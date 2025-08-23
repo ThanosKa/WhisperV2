@@ -2,7 +2,6 @@ import { html, css, LitElement } from '../assets/lit-core-2.7.4.min.js';
 import { SettingsView } from '../settings/SettingsView.js';
 import { ListenView } from '../listen/ListenView.js';
 import { AskView } from '../ask/AskView.js';
-import { ShortcutSettingsView } from '../settings/ShortCutSettingsView.js';
 
 import '../listen/audioCore/renderer.js';
 
@@ -23,12 +22,15 @@ export class PickleGlassApp extends LitElement {
             height: 100%;
         }
 
-        ask-view, settings-view, history-view, help-view, setup-view {
+        ask-view,
+        settings-view,
+        history-view,
+        help-view,
+        setup-view {
             display: block;
             width: 100%;
             height: 100%;
         }
-
     `;
 
     static properties = {
@@ -45,7 +47,7 @@ export class PickleGlassApp extends LitElement {
         layoutMode: { type: String },
         _viewInstances: { type: Object, state: true },
         _isClickThrough: { state: true },
-        structuredData: { type: Object }, 
+        structuredData: { type: Object },
     };
 
     constructor() {
@@ -54,7 +56,7 @@ export class PickleGlassApp extends LitElement {
         this.currentView = urlParams.get('view') || 'listen';
         this.currentResponseIndex = -1;
         this.selectedProfile = localStorage.getItem('selectedProfile') || 'interview';
-        
+
         // Language format migration for legacy users
         let lang = localStorage.getItem('selectedLanguage') || 'en';
         if (lang.includes('-')) {
@@ -68,12 +70,11 @@ export class PickleGlassApp extends LitElement {
         this.selectedScreenshotInterval = localStorage.getItem('selectedScreenshotInterval') || '5';
         this.selectedImageQuality = localStorage.getItem('selectedImageQuality') || 'medium';
         this._isClickThrough = false;
-
     }
 
     connectedCallback() {
         super.connectedCallback();
-        
+
         if (window.api) {
             window.api.pickleGlassApp.onClickThroughToggled((_, isEnabled) => {
                 this._isClickThrough = isEnabled;
@@ -123,9 +124,6 @@ export class PickleGlassApp extends LitElement {
         }
     }
 
-
-
-
     render() {
         switch (this.currentView) {
             case 'listen':
@@ -144,8 +142,6 @@ export class PickleGlassApp extends LitElement {
                     .onProfileChange=${profile => (this.selectedProfile = profile)}
                     .onLanguageChange=${lang => (this.selectedLanguage = lang)}
                 ></settings-view>`;
-            case 'shortcut-settings':
-                return html`<shortcut-settings-view></shortcut-settings-view>`;
             case 'history':
                 return html`<history-view></history-view>`;
             case 'help':

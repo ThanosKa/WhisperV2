@@ -936,15 +936,10 @@ export class SettingsView extends LitElement {
                 console.error('[SettingsView] Failed to refresh presets:', error);
             }
         };
-        this._shortcutListener = (event, keybinds) => {
-            console.log('[SettingsView] Received updated shortcuts:', keybinds);
-            this.shortcuts = keybinds;
-        };
 
         window.api.settingsView.onUserStateChanged(this._userStateListener);
         window.api.settingsView.onSettingsUpdated(this._settingsUpdatedListener);
         window.api.settingsView.onPresetsUpdated(this._presetsUpdatedListener);
-        window.api.settingsView.onShortcutsUpdated(this._shortcutListener);
     }
 
     cleanupIpcListeners() {
@@ -958,9 +953,6 @@ export class SettingsView extends LitElement {
         }
         if (this._presetsUpdatedListener) {
             window.api.settingsView.removeOnPresetsUpdated(this._presetsUpdatedListener);
-        }
-        if (this._shortcutListener) {
-            window.api.settingsView.removeOnShortcutsUpdated(this._shortcutListener);
         }
     }
 
@@ -1171,10 +1163,6 @@ export class SettingsView extends LitElement {
                             />
                         </svg>
                     </div>
-                </div>
-
-                <div class="buttons-section" style="border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 6px; margin-top: 6px;">
-                    <button class="settings-button full-width" @click=${this.openShortcutEditor}>Edit Shortcuts</button>
                 </div>
 
                 <div class="shortcuts-section">

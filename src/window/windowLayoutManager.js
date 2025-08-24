@@ -1,8 +1,8 @@
 const { screen } = require('electron');
 
 /**
- * 
- * @param {BrowserWindow} window 
+ *
+ * @param {BrowserWindow} window
  * @returns {Display}
  */
 function getCurrentDisplay(window) {
@@ -36,9 +36,8 @@ class WindowLayoutManager {
         return { x: 0, y: 0 };
     };
 
-
     /**
-     * 
+     *
      * @returns {{name: string, primary: string, secondary: string}}
      */
     determineLayoutStrategy(headerBounds, screenWidth, screenHeight, relativeX, relativeY, workAreaX, workAreaY) {
@@ -62,8 +61,6 @@ class WindowLayoutManager {
             return { name: 'adaptive', primary: spaceBelow > spaceAbove ? 'below' : 'above', secondary: spaceRight > spaceLeft ? 'right' : 'left' };
         }
     }
-
-
 
     /**
      * @returns {{x: number, y: number} | null}
@@ -93,7 +90,6 @@ class WindowLayoutManager {
         return { x: Math.round(clampedX), y: Math.round(clampedY) };
     }
 
-
     calculateHeaderResize(header, { width, height }) {
         if (!header) return null;
         const currentBounds = header.getBounds();
@@ -104,7 +100,7 @@ class WindowLayoutManager {
         const clampedX = Math.max(workAreaX, Math.min(workAreaX + workAreaWidth - width, newX));
         return { x: clampedX, y: currentBounds.y, width, height };
     }
-    
+
     calculateClampedPosition(header, { x: newX, y: newY }) {
         if (!header) return null;
         const targetDisplay = screen.getDisplayNearestPoint({ x: newX, y: newY });
@@ -114,7 +110,7 @@ class WindowLayoutManager {
         const clampedY = Math.max(workAreaY, Math.min(newY, workAreaY + height - headerBounds.height));
         return { x: clampedX, y: clampedY };
     }
-    
+
     calculateWindowHeightAdjustment(senderWindow, targetHeight) {
         if (!senderWindow) return null;
         const currentBounds = senderWindow.getBounds();
@@ -127,7 +123,7 @@ class WindowLayoutManager {
         console.log(`[Layout Debug] calculateWindowHeightAdjustment: targetHeight=${targetHeight}`);
         return { ...currentBounds, height: adjustedHeight };
     }
-    
+
     // 기존 getTargetBoundsForFeatureWindows를 이 함수로 대체합니다.
     calculateFeatureWindowLayout(visibility, headerBoundsOverride = null) {
         const header = this.windowPool.get('header');
@@ -145,26 +141,26 @@ class WindowLayoutManager {
         } else {
             display = getCurrentDisplay(header);
         }
-    
+
         const { width: screenWidth, height: screenHeight, x: workAreaX, y: workAreaY } = display.workArea;
-    
+
         const ask = this.windowPool.get('ask');
         const listen = this.windowPool.get('listen');
-    
+
         const askVis = visibility.ask && ask && !ask.isDestroyed();
         const listenVis = visibility.listen && listen && !listen.isDestroyed();
-    
+
         if (!askVis && !listenVis) return {};
-    
+
         const PAD = 8;
         const headerTopRel = headerBounds.y - workAreaY;
         const headerBottomRel = headerTopRel + headerBounds.height;
         const headerCenterXRel = headerBounds.x - workAreaX + headerBounds.width / 2;
-        
+
         const relativeX = headerCenterXRel / screenWidth;
         const relativeY = (headerBounds.y - workAreaY) / screenHeight;
         const strategy = this.determineLayoutStrategy(headerBounds, screenWidth, screenHeight, relativeX, relativeY, workAreaX, workAreaY);
-    
+
         const askB = askVis ? ask.getBounds() : null;
         const listenB = listenVis ? listen.getBounds() : null;
 
@@ -174,13 +170,13 @@ class WindowLayoutManager {
         if (listenVis) {
             console.log(`[Layout Debug] Listen Window Bounds: height=${listenB.height}, width=${listenB.width}`);
         }
-    
+
         const layout = {};
-    
+
         if (askVis && listenVis) {
-            let askXRel = headerCenterXRel - (askB.width / 2);
+            let askXRel = headerCenterXRel - askB.width / 2;
             let listenXRel = askXRel - listenB.width - PAD;
-    
+
             if (listenXRel < PAD) {
                 listenXRel = PAD;
                 askXRel = listenXRel + listenB.width + PAD;
@@ -189,51 +185,64 @@ class WindowLayoutManager {
                 askXRel = screenWidth - PAD - askB.width;
                 listenXRel = askXRel - listenB.width - PAD;
             }
-            
+
             if (strategy.primary === 'above') {
                 const windowBottomAbs = headerBounds.y - PAD;
-                layout.ask = { x: Math.round(askXRel + workAreaX), y: Math.round(windowBottomAbs - askB.height), width: askB.width, height: askB.height };
-                layout.listen = { x: Math.round(listenXRel + workAreaX), y: Math.round(windowBottomAbs - listenB.height), width: listenB.width, height: listenB.height };
-            } else { // 'below'
+                layout.ask = {
+                    x: Math.round(askXRel + workAreaX),
+                    y: Math.round(windowBottomAbs - askB.height),
+                    width: askB.width,
+                    height: askB.height,
+                };
+                layout.listen = {
+                    x: Math.round(listenXRel + workAreaX),
+                    y: Math.round(windowBottomAbs - listenB.height),
+                    width: listenB.width,
+                    height: listenB.height,
+                };
+            } else {
+                // 'below'
                 const yAbs = headerBounds.y + headerBounds.height + PAD;
                 layout.ask = { x: Math.round(askXRel + workAreaX), y: Math.round(yAbs), width: askB.width, height: askB.height };
                 layout.listen = { x: Math.round(listenXRel + workAreaX), y: Math.round(yAbs), width: listenB.width, height: listenB.height };
             }
-        } else { // Single window
+        } else {
+            // Single window
             const winName = askVis ? 'ask' : 'listen';
             const winB = askVis ? askB : listenB;
             if (!winB) return {};
-    
+
             let xRel = headerCenterXRel - winB.width / 2;
             xRel = Math.max(PAD, Math.min(screenWidth - winB.width - PAD, xRel));
-    
+
             let yPos;
             if (strategy.primary === 'above') {
-                yPos = (headerBounds.y - workAreaY) - PAD - winB.height;
-            } else { // 'below'
-                yPos = (headerBounds.y - workAreaY) + headerBounds.height + PAD;
+                yPos = headerBounds.y - workAreaY - PAD - winB.height;
+            } else {
+                // 'below'
+                yPos = headerBounds.y - workAreaY + headerBounds.height + PAD;
             }
-            
+
             layout[winName] = { x: Math.round(xRel + workAreaX), y: Math.round(yPos + workAreaY), width: winB.width, height: winB.height };
         }
         return layout;
     }
-    
+
     calculateShortcutSettingsWindowPosition() {
         const header = this.windowPool.get('header');
         const shortcutSettings = this.windowPool.get('shortcut-settings');
         if (!header || !shortcutSettings) return null;
-    
+
         const headerBounds = header.getBounds();
         const shortcutBounds = shortcutSettings.getBounds();
         const { workArea } = getCurrentDisplay(header);
-    
-        let newX = Math.round(headerBounds.x + (headerBounds.width / 2) - (shortcutBounds.width / 2));
+
+        let newX = Math.round(headerBounds.x + headerBounds.width / 2 - shortcutBounds.width / 2);
         let newY = Math.round(headerBounds.y);
-    
+
         newX = Math.max(workArea.x, Math.min(newX, workArea.x + workArea.width - shortcutBounds.width));
         newY = Math.max(workArea.y, Math.min(newY, workArea.y + workArea.height - shortcutBounds.height));
-    
+
         return { x: newX, y: newY, width: shortcutBounds.width, height: shortcutBounds.height };
     }
 
@@ -243,58 +252,80 @@ class WindowLayoutManager {
         const stepSize = 80; // 이동 간격
         let targetX = currentBounds.x;
         let targetY = currentBounds.y;
-    
+
         switch (direction) {
-            case 'left': targetX -= stepSize; break;
-            case 'right': targetX += stepSize; break;
-            case 'up': targetY -= stepSize; break;
-            case 'down': targetY += stepSize; break;
+            case 'left':
+                targetX -= stepSize;
+                break;
+            case 'right':
+                targetX += stepSize;
+                break;
+            case 'up':
+                targetY -= stepSize;
+                break;
+            case 'down':
+                targetY += stepSize;
+                break;
         }
-    
+
         return this.calculateClampedPosition(header, { x: targetX, y: targetY });
     }
-    
+
     calculateEdgePosition(header, direction) {
         if (!header) return null;
         const display = getCurrentDisplay(header);
         const { workArea } = display;
         const currentBounds = header.getBounds();
-    
+
         let targetX = currentBounds.x;
         let targetY = currentBounds.y;
-    
+
         switch (direction) {
-            case 'left': targetX = workArea.x; break;
-            case 'right': targetX = workArea.x + workArea.width - currentBounds.width; break;
-            case 'up': targetY = workArea.y; break;
-            case 'down': targetY = workArea.y + workArea.height - currentBounds.height; break;
+            case 'left':
+                targetX = workArea.x;
+                break;
+            case 'right':
+                targetX = workArea.x + workArea.width - currentBounds.width;
+                break;
+            case 'up':
+                targetY = workArea.y;
+                break;
+            case 'down':
+                targetY = workArea.y + workArea.height - currentBounds.height;
+                break;
         }
         return { x: targetX, y: targetY };
     }
-    
+
     calculateNewPositionForDisplay(window, targetDisplayId) {
         if (!window) return null;
-    
+
         const targetDisplay = screen.getAllDisplays().find(d => d.id === targetDisplayId);
         if (!targetDisplay) return null;
-    
+
         const currentBounds = window.getBounds();
         const currentDisplay = getCurrentDisplay(window);
-    
+
         if (currentDisplay.id === targetDisplay.id) return { x: currentBounds.x, y: currentBounds.y };
-    
+
         const relativeX = (currentBounds.x - currentDisplay.workArea.x) / currentDisplay.workArea.width;
         const relativeY = (currentBounds.y - currentDisplay.workArea.y) / currentDisplay.workArea.height;
-        
+
         const targetX = targetDisplay.workArea.x + targetDisplay.workArea.width * relativeX;
         const targetY = targetDisplay.workArea.y + targetDisplay.workArea.height * relativeY;
-    
-        const clampedX = Math.max(targetDisplay.workArea.x, Math.min(targetX, targetDisplay.workArea.x + targetDisplay.workArea.width - currentBounds.width));
-        const clampedY = Math.max(targetDisplay.workArea.y, Math.min(targetY, targetDisplay.workArea.y + targetDisplay.workArea.height - currentBounds.height));
-    
+
+        const clampedX = Math.max(
+            targetDisplay.workArea.x,
+            Math.min(targetX, targetDisplay.workArea.x + targetDisplay.workArea.width - currentBounds.width)
+        );
+        const clampedY = Math.max(
+            targetDisplay.workArea.y,
+            Math.min(targetY, targetDisplay.workArea.y + targetDisplay.workArea.height - currentBounds.height)
+        );
+
         return { x: Math.round(clampedX), y: Math.round(clampedY) };
     }
-    
+
     /**
      * @param {Rectangle} bounds1
      * @param {Rectangle} bounds2

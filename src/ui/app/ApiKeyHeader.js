@@ -323,7 +323,6 @@ export class ApiKeyHeader extends LitElement {
         }
     `;
 
-
     constructor() {
         super();
         this.isLoading = false;
@@ -1094,7 +1093,7 @@ export class ApiKeyHeader extends LitElement {
         const progressHandler = (event, data) => {
             // 통합 LocalAI 이벤트에서 Ollama 진행률만 처리
             if (data.service !== 'ollama') return;
-            
+
             let baseProgress = 0;
             let stageTotal = 0;
 
@@ -1589,12 +1588,12 @@ export class ApiKeyHeader extends LitElement {
 
             if (llmResult.success && sttResult.success) {
                 console.log('[ApiKeyHeader] handleSubmit: Validation successful.');
-                
+
                 // Force refresh the model state to ensure areProvidersConfigured returns true
                 setTimeout(async () => {
                     const isConfigured = await window.api.apiKeyHeader.areProvidersConfigured();
                     console.log('[ApiKeyHeader] Post-validation providers configured check:', isConfigured);
-                    
+
                     if (isConfigured) {
                         this.startSlideOutAnimation();
                     } else {
@@ -1621,12 +1620,11 @@ export class ApiKeyHeader extends LitElement {
     }
     //////// after_modelStateService ////////
 
-
     ////TODO: 뭔가 넘어가는 애니메이션 로직에 문제가 있음
     startSlideOutAnimation() {
         console.log('[ApiKeyHeader] startSlideOutAnimation: Starting slide out animation.');
         this.classList.add('sliding-out');
-        
+
         // Fallback: if animation doesn't trigger animationend event, force transition
         setTimeout(() => {
             if (this.classList.contains('sliding-out')) {

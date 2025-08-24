@@ -196,7 +196,7 @@ export class WelcomeHeader extends LitElement {
                     <div class="option-content">
                         <div class="option-title">Quick start with default API key</div>
                         <div class="option-description">
-                            100% free with Pickle's OpenAI key<br/>No personal data collected<br/>Sign up with Google in seconds
+                            100% free with Pickle's OpenAI key<br />No personal data collected<br />Sign up with Google in seconds
                         </div>
                     </div>
                     <button class="action-button" @click=${this.loginCallback}>
@@ -209,7 +209,7 @@ export class WelcomeHeader extends LitElement {
                     <div class="option-content">
                         <div class="option-title">Use Personal API keys</div>
                         <div class="option-description">
-                            Costs may apply based on your API usage<br/>No personal data collected<br/>Use your own API keys (OpenAI, Gemini, etc.)
+                            Costs may apply based on your API usage<br />No personal data collected<br />Use your own API keys (OpenAI, Gemini, etc.)
                         </div>
                     </div>
                     <button class="action-button" @click=${this.apiKeyCallback}>

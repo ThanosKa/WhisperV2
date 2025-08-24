@@ -34,13 +34,7 @@ export class MainHeader extends LitElement {
         }
 
         * {
-            font-family:
-                'Helvetica Neue',
-                -apple-system,
-                BlinkMacSystemFont,
-                'Segoe UI',
-                Roboto,
-                sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
             cursor: default;
             user-select: none;
         }
@@ -83,7 +77,7 @@ export class MainHeader extends LitElement {
             right: 0;
             bottom: 0;
             border-radius: 9000px;
-            padding: 1px;
+            padding: 2px;
             background: linear-gradient(169deg, rgba(255, 255, 255, 0.17) 0%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.17) 100%);
             -webkit-mask:
                 linear-gradient(#fff 0 0) content-box,
@@ -245,6 +239,7 @@ export class MainHeader extends LitElement {
             font-family: 'Helvetica Neue', sans-serif;
             font-weight: 500; /* Medium */
             word-wrap: break-word;
+            white-space: nowrap;
         }
 
         .icon-container {
@@ -298,7 +293,23 @@ export class MainHeader extends LitElement {
         .settings-button:hover {
             background: rgba(255, 255, 255, 0.1);
         }
-
+        .left-label {
+            background-color: rgba(59, 130, 246, 0.5);
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+            height: 28px;
+            border-radius: 18px;
+            padding: 0 16px;
+            border: none;
+            cursor: pointer;
+            opacity: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+            margin-right: 8px;
+        }
         .settings-icon {
             display: flex;
             align-items: center;
@@ -638,6 +649,7 @@ export class MainHeader extends LitElement {
 
         return html`
             <div class="header" @mousedown=${this.handleMouseDown}>
+                <button class="left-label">Upgrade to Pro</button>
                 <button
                     class="listen-button ${Object.keys(buttonClasses)
                         .filter(k => buttonClasses[k])
@@ -680,7 +692,7 @@ export class MainHeader extends LitElement {
 
                 <div class="header-actions" @click=${() => this._handleToggleAllWindowsVisibility()}>
                     <div class="action-text">
-                        <div class="action-text-content">Show/Hide</div>
+                        <div class="action-text-content">Show / Hide</div>
                     </div>
                     <div class="icon-container">${this.renderShortcut(this.shortcuts.toggleVisibility)}</div>
                 </div>

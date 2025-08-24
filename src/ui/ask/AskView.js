@@ -394,6 +394,7 @@ export class AskView extends LitElement {
                             });
                         }
                         responseContainer.scrollTop = responseContainer.scrollHeight;
+                        this.adjustWindowHeightThrottled();
                     }
 
                     if (this.displayBuffer.length < this.pendingText.length || this.isStreaming) {

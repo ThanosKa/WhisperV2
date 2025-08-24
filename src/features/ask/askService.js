@@ -134,6 +134,20 @@ class AskService {
         console.log('[AskService] Service instance created.');
     }
 
+    interruptStream() {
+        if (this.abortController) {
+            console.log('[AskService] User interrupted the stream.');
+            this.abortController.abort('User interrupted');
+            this.abortController = null;
+
+            this.state.currentResponse += '\n\n---\n*Interrupted by user*';
+            this.state.isLoading = false;
+            this.state.isStreaming = false;
+            this.state.showTextInput = true;
+            this._broadcastState();
+        }
+    }
+
     _broadcastState() {
         const askWindow = getWindowPool()?.get('ask');
         if (askWindow && !askWindow.isDestroyed()) {
@@ -276,7 +290,7 @@ class AskService {
             });
 
             try {
-                const response = await streamingLLM.streamChat(messages);
+                const response = await streamingLLM.streamChat(messages, { signal });
                 const askWin = getWindowPool()?.get('ask');
 
                 if (!askWin || askWin.isDestroyed()) {
@@ -309,7 +323,7 @@ class AskService {
                         },
                     ];
 
-                    const fallbackResponse = await streamingLLM.streamChat(textOnlyMessages);
+                    const fallbackResponse = await streamingLLM.streamChat(textOnlyMessages, { signal });
                     const askWin = getWindowPool()?.get('ask');
 
                     if (!askWin || askWin.isDestroyed()) {
@@ -404,8 +418,12 @@ class AskService {
             }
         } finally {
             this.state.isStreaming = false;
-            this.state.currentResponse = fullResponse;
-            this._broadcastState();
+            // If the stream was aborted, `interruptStream` is responsible for state.
+            if (!signal.aborted) {
+                this.state.currentResponse = fullResponse;
+                this._broadcastState();
+            }
+
             if (fullResponse) {
                 try {
                     await askRepository.addAiMessage({ sessionId, role: 'assistant', content: fullResponse });

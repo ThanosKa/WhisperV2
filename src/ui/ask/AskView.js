@@ -3,6 +3,13 @@ import { parser, parser_write, parser_end, default_renderer } from '../../ui/ass
 import { styles } from './ask-view.css.js';
 import { renderTemplate } from './AskView.template.js';
 
+const BASE_DELAY = 40; // ms for the first ~100 words
+
+function calcDelay(wordIndex) {
+    // linear ramp: halves every 200 words
+    return Math.max(8, BASE_DELAY * Math.exp(-wordIndex / 200));
+}
+
 export class AskView extends LitElement {
     static properties = {
         currentResponse: { type: String },
@@ -33,6 +40,10 @@ export class AskView extends LitElement {
         this.isStreaming = false;
         this.windowHeight = window.innerHeight;
 
+        this.displayBuffer = ''; // what the user sees
+        this.typewriterInterval = null; // interval id
+        this.pendingText = ''; // full answer still arriving
+
         this.marked = null;
         this.hljs = null;
         this.DOMPurify = null;
@@ -42,6 +53,7 @@ export class AskView extends LitElement {
         this.smdParser = null;
         this.smdContainer = null;
         this.lastProcessedLength = 0;
+        this.wordCount = 0;
 
         this.handleSendText = this.handleSendText.bind(this);
         this.handleTextKeydown = this.handleTextKeydown.bind(this);
@@ -120,6 +132,10 @@ export class AskView extends LitElement {
 
     disconnectedCallback() {
         super.disconnectedCallback();
+        if (this.typewriterInterval) {
+            clearInterval(this.typewriterInterval);
+            this.typewriterInterval = null;
+        }
         this.resizeObserver?.disconnect();
 
         console.log('📱 AskView disconnectedCallback - IPC 이벤트 리스너 제거');
@@ -219,7 +235,11 @@ export class AskView extends LitElement {
     handleEscKey(e) {
         if (e.key === 'Escape') {
             e.preventDefault();
-            this.handleCloseIfNoContent();
+            if (this.isStreaming) {
+                this.handleInterrupt();
+            } else {
+                this.handleCloseIfNoContent();
+            }
         }
     }
 
@@ -233,6 +253,7 @@ export class AskView extends LitElement {
         this.lastProcessedLength = 0;
         this.smdParser = null;
         this.smdContainer = null;
+        this.wordCount = 0;
     }
 
     handleInputFocus() {
@@ -332,51 +353,59 @@ export class AskView extends LitElement {
         this.smdParser = null;
         this.smdContainer = null;
         this.lastProcessedLength = 0;
+        this.wordCount = 0;
     }
 
     renderStreamingMarkdown(responseContainer) {
         try {
-            // 파서가 없거나 컨테이너가 변경되었으면 새로 생성
             if (!this.smdParser || this.smdContainer !== responseContainer) {
                 this.smdContainer = responseContainer;
-                this.smdContainer.innerHTML = '';
-
-                // smd.js의 default_renderer 사용
+                responseContainer.innerHTML = '';
                 const renderer = default_renderer(this.smdContainer);
                 this.smdParser = parser(renderer);
+                this.displayBuffer = '';
+                this.pendingText = '';
                 this.lastProcessedLength = 0;
+                this.wordCount = 0;
             }
 
-            // 새로운 텍스트만 처리 (스트리밍 최적화)
-            const currentText = this.currentResponse;
-            const newText = currentText.slice(this.lastProcessedLength);
+            this.pendingText = this.currentResponse;
 
-            if (newText.length > 0) {
-                // 새로운 텍스트 청크를 파서에 전달
-                parser_write(this.smdParser, newText);
-                this.lastProcessedLength = currentText.length;
-            }
-
-            // 스트리밍이 완료되면 파서 종료
-            if (!this.isStreaming && !this.isLoading) {
-                parser_end(this.smdParser);
-            }
-
-            // 코드 하이라이팅 적용
-            if (this.hljs) {
-                responseContainer.querySelectorAll('pre code').forEach(block => {
-                    if (!block.hasAttribute('data-highlighted')) {
-                        this.hljs.highlightElement(block);
-                        block.setAttribute('data-highlighted', 'true');
+            if (!this.typewriterInterval) {
+                const typeNextChunk = () => {
+                    if (!this.isStreaming && this.displayBuffer.length >= this.pendingText.length) {
+                        this.stop();
+                        return;
                     }
-                });
-            }
 
-            // 스크롤을 맨 아래로
-            responseContainer.scrollTop = responseContainer.scrollHeight;
-        } catch (error) {
-            console.error('Error rendering streaming markdown:', error);
-            // 에러 발생 시 기본 텍스트 렌더링으로 폴백
+                    const nextWordEnd = this.pendingText.indexOf(' ', this.displayBuffer.length + 1);
+                    const sliceEnd = nextWordEnd === -1 ? this.pendingText.length : nextWordEnd;
+                    const nextChunk = this.pendingText.slice(this.displayBuffer.length, sliceEnd);
+
+                    if (nextChunk) {
+                        this.displayBuffer += nextChunk;
+                        parser_write(this.smdParser, nextChunk);
+                        this.wordCount++;
+
+                        if (this.hljs) {
+                            responseContainer.querySelectorAll('pre code:not([data-highlighted])').forEach(block => {
+                                this.hljs.highlightElement(block);
+                                block.setAttribute('data-highlighted', 'true');
+                            });
+                        }
+                        responseContainer.scrollTop = responseContainer.scrollHeight;
+                    }
+
+                    if (this.displayBuffer.length < this.pendingText.length || this.isStreaming) {
+                        this.typewriterInterval = setTimeout(typeNextChunk, calcDelay(this.wordCount));
+                    } else {
+                        this.stop();
+                    }
+                };
+                this.typewriterInterval = setTimeout(typeNextChunk, calcDelay(this.wordCount));
+            }
+        } catch (err) {
+            console.error('Streaming render error:', err);
             this.renderFallbackContent(responseContainer);
         }
     }
@@ -600,6 +629,38 @@ export class AskView extends LitElement {
         } catch (err) {
             console.error('Failed to copy line:', err);
         }
+    }
+
+    async handleInterrupt() {
+        if (window.api) {
+            try {
+                await window.api.askView.interruptStream();
+                console.log('Interruption signal sent');
+            } catch (error) {
+                console.error('Failed to send interruption signal:', error);
+            }
+        }
+        this.stop();
+    }
+
+    stop() {
+        if (this.typewriterInterval) {
+            clearTimeout(this.typewriterInterval);
+            this.typewriterInterval = null;
+        }
+        if (this.smdParser) {
+            parser_end(this.smdParser);
+        }
+        this.isStreaming = false;
+
+        // Final highlight check
+        if (this.hljs && this.smdContainer) {
+            this.smdContainer.querySelectorAll('pre code:not([data-highlighted])').forEach(block => {
+                this.hljs.highlightElement(block);
+                block.setAttribute('data-highlighted', 'true');
+            });
+        }
+        console.log('Typewriter stopped');
     }
 
     async handleSendText(e, overridingText = '') {

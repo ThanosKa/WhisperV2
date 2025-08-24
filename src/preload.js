@@ -150,6 +150,7 @@ contextBridge.exposeInMainWorld('api', {
 
         // Message Handling
         sendMessage: text => ipcRenderer.invoke('ask:sendQuestionFromAsk', text),
+        interruptStream: () => ipcRenderer.send('interrupt-stream'),
 
         // Listeners
         onAskStateUpdate: callback => ipcRenderer.on('ask:stateUpdate', callback),

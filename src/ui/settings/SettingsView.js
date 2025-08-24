@@ -1150,7 +1150,7 @@ export class SettingsView extends LitElement {
             <div class="settings-container">
                 <div class="header-section">
                     <div>
-                        <h1 class="app-title">Pickle Glass</h1>
+                        <h1 class="app-title">Whisper</h1>
                         <div class="account-info">
                             ${this.firebaseUser ? html`Account: ${this.firebaseUser.email || 'Logged In'}` : `Account: Not Logged In`}
                         </div>

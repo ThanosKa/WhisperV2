@@ -393,7 +393,6 @@ export class AskView extends LitElement {
                                 block.setAttribute('data-highlighted', 'true');
                             });
                         }
-                        responseContainer.scrollTop = responseContainer.scrollHeight;
                         this.adjustWindowHeightThrottled();
                     }
 

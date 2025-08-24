@@ -16,6 +16,7 @@ export class AskView extends LitElement {
         headerText: { type: String },
         headerAnimating: { type: Boolean },
         isStreaming: { type: Boolean },
+        windowHeight: { type: Number },
     };
 
     static styles = styles;
@@ -30,6 +31,7 @@ export class AskView extends LitElement {
         this.headerText = 'AI Response';
         this.headerAnimating = false;
         this.isStreaming = false;
+        this.windowHeight = window.innerHeight;
 
         this.marked = null;
         this.hljs = null;
@@ -678,8 +680,9 @@ export class AskView extends LitElement {
 
                 const idealHeight = headerHeight + responseHeight + inputHeight;
 
-                const targetHeight = Math.min(700, idealHeight);
+                const targetHeight = Math.min(700, idealHeight < 80 ? 40 : idealHeight);
 
+                this.windowHeight = targetHeight;
                 window.api.askView.adjustWindowHeight('ask', targetHeight);
             })
             .catch(err => console.error('AskView adjustWindowHeight error:', err));

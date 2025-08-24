@@ -3,9 +3,10 @@ import { html } from '../../ui/assets/lit-core-2.7.4.min.js';
 export const renderTemplate = self => {
     const hasResponse = self.isLoading || self.currentResponse || self.isStreaming;
     const headerText = self.isLoading ? 'Thinking...' : 'AI Response';
+    const isCompact = self.windowHeight < 50;
 
     return html`
-        <div class="ask-container">
+        <div class="ask-container ${isCompact ? 'compact' : ''}">
             <!-- Response Header -->
             <div class="response-header ${!hasResponse ? 'hidden' : ''}">
                 <div class="header-left">

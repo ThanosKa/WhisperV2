@@ -711,4 +711,21 @@ export const styles = css`
     .header-clear-btn:hover .icon-box {
         background-color: rgba(255, 255, 255, 0.18);
     }
+
+    .ask-container.compact .response-header,
+    .ask-container.compact .text-input-container {
+        padding-top: 4px;
+        padding-bottom: 4px;
+        min-height: 0;
+    }
+
+    .ask-container.compact .response-container {
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
+    .ask-container.compact #textInput {
+        padding: 4px 10px;
+        font-size: 13px;
+    }
 `;

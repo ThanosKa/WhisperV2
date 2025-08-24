@@ -80,13 +80,7 @@ export const styles = css`
     }
 
     * {
-        font-family:
-            'Helvetica Neue',
-            -apple-system,
-            BlinkMacSystemFont,
-            'Segoe UI',
-            Roboto,
-            sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
         cursor: default;
         user-select: none;
     }
@@ -170,8 +164,8 @@ export const styles = css`
         height: 100%;
         width: 100%;
         background: rgba(0, 0, 0, 0.6);
-        border-radius: 12px;
-        outline: 0.5px rgba(255, 255, 255, 0.3) solid;
+        border-radius: 8px;
+        outline: 1.5px rgba(255, 255, 255, 0.3) solid;
         outline-offset: -1px;
         backdrop-filter: blur(1px);
         box-sizing: border-box;
@@ -512,7 +506,7 @@ export const styles = css`
     #textInput {
         flex: 1;
         padding: 10px 14px;
-        background: rgba(0, 0, 0, 0.2);
+        background: transparent;
         border-radius: 20px;
         outline: none;
         border: none;

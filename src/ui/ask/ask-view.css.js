@@ -583,6 +583,27 @@ export const styles = css`
         color: rgba(255, 255, 255, 0.8);
     }
 
+    .interruption-indicator {
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+        margin-top: 16px;
+        padding-top: 8px;
+        text-align: start; /* align text at the start */
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 12px;
+
+        opacity: 0;
+        animation: fadeIn 0.4s ease forwards;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
+    }
+
     .empty-state {
         display: flex;
         align-items: center;

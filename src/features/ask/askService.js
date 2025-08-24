@@ -130,6 +130,7 @@ class AskService {
             currentQuestion: '',
             currentResponse: '',
             showTextInput: true,
+            interrupted: false,
         };
         console.log('[AskService] Service instance created.');
     }
@@ -140,10 +141,14 @@ class AskService {
             this.abortController.abort('User interrupted');
             this.abortController = null;
 
-            this.state.currentResponse += '\n\n---\n*Interrupted by user*';
-            this.state.isLoading = false;
-            this.state.isStreaming = false;
-            this.state.showTextInput = true;
+            // To avoid race conditions, ensure this is the definitive final state update.
+            this.state = {
+                ...this.state,
+                isLoading: false,
+                isStreaming: false,
+                showTextInput: false,
+                interrupted: true,
+            };
             this._broadcastState();
         }
     }
@@ -199,6 +204,7 @@ class AskService {
             currentQuestion: '',
             currentResponse: '',
             showTextInput: true,
+            interrupted: false,
         };
         this._broadcastState();
 
@@ -234,6 +240,7 @@ class AskService {
             currentQuestion: userPrompt,
             currentResponse: '',
             showTextInput: false,
+            interrupted: false,
         };
         this._broadcastState();
 

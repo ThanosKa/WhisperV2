@@ -24,6 +24,7 @@ export class AskView extends LitElement {
         headerAnimating: { type: Boolean },
         isStreaming: { type: Boolean },
         windowHeight: { type: Number },
+        interrupted: { type: Boolean },
     };
 
     static styles = styles;
@@ -39,6 +40,9 @@ export class AskView extends LitElement {
         this.headerAnimating = false;
         this.isStreaming = false;
         this.windowHeight = window.innerHeight;
+        this.interrupted = false;
+
+        this.isAnimating = false; // Tracks typewriter animation state
 
         this.displayBuffer = ''; // what the user sees
         this.typewriterInterval = null; // interval id
@@ -114,6 +118,7 @@ export class AskView extends LitElement {
                 this.currentQuestion = newState.currentQuestion;
                 this.isLoading = newState.isLoading;
                 this.isStreaming = newState.isStreaming;
+                this.interrupted = newState.interrupted;
 
                 const wasHidden = !this.showTextInput;
                 this.showTextInput = newState.showTextInput;
@@ -235,7 +240,7 @@ export class AskView extends LitElement {
     handleEscKey(e) {
         if (e.key === 'Escape') {
             e.preventDefault();
-            if (this.isStreaming) {
+            if (this.isStreaming || this.isAnimating) {
                 this.handleInterrupt();
             } else {
                 this.handleCloseIfNoContent();
@@ -254,6 +259,7 @@ export class AskView extends LitElement {
         this.smdParser = null;
         this.smdContainer = null;
         this.wordCount = 0;
+        this.interrupted = false;
     }
 
     handleInputFocus() {
@@ -403,6 +409,7 @@ export class AskView extends LitElement {
                     }
                 };
                 this.typewriterInterval = setTimeout(typeNextChunk, calcDelay(this.wordCount));
+                this.isAnimating = true;
             }
         } catch (err) {
             console.error('Streaming render error:', err);
@@ -632,6 +639,8 @@ export class AskView extends LitElement {
     }
 
     async handleInterrupt() {
+        console.log('[AskView] User interrupted stream from frontend.');
+        this.interrupted = true; // Set state immediately on frontend
         if (window.api) {
             try {
                 await window.api.askView.interruptStream();
@@ -652,6 +661,7 @@ export class AskView extends LitElement {
             parser_end(this.smdParser);
         }
         this.isStreaming = false;
+        this.isAnimating = false;
 
         // Final highlight check
         if (this.hljs && this.smdContainer) {
@@ -660,13 +670,23 @@ export class AskView extends LitElement {
                 block.setAttribute('data-highlighted', 'true');
             });
         }
+        if (this.interrupted) {
+            const responseContainer = this.shadowRoot.getElementById('responseContainer');
+            if (responseContainer && !responseContainer.querySelector('.interruption-indicator')) {
+                const indicator = document.createElement('div');
+                indicator.className = 'interruption-indicator';
+                indicator.textContent = 'Interrupted';
+                responseContainer.appendChild(indicator);
+                this.adjustWindowHeightThrottled(); // Recalculate height to include indicator
+            }
+        }
         console.log('Typewriter stopped');
     }
 
     async handleSendText(e, overridingText = '') {
         const textInput = this.shadowRoot?.getElementById('textInput');
         const text = (overridingText || textInput?.value || '').trim();
-        // if (!text) return;
+        if (!text) return;
 
         textInput.value = '';
 

@@ -54,7 +54,7 @@ module.exports = {
         ipcMain.handle('ask:sendQuestionFromSummary', async (event, userPrompt) => await askService.sendMessage(userPrompt));
         ipcMain.handle('ask:toggleAskButton', async () => await askService.toggleAskButton());
         ipcMain.handle('ask:closeAskWindow', async () => await askService.closeAskWindow());
-        ipcMain.on('interrupt-stream', () => {
+        ipcMain.handle('ask:interruptStream', () => {
             askService.interruptStream();
         });
 

@@ -316,7 +316,10 @@ function createStreamingLLM({ apiKey, model = 'gemini-2.5-flash', temperature = 
                         if (!signal?.aborted) {
                             controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
                         }
-                        controller.close();
+                        // Only close the controller if the stream was not aborted.
+                        if (!signal?.aborted) {
+                            controller.close();
+                        }
                     } catch (error) {
                         console.error('[Gemini Provider] Streaming error:', error);
                         controller.error(error);

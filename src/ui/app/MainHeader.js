@@ -678,18 +678,18 @@ export class MainHeader extends LitElement {
                           `}
                 </button>
 
-                <div class="header-actions ask-action" @click=${() => this._handleAskClick()}>
-                    <div class="action-text">
-                        <div class="action-text-content">Ask</div>
-                    </div>
-                    <div class="icon-container">${this.renderShortcut(this.shortcuts.nextStep)}</div>
-                </div>
-
                 <div class="header-actions" @click=${() => this._handleToggleAllWindowsVisibility()}>
                     <div class="action-text">
                         <div class="action-text-content">Show/Hide</div>
                     </div>
                     <div class="icon-container">${this.renderShortcut(this.shortcuts.toggleVisibility)}</div>
+                </div>
+
+                <div class="header-actions ask-action" @click=${() => this._handleAskClick()}>
+                    <div class="action-text">
+                        <div class="action-text-content">Ask</div>
+                    </div>
+                    <div class="icon-container">${this.renderShortcut(this.shortcuts.nextStep)}</div>
                 </div>
 
                 <button

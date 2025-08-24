@@ -7,7 +7,7 @@ const config = require('../config/config');
 class DatabaseInitializer {
     constructor() {
         this.isInitialized = false;
-        
+
         // 최종적으로 사용될 DB 경로 (쓰기 가능한 위치)
         const userDataPath = app.getPath('userData');
         // In both development and production mode, the database is stored in the userData directory:
@@ -56,7 +56,7 @@ class DatabaseInitializer {
             this.ensureDatabaseExists();
 
             sqliteClient.connect(this.dbPath); // DB 경로를 인자로 전달
-            
+
             // This single call will now synchronize the schema and then init default data.
             await sqliteClient.initTables();
 
@@ -69,7 +69,7 @@ class DatabaseInitializer {
         } catch (error) {
             console.error('[DB] Database initialization failed:', error);
             this.isInitialized = false;
-            throw error; 
+            throw error;
         }
     }
 
@@ -102,15 +102,14 @@ class DatabaseInitializer {
         console.log('[DatabaseInitializer] Creating new database...');
         try {
             await sqliteClient.connect(); // Connect and initialize tables/default data
-            
+
             const user = await sqliteClient.getUser(sqliteClient.defaultUserId);
             if (!user) {
                 throw new Error('Default user was not created during initialization.');
             }
-            
+
             console.log(`[DatabaseInitializer] Default user check successful, UID: ${user.uid}`);
             return { success: true, user };
-
         } catch (error) {
             console.error('[DatabaseInitializer] Failed to create new database:', error);
             throw error;
@@ -121,16 +120,15 @@ class DatabaseInitializer {
         console.log('[DatabaseInitializer] Connecting to existing database...');
         try {
             await sqliteClient.connect();
-            
+
             const user = await sqliteClient.getUser(sqliteClient.defaultUserId);
             if (!user) {
                 console.warn('[DatabaseInitializer] Default user not found in existing DB, attempting recovery.');
                 throw new Error('Default user missing');
             }
-            
+
             console.log(`[DatabaseInitializer] Connection to existing DB successful for user: ${user.uid}`);
             return { success: true, user };
-
         } catch (error) {
             console.error('[DatabaseInitializer] Failed to connect to existing database:', error);
             throw error;
@@ -146,7 +144,7 @@ class DatabaseInitializer {
             // We just need to ensure default data is present.
             await sqliteClient.synchronizeSchema();
 
-            const defaultUser =  await sqliteClient.getUser(sqliteClient.defaultUserId);
+            const defaultUser = await sqliteClient.getUser(sqliteClient.defaultUserId);
             if (!defaultUser) {
                 console.log('[DatabaseInitializer] Default user not found - creating...');
                 await sqliteClient.initDefaultData();
@@ -160,7 +158,6 @@ class DatabaseInitializer {
 
             console.log('[DatabaseInitializer] Database validation completed');
             return { success: true };
-
         } catch (error) {
             console.error('[DatabaseInitializer] Database validation failed:', error);
             try {
@@ -180,16 +177,16 @@ class DatabaseInitializer {
             dbPath: this.dbPath,
             dbExists: fs.existsSync(this.dbPath),
             enableSQLiteStorage: config.get('enableSQLiteStorage'),
-            enableOfflineMode: config.get('enableOfflineMode')
+            enableOfflineMode: config.get('enableOfflineMode'),
         };
     }
 
     async reset() {
         try {
             console.log('[DatabaseInitializer] Resetting database...');
-            
+
             sqliteClient.close();
-            
+
             if (fs.existsSync(this.dbPath)) {
                 fs.unlinkSync(this.dbPath);
                 console.log('[DatabaseInitializer] Database file deleted');
@@ -200,7 +197,6 @@ class DatabaseInitializer {
 
             console.log('[DatabaseInitializer] Database reset completed');
             return true;
-
         } catch (error) {
             console.error('[DatabaseInitializer] Database reset failed:', error);
             return false;
@@ -222,4 +218,4 @@ class DatabaseInitializer {
 
 const databaseInitializer = new DatabaseInitializer();
 
-module.exports = databaseInitializer; 
+module.exports = databaseInitializer;

@@ -5,7 +5,9 @@ let keytar;
 try {
     keytar = require('keytar');
 } catch (error) {
-    console.warn('[EncryptionService] keytar is not available. Will use in-memory key for this session. Restarting the app might be required for data persistence after login.');
+    console.warn(
+        '[EncryptionService] keytar is not available. Will use in-memory key for this session. Restarting the app might be required for data persistence after login.'
+    );
     keytar = null;
 }
 
@@ -17,7 +19,6 @@ let sessionKey = null; // In-memory fallback key
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16; // For AES, this is always 16
 const AUTH_TAG_LENGTH = 16;
-
 
 /**
  * Initializes the encryption key for a given user.
@@ -90,7 +91,8 @@ function encrypt(text) {
         console.error('[EncryptionService] Encryption key is not initialized. Cannot encrypt.');
         return text; // Return original if key is missing
     }
-    if (text == null) { // checks for null or undefined
+    if (text == null) {
+        // checks for null or undefined
         return text;
     }
 
@@ -98,10 +100,10 @@ function encrypt(text) {
         const key = Buffer.from(sessionKey, 'hex');
         const iv = crypto.randomBytes(IV_LENGTH);
         const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-        
+
         let encrypted = cipher.update(String(text), 'utf8', 'hex');
         encrypted += cipher.final('hex');
-        
+
         const authTag = cipher.getAuthTag();
 
         // Prepend IV and AuthTag to the encrypted content, then encode as base64.
@@ -132,7 +134,7 @@ function decrypt(encryptedText) {
             // This is not a valid encrypted string, likely plain text.
             return encryptedText;
         }
-        
+
         const key = Buffer.from(sessionKey, 'hex');
         const iv = data.slice(0, IV_LENGTH);
         const authTag = data.slice(IV_LENGTH, IV_LENGTH + AUTH_TAG_LENGTH);
@@ -140,10 +142,10 @@ function decrypt(encryptedText) {
 
         const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
         decipher.setAuthTag(authTag);
-        
+
         let decrypted = decipher.update(encryptedContent, 'hex', 'utf8');
         decrypted += decipher.final('utf8');
-        
+
         return decrypted;
     } catch (error) {
         // It's common for this to fail if the data is not encrypted (e.g., legacy data).
@@ -172,4 +174,4 @@ module.exports = {
     encrypt,
     decrypt,
     looksEncrypted,
-}; 
+};

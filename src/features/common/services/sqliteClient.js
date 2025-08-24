@@ -28,7 +28,7 @@ class SQLiteClient {
 
     getDb() {
         if (!this.db) {
-            throw new Error("Database not connected. Call connect() first.");
+            throw new Error('Database not connected. Call connect() first.');
         }
         return this.db;
     }
@@ -45,39 +45,42 @@ class SQLiteClient {
         if (!tablesInDb.includes('provider_settings')) {
             return; // Table doesn't exist, no migration needed.
         }
-    
+
         const providerSettingsInfo = this.db.prepare(`PRAGMA table_info(provider_settings)`).all();
         const hasUidColumn = providerSettingsInfo.some(col => col.name === 'uid');
-    
+
         if (hasUidColumn) {
             console.log('[DB Migration] Old provider_settings schema detected. Starting robust migration...');
-    
+
             try {
                 this.db.transaction(() => {
                     this.db.exec('ALTER TABLE provider_settings RENAME TO provider_settings_old');
                     console.log('[DB Migration] Renamed provider_settings to provider_settings_old');
-    
+
                     this.createTable('provider_settings', LATEST_SCHEMA.provider_settings);
                     console.log('[DB Migration] Created new provider_settings table');
-    
+
                     // Dynamically build the migration query for robustness
-                    const oldColumnNames = this.db.prepare(`PRAGMA table_info(provider_settings_old)`).all().map(c => c.name);
+                    const oldColumnNames = this.db
+                        .prepare(`PRAGMA table_info(provider_settings_old)`)
+                        .all()
+                        .map(c => c.name);
                     const newColumnNames = LATEST_SCHEMA.provider_settings.columns.map(c => c.name);
                     const commonColumns = newColumnNames.filter(name => oldColumnNames.includes(name));
-    
+
                     if (!commonColumns.includes('provider')) {
                         console.warn('[DB Migration] Old table is missing the "provider" column. Aborting migration for this table.');
                         this.db.exec('DROP TABLE provider_settings_old');
                         return;
                     }
-    
+
                     const orderParts = [];
                     if (oldColumnNames.includes('updated_at')) orderParts.push('updated_at DESC');
                     if (oldColumnNames.includes('created_at')) orderParts.push('created_at DESC');
                     const orderByClause = orderParts.length > 0 ? `ORDER BY ${orderParts.join(', ')}` : '';
-    
+
                     const columnsForInsert = commonColumns.map(c => this._validateAndQuoteIdentifier(c)).join(', ');
-    
+
                     const migrationQuery = `
                         INSERT INTO provider_settings (${columnsForInsert})
                         SELECT ${columnsForInsert}
@@ -87,18 +90,18 @@ class SQLiteClient {
                         )
                         WHERE rn = 1
                     `;
-                    
+
                     console.log(`[DB Migration] Executing robust migration query for columns: ${commonColumns.join(', ')}`);
                     const result = this.db.prepare(migrationQuery).run();
                     console.log(`[DB Migration] Migrated ${result.changes} rows to the new provider_settings table.`);
-    
+
                     this.db.exec('DROP TABLE provider_settings_old');
                     console.log('[DB Migration] Dropped provider_settings_old table.');
                 })();
                 console.log('[DB Migration] provider_settings migration completed successfully.');
             } catch (error) {
                 console.error('[DB Migration] Failed to migrate provider_settings table.', error);
-                
+
                 // Try to recover by dropping the temp table if it exists
                 const oldTableExists = this.getTablesFromDb().includes('provider_settings_old');
                 if (oldTableExists) {
@@ -139,13 +142,11 @@ class SQLiteClient {
 
     createTable(tableName, tableSchema) {
         const safeTableName = this._validateAndQuoteIdentifier(tableName);
-        const columnDefs = tableSchema.columns
-            .map(col => `${this._validateAndQuoteIdentifier(col.name)} ${col.type}`)
-            .join(', ');
-        
+        const columnDefs = tableSchema.columns.map(col => `${this._validateAndQuoteIdentifier(col.name)} ${col.type}`).join(', ');
+
         const constraints = tableSchema.constraints || [];
         const constraintsDef = constraints.length > 0 ? ', ' + constraints.join(', ') : '';
-        
+
         const query = `CREATE TABLE IF NOT EXISTS ${safeTableName} (${columnDefs}${constraintsDef})`;
         console.log(`[DB Sync] Creating table: ${tableName}`);
         this.db.exec(query);
@@ -153,7 +154,7 @@ class SQLiteClient {
 
     updateTable(tableName, tableSchema) {
         const safeTableName = this._validateAndQuoteIdentifier(tableName);
-        
+
         // Get current columns
         const currentColumns = this.db.prepare(`PRAGMA table_info(${safeTableName})`).all();
         const currentColumnNames = currentColumns.map(col => col.name);
@@ -221,11 +222,36 @@ class SQLiteClient {
         this.db.prepare(initUserQuery).run(this.defaultUserId, 'Default User', 'contact@pickle.com', now);
 
         const defaultPresets = [
-            ['school', 'School', 'You are a school and lecture assistant. Your goal is to help the user, a student, understand academic material and answer questions.\n\nWhenever a question appears on the user\'s screen or is asked aloud, you provide a direct, step-by-step answer, showing all necessary reasoning or calculations.\n\nIf the user is watching a lecture or working through new material, you offer concise explanations of key concepts and clarify definitions as they come up.', 1],
-            ['meetings', 'Meetings', 'You are a meeting assistant. Your goal is to help the user capture key information during meetings and follow up effectively.\n\nYou help capture meeting notes, track action items, identify key decisions, and summarize important points discussed during meetings.', 1],
-            ['sales', 'Sales', 'You are a real-time AI sales assistant, and your goal is to help the user close deals during sales interactions.\n\nYou provide real-time sales support, suggest responses to objections, help identify customer needs, and recommend strategies to advance deals.', 1],
-            ['recruiting', 'Recruiting', 'You are a recruiting assistant. Your goal is to help the user interview candidates and evaluate talent effectively.\n\nYou help evaluate candidates, suggest interview questions, analyze responses, and provide insights about candidate fit for positions.', 1],
-            ['customer-support', 'Customer Support', 'You are a customer support assistant. Your goal is to help resolve customer issues efficiently and thoroughly.\n\nYou help diagnose customer problems, suggest solutions, provide step-by-step troubleshooting guidance, and ensure customer satisfaction.', 1],
+            [
+                'school',
+                'School',
+                "You are a school and lecture assistant. Your goal is to help the user, a student, understand academic material and answer questions.\n\nWhenever a question appears on the user's screen or is asked aloud, you provide a direct, step-by-step answer, showing all necessary reasoning or calculations.\n\nIf the user is watching a lecture or working through new material, you offer concise explanations of key concepts and clarify definitions as they come up.",
+                1,
+            ],
+            [
+                'meetings',
+                'Meetings',
+                'You are a meeting assistant. Your goal is to help the user capture key information during meetings and follow up effectively.\n\nYou help capture meeting notes, track action items, identify key decisions, and summarize important points discussed during meetings.',
+                1,
+            ],
+            [
+                'sales',
+                'Sales',
+                'You are a real-time AI sales assistant, and your goal is to help the user close deals during sales interactions.\n\nYou provide real-time sales support, suggest responses to objections, help identify customer needs, and recommend strategies to advance deals.',
+                1,
+            ],
+            [
+                'recruiting',
+                'Recruiting',
+                'You are a recruiting assistant. Your goal is to help the user interview candidates and evaluate talent effectively.\n\nYou help evaluate candidates, suggest interview questions, analyze responses, and provide insights about candidate fit for positions.',
+                1,
+            ],
+            [
+                'customer-support',
+                'Customer Support',
+                'You are a customer support assistant. Your goal is to help resolve customer issues efficiently and thoroughly.\n\nYou help diagnose customer problems, suggest solutions, provide step-by-step troubleshooting guidance, and ensure customer satisfaction.',
+                1,
+            ],
         ];
 
         const stmt = this.db.prepare(`
@@ -272,4 +298,4 @@ class SQLiteClient {
 }
 
 const sqliteClient = new SQLiteClient();
-module.exports = sqliteClient; 
+module.exports = sqliteClient;

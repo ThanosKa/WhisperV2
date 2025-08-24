@@ -26,16 +26,16 @@ async function checkAndRunMigration(firebaseUser) {
     }
 
     console.log(`[Migration] Starting data migration for user ${firebaseUser.uid}...`);
-    
+
     try {
         const db = getFirestoreInstance();
-        
+
         // --- Phase 1: Migrate Parent Documents (Presets & Sessions) ---
         console.log('[Migration Phase 1] Migrating parent documents...');
         let phase1Batch = writeBatch(db);
         let phase1OpCount = 0;
         const phase1Promises = [];
-        
+
         const localPresets = (await sqlitePresetRepo.getPresets(firebaseUser.uid)).filter(p => !p.is_default);
         console.log(`[Migration Phase 1] Found ${localPresets.length} custom presets.`);
         for (const preset of localPresets) {
@@ -46,7 +46,7 @@ async function checkAndRunMigration(firebaseUser) {
                 prompt: encryptionService.encrypt(preset.prompt ?? ''),
                 is_default: preset.is_default ?? 0,
                 created_at: preset.created_at ? Timestamp.fromMillis(preset.created_at * 1000) : null,
-                updated_at: preset.updated_at ? Timestamp.fromMillis(preset.updated_at * 1000) : null
+                updated_at: preset.updated_at ? Timestamp.fromMillis(preset.updated_at * 1000) : null,
             };
             phase1Batch.set(presetRef, cleanPreset);
             phase1OpCount++;
@@ -56,7 +56,7 @@ async function checkAndRunMigration(firebaseUser) {
                 phase1OpCount = 0;
             }
         }
-        
+
         const localSessions = await sqliteSessionRepo.getAllByUserId(firebaseUser.uid);
         console.log(`[Migration Phase 1] Found ${localSessions.length} sessions.`);
         for (const session of localSessions) {
@@ -68,7 +68,7 @@ async function checkAndRunMigration(firebaseUser) {
                 session_type: session.session_type ?? 'ask',
                 started_at: session.started_at ? Timestamp.fromMillis(session.started_at * 1000) : null,
                 ended_at: session.ended_at ? Timestamp.fromMillis(session.ended_at * 1000) : null,
-                updated_at: session.updated_at ? Timestamp.fromMillis(session.updated_at * 1000) : null
+                updated_at: session.updated_at ? Timestamp.fromMillis(session.updated_at * 1000) : null,
             };
             phase1Batch.set(sessionRef, cleanSession);
             phase1OpCount++;
@@ -78,11 +78,11 @@ async function checkAndRunMigration(firebaseUser) {
                 phase1OpCount = 0;
             }
         }
-        
+
         if (phase1OpCount > 0) {
             phase1Promises.push(phase1Batch.commit());
         }
-        
+
         if (phase1Promises.length > 0) {
             await Promise.all(phase1Promises);
             console.log(`[Migration Phase 1] Successfully committed ${phase1Promises.length} batches of parent documents.`);
@@ -108,7 +108,7 @@ async function checkAndRunMigration(firebaseUser) {
                     speaker: t.speaker ?? null,
                     text: encryptionService.encrypt(t.text ?? ''),
                     lang: t.lang ?? 'en',
-                    created_at: t.created_at ? Timestamp.fromMillis(t.created_at * 1000) : null
+                    created_at: t.created_at ? Timestamp.fromMillis(t.created_at * 1000) : null,
                 };
                 phase2Batch.set(transcriptRef, cleanTranscript);
                 phase2OpCount++;
@@ -130,7 +130,7 @@ async function checkAndRunMigration(firebaseUser) {
                     content: encryptionService.encrypt(m.content ?? ''),
                     tokens: m.tokens ?? null,
                     model: m.model ?? 'unknown',
-                    created_at: m.created_at ? Timestamp.fromMillis(m.created_at * 1000) : null
+                    created_at: m.created_at ? Timestamp.fromMillis(m.created_at * 1000) : null,
                 };
                 phase2Batch.set(msgRef, cleanMessage);
                 phase2OpCount++;
@@ -155,7 +155,7 @@ async function checkAndRunMigration(firebaseUser) {
                     bullet_json: encryptionService.encrypt(summary.bullet_json ?? '[]'),
                     action_json: encryptionService.encrypt(summary.action_json ?? '[]'),
                     tokens_used: summary.tokens_used ?? null,
-                    updated_at: summary.updated_at ? Timestamp.fromMillis(summary.updated_at * 1000) : null
+                    updated_at: summary.updated_at ? Timestamp.fromMillis(summary.updated_at * 1000) : null,
                 };
                 phase2Batch.set(summaryRef, cleanSummary);
                 phase2OpCount++;
@@ -181,7 +181,6 @@ async function checkAndRunMigration(firebaseUser) {
         // --- 4. Mark migration as complete ---
         sqliteUserRepo.setMigrationComplete(firebaseUser.uid);
         console.log(`[Migration] ✅ Successfully marked migration as complete for ${firebaseUser.uid}.`);
-
     } catch (error) {
         console.error(`[Migration] 🔥 An error occurred during migration for user ${firebaseUser.uid}:`, error);
     }
@@ -189,4 +188,4 @@ async function checkAndRunMigration(firebaseUser) {
 
 module.exports = {
     checkAndRunMigration,
-}; 
+};

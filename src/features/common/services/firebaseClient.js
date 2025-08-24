@@ -7,7 +7,7 @@ const { getFirestore, setLogLevel } = require('firebase/firestore');
 
 /**
  * Firebase Auth expects the `persistence` option passed to `initializeAuth()` to be *classes*,
- * not instances. It then calls `new PersistenceClass()` internally.  
+ * not instances. It then calls `new PersistenceClass()` internally.
  *
  * The helper below returns such a class, pre-configured with an `electron-store` instance that
  * will be shared across all constructed objects. This mirrors the pattern used by Firebase's own
@@ -78,7 +78,7 @@ function initializeFirebase() {
     }
     try {
         firebaseApp = initializeApp(firebaseConfig);
-        
+
         // Build a *class* persistence provider and hand it to Firebase.
         const ElectronStorePersistence = createElectronStorePersistence('firebase-auth-session');
 
@@ -100,14 +100,14 @@ function initializeFirebase() {
 
 function getFirebaseAuth() {
     if (!firebaseAuth) {
-        throw new Error("Firebase Auth has not been initialized. Call initializeFirebase() first.");
+        throw new Error('Firebase Auth has not been initialized. Call initializeFirebase() first.');
     }
     return firebaseAuth;
 }
 
 function getFirestoreInstance() {
     if (!firestoreInstance) {
-        throw new Error("Firestore has not been initialized. Call initializeFirebase() first.");
+        throw new Error('Firestore has not been initialized. Call initializeFirebase() first.');
     }
     return firestoreInstance;
 }
@@ -116,4 +116,4 @@ module.exports = {
     initializeFirebase,
     getFirebaseAuth,
     getFirestoreInstance,
-}; 
+};

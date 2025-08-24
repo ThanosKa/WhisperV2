@@ -222,18 +222,6 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
                 text: 'Join Discord',
                 ariaLabel: 'Help Center (new window)',
             },
-            {
-                href: 'https://www.dropbox.com/scl/fi/esk4h8z45sryvbremy57v/Pickle_latest.dmg?rlkey=92y535bz6p6gov6vd17x6q53b&st=9kl0annj&dl=1',
-                icon: '/download.svg',
-                text: 'Download Pickle Camera',
-                ariaLabel: 'Download Pickle Camera (new window)',
-            },
-            {
-                href: 'hhttps://www.dropbox.com/scl/fi/znid09apxiwtwvxer6oc9/Glass_latest.dmg?rlkey=gwvvyb3bizkl25frhs4k1zwds&st=37q31b4w&dl=1',
-                icon: '/download.svg',
-                text: 'Download Pickle Glass',
-                ariaLabel: 'Download Pickle Glass (new window)',
-            },
         ],
         []
     );

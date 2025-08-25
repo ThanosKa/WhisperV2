@@ -163,11 +163,10 @@ export const styles = css`
         flex-direction: column;
         height: 100%;
         width: 100%;
-        background: rgba(0, 0, 0, 0.6);
-        border-radius: 8px;
-        outline: 1.5px rgba(255, 255, 255, 0.3) solid;
-        outline-offset: -1px;
-        backdrop-filter: blur(1px);
+        background: rgba(11, 11, 11, 0.55);
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        backdrop-filter: blur(25px);
         box-sizing: border-box;
         position: relative;
         overflow: hidden;
@@ -194,8 +193,9 @@ export const styles = css`
         justify-content: space-between;
         align-items: center;
         padding: 12px 16px;
-        background: transparent;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(11, 11, 11, 0.75);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 6px 6px 0 0;
         flex-shrink: 0;
     }
 
@@ -265,12 +265,21 @@ export const styles = css`
 
     .question-text {
         font-size: 13px;
-        color: rgba(255, 255, 255, 0.7);
+        color: rgb(255, 255, 255);
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 4px;
+        padding: 4px 8px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         max-width: 300px;
         margin-right: 8px;
+        transition: background-color 0.15s ease;
+    }
+
+    .question-text:hover {
+        background: rgba(255, 255, 255, 0.1);
     }
 
     .header-controls {
@@ -281,9 +290,9 @@ export const styles = css`
     }
 
     .copy-button {
-        background: transparent;
-        color: rgba(255, 255, 255, 0.9);
-        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.05);
+        color: rgba(180, 180, 180, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.15);
         padding: 4px;
         border-radius: 3px;
         cursor: pointer;
@@ -299,7 +308,7 @@ export const styles = css`
     }
 
     .copy-button:hover {
-        background: rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.1);
     }
 
     .copy-button svg {
@@ -325,6 +334,17 @@ export const styles = css`
     .copy-button.copied .check-icon {
         opacity: 1;
         transform: translate(-50%, -50%) scale(1);
+    }
+
+    /* Stop button active state */
+    .copy-button.stop-active {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #f87171;
+    }
+
+    .copy-button.stop-active:hover {
+        background: rgba(239, 68, 68, 0.2);
     }
 
     .close-button {
@@ -358,7 +378,7 @@ export const styles = css`
         line-height: 1.6;
         background: transparent;
         min-height: 0;
-        max-height: 400px;
+        max-height: 70vh;
         position: relative;
     }
 
@@ -393,11 +413,46 @@ export const styles = css`
     }
 
     .loading-dot {
-        width: 8px;
-        height: 8px;
-        background: rgba(255, 255, 255, 0.6);
+        width: 6px;
+        height: 6px;
+        background: rgb(255, 255, 255);
         border-radius: 50%;
         animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    /* Thinking state container */
+    .thinking-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 20px;
+        background: rgba(11, 11, 11, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 6px;
+        height: 40px;
+        font-size: 14px;
+        color: rgb(255, 255, 255);
+    }
+
+    .thinking-text {
+        color: rgb(255, 255, 255);
+        animation: thinking-pulse 1.5s ease-in-out infinite;
+    }
+
+    .brain-icon {
+        color: rgb(255, 255, 255);
+        width: 16px;
+        height: 16px;
+    }
+
+    @keyframes thinking-pulse {
+        0%, 100% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0.5;
+        }
     }
 
     .loading-dot:nth-child(1) {
@@ -480,14 +535,16 @@ export const styles = css`
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 12px 16px;
-        background: rgba(0, 0, 0, 0.1);
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 12px 20px;
+        height: 40px;
+        background: transparent;
+        border-top: 1px solid rgba(255, 255, 255, 0.15);
         flex-shrink: 0;
         transition:
             opacity 0.1s ease-in-out,
             transform 0.1s ease-in-out;
         transform-origin: bottom;
+        box-sizing: border-box;
     }
 
     .text-input-container.hidden {
@@ -505,23 +562,32 @@ export const styles = css`
 
     #textInput {
         flex: 1;
-        padding: 10px 14px;
+        padding: 0;
         background: transparent;
-        border-radius: 20px;
-        outline: none;
         border: none;
-        color: white;
-        font-size: 14px;
+        outline: none;
+        color: rgb(255, 255, 255);
+        font-size: 15px;
         font-family: 'Helvetica Neue', sans-serif;
         font-weight: 400;
+        height: 100%;
     }
 
     #textInput::placeholder {
-        color: rgba(255, 255, 255, 0.5);
+        color: rgb(255, 255, 255);
     }
 
     #textInput:focus {
         outline: none;
+    }
+
+    /* Character limit warning */
+    .character-limit-warning {
+        color: #ef4444;
+        font-size: 12px;
+        background: transparent;
+        padding: 4px 0;
+        margin-top: 4px;
     }
 
     .response-line h1,
@@ -661,8 +727,8 @@ export const styles = css`
     .clear-btn {
         display: flex;
         align-items: center;
-        background: transparent;
-        color: white;
+        background: rgba(0, 0, 0, 0.0);
+        color: rgb(255, 255, 255);
         border: none;
         border-radius: 6px;
         margin-left: 8px;
@@ -675,6 +741,13 @@ export const styles = css`
         height: 32px;
         padding: 0 10px;
         box-shadow: none;
+    }
+    
+    .submit-btn:disabled,
+    .clear-btn:disabled {
+        background: #6b7280;
+        opacity: 0.5;
+        cursor: not-allowed;
     }
     .submit-btn:hover,
     .clear-btn:hover {

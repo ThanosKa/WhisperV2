@@ -283,12 +283,24 @@ export const styles = css`
         background: transparent;
         border-top: 1px solid rgba(255, 255, 255, 0.15);
         flex-shrink: 0;
-        transition:
-            opacity 0.1s ease-in-out,
-            transform 0.1s ease-in-out;
-        transform-origin: bottom;
         box-sizing: border-box;
         position: relative;
+        
+        /* Smooth appearance animation */
+        opacity: 0;
+        transform: translateY(20px);
+        animation: slideUpSmooth 0.4s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+    }
+
+    @keyframes slideUpSmooth {
+        0% {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 
     .followup-input-container #followupInput {

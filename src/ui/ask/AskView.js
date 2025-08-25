@@ -126,7 +126,13 @@ export class AskView extends LitElement {
                     console.log('Showing follow-up input');
                     if (!this.showFollowupInput) {
                         this.showFollowupInput = true;
-                        this.updateComplete.then(() => this.focusFollowupInput());
+                        this.updateComplete.then(() => {
+                            this.focusFollowupInput();
+                            // Delay height adjustment to allow smooth animation to complete
+                            setTimeout(() => {
+                                this.adjustWindowHeightThrottled();
+                            }, 400); // Match CSS animation duration
+                        });
                     } else {
                         this.focusFollowupInput();
                     }
@@ -820,7 +826,8 @@ export class AskView extends LitElement {
         }
 
         // Only adjust height for state changes that affect layout, not during typing
-        if (changedProperties.has('isLoading') || changedProperties.has('isAnalyzing') || changedProperties.has('currentResponse') || changedProperties.has('showFollowupInput')) {
+        // Exclude showFollowupInput to allow smooth animation with delayed height adjustment
+        if (changedProperties.has('isLoading') || changedProperties.has('isAnalyzing') || changedProperties.has('currentResponse')) {
             this.adjustWindowHeightThrottled();
         }
 

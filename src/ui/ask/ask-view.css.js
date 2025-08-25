@@ -193,10 +193,17 @@ export const styles = css`
         justify-content: space-between;
         align-items: center;
         padding: 12px 16px;
-        background: rgba(11, 11, 11, 0.75);
+        background: transparent;
         border-bottom: 1px solid rgba(255, 255, 255, 0.15);
         border-radius: 6px 6px 0 0;
         flex-shrink: 0;
+        height: 40px;
+        box-sizing: border-box;
+    }
+
+    /* "Thinking..." state: make header match the "Ask anything" input box by hiding the border */
+    .response-header:has(+ .response-container:empty:not(.hidden)) {
+        border-bottom: none;
     }
 
     .response-header.hidden {
@@ -252,6 +259,45 @@ export const styles = css`
         100% {
             opacity: 1;
             transform: translateY(0);
+        }
+    }
+
+    /* Proper pulsing animation - scale based */
+    .response-label.pulsing {
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    #textInput.pulsing::placeholder {
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% {
+            transform: scale(1);
+            opacity: 1;
+        }
+        50% {
+            transform: scale(1.05);
+            opacity: 0.8;
+        }
+    }
+
+    /* Thinking dots animation */
+    .thinking-dots::after {
+        content: '';
+        display: inline-block;
+        animation: thinkingDots 1.2s infinite;
+    }
+
+    @keyframes thinkingDots {
+        0%, 20% {
+            content: '.';
+        }
+        40% {
+            content: '..';
+        }
+        60%, 100% {
+            content: '...';
         }
     }
 
@@ -386,6 +432,12 @@ export const styles = css`
         display: none;
     }
 
+    /* Ensure consistent height when response container is empty but visible */
+    .response-container:empty {
+        min-height: 0;
+        padding: 0;
+    }
+
     .response-container::-webkit-scrollbar {
         width: 6px;
     }
@@ -447,7 +499,8 @@ export const styles = css`
     }
 
     @keyframes thinking-pulse {
-        0%, 100% {
+        0%,
+        100% {
             opacity: 1;
         }
         50% {
@@ -570,7 +623,6 @@ export const styles = css`
         font-size: 15px;
         font-family: 'Helvetica Neue', sans-serif;
         font-weight: 400;
-        height: 100%;
     }
 
     #textInput::placeholder {
@@ -727,7 +779,7 @@ export const styles = css`
     .clear-btn {
         display: flex;
         align-items: center;
-        background: rgba(0, 0, 0, 0.0);
+        background: rgba(0, 0, 0, 0);
         color: rgb(255, 255, 255);
         border: none;
         border-radius: 6px;
@@ -742,7 +794,7 @@ export const styles = css`
         padding: 0 10px;
         box-shadow: none;
     }
-    
+
     .submit-btn:disabled,
     .clear-btn:disabled {
         background: #6b7280;

@@ -2,8 +2,19 @@ import { html } from '../../ui/assets/lit-core-2.7.4.min.js';
 
 export const renderTemplate = self => {
     const hasResponse = self.isLoading || self.currentResponse || self.isStreaming;
-    const headerText = self.isLoading ? 'Thinking...' : 'AI Response';
+    let headerText = 'AI Response';
+    let headerClass = '';
+    
+    if (self.isAnalyzing) {
+        headerText = 'Analyzing';
+        headerClass = 'pulsing';
+    } else if (self.isLoading || (self.isStreaming && !self.currentResponse)) {
+        headerText = 'Thinking';
+        headerClass = 'pulsing thinking-dots';
+    }
+    
     const isCompact = self.windowHeight < 50;
+    const inputPulsing = !hasResponse ? 'pulsing' : '';
 
     return html`
         <div class="ask-container ${isCompact ? 'compact' : ''}">
@@ -16,7 +27,7 @@ export const renderTemplate = self => {
                             <path d="M8 12l2 2 4-4" />
                         </svg>
                     </div>
-                    <span class="response-label">${headerText}</span>
+                    <span class="response-label ${headerClass}">${headerText}</span>
                 </div>
                 <div class="header-right">
                     <span class="question-text">${self.getTruncatedQuestion(self.currentQuestion)}</span>
@@ -47,7 +58,7 @@ export const renderTemplate = self => {
 
             <!-- Text Input Container -->
             <div class="text-input-container ${!hasResponse ? 'no-response' : ''} ${!self.showTextInput ? 'hidden' : ''}">
-                <input type="text" id="textInput" placeholder="Ask anything" @keydown=${self.handleTextKeydown} @focus=${self.handleInputFocus} />
+                <input type="text" id="textInput" class="${inputPulsing}" placeholder="Ask anything" @keydown=${self.handleTextKeydown} @focus=${self.handleInputFocus} />
                 <button class="submit-btn" @click=${self.handleSendText}>
                     <span class="btn-label">Submit</span>
                     <span class="btn-icon"> ↵ </span>

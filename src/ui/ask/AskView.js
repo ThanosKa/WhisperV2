@@ -3,8 +3,8 @@ import { parser, parser_write, parser_end, default_renderer } from '../../ui/ass
 import { styles } from './ask-view.css.js';
 import { renderTemplate } from './AskView.template.js';
 
-const BASE_DELAY = 8;  // ms
-const MIN_DELAY = 2;   // ms
+const BASE_DELAY = 8; // ms
+const MIN_DELAY = 2; // ms
 
 function calcDelay(wordIndex) {
     // Simple adaptive delay that gets faster over time
@@ -26,6 +26,7 @@ export class AskView extends LitElement {
         isStreaming: { type: Boolean },
         windowHeight: { type: Number },
         interrupted: { type: Boolean },
+        isAnalyzing: { type: Boolean },
     };
 
     static styles = styles;
@@ -42,6 +43,7 @@ export class AskView extends LitElement {
         this.isStreaming = false;
         this.windowHeight = window.innerHeight;
         this.interrupted = false;
+        this.isAnalyzing = false;
 
         this.isAnimating = false; // Tracks typewriter animation state
 
@@ -261,6 +263,7 @@ export class AskView extends LitElement {
         this.smdContainer = null;
         this.wordCount = 0;
         this.interrupted = false;
+        this.isAnalyzing = false;
     }
 
     handleInputFocus() {
@@ -332,19 +335,14 @@ export class AskView extends LitElement {
 
         // Check loading state
         if (this.isLoading) {
-            responseContainer.innerHTML = `
-              <div class="loading-dots">
-                <div class="loading-dot"></div>
-                <div class="loading-dot"></div>
-                <div class="loading-dot"></div>
-              </div>`;
+            responseContainer.innerHTML = '';
             this.resetStreamingParser();
             return;
         }
 
         // If there is no response, show empty state
         if (!this.currentResponse) {
-            responseContainer.innerHTML = `<div class="empty-state">...</div>`;
+            responseContainer.innerHTML = '';
             this.resetStreamingParser();
             return;
         }
@@ -691,6 +689,16 @@ export class AskView extends LitElement {
 
         textInput.value = '';
 
+        // Start analyzing state
+        this.isAnalyzing = true;
+        this.requestUpdate();
+
+        // After 800ms, switch to thinking
+        setTimeout(() => {
+            this.isAnalyzing = false;
+            this.requestUpdate();
+        }, 800);
+
         if (window.api) {
             window.api.askView.sendMessage(text).catch(error => {
                 console.error('Error sending text:', error);
@@ -756,16 +764,29 @@ export class AskView extends LitElement {
 
                 if (!headerEl || !responseEl) return;
 
+                // Calculate heights based on visibility
                 const headerHeight = headerEl.classList.contains('hidden') ? 0 : headerEl.offsetHeight;
-                const responseHeight = responseEl.scrollHeight;
+                const responseHeight = responseEl.classList.contains('hidden') ? 0 : responseEl.scrollHeight;
                 const inputHeight = inputEl && !inputEl.classList.contains('hidden') ? inputEl.offsetHeight : 0;
 
                 // Add extra padding for borders and spacing
                 const borderPadding = 10; // Account for container borders and padding
-                const idealHeight = headerHeight + responseHeight + inputHeight + borderPadding;
+                let idealHeight = headerHeight + responseHeight + inputHeight + borderPadding;
 
-                // Ensure minimum height shows all content including borders 
-                const minHeightForContent = 90; // Minimum to show input field + borders properly
+                // Force consistent height for initial states
+                const hasResponse = this.isLoading || this.currentResponse || this.isStreaming;
+                const CONSISTENT_BASE_HEIGHT = 64; // Fixed height for both ask and thinking states
+
+                if (!hasResponse) {
+                    // "Ask anything" state - use consistent base height
+                    idealHeight = CONSISTENT_BASE_HEIGHT;
+                } else if (this.isLoading && !this.currentResponse) {
+                    // "Thinking..." state with no content yet - use same consistent height
+                    idealHeight = CONSISTENT_BASE_HEIGHT;
+                }
+
+                // Ensure minimum height shows all content including borders
+                const minHeightForContent = CONSISTENT_BASE_HEIGHT;
                 const targetHeight = Math.min(700, Math.max(minHeightForContent, idealHeight));
 
                 this.windowHeight = targetHeight;

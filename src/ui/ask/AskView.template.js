@@ -1,7 +1,7 @@
 import { html } from '../../ui/assets/lit-core-2.7.4.min.js';
 
 export const renderTemplate = self => {
-    const hasActualResponse = self.currentResponse && !self.isLoading;
+    const hasActualResponse = self.currentResponse && !self.isLoading && !self.isAnalyzing;
     const isCompact = self.windowHeight < 50;
     
     // Determine current state for unified container
@@ -11,7 +11,13 @@ export const renderTemplate = self => {
     let showTextInput = true;
     let showHeaderControls = false;
     
-    if (self.isLoading) {
+    if (self.isAnalyzing) {
+        currentState = 'analyzing';
+        stateText = 'Analyzing screen';
+        showIcon = true;
+        showTextInput = false;
+        showHeaderControls = false;
+    } else if (self.isLoading) {
         currentState = 'thinking';
         stateText = 'Thinking';
         showIcon = true;
@@ -28,10 +34,10 @@ export const renderTemplate = self => {
     return html`
         <div class="ask-container ${isCompact ? 'compact' : ''}">
             <!-- Unified State Container -->
-            <div class="text-input-container ${currentState === 'ask' ? 'ask-state' : ''} ${currentState === 'thinking' ? 'thinking-state' : ''} ${currentState === 'response' ? 'response-state' : ''}">
+            <div class="text-input-container ${currentState === 'ask' ? 'ask-state' : ''} ${currentState === 'analyzing' ? 'analyzing-state' : ''} ${currentState === 'thinking' ? 'thinking-state' : ''} ${currentState === 'response' ? 'response-state' : ''}">
                 ${showIcon ? html`
                     <div class="state-icon">
-                        ${currentState === 'thinking' ? html`
+                        ${currentState === 'analyzing' || currentState === 'thinking' ? html`
                             <svg class="brain-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
                                 <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
@@ -53,14 +59,27 @@ export const renderTemplate = self => {
                     </div>
                 ` : ''}
                 
-                ${currentState === 'thinking' ? html`
-                    <span class="header-text thinking-text">${stateText}</span>
-                    <div class="thinking-dots">
-                        <div class="thinking-dot"></div>
-                        <div class="thinking-dot"></div>
-                        <div class="thinking-dot"></div>
+                <!-- Analyzing State -->
+                ${currentState === 'analyzing' ? html`
+                    <div class="state-content analyzing-content">
+                        <span class="header-text analyzing-text">${stateText}</span>
                     </div>
-                ` : currentState === 'response' ? html`
+                ` : ''}
+                
+                <!-- Thinking State -->
+                ${currentState === 'thinking' ? html`
+                    <div class="state-content thinking-content">
+                        <span class="header-text thinking-text">${stateText}</span>
+                        <div class="thinking-dots">
+                            <div class="thinking-dot"></div>
+                            <div class="thinking-dot"></div>
+                            <div class="thinking-dot"></div>
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- Response State -->
+                ${currentState === 'response' ? html`
                     <span class="header-text">${stateText}</span>
                     <div class="header-controls">
                         <span class="question-text">${self.getTruncatedQuestion(self.currentQuestion)}</span>

@@ -16,6 +16,7 @@ export class AskView extends LitElement {
         currentResponse: { type: String },
         currentQuestion: { type: String },
         isLoading: { type: Boolean },
+        isAnalyzing: { type: Boolean },
         copyState: { type: String },
         isHovering: { type: Boolean },
         hoveredLineIndex: { type: Number },
@@ -35,6 +36,7 @@ export class AskView extends LitElement {
         this.currentResponse = '';
         this.currentQuestion = '';
         this.isLoading = false;
+        this.isAnalyzing = false;
         this.copyState = 'idle';
         this.showTextInput = true;
         this.headerText = 'AI Response';
@@ -59,6 +61,9 @@ export class AskView extends LitElement {
         this.smdContainer = null;
         this.lastProcessedLength = 0;
         this.wordCount = 0;
+
+        // Analysis timing
+        this.analyzeTimeout = null;
 
         this.handleSendText = this.handleSendText.bind(this);
         this.handleTextKeydown = this.handleTextKeydown.bind(this);
@@ -147,6 +152,10 @@ export class AskView extends LitElement {
         console.log('📱 AskView disconnectedCallback - IPC 이벤트 리스너 제거');
 
         document.removeEventListener('keydown', this.handleEscKey);
+
+        if (this.analyzeTimeout) {
+            clearTimeout(this.analyzeTimeout);
+        }
 
         if (this.copyTimeout) {
             clearTimeout(this.copyTimeout);
@@ -656,11 +665,26 @@ export class AskView extends LitElement {
 
         textInput.value = '';
 
-        if (window.api) {
-            window.api.askView.sendMessage(text).catch(error => {
-                console.error('Error sending text:', error);
-            });
+        // Start the analyze screen state for 800ms
+        this.isAnalyzing = true;
+        this.requestUpdate();
+
+        // Clear any existing timeout
+        if (this.analyzeTimeout) {
+            clearTimeout(this.analyzeTimeout);
         }
+
+        // After 800ms, send the actual message and switch to thinking
+        this.analyzeTimeout = setTimeout(() => {
+            this.isAnalyzing = false;
+            this.requestUpdate();
+            
+            if (window.api) {
+                window.api.askView.sendMessage(text).catch(error => {
+                    console.error('Error sending text:', error);
+                });
+            }
+        }, 800);
     }
 
     handleTextKeydown(e) {
@@ -681,13 +705,13 @@ export class AskView extends LitElement {
     updated(changedProperties) {
         super.updated(changedProperties);
 
-        // ✨ isLoading 또는 currentResponse가 변경될 때마다 뷰를 다시 그립니다.
-        if (changedProperties.has('isLoading') || changedProperties.has('currentResponse')) {
+        // ✨ isLoading, isAnalyzing 또는 currentResponse가 변경될 때마다 뷰를 다시 그립니다.
+        if (changedProperties.has('isLoading') || changedProperties.has('isAnalyzing') || changedProperties.has('currentResponse')) {
             this.renderContent();
         }
 
         // Only adjust height for state changes that affect layout, not during typing
-        if (changedProperties.has('isLoading') || changedProperties.has('currentResponse')) {
+        if (changedProperties.has('isLoading') || changedProperties.has('isAnalyzing') || changedProperties.has('currentResponse')) {
             this.adjustWindowHeightThrottled();
         }
 
@@ -717,10 +741,10 @@ export class AskView extends LitElement {
         this.updateComplete
             .then(() => {
                 // Fixed height for ask and thinking states (only input container visible)
-                const hasActualResponse = this.currentResponse && !this.isLoading;
+                const hasActualResponse = this.currentResponse && !this.isLoading && !this.isAnalyzing;
                 
                 if (!hasActualResponse) {
-                    // Fixed window height for ask anything and thinking states
+                    // Fixed window height for ask anything, analyzing, and thinking states
                     const fixedHeight = 100; // Fixed height for initial states
                     this.windowHeight = fixedHeight;
                     window.api.askView.adjustWindowHeight('ask', fixedHeight);

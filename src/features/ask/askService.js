@@ -160,6 +160,13 @@ class AskService {
         }
     }
 
+    _sendShowTextInputEvent() {
+        const askWindow = getWindowPool()?.get('ask');
+        if (askWindow && !askWindow.isDestroyed()) {
+            askWindow.webContents.send('ask:showTextInput');
+        }
+    }
+
     async toggleAskButton(inputScreenOnly = false) {
         const askWindow = getWindowPool()?.get('ask');
 
@@ -175,6 +182,10 @@ class AskService {
         if (askWindow && askWindow.isVisible() && hasContent) {
             this.state.showTextInput = !this.state.showTextInput;
             this._broadcastState();
+            // Send specific event to trigger follow-up input when there's content
+            if (this.state.showTextInput) {
+                this._sendShowTextInputEvent();
+            }
         } else {
             if (askWindow && askWindow.isVisible()) {
                 internalBridge.emit('window:requestVisibility', { name: 'ask', visible: false });

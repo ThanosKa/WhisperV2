@@ -269,6 +269,49 @@ export const styles = css`
         min-height: 0;
         max-height: 70vh;
         position: relative;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .followup-input-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 20px;
+        height: 40px;
+        min-height: 40px;
+        max-height: 40px;
+        background: transparent;
+        border-top: 1px solid rgba(255, 255, 255, 0.15);
+        flex-shrink: 0;
+        transition:
+            opacity 0.1s ease-in-out,
+            transform 0.1s ease-in-out;
+        transform-origin: bottom;
+        box-sizing: border-box;
+        position: relative;
+    }
+
+    .followup-input-container #followupInput {
+        flex: 1;
+        padding: 0;
+        background: transparent;
+        border: none;
+        outline: none;
+        color: rgb(255, 255, 255);
+        font-size: 15px;
+        font-family: 'Helvetica Neue', sans-serif;
+        font-weight: 400;
+        height: 100%;
+        cursor: text;
+    }
+
+    .followup-input-container #followupInput::placeholder {
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .followup-input-container #followupInput:focus {
+        outline: none;
+        cursor: text;
     }
 
     .response-container.hidden {

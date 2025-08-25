@@ -23,6 +23,7 @@ export class AskView extends LitElement {
         hoveredLineIndex: { type: Number },
         lineCopyState: { type: Object },
         showTextInput: { type: Boolean },
+        showFollowupInput: { type: Boolean },
         headerText: { type: String },
         headerAnimating: { type: Boolean },
         isStreaming: { type: Boolean },
@@ -41,6 +42,7 @@ export class AskView extends LitElement {
         this.isTransitioning = false;
         this.copyState = 'idle';
         this.showTextInput = true;
+        this.showFollowupInput = false;
         this.headerText = 'AI Response';
         this.headerAnimating = false;
         this.isStreaming = false;
@@ -111,11 +113,32 @@ export class AskView extends LitElement {
         if (window.api) {
             window.api.askView.onShowTextInput(() => {
                 console.log('Show text input signal received');
-                if (!this.showTextInput) {
-                    this.showTextInput = true;
-                    this.updateComplete.then(() => this.focusTextInput());
+                console.log('Current state:', {
+                    currentResponse: !!this.currentResponse,
+                    isLoading: this.isLoading,
+                    isAnalyzing: this.isAnalyzing,
+                    showFollowupInput: this.showFollowupInput
+                });
+                const hasActualResponse = this.currentResponse && !this.isLoading && !this.isAnalyzing;
+                
+                if (hasActualResponse) {
+                    // When there's an AI response, show follow-up input instead
+                    console.log('Showing follow-up input');
+                    if (!this.showFollowupInput) {
+                        this.showFollowupInput = true;
+                        this.updateComplete.then(() => this.focusFollowupInput());
+                    } else {
+                        this.focusFollowupInput();
+                    }
                 } else {
-                    this.focusTextInput();
+                    // When no response, show main input
+                    console.log('Showing main input');
+                    if (!this.showTextInput) {
+                        this.showTextInput = true;
+                        this.updateComplete.then(() => this.focusTextInput());
+                    } else {
+                        this.focusTextInput();
+                    }
                 }
             });
 
@@ -135,6 +158,11 @@ export class AskView extends LitElement {
 
                 const wasHidden = !this.showTextInput;
                 this.showTextInput = newState.showTextInput;
+                
+                // Reset follow-up input when starting new conversation
+                if (newState.isLoading || newState.isAnalyzing || !newState.currentResponse) {
+                    this.showFollowupInput = false;
+                }
 
                 if (newState.showTextInput) {
                     if (wasHidden) {
@@ -272,6 +300,7 @@ export class AskView extends LitElement {
         this.isStreaming = false;
         this.headerText = 'AI Response';
         this.showTextInput = true;
+        this.showFollowupInput = false;
         this.lastProcessedLength = 0;
         this.smdParser = null;
         this.smdContainer = null;
@@ -288,6 +317,15 @@ export class AskView extends LitElement {
             const textInput = this.shadowRoot?.getElementById('textInput');
             if (textInput) {
                 textInput.focus();
+            }
+        });
+    }
+
+    focusFollowupInput() {
+        requestAnimationFrame(() => {
+            const followupInput = this.shadowRoot?.getElementById('followupInput');
+            if (followupInput) {
+                followupInput.focus();
             }
         });
     }
@@ -675,6 +713,46 @@ export class AskView extends LitElement {
         // Start the analyze screen state for 800ms
         this.isTransitioning = true;
         this.isAnalyzing = true;
+        this.showFollowupInput = false; // Hide follow-up input when starting new conversation
+        this.requestUpdate();
+
+        // Clear any existing timeout
+        if (this.analyzeTimeout) {
+            clearTimeout(this.analyzeTimeout);
+        }
+
+        // After 800ms, send the actual message and switch to thinking
+        this.analyzeTimeout = setTimeout(() => {
+            // Set loading state first to ensure smooth transition
+            this.isLoading = true;
+            this.isAnalyzing = false;
+            // Keep isTransitioning true until we get response
+            this.requestUpdate();
+            
+            if (window.api) {
+                window.api.askView.sendMessage(text).catch(error => {
+                    console.error('Error sending text:', error);
+                    // Reset states on error
+                    this.isLoading = false;
+                    this.isAnalyzing = false;
+                    this.isTransitioning = false;
+                    this.requestUpdate();
+                });
+            }
+        }, 800);
+    }
+
+    async handleFollowupSendText(e, overridingText = '') {
+        const followupInput = this.shadowRoot?.getElementById('followupInput');
+        const text = (overridingText || followupInput?.value || '').trim();
+        if (!text) return;
+
+        followupInput.value = '';
+        this.showFollowupInput = false; // Hide follow-up input
+
+        // Start the analyze screen state for 800ms
+        this.isTransitioning = true;
+        this.isAnalyzing = true;
         this.requestUpdate();
 
         // Clear any existing timeout
@@ -718,6 +796,21 @@ export class AskView extends LitElement {
         }
     }
 
+    handleFollowupKeydown(e) {
+        // Fix for IME composition issue: Ignore Enter key presses while composing.
+        if (e.isComposing) {
+            return;
+        }
+
+        const isPlainEnter = e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey;
+        const isModifierEnter = e.key === 'Enter' && (e.metaKey || e.ctrlKey);
+
+        if (isPlainEnter || isModifierEnter) {
+            e.preventDefault();
+            this.handleFollowupSendText();
+        }
+    }
+
     updated(changedProperties) {
         super.updated(changedProperties);
 
@@ -727,12 +820,16 @@ export class AskView extends LitElement {
         }
 
         // Only adjust height for state changes that affect layout, not during typing
-        if (changedProperties.has('isLoading') || changedProperties.has('isAnalyzing') || changedProperties.has('currentResponse')) {
+        if (changedProperties.has('isLoading') || changedProperties.has('isAnalyzing') || changedProperties.has('currentResponse') || changedProperties.has('showFollowupInput')) {
             this.adjustWindowHeightThrottled();
         }
 
         if (changedProperties.has('showTextInput') && this.showTextInput) {
             this.focusTextInput();
+        }
+        
+        if (changedProperties.has('showFollowupInput') && this.showFollowupInput) {
+            this.focusFollowupInput();
         }
     }
 
@@ -770,15 +867,17 @@ export class AskView extends LitElement {
                 // Dynamic height calculation only when there's actual AI response content
                 const containerEl = this.shadowRoot.querySelector('.text-input-container');
                 const responseEl = this.shadowRoot.querySelector('.response-container');
+                const followupEl = this.shadowRoot.querySelector('.followup-input-container');
 
                 if (!containerEl) return;
 
                 const containerHeight = containerEl.offsetHeight;
                 const responseHeight = responseEl ? responseEl.scrollHeight : 0;
+                const followupHeight = followupEl && this.showFollowupInput ? followupEl.offsetHeight : 0;
 
                 // Add extra padding for borders and spacing
                 const borderPadding = 10; // Account for container borders and padding
-                const idealHeight = containerHeight + responseHeight + borderPadding;
+                const idealHeight = containerHeight + responseHeight + followupHeight + borderPadding;
 
                 // Ensure minimum height shows all content including borders 
                 const minHeightForContent = 100; // Minimum to show input field + borders properly

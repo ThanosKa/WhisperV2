@@ -117,6 +117,23 @@ export const renderTemplate = self => {
                     <!-- Content is dynamically generated in renderContent() -->
                 </div>
             ` : ''}
+            
+            <!-- Follow-up Input Container - Only shown when triggered and there's a response -->
+            ${hasActualResponse && self.showFollowupInput ? (() => {
+                console.log('[Template] Rendering follow-up input - hasActualResponse:', hasActualResponse, 'showFollowupInput:', self.showFollowupInput);
+                return html`
+                    <div class="followup-input-container">
+                        <input type="text" id="followupInput" placeholder="Ask anything" @keydown=${self.handleFollowupKeydown} @focus=${self.handleInputFocus} />
+                        <button class="submit-btn" @click=${self.handleFollowupSendText}>
+                            <span class="btn-label">Submit</span>
+                            <span class="btn-icon"> ↵ </span>
+                        </button>
+                    </div>
+                `;
+            })() : (() => {
+                console.log('[Template] NOT rendering follow-up input - hasActualResponse:', hasActualResponse, 'showFollowupInput:', self.showFollowupInput);
+                return '';
+            })()}
         </div>
     `;
 };

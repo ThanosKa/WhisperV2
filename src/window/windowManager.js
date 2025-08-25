@@ -457,7 +457,12 @@ function createFeatureWindows(header, namesToCreate) {
 
             // ask
             case 'ask': {
-                const ask = new BrowserWindow({ ...commonChildOptions, width: 600 });
+                const ask = new BrowserWindow({ 
+                    ...commonChildOptions, 
+                    width: 600,
+                    height: 100, // Initial height to ensure borders are visible
+                    minHeight: 80 // Minimum height to prevent cutting off borders
+                });
                 ask.setContentProtection(isContentProtectionOn);
                 ask.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
                 if (process.platform === 'darwin') {

@@ -730,7 +730,7 @@ export class AskView extends LitElement {
     }
 
     firstUpdated() {
-        setTimeout(() => this.adjustWindowHeight(), 200);
+        setTimeout(() => this.adjustWindowHeight(), 300); // Increased delay to ensure full DOM rendering
     }
 
     getTruncatedQuestion(question, maxLength = 30) {
@@ -759,9 +759,13 @@ export class AskView extends LitElement {
                 const responseHeight = responseEl.scrollHeight;
                 const inputHeight = inputEl && !inputEl.classList.contains('hidden') ? inputEl.offsetHeight : 0;
 
-                const idealHeight = headerHeight + responseHeight + inputHeight;
+                // Add extra padding for borders and spacing
+                const borderPadding = 10; // Account for container borders and padding
+                const idealHeight = headerHeight + responseHeight + inputHeight + borderPadding;
 
-                const targetHeight = Math.min(700, idealHeight < 80 ? 40 : idealHeight);
+                // Ensure minimum height shows all content including borders 
+                const minHeightForContent = 90; // Minimum to show input field + borders properly
+                const targetHeight = Math.min(700, Math.max(minHeightForContent, idealHeight));
 
                 this.windowHeight = targetHeight;
                 window.api.askView.adjustWindowHeight('ask', targetHeight);

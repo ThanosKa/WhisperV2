@@ -98,6 +98,10 @@ const adjustWindowHeight = (winName, targetHeight) => {
     internalBridge.emit('window:adjustWindowHeight', { winName, targetHeight });
 };
 
+const adjustWindowHeightMaintainPosition = (winName, targetHeight) => {
+    internalBridge.emit('window:adjustWindowHeightMaintainPosition', { winName, targetHeight });
+};
+
 function setupWindowController(windowPool, layoutManager, movementManager) {
     internalBridge.on('window:requestVisibility', ({ name, visible }) => {
         handleWindowVisibilityRequest(windowPool, layoutManager, movementManager, name, visible);
@@ -205,6 +209,29 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
                 onComplete: () => {
                     if (!wasResizable) senderWindow.setResizable(false);
                     updateChildWindowLayouts(true);
+                },
+            });
+        }
+    });
+
+    internalBridge.on('window:adjustWindowHeightMaintainPosition', ({ winName, targetHeight }) => {
+        console.log(`[Layout Debug] adjustWindowHeightMaintainPosition: targetHeight=${targetHeight}`);
+        const senderWindow = windowPool.get(winName);
+        if (senderWindow) {
+            const currentBounds = senderWindow.getBounds();
+            // Maintain current top position and only change height
+            const newBounds = {
+                ...currentBounds,
+                height: Math.max(targetHeight, 80), // Ensure minimum height
+            };
+
+            const wasResizable = senderWindow.isResizable();
+            if (!wasResizable) senderWindow.setResizable(true);
+
+            movementManager.animateWindowBounds(senderWindow, newBounds, {
+                onComplete: () => {
+                    if (!wasResizable) senderWindow.setResizable(false);
+                    // Don't call updateChildWindowLayouts to avoid repositioning
                 },
             });
         }
@@ -457,11 +484,11 @@ function createFeatureWindows(header, namesToCreate) {
 
             // ask
             case 'ask': {
-                const ask = new BrowserWindow({ 
-                    ...commonChildOptions, 
+                const ask = new BrowserWindow({
+                    ...commonChildOptions,
                     width: 600,
                     height: 100, // Initial height to ensure borders are visible
-                    minHeight: 80 // Minimum height to prevent cutting off borders
+                    minHeight: 80, // Minimum height to prevent cutting off borders
                 });
                 ask.setContentProtection(isContentProtectionOn);
                 ask.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
@@ -726,4 +753,5 @@ module.exports = {
     getHeaderPosition,
     moveHeaderTo,
     adjustWindowHeight,
+    adjustWindowHeightMaintainPosition,
 };

@@ -285,17 +285,17 @@ export const styles = css`
         flex-shrink: 0;
         box-sizing: border-box;
         position: relative;
-        
+
         /* Smooth appearance animation */
         opacity: 0;
-        transform: translateY(20px);
-        animation: slideUpSmooth 0.4s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+        transform: translateY(10px);
+        animation: slideUpSmooth 0.2s cubic-bezier(0.23, 1, 0.32, 1) forwards;
     }
 
     @keyframes slideUpSmooth {
         0% {
             opacity: 0;
-            transform: translateY(20px);
+            transform: translateY(10px);
         }
         100% {
             opacity: 1;
@@ -543,7 +543,8 @@ export const styles = css`
     }
 
     @keyframes analyzing-pulse {
-        0%, 100% {
+        0%,
+        100% {
             opacity: 0.7;
         }
         50% {
@@ -552,7 +553,8 @@ export const styles = css`
     }
 
     @keyframes thinking-pulse {
-        0%, 100% {
+        0%,
+        100% {
             opacity: 0.7;
         }
         50% {
@@ -626,7 +628,9 @@ export const styles = css`
     }
 
     @keyframes thinking-dot-pulse {
-        0%, 80%, 100% {
+        0%,
+        80%,
+        100% {
             opacity: 0.3;
             transform: scale(0.8);
         }
@@ -828,7 +832,7 @@ export const styles = css`
     .clear-btn {
         display: flex;
         align-items: center;
-        background: rgba(0, 0, 0, 0.0);
+        background: rgba(0, 0, 0, 0);
         color: rgb(255, 255, 255);
         border: none;
         border-radius: 6px;
@@ -843,7 +847,7 @@ export const styles = css`
         padding: 0 10px;
         box-shadow: none;
     }
-    
+
     .submit-btn:disabled,
     .clear-btn:disabled {
         background: #6b7280;

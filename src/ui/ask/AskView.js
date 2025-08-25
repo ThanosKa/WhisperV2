@@ -3,8 +3,8 @@ import { parser, parser_write, parser_end, default_renderer } from '../../ui/ass
 import { styles } from './ask-view.css.js';
 import { renderTemplate } from './AskView.template.js';
 
-const BASE_DELAY = 8;  // ms
-const MIN_DELAY = 2;   // ms
+const BASE_DELAY = 8; // ms
+const MIN_DELAY = 2; // ms
 
 function calcDelay(wordIndex) {
     // Simple adaptive delay that gets faster over time
@@ -117,10 +117,10 @@ export class AskView extends LitElement {
                     currentResponse: !!this.currentResponse,
                     isLoading: this.isLoading,
                     isAnalyzing: this.isAnalyzing,
-                    showFollowupInput: this.showFollowupInput
+                    showFollowupInput: this.showFollowupInput,
                 });
                 const hasActualResponse = this.currentResponse && !this.isLoading && !this.isAnalyzing;
-                
+
                 if (hasActualResponse) {
                     // When there's an AI response, show follow-up input instead
                     console.log('Showing follow-up input');
@@ -128,10 +128,10 @@ export class AskView extends LitElement {
                         this.showFollowupInput = true;
                         this.updateComplete.then(() => {
                             this.focusFollowupInput();
-                            // Delay height adjustment to allow smooth animation to complete
-                            setTimeout(() => {
+                            // Immediately adjust height for smooth expansion
+                            requestAnimationFrame(() => {
                                 this.adjustWindowHeightThrottled();
-                            }, 400); // Match CSS animation duration
+                            });
                         });
                     } else {
                         this.focusFollowupInput();
@@ -164,7 +164,7 @@ export class AskView extends LitElement {
 
                 const wasHidden = !this.showTextInput;
                 this.showTextInput = newState.showTextInput;
-                
+
                 // Reset follow-up input when starting new conversation
                 if (newState.isLoading || newState.isAnalyzing || !newState.currentResponse) {
                     this.showFollowupInput = false;
@@ -734,7 +734,7 @@ export class AskView extends LitElement {
             this.isAnalyzing = false;
             // Keep isTransitioning true until we get response
             this.requestUpdate();
-            
+
             if (window.api) {
                 window.api.askView.sendMessage(text).catch(error => {
                     console.error('Error sending text:', error);
@@ -773,7 +773,7 @@ export class AskView extends LitElement {
             this.isAnalyzing = false;
             // Keep isTransitioning true until we get response
             this.requestUpdate();
-            
+
             if (window.api) {
                 window.api.askView.sendMessage(text).catch(error => {
                     console.error('Error sending text:', error);
@@ -834,7 +834,7 @@ export class AskView extends LitElement {
         if (changedProperties.has('showTextInput') && this.showTextInput) {
             this.focusTextInput();
         }
-        
+
         if (changedProperties.has('showFollowupInput') && this.showFollowupInput) {
             this.focusFollowupInput();
         }
@@ -862,7 +862,7 @@ export class AskView extends LitElement {
             .then(() => {
                 // Fixed height for ask and thinking states (only input container visible)
                 const hasActualResponse = this.currentResponse && !this.isLoading && !this.isAnalyzing;
-                
+
                 if (!hasActualResponse) {
                     // Fixed window height for ask anything, analyzing, and thinking states
                     const fixedHeight = 100; // Fixed height for initial states
@@ -886,12 +886,18 @@ export class AskView extends LitElement {
                 const borderPadding = 10; // Account for container borders and padding
                 const idealHeight = containerHeight + responseHeight + followupHeight + borderPadding;
 
-                // Ensure minimum height shows all content including borders 
+                // Ensure minimum height shows all content including borders
                 const minHeightForContent = 100; // Minimum to show input field + borders properly
                 const targetHeight = Math.min(700, Math.max(minHeightForContent, idealHeight));
 
                 this.windowHeight = targetHeight;
-                window.api.askView.adjustWindowHeight('ask', targetHeight);
+
+                // When showing followup input, use special height adjustment to maintain position
+                if (this.showFollowupInput && followupHeight > 0) {
+                    window.api.askView.adjustWindowHeightMaintainPosition('ask', targetHeight);
+                } else {
+                    window.api.askView.adjustWindowHeight('ask', targetHeight);
+                }
             })
             .catch(err => console.error('AskView adjustWindowHeight error:', err));
     }

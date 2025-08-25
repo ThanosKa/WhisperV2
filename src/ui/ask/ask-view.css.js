@@ -193,7 +193,7 @@ export const styles = css`
         justify-content: space-between;
         align-items: center;
         padding: 12px 16px;
-        background: rgba(11, 11, 11, 0.75);
+        background: transparent;
         border-bottom: 1px solid rgba(255, 255, 255, 0.15);
         border-radius: 6px 6px 0 0;
         flex-shrink: 0;
@@ -203,11 +203,80 @@ export const styles = css`
         display: none;
     }
 
-    .header-left {
+    /* Remove border during analyze/thinking states when no content below */
+    .response-header.analyze-thinking {
+        border-bottom: none;
+    }
+
+    /* Analyze/Thinking Content - Shown in text input area */
+    .analyze-thinking-content {
         display: flex;
         align-items: center;
         gap: 8px;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+    }
+
+    .analyze-thinking-text {
+        color: rgb(255, 255, 255);
+        font-size: 15px;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+
+    .analyze-thinking-dots {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .thinking-dot {
+        width: 6px;
+        height: 6px;
+        background: rgb(255, 255, 255);
+        border-radius: 50%;
+        animation: thinking-pulse 1.5s ease-in-out infinite;
+    }
+
+    .thinking-dot:nth-child(1) {
+        animation-delay: 0s;
+    }
+
+    .thinking-dot:nth-child(2) {
+        animation-delay: 0.2s;
+    }
+
+    .thinking-dot:nth-child(3) {
+        animation-delay: 0.4s;
+    }
+
+    @keyframes thinking-pulse {
+        0%,
+        80%,
+        100% {
+            opacity: 0.3;
+            transform: scale(0.8);
+        }
+        40% {
+            opacity: 1;
+            transform: scale(1.2);
+        }
+    }
+
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 4px;
         flex-shrink: 0;
+    }
+
+    /* Header thinking dots - inline with header text */
+    .header-thinking-dots {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 0;
     }
 
     .response-icon {
@@ -225,6 +294,16 @@ export const styles = css`
         width: 12px;
         height: 12px;
         stroke: rgba(255, 255, 255, 0.9);
+    }
+
+    .header-text {
+        font-size: 13px;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.9);
+        white-space: nowrap;
+        position: relative;
+        overflow: hidden;
+        line-height: 1;
     }
 
     .response-label {
@@ -380,6 +459,7 @@ export const styles = css`
         min-height: 0;
         max-height: 70vh;
         position: relative;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
     }
 
     .response-container.hidden {
@@ -427,8 +507,8 @@ export const styles = css`
         justify-content: center;
         gap: 8px;
         padding: 20px;
-        background: rgba(11, 11, 11, 0.55);
-        border: 1px solid rgba(255, 255, 255, 0.25);
+        background: transparent;
+        border: none;
         border-radius: 6px;
         height: 40px;
         font-size: 14px;
@@ -533,12 +613,13 @@ export const styles = css`
 
     .text-input-container {
         display: flex;
+        justify-content: space-between;
         align-items: center;
-        gap: 8px;
         padding: 12px 20px;
         height: 40px;
         background: transparent;
         border-top: 1px solid rgba(255, 255, 255, 0.15);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
         flex-shrink: 0;
         transition:
             opacity 0.1s ease-in-out,
@@ -547,7 +628,13 @@ export const styles = css`
         box-sizing: border-box;
     }
 
+    /* Keep bottom border for analyze/thinking states, remove for Ask anything input */
+    .text-input-container:not(.analyze-thinking) {
+        border-bottom: none;
+    }
+
     .text-input-container.hidden {
+        display: none;
         opacity: 0;
         transform: scaleY(0);
         padding: 0;
@@ -567,14 +654,17 @@ export const styles = css`
         border: none;
         outline: none;
         color: rgb(255, 255, 255);
-        font-size: 15px;
+        font-size: 13px;
         font-family: 'Helvetica Neue', sans-serif;
-        font-weight: 400;
+        font-weight: 500;
         height: 100%;
+        line-height: 1;
     }
 
     #textInput::placeholder {
         color: rgba(255, 255, 255, 0.5);
+        font-size: 13px;
+        font-weight: 500;
     }
 
     #textInput:focus {

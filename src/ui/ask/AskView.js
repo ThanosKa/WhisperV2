@@ -16,6 +16,8 @@ export class AskView extends LitElement {
         currentResponse: { type: String },
         currentQuestion: { type: String },
         isLoading: { type: Boolean },
+        isAnalyzing: { type: Boolean },
+        isThinking: { type: Boolean },
         copyState: { type: String },
         isHovering: { type: Boolean },
         hoveredLineIndex: { type: Number },
@@ -35,6 +37,8 @@ export class AskView extends LitElement {
         this.currentResponse = '';
         this.currentQuestion = '';
         this.isLoading = false;
+        this.isAnalyzing = false;
+        this.isThinking = false;
         this.copyState = 'idle';
         this.showTextInput = true;
         this.headerText = 'AI Response';
@@ -48,6 +52,10 @@ export class AskView extends LitElement {
         this.displayBuffer = ''; // what the user sees
         this.typewriterInterval = null; // interval id
         this.pendingText = ''; // full answer still arriving
+        
+        // Timing control for analyze/thinking phases
+        this.analyzeTimer = null;
+        this.thinkingTimer = null;
 
         this.marked = null;
         this.hljs = null;
@@ -124,6 +132,15 @@ export class AskView extends LitElement {
                 const wasHidden = !this.showTextInput;
                 this.showTextInput = newState.showTextInput;
 
+                // Handle state transitions with timing
+                if (newState.isLoading && !this.isAnalyzing && !this.isThinking) {
+                    // Start analyze phase immediately when loading begins
+                    this.startAnalyzeThinkingFlow();
+                } else if (!newState.isLoading && !newState.isStreaming) {
+                    // Clear analyze/thinking when not loading and not streaming
+                    this.clearAnalyzeThinkingFlow();
+                }
+
                 if (newState.showTextInput) {
                     if (wasHidden) {
                         this.updateComplete.then(() => this.focusTextInput());
@@ -143,6 +160,9 @@ export class AskView extends LitElement {
             this.typewriterInterval = null;
         }
         this.resizeObserver?.disconnect();
+        
+        // Clean up analyze/thinking timers
+        this.clearAnalyzeThinkingFlow();
 
         console.log('📱 AskView disconnectedCallback - IPC 이벤트 리스너 제거');
 
@@ -254,6 +274,8 @@ export class AskView extends LitElement {
         this.currentQuestion = '';
         this.isLoading = false;
         this.isStreaming = false;
+        this.isAnalyzing = false;
+        this.isThinking = false;
         this.headerText = 'AI Response';
         this.showTextInput = true;
         this.lastProcessedLength = 0;
@@ -261,6 +283,36 @@ export class AskView extends LitElement {
         this.smdContainer = null;
         this.wordCount = 0;
         this.interrupted = false;
+        this.clearAnalyzeThinkingFlow();
+    }
+
+    startAnalyzeThinkingFlow() {
+        // Clear any existing timers
+        this.clearAnalyzeThinkingFlow();
+        
+        // Start with analyzing phase
+        this.isAnalyzing = true;
+        this.isThinking = false;
+        
+        // After 800ms, switch to thinking phase
+        this.analyzeTimer = setTimeout(() => {
+            this.isAnalyzing = false;
+            this.isThinking = true;
+            this.requestUpdate();
+        }, 800);
+    }
+
+    clearAnalyzeThinkingFlow() {
+        if (this.analyzeTimer) {
+            clearTimeout(this.analyzeTimer);
+            this.analyzeTimer = null;
+        }
+        if (this.thinkingTimer) {
+            clearTimeout(this.thinkingTimer);
+            this.thinkingTimer = null;
+        }
+        this.isAnalyzing = false;
+        this.isThinking = false;
     }
 
     handleInputFocus() {
@@ -330,14 +382,9 @@ export class AskView extends LitElement {
         const responseContainer = this.shadowRoot.getElementById('responseContainer');
         if (!responseContainer) return;
 
-        // Check loading state
-        if (this.isLoading) {
-            responseContainer.innerHTML = `
-              <div class="loading-dots">
-                <div class="loading-dot"></div>
-                <div class="loading-dot"></div>
-                <div class="loading-dot"></div>
-              </div>`;
+        // During analyze/thinking states, keep container empty (no content, no window growth)
+        if (this.isAnalyzing || this.isThinking || this.isLoading) {
+            responseContainer.innerHTML = '';
             this.resetStreamingParser();
             return;
         }
@@ -349,7 +396,7 @@ export class AskView extends LitElement {
             return;
         }
 
-        // Set streaming markdown parser
+        // Set streaming markdown parser (only when we have actual content)
         this.renderStreamingMarkdown(responseContainer);
 
         // After updating content, recalculate window height
@@ -716,12 +763,19 @@ export class AskView extends LitElement {
     updated(changedProperties) {
         super.updated(changedProperties);
 
-        // ✨ isLoading 또는 currentResponse가 변경될 때마다 뷰를 다시 그립니다.
-        if (changedProperties.has('isLoading') || changedProperties.has('currentResponse')) {
+        // ✨ isLoading, currentResponse, or analyze/thinking states changed
+        if (changedProperties.has('isLoading') || 
+            changedProperties.has('currentResponse') ||
+            changedProperties.has('isAnalyzing') ||
+            changedProperties.has('isThinking')) {
             this.renderContent();
         }
 
-        if (changedProperties.has('showTextInput') || changedProperties.has('isLoading') || changedProperties.has('currentResponse')) {
+        if (changedProperties.has('showTextInput') || 
+            changedProperties.has('isLoading') || 
+            changedProperties.has('currentResponse') ||
+            changedProperties.has('isAnalyzing') ||
+            changedProperties.has('isThinking')) {
             this.adjustWindowHeightThrottled();
         }
 
@@ -754,19 +808,37 @@ export class AskView extends LitElement {
                 const responseEl = this.shadowRoot.querySelector('.response-container');
                 const inputEl = this.shadowRoot.querySelector('.text-input-container');
 
-                if (!headerEl || !responseEl) return;
+                if (!responseEl) return;
 
-                const headerHeight = headerEl.classList.contains('hidden') ? 0 : headerEl.offsetHeight;
-                const responseHeight = responseEl.scrollHeight;
+                // Calculate heights for visible elements
+                const headerHeight = headerEl && !headerEl.classList.contains('hidden') ? headerEl.offsetHeight : 0;
+                // During analyze/thinking states OR when response container is hidden, don't count its height
+                const isResponseContainerHidden = responseEl.classList.contains('hidden');
+                const responseHeight = (this.isAnalyzing || this.isThinking || isResponseContainerHidden) ? 0 : responseEl.scrollHeight;
                 const inputHeight = inputEl && !inputEl.classList.contains('hidden') ? inputEl.offsetHeight : 0;
 
                 // Add extra padding for borders and spacing
                 const borderPadding = 10; // Account for container borders and padding
-                const idealHeight = headerHeight + responseHeight + inputHeight + borderPadding;
+                
+                // UNIFIED WINDOW SIZE STRATEGY:
+                // Use fixed size for initial states (Ask anything, Analyze, Thinking)
+                // Only grow window when actual AI response content arrives
+                let targetHeight;
+                if (this.isAnalyzing || this.isThinking) {
+                    // Fixed size during analyze/thinking states - same as "Ask anything"
+                    targetHeight = 100; // Fixed height for consistency 
+                } else {
+                    // Dynamic size for AI response content
+                    const idealHeight = headerHeight + responseHeight + inputHeight + borderPadding;
+                    const minHeightForContent = 100; // Consistent minimum
+                    targetHeight = Math.min(700, Math.max(minHeightForContent, idealHeight));
+                }
 
-                // Ensure minimum height shows all content including borders 
-                const minHeightForContent = 90; // Minimum to show input field + borders properly
-                const targetHeight = Math.min(700, Math.max(minHeightForContent, idealHeight));
+                // Debug logging
+                console.log(`[AskView Debug] State: isAnalyzing=${this.isAnalyzing}, isThinking=${this.isThinking}, isLoading=${this.isLoading}`);
+                console.log(`[AskView Debug] Heights: header=${headerHeight}, response=${responseHeight}, input=${inputHeight}`);
+                console.log(`[AskView Debug] Strategy: ${this.isAnalyzing || this.isThinking ? 'FIXED' : 'DYNAMIC'} size, targetHeight=${targetHeight}`);
+                console.log(`[AskView Debug] Elements: headerHidden=${headerEl?.classList.contains('hidden')}, inputHidden=${inputEl?.classList.contains('hidden')}, responseHidden=${isResponseContainerHidden}`);
 
                 this.windowHeight = targetHeight;
                 window.api.askView.adjustWindowHeight('ask', targetHeight);

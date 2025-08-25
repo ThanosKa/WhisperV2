@@ -166,120 +166,9 @@ export const styles = css`
         background: rgba(11, 11, 11, 0.55);
         border-radius: 6px;
         border: 1px solid rgba(255, 255, 255, 0.25);
-        backdrop-filter: blur(25px);
         box-sizing: border-box;
         position: relative;
         overflow: hidden;
-    }
-
-    .ask-container::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.15);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-        border-radius: 12px;
-        filter: blur(10px);
-        z-index: -1;
-    }
-
-    .response-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 12px 16px;
-        background: rgba(11, 11, 11, 0.75);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-        border-radius: 6px 6px 0 0;
-        flex-shrink: 0;
-    }
-
-    .response-header.hidden {
-        display: none;
-    }
-
-    .header-left {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-shrink: 0;
-    }
-
-    .response-icon {
-        width: 20px;
-        height: 20px;
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-    }
-
-    .response-icon svg {
-        width: 12px;
-        height: 12px;
-        stroke: rgba(255, 255, 255, 0.9);
-    }
-
-    .response-label {
-        font-size: 13px;
-        font-weight: 500;
-        color: rgba(255, 255, 255, 0.9);
-        white-space: nowrap;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .response-label.animating {
-        animation: fadeInOut 0.3s ease-in-out;
-    }
-
-    @keyframes fadeInOut {
-        0% {
-            opacity: 1;
-            transform: translateY(0);
-        }
-        50% {
-            opacity: 0;
-            transform: translateY(-10px);
-        }
-        100% {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    .header-right {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex: 1;
-        justify-content: flex-end;
-    }
-
-    .question-text {
-        font-size: 13px;
-        color: rgb(255, 255, 255);
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        border-radius: 4px;
-        padding: 4px 8px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 300px;
-        margin-right: 8px;
-        transition: background-color 0.15s ease;
-    }
-
-    .question-text:hover {
-        background: rgba(255, 255, 255, 0.1);
     }
 
     .header-controls {
@@ -420,41 +309,6 @@ export const styles = css`
         animation: pulse 1.5s ease-in-out infinite;
     }
 
-    /* Thinking state container */
-    .thinking-container {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        padding: 20px;
-        background: rgba(11, 11, 11, 0.55);
-        border: 1px solid rgba(255, 255, 255, 0.25);
-        border-radius: 6px;
-        height: 40px;
-        font-size: 14px;
-        color: rgb(255, 255, 255);
-    }
-
-    .thinking-text {
-        color: rgb(255, 255, 255);
-        animation: thinking-pulse 1.5s ease-in-out infinite;
-    }
-
-    .brain-icon {
-        color: rgb(255, 255, 255);
-        width: 16px;
-        height: 16px;
-    }
-
-    @keyframes thinking-pulse {
-        0%, 100% {
-            opacity: 1;
-        }
-        50% {
-            opacity: 0.5;
-        }
-    }
-
     .loading-dot:nth-child(1) {
         animation-delay: 0s;
     }
@@ -537,6 +391,8 @@ export const styles = css`
         gap: 8px;
         padding: 12px 20px;
         height: 40px;
+        min-height: 40px;
+        max-height: 40px;
         background: transparent;
         border-top: 1px solid rgba(255, 255, 255, 0.15);
         flex-shrink: 0;
@@ -545,6 +401,29 @@ export const styles = css`
             transform 0.1s ease-in-out;
         transform-origin: bottom;
         box-sizing: border-box;
+        position: relative;
+    }
+
+    .text-input-container.ask-state {
+        border-top: none;
+        justify-content: flex-start;
+    }
+
+    .text-input-container.thinking-state {
+        border-top: none;
+        justify-content: flex-start;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .text-input-container.response-state {
+        justify-content: flex-start;
+        background: rgba(11, 11, 11, 0.75);
+        border-top: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .text-input-container.response-state .header-controls {
+        margin-left: auto;
     }
 
     .text-input-container.hidden {
@@ -560,6 +439,117 @@ export const styles = css`
         border-top: none;
     }
 
+    /* State icon styling */
+    .state-icon {
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        color: rgb(255, 255, 255);
+    }
+
+    .state-icon svg {
+        width: 16px;
+        height: 16px;
+        stroke: rgb(255, 255, 255);
+    }
+
+    /* Header text styling */
+    .header-text {
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1;
+        color: rgb(255, 255, 255);
+        white-space: nowrap;
+        position: relative;
+        overflow: hidden;
+        padding: 12px 0;
+        margin: 0;
+        display: flex;
+        align-items: center;
+    }
+
+    .thinking-text {
+        animation: thinking-pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes thinking-pulse {
+        0%, 100% {
+            opacity: 0.7;
+        }
+        50% {
+            opacity: 1;
+        }
+    }
+
+    /* Thinking dots animation */
+    .thinking-dots {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 8px;
+    }
+
+    .thinking-dot {
+        width: 6px;
+        height: 6px;
+        background: rgb(255, 255, 255);
+        border-radius: 50%;
+        animation: thinking-dot-pulse 1.2s ease-in-out infinite;
+    }
+
+    .thinking-dot:nth-child(1) {
+        animation-delay: 0s;
+    }
+
+    .thinking-dot:nth-child(2) {
+        animation-delay: 0.2s;
+    }
+
+    .thinking-dot:nth-child(3) {
+        animation-delay: 0.4s;
+    }
+
+    @keyframes thinking-dot-pulse {
+        0%, 80%, 100% {
+            opacity: 0.3;
+            transform: scale(0.8);
+        }
+        40% {
+            opacity: 1;
+            transform: scale(1.2);
+        }
+    }
+
+    /* Header controls for response state */
+    .header-controls {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-shrink: 0;
+    }
+
+    .question-text {
+        font-size: 13px;
+        color: rgb(255, 255, 255);
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 4px;
+        padding: 4px 8px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 300px;
+        margin-right: 8px;
+        transition: background-color 0.15s ease;
+    }
+
+    .question-text:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
     #textInput {
         flex: 1;
         padding: 0;
@@ -571,6 +561,7 @@ export const styles = css`
         font-family: 'Helvetica Neue', sans-serif;
         font-weight: 400;
         height: 100%;
+        cursor: text;
     }
 
     #textInput::placeholder {
@@ -579,6 +570,7 @@ export const styles = css`
 
     #textInput:focus {
         outline: none;
+        cursor: text;
     }
 
     /* Character limit warning */
@@ -704,10 +696,6 @@ export const styles = css`
         box-shadow: none !important;
         filter: none !important;
         backdrop-filter: none !important;
-    }
-
-    :host-context(body.has-glass) .ask-container::before {
-        display: none !important;
     }
 
     :host-context(body.has-glass) .copy-button:hover,

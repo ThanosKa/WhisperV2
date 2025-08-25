@@ -330,21 +330,9 @@ export class AskView extends LitElement {
         const responseContainer = this.shadowRoot.getElementById('responseContainer');
         if (!responseContainer) return;
 
-        // Check loading state
-        if (this.isLoading) {
-            responseContainer.innerHTML = `
-              <div class="loading-dots">
-                <div class="loading-dot"></div>
-                <div class="loading-dot"></div>
-                <div class="loading-dot"></div>
-              </div>`;
-            this.resetStreamingParser();
-            return;
-        }
-
-        // If there is no response, show empty state
-        if (!this.currentResponse) {
-            responseContainer.innerHTML = `<div class="empty-state">...</div>`;
+        // Only render content when there's actual response and not just loading
+        if (!this.currentResponse || this.isLoading) {
+            // No content to render during loading or when no response
             this.resetStreamingParser();
             return;
         }
@@ -496,29 +484,6 @@ export class AskView extends LitElement {
         if (window.api) {
             window.api.askView.adjustWindowHeight(targetHeight);
         }
-    }
-
-    animateHeaderText(text) {
-        this.headerAnimating = true;
-        this.requestUpdate();
-
-        setTimeout(() => {
-            this.headerText = text;
-            this.headerAnimating = false;
-            this.requestUpdate();
-        }, 150);
-    }
-
-    startHeaderAnimation() {
-        this.animateHeaderText('analyzing screen...');
-
-        if (this.headerAnimationTimeout) {
-            clearTimeout(this.headerAnimationTimeout);
-        }
-
-        this.headerAnimationTimeout = setTimeout(() => {
-            this.animateHeaderText('thinking...');
-        }, 1500);
     }
 
     renderMarkdown(content) {
@@ -721,7 +686,8 @@ export class AskView extends LitElement {
             this.renderContent();
         }
 
-        if (changedProperties.has('showTextInput') || changedProperties.has('isLoading') || changedProperties.has('currentResponse')) {
+        // Only adjust height for state changes that affect layout, not during typing
+        if (changedProperties.has('isLoading') || changedProperties.has('currentResponse')) {
             this.adjustWindowHeightThrottled();
         }
 
@@ -750,22 +716,32 @@ export class AskView extends LitElement {
 
         this.updateComplete
             .then(() => {
-                const headerEl = this.shadowRoot.querySelector('.response-header');
+                // Fixed height for ask and thinking states (only input container visible)
+                const hasActualResponse = this.currentResponse && !this.isLoading;
+                
+                if (!hasActualResponse) {
+                    // Fixed window height for ask anything and thinking states
+                    const fixedHeight = 100; // Fixed height for initial states
+                    this.windowHeight = fixedHeight;
+                    window.api.askView.adjustWindowHeight('ask', fixedHeight);
+                    return;
+                }
+
+                // Dynamic height calculation only when there's actual AI response content
+                const containerEl = this.shadowRoot.querySelector('.text-input-container');
                 const responseEl = this.shadowRoot.querySelector('.response-container');
-                const inputEl = this.shadowRoot.querySelector('.text-input-container');
 
-                if (!headerEl || !responseEl) return;
+                if (!containerEl) return;
 
-                const headerHeight = headerEl.classList.contains('hidden') ? 0 : headerEl.offsetHeight;
-                const responseHeight = responseEl.scrollHeight;
-                const inputHeight = inputEl && !inputEl.classList.contains('hidden') ? inputEl.offsetHeight : 0;
+                const containerHeight = containerEl.offsetHeight;
+                const responseHeight = responseEl ? responseEl.scrollHeight : 0;
 
                 // Add extra padding for borders and spacing
                 const borderPadding = 10; // Account for container borders and padding
-                const idealHeight = headerHeight + responseHeight + inputHeight + borderPadding;
+                const idealHeight = containerHeight + responseHeight + borderPadding;
 
                 // Ensure minimum height shows all content including borders 
-                const minHeightForContent = 90; // Minimum to show input field + borders properly
+                const minHeightForContent = 100; // Minimum to show input field + borders properly
                 const targetHeight = Math.min(700, Math.max(minHeightForContent, idealHeight));
 
                 this.windowHeight = targetHeight;

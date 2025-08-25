@@ -11,13 +11,14 @@ export const renderTemplate = self => {
     let showTextInput = true;
     let showHeaderControls = false;
     
+    // Improved state management - use transitioning to prevent gaps
     if (self.isAnalyzing) {
         currentState = 'analyzing';
         stateText = 'Analyzing screen';
         showIcon = true;
         showTextInput = false;
         showHeaderControls = false;
-    } else if (self.isLoading) {
+    } else if (self.isLoading || self.isTransitioning) {
         currentState = 'thinking';
         stateText = 'Thinking';
         showIcon = true;

@@ -17,6 +17,7 @@ export class AskView extends LitElement {
         currentQuestion: { type: String },
         isLoading: { type: Boolean },
         isAnalyzing: { type: Boolean },
+        isTransitioning: { type: Boolean },
         copyState: { type: String },
         isHovering: { type: Boolean },
         hoveredLineIndex: { type: Number },
@@ -37,6 +38,7 @@ export class AskView extends LitElement {
         this.currentQuestion = '';
         this.isLoading = false;
         this.isAnalyzing = false;
+        this.isTransitioning = false;
         this.copyState = 'idle';
         this.showTextInput = true;
         this.headerText = 'AI Response';
@@ -125,6 +127,11 @@ export class AskView extends LitElement {
                 this.isLoading = newState.isLoading;
                 this.isStreaming = newState.isStreaming;
                 this.interrupted = newState.interrupted;
+
+                // Clear transitioning state when we get actual response content
+                if (newState.currentResponse) {
+                    this.isTransitioning = false;
+                }
 
                 const wasHidden = !this.showTextInput;
                 this.showTextInput = newState.showTextInput;
@@ -666,6 +673,7 @@ export class AskView extends LitElement {
         textInput.value = '';
 
         // Start the analyze screen state for 800ms
+        this.isTransitioning = true;
         this.isAnalyzing = true;
         this.requestUpdate();
 
@@ -676,12 +684,20 @@ export class AskView extends LitElement {
 
         // After 800ms, send the actual message and switch to thinking
         this.analyzeTimeout = setTimeout(() => {
+            // Set loading state first to ensure smooth transition
+            this.isLoading = true;
             this.isAnalyzing = false;
+            // Keep isTransitioning true until we get response
             this.requestUpdate();
             
             if (window.api) {
                 window.api.askView.sendMessage(text).catch(error => {
                     console.error('Error sending text:', error);
+                    // Reset states on error
+                    this.isLoading = false;
+                    this.isAnalyzing = false;
+                    this.isTransitioning = false;
+                    this.requestUpdate();
                 });
             }
         }, 800);

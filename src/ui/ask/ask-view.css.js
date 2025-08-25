@@ -574,7 +574,7 @@ export const styles = css`
     }
 
     #textInput::placeholder {
-        color: rgb(255, 255, 255);
+        color: rgba(255, 255, 255, 0.5);
     }
 
     #textInput:focus {

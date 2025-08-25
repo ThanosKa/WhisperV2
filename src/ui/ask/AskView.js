@@ -3,11 +3,12 @@ import { parser, parser_write, parser_end, default_renderer } from '../../ui/ass
 import { styles } from './ask-view.css.js';
 import { renderTemplate } from './AskView.template.js';
 
-const BASE_DELAY = 40; // ms for the first ~100 words
+const BASE_DELAY = 8;  // ms
+const MIN_DELAY = 2;   // ms
 
 function calcDelay(wordIndex) {
-    // linear ramp: halves every 200 words
-    return Math.max(8, BASE_DELAY * Math.exp(-wordIndex / 200));
+    // Simple adaptive delay that gets faster over time
+    return Math.max(MIN_DELAY, BASE_DELAY * Math.exp(-wordIndex / 150));
 }
 
 export class AskView extends LitElement {

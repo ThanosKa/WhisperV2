@@ -432,7 +432,7 @@ function createFeatureWindows(header, namesToCreate) {
             case 'ask': {
                 const ask = new BrowserWindow({ 
                     ...commonChildOptions, 
-                    width: 600,
+                    width: 750,
                     height: 100, // Initial height to ensure borders are visible
                     minHeight: 80 // Minimum height to prevent cutting off borders
                 });

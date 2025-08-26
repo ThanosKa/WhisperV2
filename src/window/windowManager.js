@@ -433,10 +433,10 @@ function createFeatureWindows(header, namesToCreate) {
                 const ask = new BrowserWindow({ 
                     ...commonChildOptions, 
                     width: 750,
-                      maxHeight: 700,
-                    backgroundColor: '#ff0000', // Red background to visualize window boundaries
-                    transparent: false, // Disable transparency to show the red background
-                    useContentSize: true // Use content size to ensure proper sizing
+                    // maxHeight: 700,
+                    // backgroundColor: '#ff0000', // Red background to visualize window boundaries
+                    // transparent: false, // Disable transparency to show the red background
+                    // useContentSize: true // Use content size to ensure proper sizing
                 });
                 ask.setContentProtection(isContentProtectionOn);
                 ask.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });

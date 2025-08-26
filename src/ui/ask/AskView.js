@@ -752,7 +752,7 @@ export class AskView extends LitElement {
                 }
 
                 
-                const targetHeight = Math.min(700, Math.max(CONSISTENT_BASE_HEIGHT, idealHeight));
+                const targetHeight = Math.min(650, Math.max(CONSISTENT_BASE_HEIGHT, idealHeight));
                 this.windowHeight = targetHeight;
                 window.api.askView.adjustWindowHeight('ask', targetHeight);
             })

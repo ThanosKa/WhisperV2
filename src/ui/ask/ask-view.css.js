@@ -447,7 +447,8 @@ export const styles = css`
         line-height: 1.6;
         background: transparent;
         min-height: 0;
-        max-height: 70vh;
+        // max-height: 70vh;
+        max-height: 500px;
         position: relative;
     }
 

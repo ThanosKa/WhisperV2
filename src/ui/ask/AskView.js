@@ -65,7 +65,6 @@ export class AskView extends LitElement {
         this.handleCopy = this.handleCopy.bind(this);
         this.clearResponseContent = this.clearResponseContent.bind(this);
         this.handleEscKey = this.handleEscKey.bind(this);
-        this.handleScroll = this.handleScroll.bind(this);
         this.handleCloseAskWindow = this.handleCloseAskWindow.bind(this);
         this.handleCloseIfNoContent = this.handleCloseIfNoContent.bind(this);
 
@@ -111,9 +110,6 @@ export class AskView extends LitElement {
                     this.focusTextInput();
                 }
             });
-
-            window.api.askView.onScrollResponseUp(() => this.handleScroll('up'));
-            window.api.askView.onScrollResponseDown(() => this.handleScroll('down'));
             window.api.askView.onAskStateUpdate((event, newState) => {
                 this.currentResponse = newState.currentResponse;
                 this.currentQuestion = newState.currentQuestion;
@@ -165,8 +161,6 @@ export class AskView extends LitElement {
         if (window.api) {
             window.api.askView.removeOnAskStateUpdate(this.handleAskStateUpdate);
             window.api.askView.removeOnShowTextInput(this.handleShowTextInput);
-            window.api.askView.removeOnScrollResponseUp(this.handleScroll);
-            window.api.askView.removeOnScrollResponseDown(this.handleScroll);
             console.log('✅ AskView: IPC 이벤트 리스너 제거 필요');
         }
     }
@@ -314,17 +308,7 @@ export class AskView extends LitElement {
         return text;
     }
 
-    handleScroll(direction) {
-        const scrollableElement = this.shadowRoot.querySelector('#responseContainer');
-        if (scrollableElement) {
-            const scrollAmount = 100; // 한 번에 스크롤할 양 (px)
-            if (direction === 'up') {
-                scrollableElement.scrollTop -= scrollAmount;
-            } else {
-                scrollableElement.scrollTop += scrollAmount;
-            }
-        }
-    }
+
 
     renderContent() {
         const responseContainer = this.shadowRoot.getElementById('responseContainer');

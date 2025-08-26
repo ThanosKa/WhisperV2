@@ -158,8 +158,6 @@ const DEFAULT_KEYBINDS = {
     manualScreenshot: 'Cmd+Shift+S',
     previousResponse: 'Cmd+[',
     nextResponse: 'Cmd+]',
-    scrollUp: 'Cmd+Shift+Up',
-    scrollDown: 'Cmd+Shift+Down',
 };
 
 // Service state

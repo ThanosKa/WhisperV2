@@ -33,8 +33,6 @@ class ShortcutsService {
             manualScreenshot: 'Cmd+Shift+S',
             previousResponse: 'Cmd+[',
             nextResponse: 'Cmd+]',
-            scrollUp: 'Cmd+Shift+Up',
-            scrollDown: 'Cmd+Shift+Down',
         };
     }
 
@@ -174,22 +172,6 @@ class ShortcutsService {
                     break;
                 case 'nextStep':
                     callback = () => askService.toggleAskButton(true);
-                    break;
-                case 'scrollUp':
-                    callback = () => {
-                        const askWindow = this.windowPool.get('ask');
-                        if (askWindow && !askWindow.isDestroyed() && askWindow.isVisible()) {
-                            askWindow.webContents.send('scroll-response-up');
-                        }
-                    };
-                    break;
-                case 'scrollDown':
-                    callback = () => {
-                        const askWindow = this.windowPool.get('ask');
-                        if (askWindow && !askWindow.isDestroyed() && askWindow.isVisible()) {
-                            askWindow.webContents.send('scroll-response-down');
-                        }
-                    };
                     break;
                 case 'moveUp':
                     callback = () => {

@@ -21,20 +21,20 @@ class ShortcutsService {
     }
 
     getDefaultKeybinds() {
-        const isMac = process.platform === 'darwin';
+        // Unified shortcuts using 'Cmd' for all platforms for simplicity
         return {
-            moveUp: isMac ? 'Cmd+Up' : 'Ctrl+Up',
-            moveDown: isMac ? 'Cmd+Down' : 'Ctrl+Down',
-            moveLeft: isMac ? 'Cmd+Left' : 'Ctrl+Left',
-            moveRight: isMac ? 'Cmd+Right' : 'Ctrl+Right',
-            toggleVisibility: isMac ? 'Cmd+\\' : 'Ctrl+\\',
-            toggleClickThrough: isMac ? 'Cmd+M' : 'Ctrl+M',
-            nextStep: isMac ? 'Cmd+Enter' : 'Ctrl+Enter',
-            manualScreenshot: isMac ? 'Cmd+Shift+S' : 'Ctrl+Shift+S',
-            previousResponse: isMac ? 'Cmd+[' : 'Ctrl+[',
-            nextResponse: isMac ? 'Cmd+]' : 'Ctrl+]',
-            scrollUp: isMac ? 'Cmd+Shift+Up' : 'Ctrl+Shift+Up',
-            scrollDown: isMac ? 'Cmd+Shift+Down' : 'Ctrl+Shift+Down',
+            moveUp: 'Cmd+Up',
+            moveDown: 'Cmd+Down',
+            moveLeft: 'Cmd+Left',
+            moveRight: 'Cmd+Right',
+            toggleVisibility: 'Cmd+\\',
+            toggleClickThrough: 'Cmd+M',
+            nextStep: 'Cmd+Enter',
+            manualScreenshot: 'Cmd+Shift+S',
+            previousResponse: 'Cmd+[',
+            nextResponse: 'Cmd+]',
+            scrollUp: 'Cmd+Shift+Up',
+            scrollDown: 'Cmd+Shift+Down',
         };
     }
 
@@ -131,8 +131,8 @@ class ShortcutsService {
         }
 
         // --- Hardcoded shortcuts ---
-        const isMac = process.platform === 'darwin';
-        const modifier = isMac ? 'Cmd' : 'Ctrl';
+        // Unified modifier using 'Cmd' for all platforms
+        const modifier = 'Cmd';
 
         // Monitor switching
         const displays = screen.getAllDisplays();

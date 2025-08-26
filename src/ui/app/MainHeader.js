@@ -253,8 +253,8 @@ export class MainHeader extends LitElement {
         const keyMap = {
             Cmd: '⌘',
             Command: '⌘',
-            Ctrl: '⌃',
-            Control: '⌃',
+            Ctrl: '⌘', // Unified to show Cmd symbol for all platforms
+            Control: '⌘', // Unified to show Cmd symbol for all platforms
             Alt: '⌥',
             Option: '⌥',
             Shift: '⇧',

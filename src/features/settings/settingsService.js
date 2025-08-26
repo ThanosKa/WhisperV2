@@ -146,50 +146,33 @@ class WindowNotificationManager {
 // Global instance
 const windowNotificationManager = new WindowNotificationManager();
 
-// Default keybinds configuration
+// Default keybinds configuration - unified for all platforms
 const DEFAULT_KEYBINDS = {
-    mac: {
-        moveUp: 'Cmd+Up',
-        moveDown: 'Cmd+Down',
-        moveLeft: 'Cmd+Left',
-        moveRight: 'Cmd+Right',
-        toggleVisibility: 'Cmd+\\',
-        toggleClickThrough: 'Cmd+M',
-        nextStep: 'Cmd+Enter',
-        manualScreenshot: 'Cmd+Shift+S',
-        previousResponse: 'Cmd+[',
-        nextResponse: 'Cmd+]',
-        scrollUp: 'Cmd+Shift+Up',
-        scrollDown: 'Cmd+Shift+Down',
-    },
-    windows: {
-        moveUp: 'Ctrl+Up',
-        moveDown: 'Ctrl+Down',
-        moveLeft: 'Ctrl+Left',
-        moveRight: 'Ctrl+Right',
-        toggleVisibility: 'Ctrl+\\',
-        toggleClickThrough: 'Ctrl+M',
-        nextStep: 'Ctrl+Enter',
-        manualScreenshot: 'Ctrl+Shift+S',
-        previousResponse: 'Ctrl+[',
-        nextResponse: 'Ctrl+]',
-        scrollUp: 'Ctrl+Shift+Up',
-        scrollDown: 'Ctrl+Shift+Down',
-    },
+    moveUp: 'Cmd+Up',
+    moveDown: 'Cmd+Down',
+    moveLeft: 'Cmd+Left',
+    moveRight: 'Cmd+Right',
+    toggleVisibility: 'Cmd+\\',
+    toggleClickThrough: 'Cmd+M',
+    nextStep: 'Cmd+Enter',
+    manualScreenshot: 'Cmd+Shift+S',
+    previousResponse: 'Cmd+[',
+    nextResponse: 'Cmd+]',
+    scrollUp: 'Cmd+Shift+Up',
+    scrollDown: 'Cmd+Shift+Down',
 };
 
 // Service state
 let currentSettings = null;
 
 function getDefaultSettings() {
-    const isMac = process.platform === 'darwin';
     return {
         profile: 'school',
         language: 'en',
         screenshotInterval: '5000',
         imageQuality: '0.8',
         layoutMode: 'stacked',
-        keybinds: isMac ? DEFAULT_KEYBINDS.mac : DEFAULT_KEYBINDS.windows,
+        keybinds: DEFAULT_KEYBINDS, // Unified keybinds for all platforms
         throttleTokens: 500,
         maxTokens: 2000,
         throttlePercent: 80,

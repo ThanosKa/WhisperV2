@@ -1012,7 +1012,7 @@ export class SettingsView extends LitElement {
         const keyMap = {
             Cmd: '⌘',
             Command: '⌘',
-            Ctrl: '⌃',
+            Ctrl: '⌘', // Unified to show Cmd symbol for all platforms
             Alt: '⌥',
             Shift: '⇧',
             Enter: '↵',

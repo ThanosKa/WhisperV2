@@ -901,7 +901,7 @@ export const styles = css`
         animation: textPulse 1.5s ease-in-out infinite;
     }
 
-    /* Fix 2: Add smooth transition for analyzing to thinking */
+    /* Fix 2: Add smooth transition for thinking states */
     .response-label {
         transition: all 0.3s ease-in-out;
     }
@@ -925,23 +925,8 @@ export const styles = css`
     }
 
     /* Slide animations for state transitions */
-    .thinking-dots.analyzing-slide {
-        animation: slideInFromTop 0.3s ease-out forwards;
-    }
-
     .thinking-dots.thinking-slide {
         animation: slideInFromBottom 0.3s ease-out forwards;
-    }
-
-    @keyframes slideInFromTop {
-        0% {
-            opacity: 0;
-            transform: translateY(-10px);
-        }
-        100% {
-            opacity: 1;
-            transform: translateY(0);
-        }
     }
 
     @keyframes slideInFromBottom {

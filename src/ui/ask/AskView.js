@@ -26,7 +26,6 @@ export class AskView extends LitElement {
         isStreaming: { type: Boolean },
         windowHeight: { type: Number },
         interrupted: { type: Boolean },
-        isAnalyzing: { type: Boolean },
     };
 
     static styles = styles;
@@ -43,7 +42,6 @@ export class AskView extends LitElement {
         this.isStreaming = false;
         this.windowHeight = window.innerHeight;
         this.interrupted = false;
-        this.isAnalyzing = false;
 
         this.isAnimating = false; // Tracks typewriter animation state
 
@@ -263,7 +261,6 @@ export class AskView extends LitElement {
         this.smdContainer = null;
         this.wordCount = 0;
         this.interrupted = false;
-        this.isAnalyzing = false;
     }
 
     handleInputFocus() {
@@ -509,15 +506,11 @@ export class AskView extends LitElement {
     }
 
     startHeaderAnimation() {
-        this.animateHeaderText('analyzing screen...');
+        this.animateHeaderText('thinking...');
 
         if (this.headerAnimationTimeout) {
             clearTimeout(this.headerAnimationTimeout);
         }
-
-        this.headerAnimationTimeout = setTimeout(() => {
-            this.animateHeaderText('thinking...');
-        }, 1500);
     }
 
     renderMarkdown(content) {
@@ -689,16 +682,6 @@ export class AskView extends LitElement {
         if (!text) return;
 
         textInput.value = '';
-
-        // Start analyzing state
-        this.isAnalyzing = true;
-        this.requestUpdate();
-
-        // After 800ms, switch to thinking
-        setTimeout(() => {
-            this.isAnalyzing = false;
-            this.requestUpdate();
-        }, 800);
 
         if (window.api) {
             window.api.askView.sendMessage(text).catch(error => {

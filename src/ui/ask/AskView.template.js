@@ -5,10 +5,7 @@ export const renderTemplate = self => {
     let headerText = 'AI Response';
     let headerClass = '';
 
-    if (self.isAnalyzing) {
-        headerText = 'Analyzing';
-        headerClass = 'pulsing';
-    } else if (self.isLoading || (self.isStreaming && !self.currentResponse)) {
+    if (self.isLoading || (self.isStreaming && !self.currentResponse)) {
         headerText = 'Thinking';
         headerClass = 'pulsing';
     }
@@ -16,9 +13,8 @@ export const renderTemplate = self => {
     const isCompact = self.windowHeight < 50;
     const inputPulsing = !hasResponse ? 'pulsing' : '';
 
-    // Show dots for both analyzing and thinking states
-    const showAnalyzingDots = self.isAnalyzing;
-    const showThinkingDots = (self.isLoading || (self.isStreaming && !self.currentResponse)) && !self.isAnalyzing;
+    // Show dots for thinking state only
+    const showThinkingDots = (self.isLoading || (self.isStreaming && !self.currentResponse));
 
     return html`
         <div class="ask-container ${isCompact ? 'compact' : ''}">
@@ -32,15 +28,6 @@ export const renderTemplate = self => {
                         </svg>
                     </div>
                     <span class="response-label ${headerClass}">${headerText}</span>
-                    ${showAnalyzingDots
-                        ? html`
-                              <div class="thinking-dots analyzing-slide">
-                                  <div class="thinking-dot"></div>
-                                  <div class="thinking-dot"></div>
-                                  <div class="thinking-dot"></div>
-                              </div>
-                          `
-                        : ''}
                     ${showThinkingDots
                         ? html`
                               <div class="thinking-dots thinking-slide">

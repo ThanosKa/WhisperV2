@@ -165,7 +165,7 @@ export const styles = css`
         width: 100%;
         background: rgba(11, 11, 11, 0.55);
         border-radius: 6px;
-         border: 1px solid rgba(255, 255, 255, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.4);
         backdrop-filter: blur(25px);
         box-sizing: border-box;
         position: relative;
@@ -909,11 +909,12 @@ export const styles = css`
 
     /* Text pulse animation - exact copy from previous project */
     @keyframes textPulse {
-        0%, 100% { 
-            opacity: 0.7; 
+        0%,
+        100% {
+            opacity: 0.7;
         }
-        50% { 
-            opacity: 1; 
+        50% {
+            opacity: 1;
         }
     }
 
@@ -963,11 +964,12 @@ export const styles = css`
 
     /* Dot wave animation - exact copy from previous project */
     @keyframes dotWave {
-        0%, 100% { 
+        0%,
+        100% {
             opacity: 0.3;
             transform: scale(0.8);
         }
-        50% { 
+        50% {
             opacity: 1;
             transform: scale(1.2);
         }

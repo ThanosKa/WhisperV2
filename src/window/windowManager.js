@@ -430,8 +430,8 @@ function createFeatureWindows(header, namesToCreate) {
 
             // ask
             case 'ask': {
-                const ask = new BrowserWindow({ 
-                    ...commonChildOptions, 
+                const ask = new BrowserWindow({
+                    ...commonChildOptions,
                     width: 750,
                     // maxHeight: 700,
                     // backgroundColor: '#ff0000', // Red background to visualize window boundaries

@@ -740,7 +740,7 @@ export class AskView extends LitElement {
                 let idealHeight = headerHeight + responseHeight + inputHeight + borderPadding;
 
                 const hasResponse = this.isLoading || this.currentResponse || this.isStreaming;
-                const CONSISTENT_BASE_HEIGHT = 64;
+                const CONSISTENT_BASE_HEIGHT = 40;
 
                 if (!hasResponse) {
                     idealHeight = CONSISTENT_BASE_HEIGHT;
@@ -748,9 +748,10 @@ export class AskView extends LitElement {
                     idealHeight = CONSISTENT_BASE_HEIGHT;
                 } else {
                     // Add buffer to reduce resizing
-                    idealHeight += 300;
+                    idealHeight += 0;
                 }
 
+                
                 const targetHeight = Math.min(700, Math.max(CONSISTENT_BASE_HEIGHT, idealHeight));
                 this.windowHeight = targetHeight;
                 window.api.askView.adjustWindowHeight('ask', targetHeight);

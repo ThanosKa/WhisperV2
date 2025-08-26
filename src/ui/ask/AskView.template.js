@@ -39,7 +39,7 @@ export const renderTemplate = self => {
                         : ''}
                 </div>
                 <div class="header-right">
-                    <span class="question-text">${self.getTruncatedQuestion(self.currentQuestion)}</span>
+                    ${self.currentQuestion ? html`<span class="question-text">${self.getTruncatedQuestion(self.currentQuestion)}</span>` : ''}
                     <div class="header-controls">
                         <button class="copy-button ${self.copyState === 'copied' ? 'copied' : ''}" @click=${self.handleCopy}>
                             <svg class="copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

@@ -433,8 +433,10 @@ function createFeatureWindows(header, namesToCreate) {
                 const ask = new BrowserWindow({ 
                     ...commonChildOptions, 
                     width: 750,
-                    height: 100, // Initial height to ensure borders are visible
-                    minHeight: 80 // Minimum height to prevent cutting off borders
+                      maxHeight: 700,
+                    backgroundColor: '#ff0000', // Red background to visualize window boundaries
+                    transparent: false, // Disable transparency to show the red background
+                    useContentSize: true // Use content size to ensure proper sizing
                 });
                 ask.setContentProtection(isContentProtectionOn);
                 ask.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });

@@ -3,6 +3,7 @@ import { css } from '../assets/lit-core-2.7.4.min.js';
 export const mainHeaderStyles = css`
     :host {
         display: flex;
+        padding: 2px;
         transition:
             transform 0.2s cubic-bezier(0.23, 1, 0.32, 1),
             opacity 0.2s ease-out;
@@ -27,7 +28,7 @@ export const mainHeaderStyles = css`
     }
 
     * {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+        font-family: system-ui, -apple-system, sans-serif;
         cursor: default;
         user-select: none;
     }
@@ -35,10 +36,10 @@ export const mainHeaderStyles = css`
     .header {
         -webkit-app-region: drag;
         width: max-content;
-        height: 47px;
+        height: 45px;
         padding: 2px 10px 2px 13px;
         background: transparent;
-        overflow: hidden;
+        // overflow: hidden;
         border-radius: 9000px;
         /* backdrop-filter: blur(1px); */
         justify-content: space-between;
@@ -57,8 +58,12 @@ export const mainHeaderStyles = css`
         bottom: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0, 0, 0, 0.6);
+        background: rgba(11, 11, 11, 0.66);
+        border: 1px solid rgba(255, 255, 255, 0.4);
         border-radius: 9000px;
+        box-shadow: 
+            0 4px 12px rgba(0, 0, 0, 0.3),
+            0 2px 6px rgba(0, 0, 0, 0.2);
         z-index: -1;
     }
 
@@ -70,13 +75,8 @@ export const mainHeaderStyles = css`
         right: 0;
         bottom: 0;
         border-radius: 9000px;
-        padding: 2px;
-        background: linear-gradient(169deg, rgba(255, 255, 255, 0.17) 0%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.17) 100%);
-        -webkit-mask:
-            linear-gradient(#fff 0 0) content-box,
-            linear-gradient(#fff 0 0);
-        -webkit-mask-composite: destination-out;
-        mask-composite: exclude;
+        padding: 1px;
+        background: transparent;
         pointer-events: none;
     }
 
@@ -202,16 +202,18 @@ export const mainHeaderStyles = css`
         box-sizing: border-box;
         justify-content: flex-start;
         align-items: center;
-        gap: 9px;
         display: flex;
-        padding: 0 8px;
-        border-radius: 6px;
+        gap: 6px;
+        border-radius: 25px;
         transition: background 0.15s ease;
+        margin-left:8px;
+        padding: 2px 4px;
     }
 
     .header-actions:hover {
-        background: rgba(255, 255, 255, 0.1);
-    }
+        background: rgba(128, 128, 128, 0.4);
+    border-radius: 25px;
+        }
 
     .ask-action {
         margin-left: 4px;
@@ -227,12 +229,13 @@ export const mainHeaderStyles = css`
     }
 
     .action-text-content {
-        color: white;
+        color: rgb(255, 255, 255);
         font-size: 12px;
-        font-family: 'Helvetica Neue', sans-serif;
-        font-weight: 500; /* Medium */
+        font-family: system-ui, -apple-system, sans-serif;
+        font-weight: 500;
         word-wrap: break-word;
         white-space: nowrap;
+        background: transparent;
     }
 
     .icon-container {
@@ -256,17 +259,18 @@ export const mainHeaderStyles = css`
     }
 
     .icon-box {
-        color: white;
+        color: rgb(255, 255, 255);
         font-size: 12px;
-        font-family: 'Helvetica Neue', sans-serif;
+        font-family: system-ui, -apple-system, sans-serif;
         font-weight: 500;
-        background-color: rgba(255, 255, 255, 0.1);
-        border-radius: 13%;
-        width: 18px;
-        height: 18px;
+        background-color: rgba(128, 128, 128, 0.3);
+        border-radius: 50%;
+        width: 22px;
+        height: 22px;
         display: flex;
         align-items: center;
         justify-content: center;
+        margin: 0 2px;
     }
 
     .settings-button {
@@ -275,7 +279,7 @@ export const mainHeaderStyles = css`
         border-radius: 50%;
         background: transparent;
         transition: background 0.15s ease;
-        color: white;
+        color: rgb(255, 255, 255);
         border: none;
         cursor: pointer;
         display: flex;
@@ -284,11 +288,11 @@ export const mainHeaderStyles = css`
     }
 
     .settings-button:hover {
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba(128, 128, 128, 0.2);
     }
     .left-label {
         background-color: rgba(59, 130, 246, 0.5);
-        color: white;
+        color: rgb(255, 255, 255);
         font-size: 13px;
         font-weight: 600;
         height: 28px;

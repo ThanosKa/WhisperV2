@@ -1,16 +1,11 @@
-import { html, css, LitElement } from '../assets/lit-core-2.7.4.min.js';
+import { html, LitElement, css } from '../assets/lit-core-2.7.4.min.js';
+
 // import { getOllamaProgressTracker } from '../../features/common/services/localProgressTracker.js'; // 제거됨
 
 export class SettingsView extends LitElement {
     static styles = css`
         * {
-            font-family:
-                'Helvetica Neue',
-                -apple-system,
-                BlinkMacSystemFont,
-                'Segoe UI',
-                Roboto,
-                sans-serif;
+            font-family: system-ui, -apple-system, sans-serif;
             cursor: default;
             user-select: none;
         }
@@ -22,15 +17,98 @@ export class SettingsView extends LitElement {
             color: white;
         }
 
+        /* ────────────────[ TOGGLE SWITCH STYLING ]─────────────── */
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+            transition: all 0.15s ease;
+        }
+
+        .toggle-label {
+            font-size: 12px;
+            font-weight: 500;
+            color: white;
+            flex: 1;
+        }
+
+        /* Stealth mode specific styling */
+        .stealth-toggle.off {
+            opacity: 0.5;
+        }
+
+        .stealth-toggle.on {
+            opacity: 1;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 32px;
+            height: 16px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 9999px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .toggle-switch.active {
+            background: #3b82f6;
+        }
+
+        .toggle-knob {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease;
+        }
+
+        .toggle-switch.active .toggle-knob {
+            transform: translateX(16px);
+        }
+
+        /* ────────────────[ KEYBOARD SHORTCUT STYLING ]─────────────── */
+        .shortcut-key {
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 12px;
+            line-height: 1;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 16px;
+            height: 16px;
+        }
+
+        .shortcut-key:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .shortcut-keys {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* ────────────────[ GLASSMORPHISM ENHANCEMENTS ]─────────────── */
         .settings-container {
             display: flex;
             flex-direction: column;
             height: 100%;
             width: 100%;
-            background: rgba(20, 20, 20, 0.8);
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(12px);
             border-radius: 12px;
-            outline: 0.5px rgba(255, 255, 255, 0.2) solid;
-            outline-offset: -1px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
             box-sizing: border-box;
             position: relative;
             overflow-y: auto;
@@ -96,14 +174,14 @@ export class SettingsView extends LitElement {
         }
 
         .app-title {
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 500;
             color: white;
             margin: 0 0 4px 0;
         }
 
         .account-info {
-            font-size: 11px;
+            font-size: 12px;
             color: rgba(255, 255, 255, 0.7);
             margin: 0;
         }
@@ -138,7 +216,7 @@ export class SettingsView extends LitElement {
             align-items: center;
             padding: 4px 0;
             color: white;
-            font-size: 11px;
+            font-size: 12px;
         }
 
         .shortcut-name {
@@ -153,16 +231,25 @@ export class SettingsView extends LitElement {
 
         .cmd-key,
         .shortcut-key {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 3px;
-            width: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            width: auto;
+            min-width: 16px;
             height: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 11px;
             font-weight: 500;
-            color: rgba(255, 255, 255, 0.9);
+            color: white;
+            padding: 2px 8px;
+            line-height: 1;
+            transition: all 0.15s ease;
+        }
+
+        .cmd-key:hover,
+        .shortcut-key:hover {
+            background: rgba(255, 255, 255, 0.1);
         }
 
         /* Buttons Section */
@@ -178,12 +265,12 @@ export class SettingsView extends LitElement {
         }
 
         .settings-button {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 4px;
             color: white;
             padding: 5px 10px;
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 400;
             cursor: pointer;
             transition: all 0.15s ease;
@@ -194,8 +281,8 @@ export class SettingsView extends LitElement {
         }
 
         .settings-button:hover {
-            background: rgba(255, 255, 255, 0.15);
-            border-color: rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
         }
 
         .settings-button:active {
@@ -262,7 +349,7 @@ export class SettingsView extends LitElement {
         }
 
         .preset-title {
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 500;
             color: white;
         }
@@ -362,7 +449,7 @@ export class SettingsView extends LitElement {
             justify-content: center;
             padding: 20px;
             color: rgba(255, 255, 255, 0.7);
-            font-size: 11px;
+            font-size: 12px;
         }
 
         .loading-spinner {
@@ -373,6 +460,11 @@ export class SettingsView extends LitElement {
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin-right: 6px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         .hidden {
@@ -387,22 +479,26 @@ export class SettingsView extends LitElement {
             flex-direction: column;
             gap: 10px;
         }
+
         .provider-key-group,
         .model-select-group {
             display: flex;
             flex-direction: column;
             gap: 4px;
         }
+
         label {
             font-size: 11px;
             font-weight: 500;
             color: rgba(255, 255, 255, 0.8);
             margin-left: 2px;
         }
+
         label > strong {
             color: white;
             font-weight: 600;
         }
+
         .provider-key-group input {
             width: 100%;
             background: rgba(0, 0, 0, 0.2);
@@ -413,14 +509,17 @@ export class SettingsView extends LitElement {
             font-size: 11px;
             box-sizing: border-box;
         }
+
         .key-buttons {
             display: flex;
             gap: 4px;
         }
+
         .key-buttons .settings-button {
             flex: 1;
             padding: 4px;
         }
+
         .model-list {
             display: flex;
             flex-direction: column;
@@ -432,6 +531,7 @@ export class SettingsView extends LitElement {
             padding: 4px;
             margin-top: 4px;
         }
+
         .model-item {
             padding: 5px 8px;
             font-size: 11px;
@@ -442,24 +542,30 @@ export class SettingsView extends LitElement {
             justify-content: space-between;
             align-items: center;
         }
+
         .model-item:hover {
             background-color: rgba(255, 255, 255, 0.1);
         }
+
         .model-item.selected {
             background-color: rgba(0, 122, 255, 0.4);
             font-weight: 500;
         }
+
         .model-status {
             font-size: 9px;
             color: rgba(255, 255, 255, 0.6);
             margin-left: 8px;
         }
+
         .model-status.installed {
             color: rgba(0, 255, 0, 0.8);
         }
+
         .model-status.not-installed {
             color: rgba(255, 200, 0, 0.8);
         }
+
         .install-progress {
             flex: 1;
             height: 4px;
@@ -468,6 +574,7 @@ export class SettingsView extends LitElement {
             margin-left: 8px;
             overflow: hidden;
         }
+
         .install-progress-bar {
             height: 100%;
             background: rgba(0, 122, 255, 0.8);
@@ -598,30 +705,7 @@ export class SettingsView extends LitElement {
         this.requestUpdate();
     }
 
-    async loadLocalAIStatus() {
-        try {
-            // Load Whisper models status only if Whisper is enabled
-            if (this.apiKeys?.whisper === 'local') {
-                const whisperModelsResult = await window.api.settingsView.getWhisperInstalledModels();
-                if (whisperModelsResult?.success) {
-                    const installedWhisperModels = whisperModelsResult.models;
-                    if (this.providerConfig?.whisper) {
-                        this.providerConfig.whisper.sttModels.forEach(m => {
-                            const installedInfo = installedWhisperModels.find(i => i.id === m.id);
-                            if (installedInfo) {
-                                m.installed = installedInfo.installed;
-                            }
-                        });
-                    }
-                }
-            }
 
-            // Trigger UI update
-            this.requestUpdate();
-        } catch (error) {
-            console.error('Error loading LocalAI status:', error);
-        }
-    }
 
     //////// after_modelStateService ////////
     async loadInitialData() {
@@ -783,60 +867,7 @@ export class SettingsView extends LitElement {
         }
     }
 
-    async downloadWhisperModel(modelId) {
-        // Mark as installing
-        this.installingModels = { ...this.installingModels, [modelId]: 0 };
-        this.requestUpdate();
 
-        try {
-            // Set up progress listener - 통합 LocalAI 이벤트 사용
-            const progressHandler = (event, data) => {
-                if (data.service === 'whisper' && data.model === modelId) {
-                    this.installingModels = { ...this.installingModels, [modelId]: data.progress || 0 };
-                    this.requestUpdate();
-                }
-            };
-
-            window.api.settingsView.onLocalAIInstallProgress(progressHandler);
-
-            // Start download
-            const result = await window.api.settingsView.downloadWhisperModel(modelId);
-
-            if (result.success) {
-                // Update the model's installed status
-                if (this.providerConfig?.whisper?.sttModels) {
-                    const modelInfo = this.providerConfig.whisper.sttModels.find(m => m.id === modelId);
-                    if (modelInfo) {
-                        modelInfo.installed = true;
-                    }
-                }
-
-                // Remove from installing models
-                delete this.installingModels[modelId];
-                this.requestUpdate();
-
-                // Reload LocalAI status to get fresh data
-                await this.loadLocalAIStatus();
-
-                // Auto-select the model after download
-                await this.selectModel('stt', modelId);
-            } else {
-                // Remove from installing models on failure too
-                delete this.installingModels[modelId];
-                this.requestUpdate();
-                alert(`Failed to download Whisper model: ${result.error}`);
-            }
-
-            // Cleanup
-            window.api.settingsView.removeOnLocalAIInstallProgress(progressHandler);
-        } catch (error) {
-            console.error(`[SettingsView] Error downloading Whisper model ${modelId}:`, error);
-            // Remove from installing models on error
-            delete this.installingModels[modelId];
-            this.requestUpdate();
-            alert(`Error downloading ${modelId}: ${error.message}`);
-        }
-    }
 
     getProviderForModel(type, modelId) {
         for (const [providerId, config] of Object.entries(this.providerConfig)) {
@@ -1150,12 +1181,15 @@ export class SettingsView extends LitElement {
             <div class="settings-container">
                 <div class="header-section">
                     <div>
-                        <h1 class="app-title">Whisper</h1>
+                        <h1 class="app-title">Glass</h1>
                         <div class="account-info">
                             ${this.firebaseUser ? html`Account: ${this.firebaseUser.email || 'Logged In'}` : `Account: Not Logged In`}
                         </div>
                     </div>
-                    <div class="invisibility-icon ${this.isContentProtectionOn ? 'visible' : ''}" title="Invisibility is On">
+                </div>
+
+                <div class="toggle-container stealth-toggle ${this.isContentProtectionOn ? 'on' : 'off'}">
+                    <div class="invisibility-icon ${this.isContentProtectionOn ? 'visible' : ''}" style="opacity: 1; padding-top: 0; margin-right: 8px;">
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path
                                 d="M9.785 7.41787C8.7 7.41787 7.79 8.19371 7.55667 9.22621C7.0025 8.98704 6.495 9.05121 6.11 9.22037C5.87083 8.18204 4.96083 7.41787 3.88167 7.41787C2.61583 7.41787 1.58333 8.46204 1.58333 9.75121C1.58333 11.0404 2.61583 12.0845 3.88167 12.0845C5.08333 12.0845 6.06333 11.1395 6.15667 9.93787C6.355 9.79787 6.87417 9.53537 7.51 9.94954C7.615 11.1454 8.58333 12.0845 9.785 12.0845C11.0508 12.0845 12.0833 11.0404 12.0833 9.75121C12.0833 8.46204 11.0508 7.41787 9.785 7.41787ZM3.88167 11.4195C2.97167 11.4195 2.2425 10.6729 2.2425 9.75121C2.2425 8.82954 2.9775 8.08287 3.88167 8.08287C4.79167 8.08287 5.52083 8.82954 5.52083 9.75121C5.52083 10.6729 4.79167 11.4195 3.88167 11.4195ZM9.785 11.4195C8.875 11.4195 8.14583 10.6729 8.14583 9.75121C8.14583 8.82954 8.875 8.08287 9.785 8.08287C10.695 8.08287 11.43 8.82954 11.43 9.75121C11.43 10.6729 10.6892 11.4195 9.785 11.4195ZM12.6667 5.95954H1V6.83454H12.6667V5.95954ZM8.8925 1.36871C8.76417 1.08287 8.4375 0.931207 8.12833 1.03037L6.83333 1.46204L5.5325 1.03037L5.50333 1.02454C5.19417 0.93704 4.8675 1.10037 4.75083 1.39787L3.33333 5.08454H10.3333L8.91 1.39787L8.8925 1.36871Z"
@@ -1163,7 +1197,12 @@ export class SettingsView extends LitElement {
                             />
                         </svg>
                     </div>
+                    <span class="toggle-label" style="color: white;">Stealth Mode</span>
+                    <div class="toggle-switch ${this.isContentProtectionOn ? 'active' : ''}" @click=${this.handleToggleInvisibility}>
+                        <div class="toggle-knob"></div>
+                    </div>
                 </div>
+
 
                 <div class="shortcuts-section">
                     ${this.getMainShortcuts().map(
@@ -1213,9 +1252,16 @@ export class SettingsView extends LitElement {
                     <button class="settings-button full-width" @click=${this.handlePersonalize}>
                         <span>Personalize / Meeting Notes</span>
                     </button>
-                    <button class="settings-button full-width" @click=${this.handleToggleAutoUpdate} ?disabled=${this.autoUpdateLoading}>
-                        <span>Automatic Updates: ${this.autoUpdateEnabled ? 'On' : 'Off'}</span>
-                    </button>
+                    <div class="toggle-container">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 8px;">
+                            <path d="M12 6v6l4 2" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <circle cx="12" cy="12" r="9" stroke="white" stroke-width="2"/>
+                        </svg>
+                        <span class="toggle-label" style="color: white;">Automatic Updates</span>
+                        <div class="toggle-switch ${this.autoUpdateEnabled ? 'active' : ''}" @click=${this.handleToggleAutoUpdate}>
+                            <div class="toggle-knob"></div>
+                        </div>
+                    </div>
 
                     <div class="move-buttons">
                         <button class="settings-button half-width" @click=${this.handleMoveLeft}>
@@ -1225,10 +1271,6 @@ export class SettingsView extends LitElement {
                             <span>Move →</span>
                         </button>
                     </div>
-
-                    <button class="settings-button full-width" @click=${this.handleToggleInvisibility}>
-                        <span>${this.isContentProtectionOn ? 'Disable Invisibility' : 'Enable Invisibility'}</span>
-                    </button>
 
                     <div class="bottom-buttons">
                         ${this.firebaseUser

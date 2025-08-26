@@ -4,17 +4,21 @@ export const renderTemplate = self => {
     const hasResponse = self.isLoading || self.currentResponse || self.isStreaming;
     let headerText = 'AI Response';
     let headerClass = '';
-    
+
     if (self.isAnalyzing) {
         headerText = 'Analyzing';
         headerClass = 'pulsing';
     } else if (self.isLoading || (self.isStreaming && !self.currentResponse)) {
         headerText = 'Thinking';
-        headerClass = 'pulsing thinking-dots';
+        headerClass = 'pulsing';
     }
-    
+
     const isCompact = self.windowHeight < 50;
     const inputPulsing = !hasResponse ? 'pulsing' : '';
+
+    // Show dots for both analyzing and thinking states
+    const showAnalyzingDots = self.isAnalyzing;
+    const showThinkingDots = (self.isLoading || (self.isStreaming && !self.currentResponse)) && !self.isAnalyzing;
 
     return html`
         <div class="ask-container ${isCompact ? 'compact' : ''}">
@@ -28,6 +32,24 @@ export const renderTemplate = self => {
                         </svg>
                     </div>
                     <span class="response-label ${headerClass}">${headerText}</span>
+                    ${showAnalyzingDots
+                        ? html`
+                              <div class="thinking-dots analyzing-slide">
+                                  <div class="thinking-dot"></div>
+                                  <div class="thinking-dot"></div>
+                                  <div class="thinking-dot"></div>
+                              </div>
+                          `
+                        : ''}
+                    ${showThinkingDots
+                        ? html`
+                              <div class="thinking-dots thinking-slide">
+                                  <div class="thinking-dot"></div>
+                                  <div class="thinking-dot"></div>
+                                  <div class="thinking-dot"></div>
+                              </div>
+                          `
+                        : ''}
                 </div>
                 <div class="header-right">
                     <span class="question-text">${self.getTruncatedQuestion(self.currentQuestion)}</span>
@@ -58,7 +80,14 @@ export const renderTemplate = self => {
 
             <!-- Text Input Container -->
             <div class="text-input-container ${!hasResponse ? 'no-response' : ''} ${!self.showTextInput ? 'hidden' : ''}">
-                <input type="text" id="textInput" class="${inputPulsing}" placeholder="Ask anything" @keydown=${self.handleTextKeydown} @focus=${self.handleInputFocus} />
+                <input
+                    type="text"
+                    id="textInput"
+                    class="${inputPulsing}"
+                    placeholder="Ask anything"
+                    @keydown=${self.handleTextKeydown}
+                    @focus=${self.handleInputFocus}
+                />
                 <button class="submit-btn" @click=${self.handleSendText}>
                     <span class="btn-label">Submit</span>
                     <span class="btn-icon"> ↵ </span>

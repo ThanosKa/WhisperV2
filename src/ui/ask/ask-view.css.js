@@ -272,7 +272,8 @@ export const styles = css`
     }
 
     @keyframes pulse {
-        0%, 100% {
+        0%,
+        100% {
             transform: scale(1);
             opacity: 1;
         }
@@ -282,22 +283,44 @@ export const styles = css`
         }
     }
 
-    /* Thinking dots animation */
-    .thinking-dots::after {
-        content: '';
-        display: inline-block;
-        animation: thinkingDots 1.2s infinite;
+    /* Thinking dots animation - real dots, not text */
+    .thinking-dots {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: 8px;
     }
 
-    @keyframes thinkingDots {
-        0%, 20% {
-            content: '.';
+    .thinking-dot {
+        width: 4px;
+        height: 4px;
+        background: rgb(255, 255, 255);
+        border-radius: 50%;
+        animation: thinkingDotPulse 1.4s ease-in-out infinite;
+    }
+
+    .thinking-dot:nth-child(1) {
+        animation-delay: 0s;
+    }
+
+    .thinking-dot:nth-child(2) {
+        animation-delay: 0.2s;
+    }
+
+    .thinking-dot:nth-child(3) {
+        animation-delay: 0.4s;
+    }
+
+    @keyframes thinkingDotPulse {
+        0%,
+        80%,
+        100% {
+            opacity: 0.3;
+            transform: scale(0.8);
         }
         40% {
-            content: '..';
-        }
-        60%, 100% {
-            content: '...';
+            opacity: 1;
+            transform: scale(1.2);
         }
     }
 
@@ -867,5 +890,100 @@ export const styles = css`
     .ask-container.compact #textInput {
         padding: 4px 10px;
         font-size: 13px;
+    }
+
+    /* Pulsing animations for UX flow - adapted from previous project */
+    .response-label.pulsing {
+        animation: textPulse 1.5s ease-in-out infinite;
+    }
+
+    #textInput.pulsing::placeholder {
+        animation: textPulse 1.5s ease-in-out infinite;
+    }
+
+    /* Fix 2: Add smooth transition for analyzing to thinking */
+    .response-label {
+        transition: all 0.3s ease-in-out;
+    }
+
+    /* Text pulse animation - exact copy from previous project */
+    @keyframes textPulse {
+        0%, 100% { 
+            opacity: 0.7; 
+        }
+        50% { 
+            opacity: 1; 
+        }
+    }
+
+    /* Thinking dots animation - adapted from PulsingDots component */
+    .thinking-dots {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: 8px;
+    }
+
+    /* Slide animations for state transitions */
+    .thinking-dots.analyzing-slide {
+        animation: slideInFromTop 0.3s ease-out forwards;
+    }
+
+    .thinking-dots.thinking-slide {
+        animation: slideInFromBottom 0.3s ease-out forwards;
+    }
+
+    @keyframes slideInFromTop {
+        0% {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes slideInFromBottom {
+        0% {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .thinking-dot {
+        width: 6px;
+        height: 6px;
+        background: rgb(255, 255, 255);
+        border-radius: 50%;
+        animation: dotWave 1.2s ease-in-out infinite;
+    }
+
+    .thinking-dot:nth-child(1) {
+        animation-delay: 0s;
+    }
+
+    .thinking-dot:nth-child(2) {
+        animation-delay: 0.2s;
+    }
+
+    .thinking-dot:nth-child(3) {
+        animation-delay: 0.4s;
+    }
+
+    /* Dot wave animation - exact copy from previous project */
+    @keyframes dotWave {
+        0%, 100% { 
+            opacity: 0.3;
+            transform: scale(0.8);
+        }
+        50% { 
+            opacity: 1;
+            transform: scale(1.2);
+        }
     }
 `;

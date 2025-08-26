@@ -165,11 +165,11 @@ export const styles = css`
         width: 100%;
         background: rgba(11, 11, 11, 0.55);
         border-radius: 6px;
-        border: 1px solid rgba(255, 255, 255, 0.25);
+         border: 1px solid rgba(255, 255, 255, 0.4);
         backdrop-filter: blur(25px);
         box-sizing: border-box;
         position: relative;
-        overflow: hidden;
+        // overflow: hidden;
     }
 
     .ask-container::before {

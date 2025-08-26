@@ -3,12 +3,12 @@ import { parser, parser_write, parser_end, default_renderer } from '../../ui/ass
 import { styles } from './ask-view.css.js';
 import { renderTemplate } from './AskView.template.js';
 
-const BASE_DELAY = 8; // ms
-const MIN_DELAY = 2; // ms
+const BASE_DELAY = 1; // ms - Much faster
+const MIN_DELAY = 0; // ms
 
 function calcDelay(wordIndex) {
-    // Simple adaptive delay that gets faster over time
-    return Math.max(MIN_DELAY, BASE_DELAY * Math.exp(-wordIndex / 150));
+    // Faster adaptive delay - speeds up quickly
+    return Math.max(MIN_DELAY, BASE_DELAY * Math.exp(-wordIndex / 30));
 }
 
 export class AskView extends LitElement {
@@ -398,6 +398,7 @@ export class AskView extends LitElement {
                                 block.setAttribute('data-highlighted', 'true');
                             });
                         }
+                        // Smart buffer handles resize frequency
                         this.adjustWindowHeightThrottled();
                     }
 
@@ -752,7 +753,7 @@ export class AskView extends LitElement {
         return renderTemplate(this);
     }
 
-    // Dynamically resize the BrowserWindow to fit current content
+    // Simple window height with small buffer
     adjustWindowHeight() {
         if (!window.api) return;
 
@@ -764,31 +765,26 @@ export class AskView extends LitElement {
 
                 if (!headerEl || !responseEl) return;
 
-                // Calculate heights based on visibility
                 const headerHeight = headerEl.classList.contains('hidden') ? 0 : headerEl.offsetHeight;
                 const responseHeight = responseEl.classList.contains('hidden') ? 0 : responseEl.scrollHeight;
                 const inputHeight = inputEl && !inputEl.classList.contains('hidden') ? inputEl.offsetHeight : 0;
 
-                // Add extra padding for borders and spacing
-                const borderPadding = 10; // Account for container borders and padding
+                const borderPadding = 10;
                 let idealHeight = headerHeight + responseHeight + inputHeight + borderPadding;
 
-                // Force consistent height for initial states
                 const hasResponse = this.isLoading || this.currentResponse || this.isStreaming;
-                const CONSISTENT_BASE_HEIGHT = 64; // Fixed height for both ask and thinking states
+                const CONSISTENT_BASE_HEIGHT = 64;
 
                 if (!hasResponse) {
-                    // "Ask anything" state - use consistent base height
                     idealHeight = CONSISTENT_BASE_HEIGHT;
                 } else if (this.isLoading && !this.currentResponse) {
-                    // "Thinking..." state with no content yet - use same consistent height
                     idealHeight = CONSISTENT_BASE_HEIGHT;
+                } else {
+                    // Add buffer to reduce resizing
+                    idealHeight += 300;
                 }
 
-                // Ensure minimum height shows all content including borders
-                const minHeightForContent = CONSISTENT_BASE_HEIGHT;
-                const targetHeight = Math.min(700, Math.max(minHeightForContent, idealHeight));
-
+                const targetHeight = Math.min(700, Math.max(CONSISTENT_BASE_HEIGHT, idealHeight));
                 this.windowHeight = targetHeight;
                 window.api.askView.adjustWindowHeight('ask', targetHeight);
             })

@@ -166,7 +166,13 @@ class AskService {
         if (normalized.startsWith('📘') || normalized.startsWith('define') || defineQuoted) {
             const raw = (userPromptRaw || '').trim();
             const fromQuotes = raw.match(/"([^"]+)"/);
-            let term = fromQuotes?.[1] || raw.replace(/^📘\s*/i, '').replace(/^define\s*/i, '').replace(/"/g, '').trim();
+            let term =
+                fromQuotes?.[1] ||
+                raw
+                    .replace(/^📘\s*/i, '')
+                    .replace(/^define\s*/i, '')
+                    .replace(/"/g, '')
+                    .trim();
             term = term.replace(/^about\s+/i, '').trim();
             if (term && term.length > 1) {
                 return {
@@ -182,8 +188,7 @@ class AskService {
         if (normalized.includes('action') && normalized.includes('item')) {
             return {
                 mode: 'actions',
-                prompt:
-                    'From the conversation transcript, list concrete, owner-assignable action items with due dates if implied. Use short bullet points.',
+                prompt: 'From the conversation transcript, list concrete, owner-assignable action items with due dates if implied. Use short bullet points.',
             };
         }
 
@@ -191,8 +196,7 @@ class AskService {
         if (normalized.includes('show summary') || normalized === 'summary' || normalized.includes('summar')) {
             return {
                 mode: 'summary',
-                prompt:
-                    'Summarize the conversation transcript succinctly: 3–5 bullets capturing key points, decisions, and next steps.',
+                prompt: 'Summarize the conversation transcript succinctly: 3–5 bullets capturing key points, decisions, and next steps.',
             };
         }
 
@@ -200,8 +204,7 @@ class AskService {
         if (normalized.includes('recap') && normalized.includes('meeting')) {
             return {
                 mode: 'recap',
-                prompt:
-                    'Give a concise recap of the meeting so far based on the conversation transcript. Provide 4-6 bullet points covering: key topics discussed, decisions made, action items identified, and next steps.',
+                prompt: 'Give a concise recap of the meeting so far based on the conversation transcript. Provide 4-6 bullet points covering: key topics discussed, decisions made, action items identified, and next steps.',
             };
         }
 
@@ -343,7 +346,9 @@ class AskService {
             const screenshotBase64 = screenshotResult.success ? screenshotResult.base64 : null;
 
             const conversationHistory = this._formatConversationForPrompt(conversationHistoryRaw);
-            console.log(`[AskService] what llm sees: clickLen=${userPrompt.trim().length}, historyChars=${conversationHistory.length}, screenshot=${screenshotBase64 ? 1 : 0}`);
+            console.log(
+                `[AskService] what llm sees: clickLen=${userPrompt.trim().length}, historyChars=${conversationHistory.length}, screenshot=${screenshotBase64 ? 1 : 0}`
+            );
             const expansion = this._expandInsightRequest(userPrompt);
             console.log(`[AskService] expanded intent: mode=${expansion.mode}`);
 
@@ -357,7 +362,10 @@ class AskService {
                     role: 'user',
                     content: [
                         { type: 'text', text: `Task: ${userTask}` },
-                        { type: 'text', text: 'Use ONLY the conversation transcript as primary context. If context is insufficient, say so briefly.' },
+                        {
+                            type: 'text',
+                            text: 'Use ONLY the conversation transcript as primary context. If context is insufficient, say so briefly.',
+                        },
                     ],
                 },
             ];

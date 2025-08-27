@@ -147,13 +147,6 @@ export const settingsViewStyles = css`
         z-index: -1;
     }
 
-    .settings-button[disabled],
-    .api-key-section input[disabled] {
-        opacity: 0.4;
-        cursor: not-allowed;
-        pointer-events: none;
-    }
-
     .header-section {
         display: flex;
         justify-content: space-between;
@@ -162,12 +155,6 @@ export const settingsViewStyles = css`
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         position: relative;
         z-index: 1;
-    }
-
-    .title-line {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
     }
 
     .app-title {
@@ -311,27 +298,6 @@ export const settingsViewStyles = css`
         gap: 4px;
     }
 
-    .api-key-section {
-        padding: 6px 0;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .api-key-section input {
-        width: 100%;
-        background: rgba(0, 0, 0, 0.2);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        color: white;
-        border-radius: 4px;
-        padding: 4px;
-        font-size: 11px;
-        margin-bottom: 4px;
-        box-sizing: border-box;
-    }
-
-    .api-key-section input::placeholder {
-        color: rgba(255, 255, 255, 0.4);
-    }
-
     /* Preset Management Section */
     .preset-section {
         padding: 6px 0;
@@ -466,132 +432,6 @@ export const settingsViewStyles = css`
 
     .hidden {
         display: none;
-    }
-
-    .api-key-section,
-    .model-selection-section {
-        padding: 8px 0;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-    }
-
-    .provider-key-group,
-    .model-select-group {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-    }
-
-    label {
-        font-size: 11px;
-        font-weight: 500;
-        color: rgba(255, 255, 255, 0.8);
-        margin-left: 2px;
-    }
-
-    label > strong {
-        color: white;
-        font-weight: 600;
-    }
-
-    .provider-key-group input {
-        width: 100%;
-        background: rgba(0, 0, 0, 0.2);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        color: white;
-        border-radius: 4px;
-        padding: 5px 8px;
-        font-size: 11px;
-        box-sizing: border-box;
-    }
-
-    .key-buttons {
-        display: flex;
-        gap: 4px;
-    }
-
-    .key-buttons .settings-button {
-        flex: 1;
-        padding: 4px;
-    }
-
-    .model-list {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        max-height: 120px;
-        overflow-y: auto;
-        background: rgba(0, 0, 0, 0.3);
-        border-radius: 4px;
-        padding: 4px;
-        margin-top: 4px;
-    }
-
-    .model-item {
-        padding: 5px 8px;
-        font-size: 11px;
-        border-radius: 3px;
-        cursor: pointer;
-        transition: background-color 0.15s;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .model-item:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-    }
-
-    .model-item.selected {
-        background-color: rgba(0, 122, 255, 0.4);
-        font-weight: 500;
-    }
-
-    .model-status {
-        font-size: 9px;
-        color: rgba(255, 255, 255, 0.6);
-        margin-left: 8px;
-    }
-
-    .model-status.installed {
-        color: rgba(0, 255, 0, 0.8);
-    }
-
-    .model-status.not-installed {
-        color: rgba(255, 200, 0, 0.8);
-    }
-
-    .install-progress {
-        flex: 1;
-        height: 4px;
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 2px;
-        margin-left: 8px;
-        overflow: hidden;
-    }
-
-    .install-progress-bar {
-        height: 100%;
-        background: rgba(0, 122, 255, 0.8);
-        transition: width 0.3s ease;
-    }
-
-    /* Dropdown styles */
-    select.model-dropdown {
-        background: rgba(0, 0, 0, 0.2);
-        color: white;
-        cursor: pointer;
-    }
-
-    select.model-dropdown option {
-        background: #1a1a1a;
-        color: white;
-    }
-
-    select.model-dropdown option:disabled {
-        color: rgba(255, 255, 255, 0.4);
     }
 
     /* ────────────────[ GLASS BYPASS ]─────────────── */

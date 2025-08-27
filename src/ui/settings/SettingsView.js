@@ -12,15 +12,6 @@ export class SettingsView extends LitElement {
         firebaseUser: { type: Object, state: true },
         isLoading: { type: Boolean, state: true },
         isContentProtectionOn: { type: Boolean, state: true },
-        saving: { type: Boolean, state: true },
-        providerConfig: { type: Object, state: true },
-        apiKeys: { type: Object, state: true },
-        availableLlmModels: { type: Array, state: true },
-        availableSttModels: { type: Array, state: true },
-        selectedLlm: { type: String, state: true },
-        selectedStt: { type: String, state: true },
-        isLlmListVisible: { type: Boolean },
-        isSttListVisible: { type: Boolean },
         presets: { type: Array, state: true },
         selectedPreset: { type: Object, state: true },
         showPresets: { type: Boolean, state: true },
@@ -31,20 +22,10 @@ export class SettingsView extends LitElement {
 
     constructor() {
         super();
-        //////// after_modelStateService ////////
         this.shortcuts = {};
         this.firebaseUser = null;
-        this.apiKeys = { openai: '', gemini: '' };
-        this.providerConfig = {};
         this.isLoading = true;
         this.isContentProtectionOn = true;
-        this.saving = false;
-        this.availableLlmModels = [];
-        this.availableSttModels = [];
-        this.selectedLlm = null;
-        this.selectedStt = null;
-        this.isLlmListVisible = false;
-        this.isSttListVisible = false;
         this.presets = [];
         this.selectedPreset = null;
         this.showPresets = false;
@@ -52,7 +33,6 @@ export class SettingsView extends LitElement {
         this.autoUpdateEnabled = true;
         this.autoUpdateLoading = true;
         this.loadInitialData();
-        //////// after_modelStateService ////////
     }
 
     async loadAutoUpdateSetting() {
@@ -96,26 +76,15 @@ export class SettingsView extends LitElement {
         if (!window.api) return;
         this.isLoading = true;
         try {
-            // Load essential data first
-            const [userState, modelSettings, presets, contentProtection, shortcuts] = await Promise.all([
+            // Load essential data only for current UI
+            const [userState, presets, contentProtection, shortcuts] = await Promise.all([
                 window.api.settingsView.getCurrentUser(),
-                window.api.settingsView.getModelSettings(), // Facade call
                 window.api.settingsView.getPresets(),
                 window.api.settingsView.getContentProtectionStatus(),
                 window.api.settingsView.getCurrentShortcuts(),
             ]);
 
             if (userState && userState.isLoggedIn) this.firebaseUser = userState;
-
-            if (modelSettings.success) {
-                const { config, storedKeys, availableLlm, availableStt, selectedModels } = modelSettings.data;
-                this.providerConfig = config;
-                this.apiKeys = storedKeys;
-                this.availableLlmModels = availableLlm;
-                this.availableSttModels = availableStt;
-                this.selectedLlm = selectedModels.llm;
-                this.selectedStt = selectedModels.stt;
-            }
 
             this.presets = presets || [];
             this.isContentProtectionOn = contentProtection;
@@ -129,138 +98,6 @@ export class SettingsView extends LitElement {
         } finally {
             this.isLoading = false;
         }
-    }
-
-    async handleSaveKey(provider) {
-        const input = this.shadowRoot.querySelector(`#key-input-${provider}`);
-        if (!input) return;
-        const key = input.value;
-
-        // For other providers, use the normal flow
-        this.saving = true;
-        const result = await window.api.settingsView.validateKey({ provider, key });
-
-        if (result.success) {
-            await this.refreshModelData();
-        } else {
-            alert(`Failed to save ${provider} key: ${result.error}`);
-            input.value = this.apiKeys[provider] || '';
-        }
-        this.saving = false;
-    }
-
-    async handleClearKey(provider) {
-        console.log(`[SettingsView] handleClearKey: ${provider}`);
-        this.saving = true;
-        await window.api.settingsView.removeApiKey(provider);
-        this.apiKeys = { ...this.apiKeys, [provider]: '' };
-        await this.refreshModelData();
-        this.saving = false;
-    }
-
-    async refreshModelData() {
-        const [availableLlm, availableStt, selected, storedKeys] = await Promise.all([
-            window.api.settingsView.getAvailableModels({ type: 'llm' }),
-            window.api.settingsView.getAvailableModels({ type: 'stt' }),
-            window.api.settingsView.getSelectedModels(),
-            window.api.settingsView.getAllKeys(),
-        ]);
-        this.availableLlmModels = availableLlm;
-        this.availableSttModels = availableStt;
-        this.selectedLlm = selected.llm;
-        this.selectedStt = selected.stt;
-        this.apiKeys = storedKeys;
-        this.requestUpdate();
-    }
-
-    async toggleModelList(type) {
-        const visibilityProp = type === 'llm' ? 'isLlmListVisible' : 'isSttListVisible';
-
-        if (!this[visibilityProp]) {
-            this.saving = true;
-            this.requestUpdate();
-
-            await this.refreshModelData();
-
-            this.saving = false;
-        }
-
-        // 데이터 새로고침 후, 목록의 표시 상태를 토글합니다.
-        this[visibilityProp] = !this[visibilityProp];
-        this.requestUpdate();
-    }
-
-    async selectModel(type, modelId) {
-        this.saving = true;
-        await window.api.settingsView.setSelectedModel({ type, modelId });
-        if (type === 'llm') this.selectedLlm = modelId;
-        if (type === 'stt') this.selectedStt = modelId;
-        this.isLlmListVisible = false;
-        this.isSttListVisible = false;
-        this.saving = false;
-        this.requestUpdate();
-    }
-
-    async refreshOllamaStatus() {
-        const ollamaStatus = await window.api.settingsView.getOllamaStatus();
-        if (ollamaStatus?.success) {
-            this.ollamaStatus = { installed: ollamaStatus.installed, running: ollamaStatus.running };
-            this.ollamaModels = ollamaStatus.models || [];
-        }
-    }
-
-    async installOllamaModel(modelName) {
-        try {
-            // Ollama 모델 다운로드 시작
-            this.installingModels = { ...this.installingModels, [modelName]: 0 };
-            this.requestUpdate();
-
-            // 진행률 이벤트 리스너 설정 - 통합 LocalAI 이벤트 사용
-            const progressHandler = (event, data) => {
-                if (data.service === 'ollama' && data.model === modelName) {
-                    this.installingModels = { ...this.installingModels, [modelName]: data.progress || 0 };
-                    this.requestUpdate();
-                }
-            };
-
-            // 통합 LocalAI 이벤트 리스너 등록
-            window.api.settingsView.onLocalAIInstallProgress(progressHandler);
-
-            try {
-                const result = await window.api.settingsView.pullOllamaModel(modelName);
-
-                if (result.success) {
-                    console.log(`[SettingsView] Model ${modelName} installed successfully`);
-                    delete this.installingModels[modelName];
-                    this.requestUpdate();
-
-                    // 상태 새로고침
-                    await this.refreshOllamaStatus();
-                    await this.refreshModelData();
-                } else {
-                    throw new Error(result.error || 'Installation failed');
-                }
-            } finally {
-                // 통합 LocalAI 이벤트 리스너 제거
-                window.api.settingsView.removeOnLocalAIInstallProgress(progressHandler);
-            }
-        } catch (error) {
-            console.error(`[SettingsView] Error installing model ${modelName}:`, error);
-            delete this.installingModels[modelName];
-            this.requestUpdate();
-        }
-    }
-
-
-
-    getProviderForModel(type, modelId) {
-        for (const [providerId, config] of Object.entries(this.providerConfig)) {
-            const models = type === 'llm' ? config.llmModels : config.sttModels;
-            if (models?.some(m => m.id === modelId)) {
-                return providerId;
-            }
-        }
-        return null;
     }
 
     handleUsePicklesKey(e) {
@@ -292,14 +129,6 @@ export class SettingsView extends LitElement {
         this.cleanupEventListeners();
         this.cleanupIpcListeners();
         this.cleanupWindowResize();
-
-        // Cancel any ongoing Ollama installations when component is destroyed
-        const installingModels = Object.keys(this.installingModels);
-        if (installingModels.length > 0) {
-            installingModels.forEach(modelName => {
-                window.api.settingsView.cancelOllamaInstallation(modelName);
-            });
-        }
     }
 
     setupEventListeners() {
@@ -481,25 +310,6 @@ export class SettingsView extends LitElement {
         this.requestUpdate();
     }
 
-    async handleSaveApiKey() {
-        const input = this.shadowRoot.getElementById('api-key-input');
-        if (!input || !input.value) return;
-
-        const newApiKey = input.value;
-        try {
-            const result = await window.api.settingsView.saveApiKey(newApiKey);
-            if (result.success) {
-                console.log('API Key saved successfully via IPC.');
-                this.apiKey = newApiKey;
-                this.requestUpdate();
-            } else {
-                console.error('Failed to save API Key via IPC:', result.error);
-            }
-        } catch (e) {
-            console.error('Error invoking save-api-key IPC:', e);
-        }
-    }
-
     handleQuit() {
         console.log('Quit clicked');
         window.api.settingsView.quitApplication();
@@ -510,35 +320,6 @@ export class SettingsView extends LitElement {
         window.api.settingsView.firebaseLogout();
     }
 
-    async handleOllamaShutdown() {
-        console.log('[SettingsView] Shutting down Ollama service...');
-
-        if (!window.api) return;
-
-        try {
-            // Show loading state
-            this.ollamaStatus = { ...this.ollamaStatus, running: false };
-            this.requestUpdate();
-
-            const result = await window.api.settingsView.shutdownOllama(false); // Graceful shutdown
-
-            if (result.success) {
-                console.log('[SettingsView] Ollama shut down successfully');
-                // Refresh status to reflect the change
-                await this.refreshOllamaStatus();
-            } else {
-                console.error('[SettingsView] Failed to shutdown Ollama:', result.error);
-                // Restore previous state on error
-                await this.refreshOllamaStatus();
-            }
-        } catch (error) {
-            console.error('[SettingsView] Error during Ollama shutdown:', error);
-            // Restore previous state on error
-            await this.refreshOllamaStatus();
-        }
-    }
-
-    //////// after_modelStateService ////////
     render() {
         if (this.isLoading) {
             return html`
@@ -550,14 +331,6 @@ export class SettingsView extends LitElement {
                 </div>
             `;
         }
-
-        const loggedIn = !!this.firebaseUser;
-
-        const getModelName = (type, id) => {
-            const models = type === 'llm' ? this.availableLlmModels : this.availableSttModels;
-            const model = models.find(m => m.id === id);
-            return model ? model.name : id;
-        };
 
         return html`
             <div class="settings-container">

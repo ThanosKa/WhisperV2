@@ -54,7 +54,9 @@ module.exports = {
         ipcMain.handle('ask:sendQuestionFromSummary', async (event, userPrompt) => {
             // Get conversation history from listenService and pass it to askService
             const conversationHistory = listenService.getConversationHistory();
-            console.log(`[FeatureBridge] ask:sendQuestionFromSummary: clickLen=${userPrompt?.length || 0}, historyItems=${conversationHistory.length}`);
+            console.log(
+                `[FeatureBridge] ask:sendQuestionFromSummary: clickLen=${userPrompt?.length || 0}, historyItems=${conversationHistory.length}`
+            );
             if (Array.isArray(conversationHistory)) {
                 const preview = conversationHistory.slice(-2);
                 console.log('[FeatureBridge] history preview:', JSON.stringify(preview));
@@ -92,9 +94,24 @@ module.exports = {
         });
         ipcMain.handle('listen:setPromptProfile', async (event, profile) => {
             const config = require('../features/common/config/config');
+            const fs = require('fs');
+            const path = require('path');
+
             config.set('activePromptProfile', profile);
             config.saveUserConfig();
             console.log(`[FeatureBridge] Prompt profile set to: ${profile}`);
+
+            // Write to insights.txt
+            try {
+                const rootPath = path.resolve(__dirname, '../../..');
+                const insightsPath = path.join(rootPath, 'insights.txt');
+                const timestamp = new Date().toISOString();
+                const insight = `[${timestamp}]\nUser prompt: (Profile Change)\nActive profile: ${profile}\nInsights\n\n`;
+                fs.appendFileSync(insightsPath, insight);
+            } catch (error) {
+                console.error('[FeatureBridge] Failed to write insights.txt:', error);
+            }
+
             return { success: true };
         });
         ipcMain.handle('listen:getPromptProfile', async () => {

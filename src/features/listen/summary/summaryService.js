@@ -24,26 +24,26 @@ class SummaryService {
      */
     _extractDefineCandidates(conversationTexts, maxTerms = 3) {
         if (!Array.isArray(conversationTexts) || conversationTexts.length === 0) return [];
-        
+
         // Look at the last 3-5 lines for terms
         const recentLines = conversationTexts.slice(-5);
         const candidates = new Set();
-        
+
         recentLines.forEach(line => {
             // Strip speaker prefix like "me:"/"them:"
             const cleaned = line.replace(/^\s*(me|them)\s*:\s*/i, '').trim();
             if (!cleaned) return;
-            
+
             const words = cleaned.split(/\s+/);
             let buffer = [];
-            
+
             for (const w of words) {
                 const token = w.replace(/[\.,!?;:"'\)\(\[\]]+$/g, '');
-                
+
                 // Multi-word proper nouns (e.g., "Machine Learning", "Azure DevOps")
                 if (/^[A-Z][a-zA-Z]+$/.test(token)) {
                     buffer.push(token);
-                } 
+                }
                 // ALLCAPS acronyms (e.g., "AI", "API", "GenAI")
                 else if (/^[A-Z]{2,}$/.test(token)) {
                     if (buffer.length > 0) {
@@ -70,13 +70,10 @@ class SummaryService {
                 candidates.add(buffer.join(' '));
             }
         });
-        
+
         // Filter out common words and very short terms
-        const filtered = Array.from(candidates).filter(term => 
-            term.length > 1 && 
-            !['The', 'And', 'But', 'For', 'Or', 'So', 'Yet'].includes(term)
-        );
-        
+        const filtered = Array.from(candidates).filter(term => term.length > 1 && !['The', 'And', 'But', 'For', 'Or', 'So', 'Yet'].includes(term));
+
         // Return the most recent terms first, up to maxTerms
         return filtered.slice(-maxTerms).reverse();
     }
@@ -112,7 +109,7 @@ class SummaryService {
     getConversationHistory() {
         console.log('[SummaryService] history length:', this.conversationHistory.length);
         return this.conversationHistory;
-      }
+    }
 
     resetConversationHistory() {
         this.conversationHistory = [];
@@ -203,6 +200,33 @@ Keep all points concise and build upon previous analysis if provided.`,
             ];
 
             console.log('🤖 Sending analysis request to AI...');
+
+            // Write LLM input to response.txt
+            try {
+                const fs = require('fs');
+                const path = require('path');
+                const rootPath = path.resolve(__dirname, '../../../');
+                const responsePath = path.join(rootPath, 'response.txt');
+                const timestamp = new Date().toISOString();
+
+                const llmMessages = messages
+                    .map(msg => {
+                        return `${msg.role.toUpperCase()}: ${msg.content}`;
+                    })
+                    .join('\n\n');
+
+                const responseEntry = `[${timestamp}]
+User prompt: (Analysis Request)
+Active profile: ${activeProfile}
+
+What LLM got:
+${llmMessages}
+
+`;
+                fs.appendFileSync(responsePath, responseEntry);
+            } catch (error) {
+                console.error('[SummaryService] Failed to write response.txt:', error);
+            }
 
             const llm = createLLM(modelInfo.provider, {
                 apiKey: modelInfo.apiKey,
@@ -372,7 +396,7 @@ Keep all points concise and build upon previous analysis if provided.`,
     async triggerAnalysisIfNeeded() {
         const analysisStep = config.get('analysisStep') || 5;
         const recapStep = config.get('recapStep') || 15;
-        
+
         if (this.conversationHistory.length >= analysisStep && this.conversationHistory.length % analysisStep === 0) {
             console.log(`Triggering analysis - ${this.conversationHistory.length} conversation texts accumulated`);
 
@@ -381,14 +405,14 @@ Keep all points concise and build upon previous analysis if provided.`,
                 // Add multiple Define candidates from recent conversation
                 const defineTerms = this._extractDefineCandidates(this.conversationHistory, 3);
                 data.actions = Array.isArray(data.actions) ? data.actions : [];
-                
+
                 defineTerms.forEach(term => {
                     const defineItem = `📘 Define "${term}"`;
                     if (!data.actions.some(x => (x || '').toLowerCase() === defineItem.toLowerCase())) {
                         data.actions.unshift(defineItem);
                     }
                 });
-                
+
                 // Add recap button if conversation is long enough
                 if (this.conversationHistory.length >= recapStep) {
                     const recapItem = '🗒️ Recap meeting so far';
@@ -396,7 +420,7 @@ Keep all points concise and build upon previous analysis if provided.`,
                         data.actions.unshift(recapItem);
                     }
                 }
-                
+
                 console.log('Sending structured data to renderer');
                 this.sendToRenderer('summary-update', data);
 

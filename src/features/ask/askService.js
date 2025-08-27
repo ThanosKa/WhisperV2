@@ -353,7 +353,24 @@ class AskService {
             console.log(`[AskService] expanded intent: mode=${expansion.mode}`);
 
             const activeProfile = config.get('activePromptProfile') || 'whisper';
-            const systemPrompt = getSystemPrompt(activeProfile, conversationHistory, false);
+
+            // Determine which prompt profile to use based on action type
+            let profileToUse = activeProfile;
+            let useConversationContext = true;
+
+            if (expansion.mode === 'define') {
+                profileToUse = activeProfile + '_define';
+                useConversationContext = false; // Definitions use general knowledge
+            } else if (expansion.mode === 'email') {
+                profileToUse = activeProfile + '_email';
+            } else if (userPrompt.startsWith('❓')) {
+                profileToUse = activeProfile + '_question';
+                useConversationContext = false; // Questions use general knowledge
+            }
+
+            // Use conversation context only for meeting-related actions
+            const contextForPrompt = useConversationContext ? conversationHistory : '';
+            const systemPrompt = getSystemPrompt(profileToUse, contextForPrompt, false);
 
             const userTask = expansion.prompt || userPrompt.trim();
             const messages = [
@@ -379,6 +396,44 @@ class AskService {
 
             // concise request log
             console.log('[AskService] sending request to llm');
+
+            // Write LLM input to response.txt
+            try {
+                const fs = require('fs');
+                const path = require('path');
+                const rootPath = path.resolve(__dirname, '../../../');
+                const responsePath = path.join(rootPath, 'response.txt');
+                const timestamp = new Date().toISOString();
+
+                const llmMessages = messages
+                    .map(msg => {
+                        if (msg.role === 'system') {
+                            return `SYSTEM: ${msg.content}`;
+                        } else if (msg.role === 'user') {
+                            if (Array.isArray(msg.content)) {
+                                return `USER: ${msg.content.map(c => (c.type === 'text' ? c.text : '[IMAGE]')).join(' ')}`;
+                            } else {
+                                return `USER: ${msg.content}`;
+                            }
+                        }
+                        return `${msg.role.toUpperCase()}: ${msg.content}`;
+                    })
+                    .join('\n\n');
+
+                const responseEntry = `[${timestamp}]
+User prompt: ${userPrompt}
+Active profile: ${activeProfile}
+Profile used: ${profileToUse}
+Using conversation context: ${useConversationContext}
+
+What LLM got:
+${llmMessages}
+
+`;
+                fs.appendFileSync(responsePath, responseEntry);
+            } catch (error) {
+                console.error('[AskService] Failed to write response.txt:', error);
+            }
 
             const streamingLLM = createStreamingLLM(modelInfo.provider, {
                 apiKey: modelInfo.apiKey,

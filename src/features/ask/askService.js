@@ -254,6 +254,19 @@ class AskService {
 
         try {
             console.log(`[AskService] 🤖 Processing message: ${userPrompt.substring(0, 50)}...`);
+            console.log('🔍 [AskService] CONVERSATION HISTORY ANALYSIS:');
+            console.log('  - Raw conversation history type:', typeof conversationHistoryRaw);
+            console.log('  - Raw conversation history length:', conversationHistoryRaw?.length || 0);
+            if (conversationHistoryRaw && conversationHistoryRaw.length > 0) {
+                console.log('  - First conversation item:', conversationHistoryRaw[0]);
+                console.log('  - Last conversation item:', conversationHistoryRaw[conversationHistoryRaw.length - 1]);
+                console.log('  - All conversation items:');
+                conversationHistoryRaw.forEach((item, index) => {
+                    console.log(`    [${index}]:`, item);
+                });
+            } else {
+                console.log('  - ⚠️ NO CONVERSATION HISTORY PROVIDED - This may be the bug!');
+            }
 
             sessionId = await sessionRepository.getOrCreateActive('ask');
             await askRepository.addAiMessage({ sessionId, role: 'user', content: userPrompt.trim() });
@@ -269,6 +282,14 @@ class AskService {
             const screenshotBase64 = screenshotResult.success ? screenshotResult.base64 : null;
 
             const conversationHistory = this._formatConversationForPrompt(conversationHistoryRaw);
+            console.log('📜 [AskService] CONVERSATION HISTORY FORMATTING:');
+            console.log('  - Formatted conversation history length:', conversationHistory.length, 'characters');
+            console.log('  - Formatted conversation preview (first 200 chars):');
+            console.log('    "' + conversationHistory.substring(0, 200) + '"' + (conversationHistory.length > 200 ? '...[TRUNCATED]' : ''));
+            console.log('  - Complete formatted conversation:');
+            console.log('=' + '='.repeat(60));
+            console.log(conversationHistory);
+            console.log('=' + '='.repeat(60));
 
             const systemPrompt = getSystemPrompt('pickle_glass_analysis', conversationHistory, false);
 
@@ -287,6 +308,52 @@ class AskService {
                 });
             }
 
+            // === DETAILED LLM REQUEST LOGGING ===
+            console.log('\n' + '🚀'.repeat(50));
+            console.log('🤖 [AskService] COMPLETE LLM REQUEST DETAILS:');
+            console.log('🚀'.repeat(50));
+            console.log('📊 Model Info:');
+            console.log('  - Provider:', modelInfo.provider);
+            console.log('  - Model:', modelInfo.model);
+            console.log('  - Temperature: 0.7');
+            console.log('  - Max Tokens: 2048');
+            console.log('\n📝 User Prompt (from insight click):');
+            console.log('─'.repeat(60));
+            console.log(userPrompt.trim());
+            console.log('─'.repeat(60));
+            console.log('\n📋 System Prompt (first 500 chars):');
+            console.log('─'.repeat(60));
+            console.log(systemPrompt.substring(0, 500) + (systemPrompt.length > 500 ? '...[TRUNCATED]' : ''));
+            console.log('─'.repeat(60));
+            console.log('\n🖼️  Screenshot included:', !!screenshotBase64);
+            if (screenshotBase64) {
+                console.log('  - Screenshot size:', Math.round(screenshotBase64.length / 1024), 'KB (base64)');
+            }
+            console.log('\n📜 Conversation History:');
+            console.log('─'.repeat(60));
+            console.log(conversationHistory || 'No conversation history available.');
+            console.log('─'.repeat(60));
+            console.log('\n🎯 FULL MESSAGES ARRAY STRUCTURE:');
+            console.log('─'.repeat(60));
+            console.log('Message 1 (system):');
+            console.log('  Role:', messages[0].role);
+            console.log('  Content length:', messages[0].content.length, 'characters');
+            console.log('Message 2 (user):');
+            console.log('  Role:', messages[1].role);
+            console.log('  Content type:', Array.isArray(messages[1].content) ? 'multimodal array' : 'text string');
+            if (Array.isArray(messages[1].content)) {
+                messages[1].content.forEach((item, idx) => {
+                    console.log(`  Content[${idx}]:`, item.type, item.type === 'text' ? `"${item.text}"` : '(image data)');
+                });
+            }
+            console.log('─'.repeat(60));
+            console.log('\n🗂️  COMPLETE SYSTEM PROMPT (FULL TEXT):');
+            console.log('═'.repeat(80));
+            console.log(systemPrompt);
+            console.log('═'.repeat(80));
+            console.log('🚀 About to send to LLM via streamChat...');
+            console.log('🚀'.repeat(50) + '\n');
+
             const streamingLLM = createStreamingLLM(modelInfo.provider, {
                 apiKey: modelInfo.apiKey,
                 model: modelInfo.model,
@@ -298,6 +365,9 @@ class AskService {
 
             try {
                 const response = await streamingLLM.streamChat(messages, { signal });
+
+                console.log('📡 [AskService] LLM responded - starting to process stream...');
+
                 const askWin = getWindowPool()?.get('ask');
 
                 if (!askWin || askWin.isDestroyed()) {
@@ -384,11 +454,16 @@ class AskService {
     async _processStream(reader, askWin, sessionId, signal) {
         const decoder = new TextDecoder();
         let fullResponse = '';
+        let tokenCount = 0;
+        let firstTokenReceived = false;
 
         try {
             this.state.isLoading = false;
             this.state.isStreaming = true;
             this._broadcastState();
+
+            console.log('📡 [AskService] Starting to process LLM response stream...');
+
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
@@ -400,20 +475,37 @@ class AskService {
                     if (line.startsWith('data: ')) {
                         const data = line.substring(6);
                         if (data === '[DONE]') {
+                            console.log('🏁 [AskService] LLM stream completed with [DONE] signal');
                             return;
                         }
                         try {
                             const json = JSON.parse(data);
                             const token = json.choices[0]?.delta?.content || '';
                             if (token) {
+                                if (!firstTokenReceived) {
+                                    console.log('🔥 [AskService] First token received from LLM:', JSON.stringify(token));
+                                    firstTokenReceived = true;
+                                }
+
+                                tokenCount++;
                                 fullResponse += token;
                                 this.state.currentResponse = fullResponse;
                                 this._broadcastState();
+
+                                // Log first few tokens for debugging
+                                if (tokenCount <= 10) {
+                                    console.log(`📄 [AskService] Token ${tokenCount}:`, JSON.stringify(token));
+                                } else if (tokenCount === 11) {
+                                    console.log('📄 [AskService] Continuing stream... (further tokens not logged)');
+                                }
                             }
                         } catch (error) {}
                     }
                 }
             }
+
+            console.log('📊 [AskService] Stream processing completed. Total tokens:', tokenCount);
+            console.log('📋 [AskService] Final response length:', fullResponse.length, 'characters');
         } catch (streamError) {
             if (signal.aborted) {
                 console.log(`[AskService] Stream reading was intentionally cancelled. Reason: ${signal.reason}`);

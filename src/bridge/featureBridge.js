@@ -51,7 +51,16 @@ module.exports = {
 
         // Ask
         ipcMain.handle('ask:sendQuestionFromAsk', async (event, userPrompt) => await askService.sendMessage(userPrompt));
-        ipcMain.handle('ask:sendQuestionFromSummary', async (event, userPrompt) => await askService.sendMessage(userPrompt));
+        ipcMain.handle('ask:sendQuestionFromSummary', async (event, userPrompt) => {
+            // Get conversation history from listenService and pass it to askService
+            const conversationHistory = listenService.getConversationHistory();
+            console.log('🔍 [FeatureBridge] ask:sendQuestionFromSummary - Passing conversation history:');
+            console.log('  - Insight text:', userPrompt);
+            console.log('  - Conversation history length:', conversationHistory.length, 'items');
+            console.log('  - First 3 conversation items:', conversationHistory.slice(0, 3));
+            console.log('  - Last 3 conversation items:', conversationHistory.slice(-3));
+            return await askService.sendMessage(userPrompt, conversationHistory);
+        });
         ipcMain.handle('ask:toggleAskButton', async () => await askService.toggleAskButton());
         ipcMain.handle('ask:closeAskWindow', async () => await askService.closeAskWindow());
         ipcMain.handle('ask:interruptStream', () => {

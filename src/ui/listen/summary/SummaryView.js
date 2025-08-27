@@ -176,19 +176,31 @@ export class SummaryView extends LitElement {
 
     async handleRequestClick(requestText) {
         console.log('🔥 Analysis request clicked:', requestText);
+        console.log('📋 [SummaryView] INSIGHT CLICKED - Full text being sent to LLM:');
+        console.log('='.repeat(80));
+        console.log(requestText);
+        console.log('='.repeat(80));
+        console.log('📊 [SummaryView] Text length:', requestText.length, 'characters');
+        console.log('🎯 [SummaryView] About to send to askService.sendMessage via sendQuestionFromSummary');
+        console.log('🕰️ [SummaryView] Timestamp:', new Date().toISOString());
+        console.log('🔍 [SummaryView] Request type: Insight click from summary view');
 
         if (window.api) {
             try {
+                console.log('🚀 [SummaryView] Calling window.api.summaryView.sendQuestionFromSummary...');
                 const result = await window.api.summaryView.sendQuestionFromSummary(requestText);
 
                 if (result.success) {
-                    console.log('✅ Question sent to AskView successfully');
+                    console.log('✅ [SummaryView] Question sent to AskView successfully');
+                    console.log('🎉 [SummaryView] LLM request pipeline initiated - check AskService logs for detailed LLM interaction');
                 } else {
-                    console.error('❌ Failed to send question to AskView:', result.error);
+                    console.error('❌ [SummaryView] Failed to send question to AskView:', result.error);
                 }
             } catch (error) {
-                console.error('❌ Error in handleRequestClick:', error);
+                console.error('❌ [SummaryView] Error in handleRequestClick:', error);
             }
+        } else {
+            console.error('⚠️ [SummaryView] window.api not available!');
         }
     }
 

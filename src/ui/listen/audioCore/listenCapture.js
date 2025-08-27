@@ -1,27 +1,25 @@
 const createAecModule = require('./aec.js');
 
-let aecModPromise = null;     // 한 번만 로드
-let aecMod        = null;
-let aecPtr        = 0;        // Rust Aec* 1개만 재사용
+let aecModPromise = null; // 한 번만 로드
+let aecMod = null;
+let aecPtr = 0; // Rust Aec* 1개만 재사용
 
 /** WASM 모듈 가져오고 1회 초기화 */
-async function getAec () {
-  if (aecModPromise) return aecModPromise;   // 캐시
+async function getAec() {
+    if (aecModPromise) return aecModPromise; // 캐시
 
-    aecModPromise = createAecModule().then((M) => {
-        aecMod = M; 
+    aecModPromise = createAecModule().then(M => {
+        aecMod = M;
 
-        console.log('WASM Module Loaded:', M); 
+        console.log('WASM Module Loaded:', M);
         // C 심볼 → JS 래퍼 바인딩 (딱 1번)
-        M.newPtr   = M.cwrap('AecNew',        'number',
-                            ['number','number','number','number']);
-        M.cancel   = M.cwrap('AecCancelEcho', null,
-                            ['number','number','number','number','number']);
-        M.destroy  = M.cwrap('AecDestroy',    null, ['number']);
+        M.newPtr = M.cwrap('AecNew', 'number', ['number', 'number', 'number', 'number']);
+        M.cancel = M.cwrap('AecCancelEcho', null, ['number', 'number', 'number', 'number', 'number']);
+        M.destroy = M.cwrap('AecDestroy', null, ['number']);
         return M;
     });
 
-  return aecModPromise;
+    return aecModPromise;
 }
 
 // 바로 로드-실패 로그를 보기 위해
@@ -105,28 +103,30 @@ function arrayBufferToBase64(buffer) {
 
 /* ───────────────────────── JS ↔︎ WASM 헬퍼 ───────────────────────── */
 function int16PtrFromFloat32(mod, f32) {
-  const len   = f32.length;
-  const bytes = len * 2;
-  const ptr   = mod._malloc(bytes);
-  // HEAP16이 없으면 HEAPU8.buffer로 직접 래핑
-  const heapBuf = (mod.HEAP16 ? mod.HEAP16.buffer : mod.HEAPU8.buffer);
-  const i16   = new Int16Array(heapBuf, ptr, len);
-  for (let i = 0; i < len; ++i) {
-    const s = Math.max(-1, Math.min(1, f32[i]));
-    i16[i]  = s < 0 ? s * 0x8000 : s * 0x7fff;
-  }
-  return { ptr, view: i16 };
+    const len = f32.length;
+    const bytes = len * 2;
+    const ptr = mod._malloc(bytes);
+    // HEAP16이 없으면 HEAPU8.buffer로 직접 래핑
+    const heapBuf = mod.HEAP16 ? mod.HEAP16.buffer : mod.HEAPU8.buffer;
+    const i16 = new Int16Array(heapBuf, ptr, len);
+    for (let i = 0; i < len; ++i) {
+        const s = Math.max(-1, Math.min(1, f32[i]));
+        i16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+    return { ptr, view: i16 };
 }
 
 function float32FromInt16View(i16) {
-  const out = new Float32Array(i16.length);
-  for (let i = 0; i < i16.length; ++i) out[i] = i16[i] / 32768;
-  return out;
+    const out = new Float32Array(i16.length);
+    for (let i = 0; i < i16.length; ++i) out[i] = i16[i] / 32768;
+    return out;
 }
 
 /* 필요하다면 종료 시 */
-function disposeAec () {
-  getAec().then(mod => { if (aecPtr) mod.destroy(aecPtr); });
+function disposeAec() {
+    getAec().then(mod => {
+        if (aecPtr) mod.destroy(aecPtr);
+    });
 }
 
 // listenCapture.js
@@ -151,7 +151,6 @@ function runAecSync(micF32, sysF32) {
         alignedSysF32.set(sysF32.slice(0, lengthToCopy));
     }
 
-
     // 2400개 샘플을 160개 프레임으로 나누어 루프 실행
     for (let i = 0; i < numFrames; i++) {
         const offset = i * frameSize;
@@ -169,7 +168,7 @@ function runAecSync(micF32, sysF32) {
         aecMod.cancel(aecPtr, micPtr.ptr, echoPtr.ptr, outPtr, frameSize);
 
         // WASM 메모리에서 처리된 프레임 데이터 읽기
-        const heapBuf = (aecMod.HEAP16 ? aecMod.HEAP16.buffer : aecMod.HEAPU8.buffer);
+        const heapBuf = aecMod.HEAP16 ? aecMod.HEAP16.buffer : aecMod.HEAPU8.buffer;
         const outFrameI16 = new Int16Array(heapBuf, outPtr, frameSize);
         const outFrameF32 = float32FromInt16View(outFrameI16);
 
@@ -187,7 +186,6 @@ function runAecSync(micF32, sysF32) {
     //                      여기까지가 새로운 로직
     // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 }
-
 
 // System audio data handler
 window.api.listenCapture.onSystemAudioData((event, { data }) => {
@@ -294,16 +292,15 @@ async function setupMicProcessing(micStream) {
     const mod = await getAec();
     if (!aecPtr) aecPtr = mod.newPtr(160, 1600, 24000, 1);
 
-
     const micAudioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
-    await micAudioContext.resume(); 
+    await micAudioContext.resume();
     const micSource = micAudioContext.createMediaStreamSource(micStream);
     const micProcessor = micAudioContext.createScriptProcessor(BUFFER_SIZE, 1, 1);
 
     let audioBuffer = [];
     const samplesPerChunk = SAMPLE_RATE * AUDIO_CHUNK_DURATION;
 
-    micProcessor.onaudioprocess = (e) => {
+    micProcessor.onaudioprocess = e => {
         const inputData = e.inputBuffer.getChannelData(0);
         audioBuffer.push(...inputData);
         // console.log('🎤 micProcessor.onaudioprocess');
@@ -386,7 +383,7 @@ function setupSystemAudioProcessing(systemStream) {
     systemProcessor.onaudioprocess = async e => {
         const inputData = e.inputBuffer.getChannelData(0);
         if (!inputData || inputData.length === 0) return;
-        
+
         audioBuffer.push(...inputData);
 
         while (audioBuffer.length >= samplesPerChunk) {
@@ -415,14 +412,12 @@ function setupSystemAudioProcessing(systemStream) {
 // Main capture functions (exact from renderer.js)
 // ---------------------------
 async function startCapture(screenshotIntervalSeconds = 5, imageQuality = 'medium') {
-
     // Reset token tracker when starting new capture session
     tokenTracker.reset();
     console.log('🎯 Token tracker reset for new capture session');
 
     try {
         if (isMacOS) {
-
             const sessionActive = await window.api.listenCapture.isSessionActive();
             if (!sessionActive) {
                 throw new Error('STT sessions not initialized - please wait for initialization to complete');
@@ -472,12 +467,11 @@ async function startCapture(screenshotIntervalSeconds = 5, imageQuality = 'mediu
 
             console.log('macOS screen capture started - audio handled by SystemAudioDump');
         } else if (isLinux) {
-
             const sessionActive = await window.api.listenCapture.isSessionActive();
             if (!sessionActive) {
                 throw new Error('STT sessions not initialized - please wait for initialization to complete');
             }
-            
+
             // Linux - use display media for screen capture and getUserMedia for microphone
             mediaStream = await navigator.mediaDevices.getDisplayMedia({
                 video: {
@@ -546,15 +540,15 @@ async function startCapture(screenshotIntervalSeconds = 5, imageQuality = 'mediu
             try {
                 mediaStream = await navigator.mediaDevices.getDisplayMedia({
                     video: true,
-                    audio: true // This will now use native loopback from our handler
+                    audio: true, // This will now use native loopback from our handler
                 });
-                
+
                 // Verify we got audio tracks
                 const audioTracks = mediaStream.getAudioTracks();
                 if (audioTracks.length === 0) {
                     throw new Error('No audio track in native loopback stream');
                 }
-                
+
                 console.log('Windows native loopback audio capture started');
                 const { context, processor } = setupSystemAudioProcessing(mediaStream);
                 systemAudioContext = context;
@@ -614,9 +608,9 @@ function stopCapture() {
 // Exports & global registration
 // ---------------------------
 module.exports = {
-    getAec,          // 새로 만든 초기화 함수
-    runAecSync,      // sync 버전
-    disposeAec,      // 필요시 Rust 객체 파괴
+    getAec, // 새로 만든 초기화 함수
+    runAecSync, // sync 버전
+    disposeAec, // 필요시 Rust 객체 파괴
     startCapture,
     stopCapture,
     isLinux,
@@ -629,4 +623,4 @@ if (typeof window !== 'undefined') {
     window.pickleGlass = window.pickleGlass || {};
     window.pickleGlass.startCapture = startCapture;
     window.pickleGlass.stopCapture = stopCapture;
-} 
+}

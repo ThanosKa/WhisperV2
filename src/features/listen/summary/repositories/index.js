@@ -15,9 +15,9 @@ const summaryRepositoryAdapter = {
         const uid = authService.getCurrentUserId();
         return getBaseRepository().saveSummary({ uid, sessionId, tldr, text, bullet_json, action_json, model });
     },
-    getSummaryBySessionId: (sessionId) => {
+    getSummaryBySessionId: sessionId => {
         return getBaseRepository().getSummaryBySessionId(sessionId);
-    }
+    },
 };
 
-module.exports = summaryRepositoryAdapter; 
+module.exports = summaryRepositoryAdapter;

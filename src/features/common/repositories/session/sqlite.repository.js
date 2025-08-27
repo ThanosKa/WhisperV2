@@ -10,7 +10,7 @@ function create(uid, type = 'ask') {
     const sessionId = require('crypto').randomUUID();
     const now = Math.floor(Date.now() / 1000);
     const query = `INSERT INTO sessions (id, uid, title, session_type, started_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`;
-    
+
     try {
         db.prepare(query).run(sessionId, uid, `Session @ ${new Date().toLocaleTimeString()}`, type, now, now);
         console.log(`SQLite: Created session ${sessionId} for user ${uid} (type: ${type})`);
@@ -23,7 +23,8 @@ function create(uid, type = 'ask') {
 
 function getAllByUserId(uid) {
     const db = sqliteClient.getDb();
-    const query = "SELECT id, uid, title, session_type, started_at, ended_at, sync_state, updated_at FROM sessions WHERE uid = ? ORDER BY started_at DESC";
+    const query =
+        'SELECT id, uid, title, session_type, started_at, ended_at, sync_state, updated_at FROM sessions WHERE uid = ? ORDER BY started_at DESC';
     return db.prepare(query).all(uid);
 }
 
@@ -36,12 +37,12 @@ function updateTitle(id, title) {
 function deleteWithRelatedData(id) {
     const db = sqliteClient.getDb();
     const transaction = db.transaction(() => {
-        db.prepare("DELETE FROM transcripts WHERE session_id = ?").run(id);
-        db.prepare("DELETE FROM ai_messages WHERE session_id = ?").run(id);
-        db.prepare("DELETE FROM summaries WHERE session_id = ?").run(id);
-        db.prepare("DELETE FROM sessions WHERE id = ?").run(id);
+        db.prepare('DELETE FROM transcripts WHERE session_id = ?').run(id);
+        db.prepare('DELETE FROM ai_messages WHERE session_id = ?').run(id);
+        db.prepare('DELETE FROM summaries WHERE session_id = ?').run(id);
+        db.prepare('DELETE FROM sessions WHERE id = ?').run(id);
     });
-    
+
     try {
         transaction();
         return { success: true };
@@ -76,7 +77,7 @@ function touch(id) {
 
 function getOrCreateActive(uid, requestedType = 'ask') {
     const db = sqliteClient.getDb();
-    
+
     // 1. Look for ANY active session for the user (ended_at IS NULL).
     //    Prefer 'listen' sessions over 'ask' sessions to ensure continuity.
     const findQuery = `
@@ -91,7 +92,7 @@ function getOrCreateActive(uid, requestedType = 'ask') {
     if (activeSession) {
         // An active session exists.
         console.log(`[Repo] Found active session ${activeSession.id} of type ${activeSession.session_type}`);
-        
+
         // 2. Promotion Logic: If it's an 'ask' session and we need 'listen', promote it.
         if (activeSession.session_type === 'ask' && requestedType === 'listen') {
             updateType(activeSession.id, 'listen');
@@ -113,7 +114,7 @@ function endAllActiveSessions(uid) {
     const now = Math.floor(Date.now() / 1000);
     // Filter by uid to match the Firebase repository's behavior.
     const query = `UPDATE sessions SET ended_at = ?, updated_at = ? WHERE ended_at IS NULL AND uid = ?`;
-    
+
     try {
         const result = db.prepare(query).run(now, now, uid);
         console.log(`[Repo] Ended ${result.changes} active SQLite session(s) for user ${uid}.`);
@@ -135,4 +136,4 @@ module.exports = {
     touch,
     getOrCreateActive,
     endAllActiveSessions,
-}; 
+};

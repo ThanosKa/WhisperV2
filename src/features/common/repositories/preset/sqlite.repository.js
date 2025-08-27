@@ -7,7 +7,7 @@ function getPresets(uid) {
         WHERE uid = ? OR is_default = 1 
         ORDER BY is_default DESC, title ASC
     `;
-    
+
     try {
         return db.prepare(query).all(uid);
     } catch (err) {
@@ -23,7 +23,7 @@ function getPresetTemplates() {
         WHERE is_default = 1 
         ORDER BY title ASC
     `;
-    
+
     try {
         return db.prepare(query).all();
     } catch (err) {
@@ -37,7 +37,7 @@ function create({ uid, title, prompt }) {
     const presetId = require('crypto').randomUUID();
     const now = Math.floor(Date.now() / 1000);
     const query = `INSERT INTO prompt_presets (id, uid, title, prompt, is_default, created_at, sync_state) VALUES (?, ?, ?, ?, 0, ?, 'dirty')`;
-    
+
     try {
         db.prepare(query).run(presetId, uid, title, prompt, now);
         return { id: presetId };
@@ -53,7 +53,7 @@ function update(id, { title, prompt }, uid) {
     try {
         const result = db.prepare(query).run(title, prompt, id, uid);
         if (result.changes === 0) {
-            throw new Error("Preset not found or permission denied.");
+            throw new Error('Preset not found or permission denied.');
         }
         return { changes: result.changes };
     } catch (err) {
@@ -68,7 +68,7 @@ function del(id, uid) {
     try {
         const result = db.prepare(query).run(id, uid);
         if (result.changes === 0) {
-            throw new Error("Preset not found or permission denied.");
+            throw new Error('Preset not found or permission denied.');
         }
         return { changes: result.changes };
     } catch (err) {
@@ -81,5 +81,5 @@ module.exports = {
     getPresetTemplates,
     create,
     update,
-    delete: del
-}; 
+    delete: del,
+};

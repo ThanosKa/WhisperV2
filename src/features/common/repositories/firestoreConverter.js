@@ -12,7 +12,7 @@ function createEncryptedConverter(fieldsToEncrypt = []) {
         /**
          * @param {import('@firebase/firestore').DocumentData} appObject
          */
-        toFirestore: (appObject) => {
+        toFirestore: appObject => {
             const firestoreData = { ...appObject };
             for (const field of fieldsToEncrypt) {
                 if (Object.prototype.hasOwnProperty.call(firestoreData, field) && firestoreData[field] != null) {
@@ -32,7 +32,7 @@ function createEncryptedConverter(fieldsToEncrypt = []) {
             const appObject = { ...firestoreData, id: snapshot.id }; // include the document ID
 
             for (const field of fieldsToEncrypt) {
-                 if (Object.prototype.hasOwnProperty.call(appObject, field) && appObject[field] != null) {
+                if (Object.prototype.hasOwnProperty.call(appObject, field) && appObject[field] != null) {
                     try {
                         appObject[field] = encryptionService.decrypt(appObject[field]);
                     } catch (error) {
@@ -49,12 +49,12 @@ function createEncryptedConverter(fieldsToEncrypt = []) {
                     appObject[key] = appObject[key].seconds;
                 }
             }
-            
+
             return appObject;
-        }
+        },
     };
 }
 
 module.exports = {
     createEncryptedConverter,
-}; 
+};

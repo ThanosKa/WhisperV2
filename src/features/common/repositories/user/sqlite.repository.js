@@ -2,14 +2,14 @@ const sqliteClient = require('../../services/sqliteClient');
 
 function findOrCreate(user) {
     const db = sqliteClient.getDb();
-    
+
     if (!user || !user.uid) {
         throw new Error('User object and uid are required');
     }
-    
+
     const { uid, displayName, email } = user;
     const now = Math.floor(Date.now() / 1000);
-    
+
     // Validate inputs
     const safeDisplayName = displayName || 'User';
     const safeEmail = email || 'no-email@example.com';
@@ -21,7 +21,7 @@ function findOrCreate(user) {
             display_name=excluded.display_name, 
             email=excluded.email
     `;
-    
+
     try {
         console.log('[SQLite] Creating/updating user:', { uid, displayName: safeDisplayName, email: safeEmail });
         db.prepare(query).run(uid, safeDisplayName, safeEmail, now);
@@ -39,8 +39,6 @@ function getById(uid) {
     const db = sqliteClient.getDb();
     return db.prepare('SELECT * FROM users WHERE uid = ?').get(uid);
 }
-
-
 
 function update({ uid, displayName }) {
     const db = sqliteClient.getDb();
@@ -88,5 +86,5 @@ module.exports = {
     getById,
     update,
     setMigrationComplete,
-    deleteById
-}; 
+    deleteById,
+};

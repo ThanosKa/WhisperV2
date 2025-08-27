@@ -20,7 +20,7 @@ const settingsRepositoryAdapter = {
         return getBaseRepository().getPresetTemplates();
     },
 
-    createPreset: (options) => {
+    createPreset: options => {
         const uid = authService.getCurrentUserId();
         return getBaseRepository().createPreset({ uid, ...options });
     },
@@ -30,7 +30,7 @@ const settingsRepositoryAdapter = {
         return getBaseRepository().updatePreset(id, options, uid);
     },
 
-    deletePreset: (id) => {
+    deletePreset: id => {
         const uid = authService.getCurrentUserId();
         return getBaseRepository().deletePreset(id, uid);
     },
@@ -40,7 +40,7 @@ const settingsRepositoryAdapter = {
         return getBaseRepository().getAutoUpdate(uid);
     },
 
-    setAutoUpdate: (isEnabled) => {
+    setAutoUpdate: isEnabled => {
         const uid = authService.getCurrentUserId();
         return getBaseRepository().setAutoUpdate(uid, isEnabled);
     },

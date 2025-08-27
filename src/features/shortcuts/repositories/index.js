@@ -1,1 +1,1 @@
-module.exports = require('./sqlite.repository'); 
+module.exports = require('./sqlite.repository');

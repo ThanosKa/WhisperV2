@@ -11,7 +11,7 @@ class SummaryService {
         this.analysisHistory = [];
         this.conversationHistory = [];
         this.currentSessionId = null;
-        
+
         // Callbacks
         this.onAnalysisComplete = null;
         this.onStatusUpdate = null;
@@ -29,7 +29,7 @@ class SummaryService {
     sendToRenderer(channel, data) {
         const { windowPool } = require('../../../window/windowManager');
         const listenWindow = windowPool?.get('listen');
-        
+
         if (listenWindow && !listenWindow.isDestroyed()) {
             listenWindow.webContents.send(channel, data);
         }
@@ -103,7 +103,7 @@ Please build upon this context while analyzing the new conversation segments.
                 throw new Error('AI model or API key is not configured.');
             }
             console.log(`🤖 Sending analysis request to ${modelInfo.provider} using model ${modelInfo.model}`);
-            
+
             const messages = [
                 {
                     role: 'system',
@@ -160,7 +160,7 @@ Keep all points concise and build upon previous analysis if provided.`,
                         tldr: structuredData.summary.join('\n'),
                         bullet_json: JSON.stringify(structuredData.topic.bullets),
                         action_json: JSON.stringify(structuredData.actions),
-                        model: modelInfo.model
+                        model: modelInfo.model,
                     });
                 } catch (err) {
                     console.error('[DB] Failed to save summary:', err);
@@ -310,7 +310,7 @@ Keep all points concise and build upon previous analysis if provided.`,
             if (data) {
                 console.log('Sending structured data to renderer');
                 this.sendToRenderer('summary-update', data);
-                
+
                 // Notify callback
                 if (this.onAnalysisComplete) {
                     this.onAnalysisComplete(data);
@@ -330,4 +330,4 @@ Keep all points concise and build upon previous analysis if provided.`,
     }
 }
 
-module.exports = SummaryService; 
+module.exports = SummaryService;

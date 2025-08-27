@@ -7,7 +7,7 @@ const fieldsToEncrypt = ['tldr', 'text', 'bullet_json', 'action_json'];
 const summaryConverter = createEncryptedConverter(fieldsToEncrypt);
 
 function summaryDocRef(sessionId) {
-    if (!sessionId) throw new Error("Session ID is required to access summary.");
+    if (!sessionId) throw new Error('Session ID is required to access summary.');
     const db = getFirestoreInstance();
     // Reverting to the original structure with 'data' as the document ID.
     const docPath = `sessions/${sessionId}/summary/data`;
@@ -27,7 +27,7 @@ async function saveSummary({ uid, sessionId, tldr, text, bullet_json, action_jso
         action_json,
         updated_at: now,
     };
-    
+
     // The converter attached to summaryDocRef will handle encryption via its `toFirestore` method.
     // Manual encryption was removed to fix the double-encryption bug.
     const docRef = summaryDocRef(sessionId);
@@ -45,4 +45,4 @@ async function getSummaryBySessionId(sessionId) {
 module.exports = {
     saveSummary,
     getSummaryBySessionId,
-}; 
+};

@@ -6,11 +6,11 @@ const encryptionService = require('../../common/services/encryptionService');
 const userPresetConverter = createEncryptedConverter(['prompt', 'title']);
 
 const defaultPresetConverter = {
-    toFirestore: (data) => data,
+    toFirestore: data => data,
     fromFirestore: (snapshot, options) => {
         const data = snapshot.data(options);
         return { ...data, id: snapshot.id };
-    }
+    },
 };
 
 function userPresetsCol() {
@@ -27,15 +27,9 @@ async function getPresets(uid) {
     const userPresetsQuery = query(userPresetsCol(), where('uid', '==', uid));
     const defaultPresetsQuery = query(defaultPresetsCol());
 
-    const [userSnapshot, defaultSnapshot] = await Promise.all([
-        getDocs(userPresetsQuery),
-        getDocs(defaultPresetsQuery)
-    ]);
+    const [userSnapshot, defaultSnapshot] = await Promise.all([getDocs(userPresetsQuery), getDocs(defaultPresetsQuery)]);
 
-    const presets = [
-        ...defaultSnapshot.docs.map(d => d.data()),
-        ...userSnapshot.docs.map(d => d.data())
-    ];
+    const presets = [...defaultSnapshot.docs.map(d => d.data()), ...userSnapshot.docs.map(d => d.data())];
 
     return presets.sort((a, b) => {
         if (a.is_default && !b.is_default) return -1;
@@ -68,7 +62,7 @@ async function updatePreset(id, { title, prompt }, uid) {
     const docSnap = await getDoc(docRef);
 
     if (!docSnap.exists() || docSnap.data().uid !== uid || docSnap.data().is_default) {
-        throw new Error("Preset not found or permission denied to update.");
+        throw new Error('Preset not found or permission denied to update.');
     }
 
     const updates = {};
@@ -79,7 +73,7 @@ async function updatePreset(id, { title, prompt }, uid) {
         updates.prompt = encryptionService.encrypt(prompt);
     }
     updates.updated_at = Math.floor(Date.now() / 1000);
-    
+
     await updateDoc(docRef, updates);
     return { changes: 1 };
 }
@@ -89,7 +83,7 @@ async function deletePreset(id, uid) {
     const docSnap = await getDoc(docRef);
 
     if (!docSnap.exists() || docSnap.data().uid !== uid || docSnap.data().is_default) {
-        throw new Error("Preset not found or permission denied to delete.");
+        throw new Error('Preset not found or permission denied to delete.');
     }
 
     await deleteDoc(docRef);
@@ -135,8 +129,6 @@ async function setAutoUpdate(uid, isEnabled) {
     }
 }
 
-
-
 module.exports = {
     getPresets,
     getPresetTemplates,
@@ -145,4 +137,4 @@ module.exports = {
     deletePreset,
     getAutoUpdate,
     setAutoUpdate,
-}; 
+};

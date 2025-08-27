@@ -7,22 +7,22 @@ function spawnAsync(command, args = [], options = {}) {
         let stderr = '';
 
         if (child.stdout) {
-            child.stdout.on('data', (data) => {
+            child.stdout.on('data', data => {
                 stdout += data.toString();
             });
         }
 
         if (child.stderr) {
-            child.stderr.on('data', (data) => {
+            child.stderr.on('data', data => {
                 stderr += data.toString();
             });
         }
 
-        child.on('error', (error) => {
+        child.on('error', error => {
             reject(error);
         });
 
-        child.on('close', (code) => {
+        child.on('close', code => {
             if (code === 0) {
                 resolve({ stdout, stderr });
             } else {

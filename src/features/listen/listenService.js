@@ -23,26 +23,26 @@ class ListenService {
             onTranscriptionComplete: (speaker, text) => {
                 this.handleTranscriptionComplete(speaker, text);
             },
-            onStatusUpdate: (status) => {
+            onStatusUpdate: status => {
                 this.sendToRenderer('update-status', status);
-            }
+            },
         });
 
         // Summary service callbacks
         this.summaryService.setCallbacks({
-            onAnalysisComplete: (data) => {
+            onAnalysisComplete: data => {
                 console.log('📊 Analysis completed:', data);
             },
-            onStatusUpdate: (status) => {
+            onStatusUpdate: status => {
                 this.sendToRenderer('update-status', status);
-            }
+            },
         });
     }
 
     sendToRenderer(channel, data) {
         const { windowPool } = require('../../window/windowManager');
         const listenWindow = windowPool?.get('listen');
-        
+
         if (listenWindow && !listenWindow.isDestroyed()) {
             listenWindow.webContents.send(channel, data);
         }
@@ -68,7 +68,7 @@ class ListenService {
                         listenWindow.webContents.send('session-state-changed', { isActive: true });
                     }
                     break;
-        
+
                 case 'Stop':
                     console.log('[ListenService] changeSession to "Stop"');
                     await this.closeSession();
@@ -76,32 +76,31 @@ class ListenService {
                         listenWindow.webContents.send('session-state-changed', { isActive: false });
                     }
                     break;
-        
+
                 case 'Done':
                     console.log('[ListenService] changeSession to "Done"');
                     internalBridge.emit('window:requestVisibility', { name: 'listen', visible: false });
                     listenWindow.webContents.send('session-state-changed', { isActive: false });
                     break;
-        
+
                 default:
                     throw new Error(`[ListenService] unknown listenButtonText: ${listenButtonText}`);
             }
-            
-            header.webContents.send('listen:changeSessionResult', { success: true });
 
+            header.webContents.send('listen:changeSessionResult', { success: true });
         } catch (error) {
             console.error('[ListenService] error in handleListenRequest:', error);
             header.webContents.send('listen:changeSessionResult', { success: false });
-            throw error; 
+            throw error;
         }
     }
 
     async handleTranscriptionComplete(speaker, text) {
         console.log(`[ListenService] Transcription complete: ${speaker} - ${text}`);
-        
+
         // Save to database
         await this.saveConversationTurn(speaker, text);
-        
+
         // Add to summary service for analysis
         this.summaryService.addConversationTurn(speaker, text);
     }
@@ -133,15 +132,15 @@ class ListenService {
             const user = authService.getCurrentUser();
             if (!user) {
                 // This case should ideally not happen as authService initializes a default user.
-                throw new Error("Cannot initialize session: auth service not ready.");
+                throw new Error('Cannot initialize session: auth service not ready.');
             }
-            
+
             this.currentSessionId = await sessionRepository.getOrCreateActive('listen');
             console.log(`[DB] New listen session ensured: ${this.currentSessionId}`);
 
             // Set session ID for summary service
             this.summaryService.setSessionId(this.currentSessionId);
-            
+
             // Reset conversation history
             this.summaryService.resetConversationHistory();
 
@@ -173,18 +172,16 @@ class ListenService {
 
             /* ---------- STT Initialization Retry Logic ---------- */
             const MAX_RETRY = 10;
-            const RETRY_DELAY_MS = 300;   // 0.3 seconds
+            const RETRY_DELAY_MS = 300; // 0.3 seconds
 
             let sttReady = false;
             for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
                 try {
                     await this.sttService.initializeSttSessions(language);
                     sttReady = true;
-                    break;                         // Exit on success
+                    break; // Exit on success
                 } catch (err) {
-                    console.warn(
-                        `[ListenService] STT init attempt ${attempt} failed: ${err.message}`
-                    );
+                    console.warn(`[ListenService] STT init attempt ${attempt} failed: ${err.message}`);
                     if (attempt < MAX_RETRY) {
                         await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
                     }
@@ -194,9 +191,9 @@ class ListenService {
             /* ------------------------------------------- */
 
             console.log('✅ Listen service initialized successfully.');
-            
+
             this.sendToRenderer('update-status', 'Connected. Ready to listen.');
-            
+
             return true;
         } catch (error) {
             console.error('❌ Failed to initialize listen service:', error);
@@ -205,7 +202,7 @@ class ListenService {
         } finally {
             this.isInitializingSession = false;
             this.sendToRenderer('session-initializing', false);
-            this.sendToRenderer('change-listen-capture-state', { status: "start" });
+            this.sendToRenderer('change-listen-capture-state', { status: 'start' });
         }
     }
 
@@ -230,7 +227,7 @@ class ListenService {
 
     async closeSession() {
         try {
-            this.sendToRenderer('change-listen-capture-state', { status: "stop" });
+            this.sendToRenderer('change-listen-capture-state', { status: 'stop' });
             // Close STT sessions
             await this.sttService.closeSessions();
 
@@ -284,11 +281,7 @@ class ListenService {
     }
 
     // `_createHandler`를 사용하여 핸들러들을 동적으로 생성합니다.
-    handleSendMicAudioContent = this._createHandler(
-        this.sendMicAudioContent,
-        null,
-        'Error sending user audio:'
-    );
+    handleSendMicAudioContent = this._createHandler(this.sendMicAudioContent, null, 'Error sending user audio:');
 
     handleStartMacosAudio = this._createHandler(
         async () => {
@@ -304,15 +297,11 @@ class ListenService {
         'macOS audio capture started.',
         'Error starting macOS audio capture:'
     );
-    
-    handleStopMacosAudio = this._createHandler(
-        this.stopMacOSAudioCapture,
-        'macOS audio capture stopped.',
-        'Error stopping macOS audio capture:'
-    );
+
+    handleStopMacosAudio = this._createHandler(this.stopMacOSAudioCapture, 'macOS audio capture stopped.', 'Error stopping macOS audio capture:');
 
     handleUpdateGoogleSearchSetting = this._createHandler(
-        async (enabled) => {
+        async enabled => {
             console.log('Google Search setting updated to:', enabled);
         },
         null,

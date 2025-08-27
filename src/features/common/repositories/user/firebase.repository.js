@@ -21,10 +21,14 @@ async function findOrCreate(user) {
     const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
-        await setDoc(docRef, { 
-            display_name: displayName || docSnap.data().display_name || 'User',
-            email: email || docSnap.data().email || 'no-email@example.com'
-        }, { merge: true });
+        await setDoc(
+            docRef,
+            {
+                display_name: displayName || docSnap.data().display_name || 'User',
+                email: email || docSnap.data().email || 'no-email@example.com',
+            },
+            { merge: true }
+        );
     } else {
         await setDoc(docRef, { uid, display_name: displayName || 'User', email: email || 'no-email@example.com', created_at: now });
     }
@@ -37,8 +41,6 @@ async function getById(uid) {
     const docSnap = await getDoc(docRef);
     return docSnap.exists() ? docSnap.data() : null;
 }
-
-
 
 async function update({ uid, displayName }) {
     const docRef = doc(usersCol(), uid);
@@ -53,7 +55,7 @@ async function deleteById(uid) {
     // 1. Delete all sessions owned by the user
     const sessionsQuery = query(collection(db, 'sessions'), where('uid', '==', uid));
     const sessionsSnapshot = await getDocs(sessionsQuery);
-    
+
     for (const sessionDoc of sessionsSnapshot.docs) {
         // Recursively delete sub-collections
         const subcollectionsToDelete = ['transcripts', 'ai_messages', 'summary'];
@@ -83,4 +85,4 @@ module.exports = {
     getById,
     update,
     deleteById,
-}; 
+};

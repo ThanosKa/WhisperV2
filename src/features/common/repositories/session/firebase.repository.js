@@ -18,7 +18,7 @@ function subCollections(sessionId) {
         transcripts: collection(db, `${sessionPath}/transcripts`),
         ai_messages: collection(db, `${sessionPath}/ai_messages`),
         summary: collection(db, `${sessionPath}/summary`),
-    }
+    };
 }
 
 async function getById(id) {
@@ -53,7 +53,7 @@ async function updateTitle(id, title) {
     const docRef = doc(sessionsCol(), id);
     await updateDoc(docRef, {
         title: encryptionService.encrypt(title),
-        updated_at: Timestamp.now()
+        updated_at: Timestamp.now(),
     });
     return { changes: 1 };
 }
@@ -68,7 +68,7 @@ async function deleteWithRelatedData(id) {
         getDocs(query(ai_messages)),
         getDocs(query(summary)),
     ]);
-    
+
     transcriptsSnap.forEach(d => batch.delete(d.ref));
     aiMessagesSnap.forEach(d => batch.delete(d.ref));
     summarySnap.forEach(d => batch.delete(d.ref));
@@ -99,29 +99,23 @@ async function touch(id) {
 }
 
 async function getOrCreateActive(uid, requestedType = 'ask') {
-    const findQuery = query(
-        sessionsCol(),
-        where('uid', '==', uid),
-        where('ended_at', '==', null),
-        orderBy('session_type', 'desc'),
-        limit(1)
-    );
+    const findQuery = query(sessionsCol(), where('uid', '==', uid), where('ended_at', '==', null), orderBy('session_type', 'desc'), limit(1));
 
     const activeSessionSnap = await getDocs(findQuery);
-    
+
     if (!activeSessionSnap.empty) {
         const activeSessionDoc = activeSessionSnap.docs[0];
         const sessionRef = doc(sessionsCol(), activeSessionDoc.id);
         const activeSession = activeSessionDoc.data();
 
         console.log(`[Repo] Found active Firebase session ${activeSession.id}`);
-        
+
         const updates = { updated_at: Timestamp.now() };
         if (activeSession.session_type === 'ask' && requestedType === 'listen') {
             updates.session_type = 'listen';
             console.log(`[Repo] Promoted Firebase session ${activeSession.id} to 'listen' type.`);
         }
-        
+
         await updateDoc(sessionRef, updates);
         return activeSessionDoc.id;
     } else {
@@ -158,4 +152,4 @@ module.exports = {
     touch,
     getOrCreateActive,
     endAllActiveSessions,
-}; 
+};

@@ -1,10 +1,7 @@
 const sqliteClient = require('../../services/sqliteClient');
 
 function markKeychainCompleted(uid) {
-    return sqliteClient.query(
-        'INSERT OR REPLACE INTO permissions (uid, keychain_completed) VALUES (?, 1)',
-        [uid]
-    );
+    return sqliteClient.query('INSERT OR REPLACE INTO permissions (uid, keychain_completed) VALUES (?, 1)', [uid]);
 }
 
 function checkKeychainCompleted(uid) {
@@ -14,5 +11,5 @@ function checkKeychainCompleted(uid) {
 
 module.exports = {
     markKeychainCompleted,
-    checkKeychainCompleted
-}; 
+    checkKeychainCompleted,
+};

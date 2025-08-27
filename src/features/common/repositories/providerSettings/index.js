@@ -20,14 +20,14 @@ const providerSettingsRepositoryAdapter = {
     async upsert(provider, settings) {
         const repo = getBaseRepository();
         const now = Date.now();
-        
+
         const settingsWithMeta = {
             ...settings,
             provider,
             updated_at: now,
-            created_at: settings.created_at || now
+            created_at: settings.created_at || now,
         };
-        
+
         return await repo.upsert(provider, settingsWithMeta);
     },
 
@@ -46,23 +46,23 @@ const providerSettingsRepositoryAdapter = {
         // as it's part of the local-first boot sequence.
         return await sqliteRepository.getRawApiKeys();
     },
-    
+
     async getActiveProvider(type) {
         const repo = getBaseRepository();
         return await repo.getActiveProvider(type);
     },
-    
+
     async setActiveProvider(provider, type) {
         const repo = getBaseRepository();
         return await repo.setActiveProvider(provider, type);
     },
-    
+
     async getActiveSettings() {
         const repo = getBaseRepository();
         return await repo.getActiveSettings();
-    }
+    },
 };
 
 module.exports = {
-    ...providerSettingsRepositoryAdapter
-}; 
+    ...providerSettingsRepositoryAdapter,
+};

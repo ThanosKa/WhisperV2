@@ -20,7 +20,7 @@ const presetRepositoryAdapter = {
         return getBaseRepository().getPresetTemplates();
     },
 
-    create: (options) => {
+    create: options => {
         const uid = authService.getCurrentUserId();
         return getBaseRepository().create({ uid, ...options });
     },
@@ -30,10 +30,10 @@ const presetRepositoryAdapter = {
         return getBaseRepository().update(id, options, uid);
     },
 
-    delete: (id) => {
+    delete: id => {
         const uid = authService.getCurrentUserId();
         return getBaseRepository().delete(id, uid);
     },
 };
 
-module.exports = presetRepositoryAdapter; 
+module.exports = presetRepositoryAdapter;

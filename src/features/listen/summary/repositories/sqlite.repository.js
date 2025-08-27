@@ -18,7 +18,7 @@ function saveSummary({ uid, sessionId, tldr, text, bullet_json, action_json, mod
                     action_json=excluded.action_json,
                     updated_at=excluded.updated_at
             `;
-            
+
             const result = db.prepare(query).run(sessionId, now, model, text, tldr, bullet_json, action_json, now);
             resolve({ changes: result.changes });
         } catch (err) {
@@ -30,11 +30,11 @@ function saveSummary({ uid, sessionId, tldr, text, bullet_json, action_json, mod
 
 function getSummaryBySessionId(sessionId) {
     const db = sqliteClient.getDb();
-    const query = "SELECT * FROM summaries WHERE session_id = ?";
+    const query = 'SELECT * FROM summaries WHERE session_id = ?';
     return db.prepare(query).get(sessionId) || null;
 }
 
 module.exports = {
     saveSummary,
     getSummaryBySessionId,
-}; 
+};

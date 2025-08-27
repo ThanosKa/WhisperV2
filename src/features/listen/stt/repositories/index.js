@@ -15,9 +15,9 @@ const sttRepositoryAdapter = {
         const uid = authService.getCurrentUserId();
         return getBaseRepository().addTranscript({ uid, sessionId, speaker, text });
     },
-    getAllTranscriptsBySessionId: (sessionId) => {
+    getAllTranscriptsBySessionId: sessionId => {
         return getBaseRepository().getAllTranscriptsBySessionId(sessionId);
-    }
+    },
 };
 
-module.exports = sttRepositoryAdapter; 
+module.exports = sttRepositoryAdapter;

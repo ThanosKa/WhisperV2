@@ -219,9 +219,39 @@ export const listenViewStyles = css`
         gap: 4px;
         align-items: center;
         flex-shrink: 0;
-        width: 120px;
+        width: 200px;
         justify-content: flex-end;
         box-sizing: border-box;
+        padding: 4px;
+    }
+
+    .profile-dropdown {
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 10px;
+        padding: 2px 6px;
+        height: 20px;
+        min-width: 60px;
+        outline: none;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .profile-dropdown:hover {
+        background: rgba(0, 0, 0, 0.4);
+        border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .profile-dropdown:focus {
+        border-color: rgba(255, 255, 255, 0.5);
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
+    }
+
+    .profile-dropdown option {
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
         padding: 4px;
     }
 

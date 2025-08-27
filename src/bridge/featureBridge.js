@@ -54,11 +54,11 @@ module.exports = {
         ipcMain.handle('ask:sendQuestionFromSummary', async (event, userPrompt) => {
             // Get conversation history from listenService and pass it to askService
             const conversationHistory = listenService.getConversationHistory();
-            console.log('🔍 [FeatureBridge] ask:sendQuestionFromSummary - Passing conversation history:');
-            console.log('  - Insight text:', userPrompt);
-            console.log('  - Conversation history length:', conversationHistory.length, 'items');
-            console.log('  - First 3 conversation items:', conversationHistory.slice(0, 3));
-            console.log('  - Last 3 conversation items:', conversationHistory.slice(-3));
+            console.log(`[FeatureBridge] ask:sendQuestionFromSummary: clickLen=${userPrompt?.length || 0}, historyItems=${conversationHistory.length}`);
+            if (Array.isArray(conversationHistory)) {
+                const preview = conversationHistory.slice(-2);
+                console.log('[FeatureBridge] history preview:', JSON.stringify(preview));
+            }
             return await askService.sendMessage(userPrompt, conversationHistory);
         });
         ipcMain.handle('ask:toggleAskButton', async () => await askService.toggleAskButton());
@@ -89,6 +89,21 @@ module.exports = {
                 console.error('[FeatureBridge] listen:changeSession failed', error.message);
                 return { success: false, error: error.message };
             }
+        });
+        ipcMain.handle('listen:setPromptProfile', async (event, profile) => {
+            const config = require('../features/common/config/config');
+            config.set('activePromptProfile', profile);
+            config.saveUserConfig();
+            console.log(`[FeatureBridge] Prompt profile set to: ${profile}`);
+            return { success: true };
+        });
+        ipcMain.handle('listen:getPromptProfile', async () => {
+            const config = require('../features/common/config/config');
+            return config.get('activePromptProfile') || 'whisper';
+        });
+        ipcMain.handle('listen:getAvailableProfiles', async () => {
+            const { profilePrompts } = require('../features/common/prompts/promptTemplates');
+            return Object.keys(profilePrompts);
         });
 
         // ModelStateService

@@ -15,6 +15,8 @@ export class ListenView extends LitElement {
         captureStartTime: { type: Number },
         isSessionActive: { type: Boolean },
         hasCompletedRecording: { type: Boolean },
+        availableProfiles: { type: Array },
+        currentProfile: { type: String },
     };
 
     constructor() {
@@ -31,15 +33,29 @@ export class ListenView extends LitElement {
         this.isThrottled = false;
         this.copyState = 'idle';
         this.copyTimeout = null;
+        this.availableProfiles = [];
+        this.currentProfile = 'whisper';
 
         this.adjustWindowHeight = this.adjustWindowHeight.bind(this);
     }
 
-    connectedCallback() {
+    async connectedCallback() {
         super.connectedCallback();
         // Only start timer if session is active
         if (this.isSessionActive) {
             this.startTimer();
+        }
+
+        // Load available profiles and current selection
+        if (window.api) {
+            try {
+                const profiles = await window.api.listenView.getAvailableProfiles();
+                this.availableProfiles = profiles;
+                const currentProfile = await window.api.listenView.getPromptProfile();
+                this.currentProfile = currentProfile;
+            } catch (error) {
+                console.warn('[ListenView] Failed to load prompt profiles:', error);
+            }
         }
 
         // Listen for content updates from child components
@@ -73,6 +89,19 @@ export class ListenView extends LitElement {
                     this.requestUpdate();
                 }
             });
+        }
+    }
+
+    async handleProfileChange(event) {
+        const newProfile = event.target.value;
+        if (window.api) {
+            try {
+                await window.api.listenView.setPromptProfile(newProfile);
+                this.currentProfile = newProfile;
+                console.log(`[ListenView] Profile changed to: ${newProfile}`);
+            } catch (error) {
+                console.error('[ListenView] Failed to set profile:', error);
+            }
         }
     }
 
@@ -239,6 +268,19 @@ export class ListenView extends LitElement {
                         <span class="bar-left-text-content ${this.isAnimating ? 'slide-in' : ''}"> ${displayText} </span>
                     </div>
                     <div class="bar-controls">
+                        ${this.availableProfiles.length > 0
+                            ? html`
+                                  <select class="profile-dropdown" @change=${this.handleProfileChange} .value=${this.currentProfile}>
+                                      ${this.availableProfiles.map(
+                                          profile => html`
+                                              <option value="${profile}" ?selected=${profile === this.currentProfile}>
+                                                  ${profile.charAt(0).toUpperCase() + profile.slice(1)}
+                                              </option>
+                                          `
+                                      )}
+                                  </select>
+                              `
+                            : ''}
                         <button class="toggle-button" @click=${this.toggleViewMode}>
                             ${this.viewMode === 'insights'
                                 ? html`

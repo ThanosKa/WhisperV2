@@ -4,6 +4,7 @@ const { createLLM } = require('../../common/ai/factory');
 const sessionRepository = require('../../common/repositories/session');
 const summaryRepository = require('./repositories');
 const modelStateService = require('../../common/services/modelStateService');
+const config = require('../../common/config/config');
 
 class SummaryService {
     constructor() {
@@ -15,6 +16,69 @@ class SummaryService {
         // Callbacks
         this.onAnalysisComplete = null;
         this.onStatusUpdate = null;
+    }
+
+    /**
+     * Extract up to maxTerms Define candidates from the last few conversation lines.
+     * Looks for proper-noun sequences, acronyms, and technical terms.
+     */
+    _extractDefineCandidates(conversationTexts, maxTerms = 3) {
+        if (!Array.isArray(conversationTexts) || conversationTexts.length === 0) return [];
+        
+        // Look at the last 3-5 lines for terms
+        const recentLines = conversationTexts.slice(-5);
+        const candidates = new Set();
+        
+        recentLines.forEach(line => {
+            // Strip speaker prefix like "me:"/"them:"
+            const cleaned = line.replace(/^\s*(me|them)\s*:\s*/i, '').trim();
+            if (!cleaned) return;
+            
+            const words = cleaned.split(/\s+/);
+            let buffer = [];
+            
+            for (const w of words) {
+                const token = w.replace(/[\.,!?;:"'\)\(\[\]]+$/g, '');
+                
+                // Multi-word proper nouns (e.g., "Machine Learning", "Azure DevOps")
+                if (/^[A-Z][a-zA-Z]+$/.test(token)) {
+                    buffer.push(token);
+                } 
+                // ALLCAPS acronyms (e.g., "AI", "API", "GenAI")
+                else if (/^[A-Z]{2,}$/.test(token)) {
+                    if (buffer.length > 0) {
+                        candidates.add(buffer.join(' '));
+                        buffer = [];
+                    }
+                    candidates.add(token);
+                }
+                // Technical terms with mixed case (e.g., "JavaScript", "DevOps")
+                else if (/^[A-Z][a-z]*[A-Z]/.test(token)) {
+                    if (buffer.length > 0) {
+                        candidates.add(buffer.join(' '));
+                        buffer = [];
+                    }
+                    candidates.add(token);
+                } else {
+                    if (buffer.length > 0) {
+                        candidates.add(buffer.join(' '));
+                        buffer = [];
+                    }
+                }
+            }
+            if (buffer.length > 0) {
+                candidates.add(buffer.join(' '));
+            }
+        });
+        
+        // Filter out common words and very short terms
+        const filtered = Array.from(candidates).filter(term => 
+            term.length > 1 && 
+            !['The', 'And', 'But', 'For', 'Or', 'So', 'Yet'].includes(term)
+        );
+        
+        // Return the most recent terms first, up to maxTerms
+        return filtered.slice(-maxTerms).reverse();
     }
 
     setCallbacks({ onAnalysisComplete, onStatusUpdate }) {
@@ -46,8 +110,9 @@ class SummaryService {
     }
 
     getConversationHistory() {
+        console.log('[SummaryService] history length:', this.conversationHistory.length);
         return this.conversationHistory;
-    }
+      }
 
     resetConversationHistory() {
         this.conversationHistory = [];
@@ -90,7 +155,9 @@ Please build upon this context while analyzing the new conversation segments.
 `;
         }
 
-        const basePrompt = getSystemPrompt('pickle_glass_analysis', '', false);
+        const activeProfile = config.get('activePromptProfile') || 'whisper';
+        const analysisProfile = activeProfile + '_analysis';
+        const basePrompt = getSystemPrompt(analysisProfile, '', false);
         const systemPrompt = basePrompt.replace('{{CONVERSATION_HISTORY}}', recentConversation);
 
         try {
@@ -303,11 +370,33 @@ Keep all points concise and build upon previous analysis if provided.`,
      * Triggers analysis when conversation history reaches 5 texts.
      */
     async triggerAnalysisIfNeeded() {
-        if (this.conversationHistory.length >= 5 && this.conversationHistory.length % 5 === 0) {
+        const analysisStep = config.get('analysisStep') || 5;
+        const recapStep = config.get('recapStep') || 15;
+        
+        if (this.conversationHistory.length >= analysisStep && this.conversationHistory.length % analysisStep === 0) {
             console.log(`Triggering analysis - ${this.conversationHistory.length} conversation texts accumulated`);
 
             const data = await this.makeOutlineAndRequests(this.conversationHistory);
             if (data) {
+                // Add multiple Define candidates from recent conversation
+                const defineTerms = this._extractDefineCandidates(this.conversationHistory, 3);
+                data.actions = Array.isArray(data.actions) ? data.actions : [];
+                
+                defineTerms.forEach(term => {
+                    const defineItem = `📘 Define "${term}"`;
+                    if (!data.actions.some(x => (x || '').toLowerCase() === defineItem.toLowerCase())) {
+                        data.actions.unshift(defineItem);
+                    }
+                });
+                
+                // Add recap button if conversation is long enough
+                if (this.conversationHistory.length >= recapStep) {
+                    const recapItem = '🗒️ Recap meeting so far';
+                    if (!data.actions.some(x => (x || '').toLowerCase() === recapItem.toLowerCase())) {
+                        data.actions.unshift(recapItem);
+                    }
+                }
+                
                 console.log('Sending structured data to renderer');
                 this.sendToRenderer('summary-update', data);
 
@@ -330,4 +419,5 @@ Keep all points concise and build upon previous analysis if provided.`,
     }
 }
 
-module.exports = SummaryService;
+const summaryService = new SummaryService();
+module.exports = summaryService;

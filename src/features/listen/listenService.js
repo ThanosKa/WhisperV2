@@ -1,6 +1,6 @@
 const { BrowserWindow } = require('electron');
 const SttService = require('./stt/sttService');
-const SummaryService = require('./summary/summaryService');
+const summaryService = require('./summary/summaryService');
 const authService = require('../common/services/authService');
 const sessionRepository = require('../common/repositories/session');
 const sttRepository = require('./stt/repositories');
@@ -9,7 +9,7 @@ const internalBridge = require('../../bridge/internalBridge');
 class ListenService {
     constructor() {
         this.sttService = new SttService();
-        this.summaryService = new SummaryService();
+        this.summaryService = summaryService;
         this.currentSessionId = null;
         this.isInitializingSession = false;
 
@@ -63,7 +63,18 @@ class ListenService {
                 case 'Listen':
                     console.log('[ListenService] changeSession to "Listen"');
                     internalBridge.emit('window:requestVisibility', { name: 'listen', visible: true });
-                    await this.initializeSession();
+                    if (this.isSessionActive()) {
+                        setTimeout(() => {
+                            try {
+                                const history = this.getConversationHistory();
+                                this.sendToRenderer('listen:sync-conversation-history', history);
+                            } catch (e) {
+                                console.warn('[ListenService] failed to sync conversation history:', e.message);
+                            }
+                        }, 100);
+                    } else {
+                        await this.initializeSession();
+                    }
                     if (listenWindow && !listenWindow.isDestroyed()) {
                         listenWindow.webContents.send('session-state-changed', { isActive: true });
                     }
@@ -241,7 +252,6 @@ class ListenService {
 
             // Reset state
             this.currentSessionId = null;
-            this.summaryService.resetConversationHistory();
 
             console.log('Listen service session closed.');
             return { success: true };

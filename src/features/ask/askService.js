@@ -22,6 +22,7 @@ const util = require('util');
 const execFile = util.promisify(require('child_process').execFile);
 const { desktopCapturer } = require('electron');
 const modelStateService = require('../common/services/modelStateService');
+const config = require('../common/config/config');
 
 // Try to load sharp, but don't fail if it's not available
 let sharp;
@@ -133,6 +134,78 @@ class AskService {
             interrupted: false,
         };
         console.log('[AskService] Service instance created.');
+    }
+
+    /**
+     * Expands common insight-click phrases into explicit task instructions
+     * so the LLM produces the intended output using the transcript context.
+     *
+     * @param {string} userPromptRaw
+     * @returns {{ prompt: string, mode: 'default'|'email'|'summary'|'actions' }}
+     */
+    _expandInsightRequest(userPromptRaw) {
+        const text = (userPromptRaw || '').toLowerCase();
+        const stripEmoji = s => s.replace(/[\p{Emoji}\p{Extended_Pictographic}]/gu, '').trim();
+        const normalized = stripEmoji(text);
+
+        // Draft follow-up email
+        if (normalized.includes('draft') && normalized.includes('email')) {
+            return {
+                mode: 'email',
+                prompt:
+                    'Draft a professional follow-up email based on the conversation transcript.\n' +
+                    '- Include a concise Subject line.\n' +
+                    '- Email body: greeting, 2–3 short paragraphs referencing specific points from the transcript, and a polite next-step/CTA.\n' +
+                    '- Write from "me" perspective.\n' +
+                    '- Keep it clear, friendly, and specific to the discussion.',
+            };
+        }
+
+        // Define term (📘 Define "...")
+        const defineQuoted = normalized.match(/define\s+"([^"]+)"/);
+        if (normalized.startsWith('📘') || normalized.startsWith('define') || defineQuoted) {
+            const raw = (userPromptRaw || '').trim();
+            const fromQuotes = raw.match(/"([^"]+)"/);
+            let term = fromQuotes?.[1] || raw.replace(/^📘\s*/i, '').replace(/^define\s*/i, '').replace(/"/g, '').trim();
+            term = term.replace(/^about\s+/i, '').trim();
+            if (term && term.length > 1) {
+                return {
+                    mode: 'define',
+                    prompt:
+                        `Define "${term}" briefly in the professional context of this conversation. ` +
+                        'Give a 1–2 sentence definition and, if helpful, one short example bullet.',
+                };
+            }
+        }
+
+        // Generate action items
+        if (normalized.includes('action') && normalized.includes('item')) {
+            return {
+                mode: 'actions',
+                prompt:
+                    'From the conversation transcript, list concrete, owner-assignable action items with due dates if implied. Use short bullet points.',
+            };
+        }
+
+        // Show summary
+        if (normalized.includes('show summary') || normalized === 'summary' || normalized.includes('summar')) {
+            return {
+                mode: 'summary',
+                prompt:
+                    'Summarize the conversation transcript succinctly: 3–5 bullets capturing key points, decisions, and next steps.',
+            };
+        }
+
+        // Recap meeting so far
+        if (normalized.includes('recap') && normalized.includes('meeting')) {
+            return {
+                mode: 'recap',
+                prompt:
+                    'Give a concise recap of the meeting so far based on the conversation transcript. Provide 4-6 bullet points covering: key topics discussed, decisions made, action items identified, and next steps.',
+            };
+        }
+
+        return { mode: 'default', prompt: userPromptRaw || '' };
     }
 
     interruptStream() {
@@ -254,19 +327,7 @@ class AskService {
 
         try {
             console.log(`[AskService] 🤖 Processing message: ${userPrompt.substring(0, 50)}...`);
-            console.log('🔍 [AskService] CONVERSATION HISTORY ANALYSIS:');
-            console.log('  - Raw conversation history type:', typeof conversationHistoryRaw);
-            console.log('  - Raw conversation history length:', conversationHistoryRaw?.length || 0);
-            if (conversationHistoryRaw && conversationHistoryRaw.length > 0) {
-                console.log('  - First conversation item:', conversationHistoryRaw[0]);
-                console.log('  - Last conversation item:', conversationHistoryRaw[conversationHistoryRaw.length - 1]);
-                console.log('  - All conversation items:');
-                conversationHistoryRaw.forEach((item, index) => {
-                    console.log(`    [${index}]:`, item);
-                });
-            } else {
-                console.log('  - ⚠️ NO CONVERSATION HISTORY PROVIDED - This may be the bug!');
-            }
+            console.log(`[AskService] history: items=${conversationHistoryRaw?.length || 0}`);
 
             sessionId = await sessionRepository.getOrCreateActive('ask');
             await askRepository.addAiMessage({ sessionId, role: 'user', content: userPrompt.trim() });
@@ -276,28 +337,28 @@ class AskService {
             if (!modelInfo || !modelInfo.apiKey) {
                 throw new Error('AI model or API key not configured.');
             }
-            console.log(`[AskService] Using model: ${modelInfo.model} for provider: ${modelInfo.provider}`);
+            console.log(`[AskService] model: provider=${modelInfo.provider}, model=${modelInfo.model}`);
 
             const screenshotResult = await captureScreenshot({ quality: 'medium' });
             const screenshotBase64 = screenshotResult.success ? screenshotResult.base64 : null;
 
             const conversationHistory = this._formatConversationForPrompt(conversationHistoryRaw);
-            console.log('📜 [AskService] CONVERSATION HISTORY FORMATTING:');
-            console.log('  - Formatted conversation history length:', conversationHistory.length, 'characters');
-            console.log('  - Formatted conversation preview (first 200 chars):');
-            console.log('    "' + conversationHistory.substring(0, 200) + '"' + (conversationHistory.length > 200 ? '...[TRUNCATED]' : ''));
-            console.log('  - Complete formatted conversation:');
-            console.log('=' + '='.repeat(60));
-            console.log(conversationHistory);
-            console.log('=' + '='.repeat(60));
+            console.log(`[AskService] what llm sees: clickLen=${userPrompt.trim().length}, historyChars=${conversationHistory.length}, screenshot=${screenshotBase64 ? 1 : 0}`);
+            const expansion = this._expandInsightRequest(userPrompt);
+            console.log(`[AskService] expanded intent: mode=${expansion.mode}`);
 
-            const systemPrompt = getSystemPrompt('pickle_glass_analysis', conversationHistory, false);
+            const activeProfile = config.get('activePromptProfile') || 'whisper';
+            const systemPrompt = getSystemPrompt(activeProfile, conversationHistory, false);
 
+            const userTask = expansion.prompt || userPrompt.trim();
             const messages = [
                 { role: 'system', content: systemPrompt },
                 {
                     role: 'user',
-                    content: [{ type: 'text', text: `User Request: ${userPrompt.trim()}` }],
+                    content: [
+                        { type: 'text', text: `Task: ${userTask}` },
+                        { type: 'text', text: 'Use ONLY the conversation transcript as primary context. If context is insufficient, say so briefly.' },
+                    ],
                 },
             ];
 
@@ -308,51 +369,8 @@ class AskService {
                 });
             }
 
-            // === DETAILED LLM REQUEST LOGGING ===
-            console.log('\n' + '🚀'.repeat(50));
-            console.log('🤖 [AskService] COMPLETE LLM REQUEST DETAILS:');
-            console.log('🚀'.repeat(50));
-            console.log('📊 Model Info:');
-            console.log('  - Provider:', modelInfo.provider);
-            console.log('  - Model:', modelInfo.model);
-            console.log('  - Temperature: 0.7');
-            console.log('  - Max Tokens: 2048');
-            console.log('\n📝 User Prompt (from insight click):');
-            console.log('─'.repeat(60));
-            console.log(userPrompt.trim());
-            console.log('─'.repeat(60));
-            console.log('\n📋 System Prompt (first 500 chars):');
-            console.log('─'.repeat(60));
-            console.log(systemPrompt.substring(0, 500) + (systemPrompt.length > 500 ? '...[TRUNCATED]' : ''));
-            console.log('─'.repeat(60));
-            console.log('\n🖼️  Screenshot included:', !!screenshotBase64);
-            if (screenshotBase64) {
-                console.log('  - Screenshot size:', Math.round(screenshotBase64.length / 1024), 'KB (base64)');
-            }
-            console.log('\n📜 Conversation History:');
-            console.log('─'.repeat(60));
-            console.log(conversationHistory || 'No conversation history available.');
-            console.log('─'.repeat(60));
-            console.log('\n🎯 FULL MESSAGES ARRAY STRUCTURE:');
-            console.log('─'.repeat(60));
-            console.log('Message 1 (system):');
-            console.log('  Role:', messages[0].role);
-            console.log('  Content length:', messages[0].content.length, 'characters');
-            console.log('Message 2 (user):');
-            console.log('  Role:', messages[1].role);
-            console.log('  Content type:', Array.isArray(messages[1].content) ? 'multimodal array' : 'text string');
-            if (Array.isArray(messages[1].content)) {
-                messages[1].content.forEach((item, idx) => {
-                    console.log(`  Content[${idx}]:`, item.type, item.type === 'text' ? `"${item.text}"` : '(image data)');
-                });
-            }
-            console.log('─'.repeat(60));
-            console.log('\n🗂️  COMPLETE SYSTEM PROMPT (FULL TEXT):');
-            console.log('═'.repeat(80));
-            console.log(systemPrompt);
-            console.log('═'.repeat(80));
-            console.log('🚀 About to send to LLM via streamChat...');
-            console.log('🚀'.repeat(50) + '\n');
+            // concise request log
+            console.log('[AskService] sending request to llm');
 
             const streamingLLM = createStreamingLLM(modelInfo.provider, {
                 apiKey: modelInfo.apiKey,

@@ -30,6 +30,11 @@ class Config {
 
             logLevel: 'info',
             enableDebugLogging: false,
+
+            // Listen feature settings
+            analysisStep: 5,           // Trigger analysis every N utterances
+            activePromptProfile: 'whisper',  // Current prompt profile (whisper, sales, interview, etc)
+            recapStep: 15,             // Show recap button after N utterances
         };
 
         this.config = { ...this.defaults };

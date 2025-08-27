@@ -175,7 +175,7 @@ export const summaryViewStyles = css`
     /* 마크다운 렌더링된 콘텐츠 스타일 */
     .markdown-content {
         color: #ffffff;
-        font-size: 11px;
+        font-size: 14px;
         line-height: 1.4;
         margin: 4px 0;
         padding: 6px 8px;
@@ -232,5 +232,127 @@ export const summaryViewStyles = css`
         color: rgba(255, 255, 255, 0.6);
         font-size: 12px;
         font-style: italic;
+    }
+
+    /* Meeting Introduction - scrollable summary */
+    .meeting-intro-container {
+        max-height: 100px;
+        overflow-y: auto;
+        margin-bottom: 16px;
+        padding-right: 4px;
+    }
+
+    .meeting-intro-container::-webkit-scrollbar {
+        width: 6px;
+    }
+    .meeting-intro-container::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.1);
+        border-radius: 3px;
+    }
+    .meeting-intro-container::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 3px;
+    }
+    .meeting-intro-container::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.4);
+    }
+
+    .meeting-intro-item {
+        color: #ffffff;
+        font-size: 14px;
+        line-height: 1.4;
+        margin: 4px 0;
+        padding: 6px 8px;
+        border-radius: 4px;
+        background: transparent;
+        cursor: pointer;
+        word-wrap: break-word;
+        transition: all 0.15s ease;
+    }
+
+    .meeting-intro-item:hover {
+        background: rgba(255, 255, 255, 0.1);
+        transform: translateX(2px);
+    }
+
+    /* Scrollable Questions and Defines only */
+    .scrollable-actions-container {
+        max-height: 120px;
+        overflow-y: auto;
+        margin-bottom: 16px;
+        padding-right: 4px;
+    }
+
+    .scrollable-actions-container::-webkit-scrollbar {
+        width: 6px;
+    }
+    .scrollable-actions-container::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.1);
+        border-radius: 3px;
+    }
+    .scrollable-actions-container::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 3px;
+    }
+    .scrollable-actions-container::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.4);
+    }
+
+    .scrollable-action-item {
+        color: #ffffff;
+        font-size: 14px;
+        line-height: 1.4;
+        margin: 2px 4px;
+        padding: 6px 8px;
+        border-radius: 4px;
+        background: transparent;
+        cursor: pointer;
+        word-wrap: break-word;
+        transition: all 0.15s ease;
+        border-left: 2px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .scrollable-action-item:hover {
+        background: rgba(255, 255, 255, 0.1);
+        transform: translateX(2px);
+        border-left-color: rgba(255, 255, 255, 0.5);
+    }
+
+    /* Fixed Action Buttons (same style as others + 2px more) */
+    .fixed-action-item {
+        color: #ffffff;
+        font-size: 16px;
+        line-height: 1.4;
+        margin: 4px 0;
+        padding: 6px 8px;
+        border-radius: 4px;
+        background: transparent;
+        cursor: pointer;
+        word-wrap: break-word;
+        transition: all 0.15s ease;
+    }
+
+    .fixed-action-item:hover {
+        background: rgba(255, 255, 255, 0.1);
+        transform: translateX(2px);
+    }
+
+    /* Follow-ups (no border, as before) */
+    .followup-item {
+        color: #ffffff;
+        font-size: 14px;
+        line-height: 1.4;
+        margin: 4px 0;
+        padding: 6px 8px;
+        border-radius: 4px;
+        background: transparent;
+        cursor: pointer;
+        word-wrap: break-word;
+        transition: all 0.15s ease;
+    }
+
+    .followup-item:hover {
+        background: rgba(255, 255, 255, 0.1);
+        transform: translateX(2px);
     }
 `;

@@ -169,9 +169,16 @@ contextBridge.exposeInMainWorld('api', {
         // Window Management
         adjustWindowHeight: (winName, height) => ipcRenderer.invoke('adjust-window-height', { winName, height }),
 
+        // Profile Management
+        setPromptProfile: profile => ipcRenderer.invoke('listen:setPromptProfile', profile),
+        getPromptProfile: () => ipcRenderer.invoke('listen:getPromptProfile'),
+        getAvailableProfiles: () => ipcRenderer.invoke('listen:getAvailableProfiles'),
+
         // Listeners
         onSessionStateChanged: callback => ipcRenderer.on('session-state-changed', callback),
         removeOnSessionStateChanged: callback => ipcRenderer.removeListener('session-state-changed', callback),
+        onSyncConversationHistory: callback => ipcRenderer.on('listen:sync-conversation-history', callback),
+        removeOnSyncConversationHistory: callback => ipcRenderer.removeListener('listen:sync-conversation-history', callback),
     },
 
     // src/ui/listen/stt/SttView.js

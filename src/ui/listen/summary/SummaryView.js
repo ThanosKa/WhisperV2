@@ -8,6 +8,9 @@ export class SummaryView extends LitElement {
         structuredData: { type: Object },
         isVisible: { type: Boolean },
         hasCompletedRecording: { type: Boolean },
+        insightHistory: { type: Array },
+        allActions: { type: Array },
+        allFollowUps: { type: Array },
     };
 
     constructor() {
@@ -20,6 +23,9 @@ export class SummaryView extends LitElement {
         };
         this.isVisible = true;
         this.hasCompletedRecording = false;
+        this.insightHistory = [];  // Array of all analysis results
+        this.allActions = [];      // Flattened, persistent actions
+        this.allFollowUps = [];    // Flattened, persistent follow-ups
 
         // 마크다운 라이브러리 초기화
         this.marked = null;
@@ -35,10 +41,40 @@ export class SummaryView extends LitElement {
         super.connectedCallback();
         if (window.api) {
             window.api.summaryView.onSummaryUpdate((event, data) => {
-                this.structuredData = data;
+                // Append to history instead of overwriting
+                this.insightHistory.push(data);
+                this.structuredData = data; // Keep current for display
+                this.buildFlattenedLists();
                 this.requestUpdate();
             });
+
+            // Receive existing conversation transcript when Listen window (re)opens
+            if (window.api.listenView?.onSyncConversationHistory) {
+                window.api.listenView.onSyncConversationHistory((event, history) => {
+                    console.log('[SummaryView] received existing transcript, length:', history?.length || 0);
+                    // No UI mutation needed here; SummaryService keeps the source of truth
+                });
+            }
         }
+    }
+
+    buildFlattenedLists() {
+        const actions = new Set();
+        const followUps = new Set();
+        
+        // Collect all actions and followUps from insight history
+        this.insightHistory.forEach(insight => {
+            if (Array.isArray(insight.actions)) {
+                insight.actions.forEach(action => actions.add(action));
+            }
+            if (Array.isArray(insight.followUps)) {
+                insight.followUps.forEach(followUp => followUps.add(followUp));
+            }
+        });
+        
+        // Convert to arrays while preserving order (most recent first)
+        this.allActions = Array.from(actions);
+        this.allFollowUps = Array.from(followUps);
     }
 
     disconnectedCallback() {
@@ -56,6 +92,9 @@ export class SummaryView extends LitElement {
             actions: [],
             followUps: [],
         };
+        this.insightHistory = [];
+        this.allActions = [];
+        this.allFollowUps = [];
         this.requestUpdate();
     }
 
@@ -175,29 +214,20 @@ export class SummaryView extends LitElement {
     }
 
     async handleRequestClick(requestText) {
-        console.log('🔥 Analysis request clicked:', requestText);
-        console.log('📋 [SummaryView] INSIGHT CLICKED - Full text being sent to LLM:');
-        console.log('='.repeat(80));
-        console.log(requestText);
-        console.log('='.repeat(80));
-        console.log('📊 [SummaryView] Text length:', requestText.length, 'characters');
-        console.log('🎯 [SummaryView] About to send to askService.sendMessage via sendQuestionFromSummary');
-        console.log('🕰️ [SummaryView] Timestamp:', new Date().toISOString());
-        console.log('🔍 [SummaryView] Request type: Insight click from summary view');
+        console.log(`[SummaryView] live insight click: ${requestText}`);
 
         if (window.api) {
             try {
-                console.log('🚀 [SummaryView] Calling window.api.summaryView.sendQuestionFromSummary...');
+                console.log('[SummaryView] sending insight to ask');
                 const result = await window.api.summaryView.sendQuestionFromSummary(requestText);
 
                 if (result.success) {
-                    console.log('✅ [SummaryView] Question sent to AskView successfully');
-                    console.log('🎉 [SummaryView] LLM request pipeline initiated - check AskService logs for detailed LLM interaction');
+                    console.log('[SummaryView] sent successfully');
                 } else {
-                    console.error('❌ [SummaryView] Failed to send question to AskView:', result.error);
+                    console.error('[SummaryView] failed to send:', result.error);
                 }
             } catch (error) {
-                console.error('❌ [SummaryView] Error in handleRequestClick:', error);
+                console.error('[SummaryView] error in handleRequestClick:', error);
             }
         } else {
             console.error('⚠️ [SummaryView] window.api not available!');
@@ -281,28 +311,46 @@ export class SummaryView extends LitElement {
 
         const hasAnyContent = data.summary.length > 0 || data.topic.bullets.length > 0 || data.actions.length > 0;
 
+        // Separate actions into fixed buttons and scrollable questions/defines
+        const fixedActions = this.allActions.filter(action => 
+            action.includes('What should I say next') || 
+            action.includes('Suggest follow-up') ||
+            action.includes('Recap meeting')
+        );
+        const scrollableActions = this.allActions.filter(action => 
+            action.includes('📘 Define') || 
+            action.includes('❓')
+        );
+
         return html`
             <div class="insights-container">
-                ${!hasAnyContent
+                ${!hasAnyContent && this.allActions.length === 0
                     ? html`<div class="empty-state">No insights yet...</div>`
                     : html`
-                          <insights-title>Current Summary</insights-title>
+                          <!-- Meeting Introduction (scrollable summary) -->
                           ${data.summary.length > 0
-                              ? data.summary
-                                    .slice(0, 5)
-                                    .map(
-                                        (bullet, index) => html`
-                                            <div
-                                                class="markdown-content"
-                                                data-markdown-id="summary-${index}"
-                                                data-original-text="${bullet}"
-                                                @click=${() => this.handleMarkdownClick(bullet)}
-                                            >
-                                                ${bullet}
-                                            </div>
-                                        `
-                                    )
-                              : html` <div class="request-item">No content yet...</div> `}
+                              ? html`
+                                    <insights-title>Meeting Introduction</insights-title>
+                                    <div class="meeting-intro-container">
+                                        ${data.summary
+                                            .slice(0, 4)
+                                            .map(
+                                                (bullet, index) => html`
+                                                    <div
+                                                        class="meeting-intro-item"
+                                                        data-markdown-id="intro-${index}"
+                                                        data-original-text="${bullet}"
+                                                        @click=${() => this.handleMarkdownClick(bullet)}
+                                                    >
+                                                        ${bullet}
+                                                    </div>
+                                                `
+                                            )}
+                                    </div>
+                                `
+                              : ''}
+
+                          <!-- Current Topic Section -->
                           ${data.topic.header
                               ? html`
                                     <insights-title>${data.topic.header}</insights-title>
@@ -322,16 +370,16 @@ export class SummaryView extends LitElement {
                                         )}
                                 `
                               : ''}
-                          ${data.actions.length > 0
+
+                          <!-- Scrollable Questions and Defines -->
+                          ${scrollableActions.length > 0
                               ? html`
-                                    <insights-title>Actions</insights-title>
-                                    ${data.actions
-                                        .slice(0, 5)
-                                        .map(
+                                    <div class="scrollable-actions-container">
+                                        ${scrollableActions.map(
                                             (action, index) => html`
                                                 <div
-                                                    class="markdown-content"
-                                                    data-markdown-id="action-${index}"
+                                                    class="markdown-content scrollable-action-item"
+                                                    data-markdown-id="scrollable-action-${index}"
                                                     data-original-text="${action}"
                                                     @click=${() => this.handleMarkdownClick(action)}
                                                 >
@@ -339,16 +387,38 @@ export class SummaryView extends LitElement {
                                                 </div>
                                             `
                                         )}
+                                    </div>
                                 `
                               : ''}
-                          ${this.hasCompletedRecording && data.followUps && data.followUps.length > 0
+
+                          <!-- Fixed Action Buttons (below questions/defines) -->
+                          ${fixedActions.length > 0
+                              ? html`
+                                    <insights-title>Actions</insights-title>
+                                    ${fixedActions.map(
+                                        (action, index) => html`
+                                            <div
+                                                class="markdown-content fixed-action-item"
+                                                data-markdown-id="fixed-action-${index}"
+                                                data-original-text="${action}"
+                                                @click=${() => this.handleMarkdownClick(action)}
+                                            >
+                                                ${action}
+                                            </div>
+                                        `
+                                    )}
+                                `
+                              : ''}
+
+                          <!-- Follow-Ups Section (no border, as before) -->
+                          ${this.hasCompletedRecording && this.allFollowUps.length > 0
                               ? html`
                                     <insights-title>Follow-Ups</insights-title>
-                                    ${data.followUps.map(
+                                    ${this.allFollowUps.map(
                                         (followUp, index) => html`
                                             <div
-                                                class="markdown-content"
-                                                data-markdown-id="followup-${index}"
+                                                class="markdown-content followup-item"
+                                                data-markdown-id="persistent-followup-${index}"
                                                 data-original-text="${followUp}"
                                                 @click=${() => this.handleMarkdownClick(followUp)}
                                             >

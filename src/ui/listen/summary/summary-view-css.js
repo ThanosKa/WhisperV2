@@ -106,8 +106,8 @@ export const summaryViewStyles = css`
     }
 
     insights-title {
-        color: rgba(255, 255, 255, 0.8);
-        font-size: 15px;
+        color: #ffffff;
+        font-size: 17px;
         font-weight: 500;
         font-family: 'Helvetica Neue', sans-serif;
         margin: 12px 0 8px 0;

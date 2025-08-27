@@ -23,9 +23,9 @@ export class SummaryView extends LitElement {
         };
         this.isVisible = true;
         this.hasCompletedRecording = false;
-        this.insightHistory = [];  // Array of all analysis results
-        this.allActions = [];      // Flattened, persistent actions
-        this.allFollowUps = [];    // Flattened, persistent follow-ups
+        this.insightHistory = []; // Array of all analysis results
+        this.allActions = []; // Flattened, persistent actions
+        this.allFollowUps = []; // Flattened, persistent follow-ups
 
         // 마크다운 라이브러리 초기화
         this.marked = null;
@@ -61,7 +61,7 @@ export class SummaryView extends LitElement {
     buildFlattenedLists() {
         const actions = new Set();
         const followUps = new Set();
-        
+
         // Collect all actions and followUps from insight history
         this.insightHistory.forEach(insight => {
             if (Array.isArray(insight.actions)) {
@@ -71,7 +71,7 @@ export class SummaryView extends LitElement {
                 insight.followUps.forEach(followUp => followUps.add(followUp));
             }
         });
-        
+
         // Convert to arrays while preserving order (most recent first)
         this.allActions = Array.from(actions);
         this.allFollowUps = Array.from(followUps);
@@ -312,15 +312,10 @@ export class SummaryView extends LitElement {
         const hasAnyContent = data.summary.length > 0 || data.topic.bullets.length > 0 || data.actions.length > 0;
 
         // Separate actions into fixed buttons and scrollable questions/defines
-        const fixedActions = this.allActions.filter(action => 
-            action.includes('What should I say next') || 
-            action.includes('Suggest follow-up') ||
-            action.includes('Recap meeting')
+        const fixedActions = this.allActions.filter(
+            action => action.includes('What should I say next') || action.includes('Suggest follow-up') || action.includes('Recap meeting')
         );
-        const scrollableActions = this.allActions.filter(action => 
-            action.includes('📘 Define') || 
-            action.includes('❓')
-        );
+        const scrollableActions = this.allActions.filter(action => action.includes('📘 Define') || action.includes('❓'));
 
         return html`
             <div class="insights-container">
@@ -370,6 +365,7 @@ export class SummaryView extends LitElement {
                                         )}
                                 `
                               : ''}
+                          <insights-title>Actions</insights-title>
 
                           <!-- Scrollable Questions and Defines -->
                           ${scrollableActions.length > 0
@@ -394,7 +390,6 @@ export class SummaryView extends LitElement {
                           <!-- Fixed Action Buttons (below questions/defines) -->
                           ${fixedActions.length > 0
                               ? html`
-                                    <insights-title>Actions</insights-title>
                                     ${fixedActions.map(
                                         (action, index) => html`
                                             <div

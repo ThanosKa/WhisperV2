@@ -15,11 +15,14 @@ export class SttView extends LitElement {
             display: flex;
             flex-direction: column;
             gap: 8px;
-            min-height: 150px;
-            max-height: 600px;
+            /* Dynamic sizing: grows with content, scrolls when exceeds window */
+            min-height: 200px; /* Minimum for empty state */
+            max-height: 450px; /* Leave room for top bar */
+            height: auto;
             position: relative;
             z-index: 1;
             flex: 1;
+            box-sizing: border-box;
         }
 
         /* Visibility handled by parent component */

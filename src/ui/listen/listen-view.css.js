@@ -4,12 +4,18 @@ export const listenViewStyles = css`
     :host {
         display: block;
         width: 400px;
+        max-width: 400px;
+        min-width: 400px;
+        /* Dynamic height: starts at 250px, grows to 500px based on content */
+        min-height: 250px;
+        max-height: 500px;
         transform: translate3d(0, 0, 0);
         backface-visibility: hidden;
         transition:
             transform 0.2s cubic-bezier(0.23, 1, 0.32, 1),
             opacity 0.2s ease-out;
         will-change: transform, opacity;
+        box-sizing: border-box;
     }
 
     :host(.hiding) {
@@ -133,7 +139,10 @@ export const listenViewStyles = css`
         overflow: hidden;
         border-radius: 12px;
         width: 100%;
-        height: 100%;
+        /* Dynamic height: grows with content from 250px to 500px */
+        min-height: 250px;
+        max-height: 500px;
+        height: auto;
     }
 
     .assistant-container::after {

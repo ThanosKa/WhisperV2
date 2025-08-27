@@ -218,6 +218,42 @@ export class SummaryView extends LitElement {
     updated(changedProperties) {
         super.updated(changedProperties);
         this.renderMarkdownContent();
+
+        // Log when Follow-ups appear and trigger height adjustment
+        if (changedProperties.has('hasCompletedRecording') && this.hasCompletedRecording) {
+            console.log('[SummaryView] Follow-ups now available - triggering window height adjustment');
+
+            // Trigger parent height adjustment for Follow-ups content
+            setTimeout(() => {
+                this.dispatchEvent(
+                    new CustomEvent('content-updated', {
+                        bubbles: true,
+                        detail: { contentType: 'followups', trigger: 'height-adjustment' },
+                    })
+                );
+            }, 100);
+
+            // Debug container dimensions
+            setTimeout(() => {
+                const container = this.shadowRoot.querySelector('.insights-container');
+                if (container && this.structuredData?.followUps?.length > 0) {
+                    console.log(
+                        `[SummaryView] Container dimensions: scrollHeight=${container.scrollHeight}px, clientHeight=${container.clientHeight}px, offsetHeight=${container.offsetHeight}px`
+                    );
+                    console.log(`[SummaryView] Scrollable: ${container.scrollHeight > container.clientHeight ? 'YES' : 'NO'}`);
+                }
+            }, 150);
+        }
+
+        // Always log container dimensions when content changes
+        setTimeout(() => {
+            const container = this.shadowRoot.querySelector('.insights-container');
+            if (container) {
+                console.log(
+                    `[SummaryView] Current container state: scrollHeight=${container.scrollHeight}px, clientHeight=${container.clientHeight}px`
+                );
+            }
+        }, 50);
     }
 
     render() {

@@ -41,6 +41,15 @@ export class ListenView extends LitElement {
         if (this.isSessionActive) {
             this.startTimer();
         }
+
+        // Listen for content updates from child components
+        this.addEventListener('content-updated', event => {
+            console.log('[ListenView] Content updated:', event.detail);
+            if (event.detail.trigger === 'height-adjustment') {
+                this.adjustWindowHeightThrottled();
+            }
+        });
+
         if (window.api) {
             window.api.listenView.onSessionStateChanged((event, { isActive }) => {
                 const wasActive = this.isSessionActive;
@@ -112,12 +121,11 @@ export class ListenView extends LitElement {
                 if (!topBar || !activeContent) return;
 
                 const topBarHeight = topBar.offsetHeight;
-
                 const contentHeight = activeContent.scrollHeight;
-
                 const idealHeight = topBarHeight + contentHeight;
 
-                const targetHeight = Math.min(700, idealHeight);
+                // Dynamic sizing: min 250px, max 500px
+                const targetHeight = Math.max(250, Math.min(500, idealHeight));
 
                 console.log(
                     `[Height Adjusted] Mode: ${this.viewMode}, TopBar: ${topBarHeight}px, Content: ${contentHeight}px, Ideal: ${idealHeight}px, Target: ${targetHeight}px`
@@ -195,18 +203,20 @@ export class ListenView extends LitElement {
     updated(changedProperties) {
         super.updated(changedProperties);
 
+        // Re-enabled: Window now grows dynamically from 250px to 500px based on content
         if (changedProperties.has('viewMode')) {
             this.adjustWindowHeight();
         }
     }
 
     handleSttMessagesUpdated(event) {
-        // Handle messages update from SttView if needed
+        // Handle messages update from SttView - adjust height as content grows
         this.adjustWindowHeightThrottled();
     }
 
     firstUpdated() {
         super.firstUpdated();
+        // Re-enabled: Window starts at 250px and grows with content
         setTimeout(() => this.adjustWindowHeight(), 200);
     }
 

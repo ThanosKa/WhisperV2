@@ -80,9 +80,12 @@ export const summaryViewStyles = css`
         padding: 12px 16px 16px 16px;
         position: relative;
         z-index: 1;
-        min-height: 150px;
-        max-height: 600px;
+        /* Dynamic sizing: grows with content, scrolls when exceeds window */
+        min-height: 200px; /* Minimum for empty state */
+        max-height: 450px; /* Leave room for top bar */
+        height: auto;
         flex: 1;
+        box-sizing: border-box;
     }
 
     /* Visibility handled by parent component */

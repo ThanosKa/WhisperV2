@@ -420,9 +420,13 @@ function createFeatureWindows(header, namesToCreate) {
                 const listen = new BrowserWindow({
                     ...commonChildOptions,
                     width: 400,
+                    height: 250, // Start small when empty
                     minWidth: 400,
-                    maxWidth: 700,
-                    maxHeight: 700,
+                    maxWidth: 400,
+                    minHeight: 250, // Minimum when empty
+                    maxHeight: 500, // Maximum when full content
+                    resizable: true, // Allow resizing for dynamic growth
+                    // Dynamic dimensions - window grows with content from 250px to 500px
                     // backgroundColor: '#ff0000', // Red background to visualize window boundaries
                     // transparent: false, // Disable transparency to show the red background
                     // useContentSize: true // Use content size to ensure proper sizing

@@ -204,7 +204,7 @@ class SttService {
                 return;
             } else if (this.modelInfo.provider === 'gemini') {
                 if (!message.serverContent?.modelTurn) {
-                    console.log('[Gemini STT - Me]', JSON.stringify(message, null, 2));
+                    // console.log('[Gemini STT - Me]', JSON.stringify(message, null, 2));
                 }
 
                 if (message.serverContent?.turnComplete) {
@@ -342,7 +342,7 @@ class SttService {
                 return;
             } else if (this.modelInfo.provider === 'gemini') {
                 if (!message.serverContent?.modelTurn) {
-                    console.log('[Gemini STT - Them]', JSON.stringify(message, null, 2));
+                    // console.log('[Gemini STT - Them]', JSON.stringify(message, null, 2));
                 }
 
                 if (message.serverContent?.turnComplete) {
@@ -587,6 +587,7 @@ class SttService {
         }
 
         await this.theirSttSession.sendRealtimeInput(payload);
+        return { success: true };
     }
 
     killExistingSystemAudioDump() {

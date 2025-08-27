@@ -214,16 +214,19 @@ export class ListenView extends LitElement {
         const displayText = this.isHovering
             ? this.viewMode === 'transcript'
                 ? 'Copy Transcript'
-                : 'Copy Glass Analysis'
+                : 'Copy Analysis'
             : this.viewMode === 'insights'
               ? `Live insights`
-              : `Glass is Listening ${this.elapsedTime}`;
+              : `Listening ${this.elapsedTime}`;
+
+        // Show bouncing dots when actively listening and in transcript mode
+        const showListeningDots = !this.isHovering && this.viewMode === 'transcript' && this.isSessionActive;
 
         return html`
             <div class="assistant-container">
                 <div class="top-bar">
                     <div class="bar-left-text">
-                        <span class="bar-left-text-content ${this.isAnimating ? 'slide-in' : ''}">${displayText}</span>
+                        <span class="bar-left-text-content ${this.isAnimating ? 'slide-in' : ''}"> ${displayText} </span>
                     </div>
                     <div class="bar-controls">
                         <button class="toggle-button" @click=${this.toggleViewMode}>
@@ -263,6 +266,16 @@ export class ListenView extends LitElement {
                 <stt-view .isVisible=${this.viewMode === 'transcript'} @stt-messages-updated=${this.handleSttMessagesUpdated}></stt-view>
 
                 <summary-view .isVisible=${this.viewMode === 'insights'} .hasCompletedRecording=${this.hasCompletedRecording}></summary-view>
+
+                ${showListeningDots
+                    ? html`
+                          <div class="listening-dots">
+                              <span class="listening-dot"></span>
+                              <span class="listening-dot"></span>
+                              <span class="listening-dot"></span>
+                          </div>
+                      `
+                    : ''}
             </div>
         `;
     }

@@ -175,6 +175,7 @@ class WindowLayoutManager {
             console.log(`[Layout Debug] Ask Window Bounds: height=${askB.height}, width=${askB.width}`);
         }
         if (listenVis) {
+            // Console logging for listen window dimensions when window is opened/resized
             console.log(`[Layout Debug] Listen Window Bounds: height=${listenB.height}, width=${listenB.width}`);
         }
 

@@ -234,12 +234,11 @@ You: "That's smart business practice. While you're evaluating alternatives, I wa
 Provide only the exact words to say in **markdown format**. Focus on finding win-win solutions and addressing underlying concerns. Keep responses **short and impactful**.`,
     },
 
-
     pickle_glass_analysis: {
         intro: `<core_identity>
     You are Pickle, developed and created by Pickle, and you are the user's live-meeting co-pilot.
     </core_identity>`,
-    
+
         formatRequirements: `<objective>
     Your goal is to help the user at the current moment in the conversation (the end of the transcript). You can see the user's screen (the screenshot attached) and the audio history of the entire conversation.
     Execute in the following priority order:
@@ -391,17 +390,16 @@ Provide only the exact words to say in **markdown format**. Focus on finding win
     </passive_acknowledgment_priority>
     </passive_mode_implementation_rules>
     </objective>`,
-    
+
         searchUsage: ``,
-    
+
         content: `User-provided context (defer to this information over your general knowledge / if there is specific script/desired responses prioritize this over previous instructions)
     
     Make sure to **reference context** fully if it is provided (ex. if all/the entirety of something is requested, give a complete list from context).
     ----------`,
-    
+
         outputInstructions: `{{CONVERSATION_HISTORY}}`,
     },
-
 };
 
 module.exports = {

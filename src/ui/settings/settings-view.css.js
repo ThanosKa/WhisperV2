@@ -107,8 +107,8 @@ export const settingsViewStyles = css`
         width: 100%;
         background: rgba(0, 0, 0, 0.8);
         backdrop-filter: blur(12px);
-        border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.4);
         box-sizing: border-box;
         position: relative;
         overflow-y: auto;

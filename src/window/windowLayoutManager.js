@@ -75,6 +75,10 @@ class WindowLayoutManager {
 
         const headerBounds = header.getBounds();
         const settingsBounds = settings.getBounds();
+        
+        // Add console logging for settings window bounds
+        console.log(`[Layout Debug] Settings Window Bounds: height=${settingsBounds.height}, width=${settingsBounds.width}`);
+        
         const display = getCurrentDisplay(header);
         const { x: workAreaX, y: workAreaY, width: screenWidth, height: screenHeight } = display.workArea;
 
@@ -87,7 +91,10 @@ class WindowLayoutManager {
         const clampedX = Math.max(workAreaX + 10, Math.min(workAreaX + screenWidth - settingsBounds.width - 10, x));
         const clampedY = Math.max(workAreaY + 10, Math.min(workAreaY + screenHeight - settingsBounds.height - 10, y));
 
-        return { x: Math.round(clampedX), y: Math.round(clampedY) };
+        const newPosition = { x: Math.round(clampedX), y: Math.round(clampedY) };
+        console.log(`[Layout Debug] Settings Window New Position: x=${newPosition.x}, y=${newPosition.y}`);
+        
+        return newPosition;
     }
 
     calculateHeaderResize(header, { width, height }) {

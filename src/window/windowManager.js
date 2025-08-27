@@ -277,15 +277,25 @@ async function handleWindowVisibilityRequest(windowPool, layoutManager, movement
             }
             const position = layoutManager.calculateSettingsWindowPosition();
             if (position) {
+                console.log(`[WindowManager] Showing settings window at position:`, position);
+                const currentBounds = win.getBounds();
+                console.log(`[WindowManager] Settings current bounds:`, currentBounds);
+                console.log(`[WindowManager] Settings maxHeight: ${win.getMaximumSize()[1]}, minHeight: ${win.getMinimumSize()[1]}`);
+                
                 win.setBounds(position);
                 win.__lockedByButton = true;
                 win.show();
                 win.moveTop();
                 win.setAlwaysOnTop(true);
+                
+                // Log bounds after setting
+                const newBounds = win.getBounds();
+                console.log(`[WindowManager] Settings bounds after setBounds:`, newBounds);
             } else {
                 console.warn('[WindowManager] Could not calculate settings window position.');
             }
         } else {
+            console.log(`[WindowManager] Hiding settings window`);
             // Hide after a delay
             if (settingsHideTimer) {
                 clearTimeout(settingsHideTimer);
@@ -294,6 +304,7 @@ async function handleWindowVisibilityRequest(windowPool, layoutManager, movement
                 if (win && !win.isDestroyed()) {
                     win.setAlwaysOnTop(false);
                     win.hide();
+                    console.log(`[WindowManager] Settings window hidden`);
                 }
                 settingsHideTimer = null;
             }, 200);
@@ -457,7 +468,12 @@ function createFeatureWindows(header, namesToCreate) {
 
             // settings
             case 'settings': {
-                const settings = new BrowserWindow({ ...commonChildOptions, width: 240, maxHeight: 400, parent: undefined });
+                const settings = new BrowserWindow({ 
+                    ...commonChildOptions, 
+                    width: 240, 
+                    maxHeight: 400, 
+                    parent: undefined,
+                });
                 settings.setContentProtection(isContentProtectionOn);
                 settings.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
                 if (process.platform === 'darwin') {
@@ -471,6 +487,9 @@ function createFeatureWindows(header, namesToCreate) {
                 if (!app.isPackaged) {
                     settings.webContents.openDevTools({ mode: 'detach' });
                 }
+                
+                // Add logging for settings window creation
+                console.log(`[WindowManager] Settings window created with maxHeight: ${settings.getMaximumSize()[1]}`);
                 break;
             }
         }

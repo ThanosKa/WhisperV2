@@ -281,13 +281,13 @@ async function handleWindowVisibilityRequest(windowPool, layoutManager, movement
                 const currentBounds = win.getBounds();
                 console.log(`[WindowManager] Settings current bounds:`, currentBounds);
                 console.log(`[WindowManager] Settings maxHeight: ${win.getMaximumSize()[1]}, minHeight: ${win.getMinimumSize()[1]}`);
-                
+
                 win.setBounds(position);
                 win.__lockedByButton = true;
                 win.show();
                 win.moveTop();
                 win.setAlwaysOnTop(true);
-                
+
                 // Log bounds after setting
                 const newBounds = win.getBounds();
                 console.log(`[WindowManager] Settings bounds after setBounds:`, newBounds);
@@ -421,8 +421,11 @@ function createFeatureWindows(header, namesToCreate) {
                     ...commonChildOptions,
                     width: 400,
                     minWidth: 400,
-                    maxWidth: 900,
-                    maxHeight: 900,
+                    maxWidth: 700,
+                    maxHeight: 700,
+                    // backgroundColor: '#ff0000', // Red background to visualize window boundaries
+                    // transparent: false, // Disable transparency to show the red background
+                    // useContentSize: true // Use content size to ensure proper sizing
                 });
                 listen.setContentProtection(isContentProtectionOn);
                 listen.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
@@ -468,10 +471,10 @@ function createFeatureWindows(header, namesToCreate) {
 
             // settings
             case 'settings': {
-                const settings = new BrowserWindow({ 
-                    ...commonChildOptions, 
-                    width: 240, 
-                    maxHeight: 400, 
+                const settings = new BrowserWindow({
+                    ...commonChildOptions,
+                    width: 240,
+                    maxHeight: 400,
                     parent: undefined,
                 });
                 settings.setContentProtection(isContentProtectionOn);
@@ -487,7 +490,7 @@ function createFeatureWindows(header, namesToCreate) {
                 if (!app.isPackaged) {
                     settings.webContents.openDevTools({ mode: 'detach' });
                 }
-                
+
                 // Add logging for settings window creation
                 console.log(`[WindowManager] Settings window created with maxHeight: ${settings.getMaximumSize()[1]}`);
                 break;

@@ -28,7 +28,10 @@ export const mainHeaderStyles = css`
     }
 
     * {
-        font-family: system-ui, -apple-system, sans-serif;
+        font-family:
+            system-ui,
+            -apple-system,
+            sans-serif;
         cursor: default;
         user-select: none;
     }
@@ -61,7 +64,7 @@ export const mainHeaderStyles = css`
         background: rgba(11, 11, 11, 0.66);
         border: 1px solid rgba(255, 255, 255, 0.4);
         border-radius: 9000px;
-        box-shadow: 
+        box-shadow:
             0 4px 12px rgba(0, 0, 0, 0.3),
             0 2px 6px rgba(0, 0, 0, 0.2);
         z-index: -1;
@@ -206,14 +209,14 @@ export const mainHeaderStyles = css`
         gap: 6px;
         border-radius: 25px;
         transition: background 0.15s ease;
-        margin-left:8px;
+        margin-left: 8px;
         padding: 2px 4px;
     }
 
     .header-actions:hover {
         background: rgba(128, 128, 128, 0.4);
-    border-radius: 25px;
-        }
+        border-radius: 25px;
+    }
 
     .ask-action {
         margin-left: 4px;
@@ -231,7 +234,10 @@ export const mainHeaderStyles = css`
     .action-text-content {
         color: rgb(255, 255, 255);
         font-size: 12px;
-        font-family: system-ui, -apple-system, sans-serif;
+        font-family:
+            system-ui,
+            -apple-system,
+            sans-serif;
         font-weight: 500;
         word-wrap: break-word;
         white-space: nowrap;
@@ -261,7 +267,10 @@ export const mainHeaderStyles = css`
     .icon-box {
         color: rgb(255, 255, 255);
         font-size: 12px;
-        font-family: system-ui, -apple-system, sans-serif;
+        font-family:
+            system-ui,
+            -apple-system,
+            sans-serif;
         font-weight: 500;
         background-color: rgba(128, 128, 128, 0.3);
         border-radius: 50%;

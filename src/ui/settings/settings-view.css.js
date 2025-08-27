@@ -2,7 +2,10 @@ import { css } from '../assets/lit-core-2.7.4.min.js';
 
 export const settingsViewStyles = css`
     * {
-        font-family: system-ui, -apple-system, sans-serif;
+        font-family:
+            system-ui,
+            -apple-system,
+            sans-serif;
         cursor: default;
         user-select: none;
     }
@@ -426,8 +429,12 @@ export const settingsViewStyles = css`
     }
 
     @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
+        0% {
+            transform: rotate(0deg);
+        }
+        100% {
+            transform: rotate(360deg);
+        }
     }
 
     .hidden {

@@ -12,6 +12,7 @@ class SummaryService {
         this.analysisHistory = [];
         this.conversationHistory = [];
         this.currentSessionId = null;
+        this.definedTerms = new Set(); // Track previously defined terms
 
         // Callbacks
         this.onAnalysisComplete = null;
@@ -115,6 +116,7 @@ class SummaryService {
         this.conversationHistory = [];
         this.previousAnalysisResult = null;
         this.analysisHistory = [];
+        this.definedTerms.clear(); // Clear defined terms for new conversation
         console.log('🔄 Conversation history and analysis state reset');
     }
 
@@ -144,7 +146,6 @@ class SummaryService {
         if (this.previousAnalysisResult) {
             contextualPrompt = `
 Previous Analysis Context:
-- Main Topic: ${this.previousAnalysisResult.topic.header}
 - Key Points: ${this.previousAnalysisResult.summary.slice(0, 3).join(', ')}
 - Last Actions: ${this.previousAnalysisResult.actions.slice(0, 2).join(', ')}
 
@@ -177,25 +178,29 @@ Please build upon this context while analyzing the new conversation segments.
                     role: 'user',
                     content: `${contextualPrompt}
 
-Analyze the conversation and provide a structured summary. Format your response as follows:
+Analyze the conversation and provide a structured summary. Use ONLY the transcript content; do not invent questions or terms. Format your response exactly as follows:
 
-**Summary Overview**
-- Main discussion point with context
+**Meeting Recap**
+- Key discussion points and decisions made so far
+- Current focus areas and topics being addressed
+- Progress updates and next steps discussed
 
-**Key Topic: [Topic Name]**
-- First key insight
-- Second key insight
-- Third key insight
+**Detected Questions (verbatim from transcript)**
+1. Exact question text as asked
+2. Another exact question text
+3. (Up to 5 total; include only if actually asked)
 
-**Extended Explanation**
-Provide 2-3 sentences explaining the context and implications.
+**Define Candidates (from transcript, not invented)**
+- Term 1 (proper noun/technical term that may need definition)
+- Term 2
+- Term 3
 
-**Suggested Questions**
-1. First follow-up question?
-2. Second follow-up question?
-3. Third follow-up question?
-
-Keep all points concise and build upon previous analysis if provided.`,
+Rules:
+- Meeting Recap bullets should be concise but informative (6-10 words each)
+- Focus on actual content, decisions, and progress rather than just topic names
+- Detected Questions must be quoted verbatim from the transcript (no rephrasing).
+- Define Candidates must be terms that appear in the transcript, preferably near the end; do not add anything not present.
+- Provide meaningful meeting context and progress updates.`,
                 },
             ];
 
@@ -249,7 +254,7 @@ ${llmMessages}
                         sessionId: this.currentSessionId,
                         text: responseText,
                         tldr: structuredData.summary.join('\n'),
-                        bullet_json: JSON.stringify(structuredData.topic.bullets),
+                        bullet_json: JSON.stringify([]), // Empty array for topic bullets
                         action_json: JSON.stringify(structuredData.actions),
                         model: modelInfo.model,
                     });
@@ -280,22 +285,18 @@ ${llmMessages}
     parseResponseText(responseText, previousResult) {
         const structuredData = {
             summary: [],
-            topic: { header: '', bullets: [] },
             actions: [],
             followUps: ['✉️ Draft a follow-up email', '✅ Generate action items', '📝 Show summary'],
         };
 
         // 이전 결과가 있으면 기본값으로 사용
         if (previousResult) {
-            structuredData.topic.header = previousResult.topic.header;
             structuredData.summary = [...previousResult.summary];
         }
 
         try {
             const lines = responseText.split('\n');
             let currentSection = '';
-            let isCapturingTopic = false;
-            let topicName = '';
 
             for (const line of lines) {
                 const trimmedLine = line.trim();
@@ -304,19 +305,11 @@ ${llmMessages}
                 if (trimmedLine.startsWith('**Summary Overview**')) {
                     currentSection = 'summary-overview';
                     continue;
-                } else if (trimmedLine.startsWith('**Key Topic:')) {
-                    currentSection = 'topic';
-                    isCapturingTopic = true;
-                    topicName = trimmedLine.match(/\*\*Key Topic: (.+?)\*\*/)?.[1] || '';
-                    if (topicName) {
-                        structuredData.topic.header = topicName + ':';
-                    }
+                } else if (trimmedLine.startsWith('**Detected Questions')) {
+                    currentSection = 'detected-questions';
                     continue;
-                } else if (trimmedLine.startsWith('**Extended Explanation**')) {
-                    currentSection = 'explanation';
-                    continue;
-                } else if (trimmedLine.startsWith('**Suggested Questions**')) {
-                    currentSection = 'questions';
+                } else if (trimmedLine.startsWith('**Define Candidates')) {
+                    currentSection = 'define-candidates';
                     continue;
                 }
 
@@ -330,27 +323,19 @@ ${llmMessages}
                             structuredData.summary.pop();
                         }
                     }
-                } else if (trimmedLine.startsWith('-') && currentSection === 'topic') {
-                    const bullet = trimmedLine.substring(1).trim();
-                    if (bullet && structuredData.topic.bullets.length < 3) {
-                        structuredData.topic.bullets.push(bullet);
-                    }
-                } else if (currentSection === 'explanation' && trimmedLine) {
-                    // explanation을 topic bullets에 추가 (문장 단위로)
-                    const sentences = trimmedLine
-                        .split(/\.\s+/)
-                        .filter(s => s.trim().length > 0)
-                        .map(s => s.trim() + (s.endsWith('.') ? '' : '.'));
-
-                    sentences.forEach(sentence => {
-                        if (structuredData.topic.bullets.length < 3 && !structuredData.topic.bullets.includes(sentence)) {
-                            structuredData.topic.bullets.push(sentence);
-                        }
-                    });
-                } else if (trimmedLine.match(/^\d+\./) && currentSection === 'questions') {
+                } else if (trimmedLine.match(/^\d+\./) && currentSection === 'detected-questions') {
                     const question = trimmedLine.replace(/^\d+\.\s*/, '').trim();
-                    if (question && question.includes('?')) {
+                    if (question) {
                         structuredData.actions.push(`❓ ${question}`);
+                    }
+                } else if (trimmedLine.startsWith('-') && currentSection === 'define-candidates') {
+                    const term = trimmedLine.substring(1).trim().replace(/^"|"$/g, '');
+                    if (term && !this.definedTerms.has(term.toLowerCase())) {
+                        const defineItem = `📘 Define "${term}"`;
+                        if (!structuredData.actions.some(x => (x || '').toLowerCase() === defineItem.toLowerCase())) {
+                            structuredData.actions.push(defineItem);
+                            this.definedTerms.add(term.toLowerCase()); // Track this term as defined
+                        }
                     }
                 }
             }
@@ -364,14 +349,11 @@ ${llmMessages}
             });
 
             // 액션 개수 제한
-            structuredData.actions = structuredData.actions.slice(0, 5);
+            structuredData.actions = structuredData.actions.slice(0, 10);
 
             // 유효성 검증 및 이전 데이터 병합
             if (structuredData.summary.length === 0 && previousResult) {
                 structuredData.summary = previousResult.summary;
-            }
-            if (structuredData.topic.bullets.length === 0 && previousResult) {
-                structuredData.topic.bullets = previousResult.topic.bullets;
             }
         } catch (error) {
             console.error('❌ Error parsing response text:', error);
@@ -379,7 +361,6 @@ ${llmMessages}
             return (
                 previousResult || {
                     summary: [],
-                    topic: { header: 'Analysis in progress', bullets: [] },
                     actions: ['✨ What should I say next?', '💬 Suggest follow-up questions'],
                     followUps: ['✉️ Draft a follow-up email', '✅ Generate action items', '📝 Show summary'],
                 }
@@ -402,16 +383,7 @@ ${llmMessages}
 
             const data = await this.makeOutlineAndRequests(this.conversationHistory);
             if (data) {
-                // Add multiple Define candidates from recent conversation
-                const defineTerms = this._extractDefineCandidates(this.conversationHistory, 3);
                 data.actions = Array.isArray(data.actions) ? data.actions : [];
-
-                defineTerms.forEach(term => {
-                    const defineItem = `📘 Define "${term}"`;
-                    if (!data.actions.some(x => (x || '').toLowerCase() === defineItem.toLowerCase())) {
-                        data.actions.unshift(defineItem);
-                    }
-                });
 
                 // Add recap button if conversation is long enough
                 if (this.conversationHistory.length >= recapStep) {
@@ -439,6 +411,7 @@ ${llmMessages}
             previousResult: this.previousAnalysisResult,
             history: this.analysisHistory,
             conversationLength: this.conversationHistory.length,
+            definedTerms: Array.from(this.definedTerms), // Include defined terms for debugging
         };
     }
 }

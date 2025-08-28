@@ -17,7 +17,6 @@ export class SummaryView extends LitElement {
         super();
         this.structuredData = {
             summary: [],
-            topic: { header: '', bullets: [] },
             actions: [],
             followUps: [],
         };
@@ -26,6 +25,7 @@ export class SummaryView extends LitElement {
         this.insightHistory = []; // Array of all analysis results
         this.allActions = []; // Flattened, persistent actions
         this.allFollowUps = []; // Flattened, persistent follow-ups
+        this.hasReceivedFirstText = false; // Track if any text has been received
 
         // 마크다운 라이브러리 초기화
         this.marked = null;
@@ -44,7 +44,18 @@ export class SummaryView extends LitElement {
                 // Append to history instead of overwriting
                 this.insightHistory.push(data);
                 this.structuredData = data; // Keep current for display
+                this.hasReceivedFirstText = true; // Mark that we've received first text
                 this.buildFlattenedLists();
+
+                // Ensure default actions are always present after first text
+                if (this.hasReceivedFirstText) {
+                    const defaultActions = ['✨ What should I say next?', '💬 Suggest follow-up questions'];
+                    defaultActions.forEach(action => {
+                        if (!this.allActions.includes(action)) {
+                            this.allActions.push(action);
+                        }
+                    });
+                }
                 this.requestUpdate();
             });
 
@@ -52,7 +63,18 @@ export class SummaryView extends LitElement {
             if (window.api.listenView?.onSyncConversationHistory) {
                 window.api.listenView.onSyncConversationHistory((event, history) => {
                     console.log('[SummaryView] received existing transcript, length:', history?.length || 0);
-                    // No UI mutation needed here; SummaryService keeps the source of truth
+                    // Mark as having received first text if there's history
+                    if (history && history.length > 0) {
+                        this.hasReceivedFirstText = true;
+                        // Ensure default actions are present
+                        const defaultActions = ['✨ What should I say next?', '💬 Suggest follow-up questions'];
+                        defaultActions.forEach(action => {
+                            if (!this.allActions.includes(action)) {
+                                this.allActions.push(action);
+                            }
+                        });
+                        this.requestUpdate();
+                    }
                 });
             }
         }
@@ -88,13 +110,13 @@ export class SummaryView extends LitElement {
     resetAnalysis() {
         this.structuredData = {
             summary: [],
-            topic: { header: '', bullets: [] },
             actions: [],
             followUps: [],
         };
         this.insightHistory = [];
         this.allActions = [];
         this.allFollowUps = [];
+        this.hasReceivedFirstText = false; // Reset first text flag
         this.requestUpdate();
     }
 
@@ -235,15 +257,11 @@ export class SummaryView extends LitElement {
     }
 
     getSummaryText() {
-        const data = this.structuredData || { summary: [], topic: { header: '', bullets: [] }, actions: [] };
+        const data = this.structuredData || { summary: [], actions: [] };
         let sections = [];
 
         if (data.summary && data.summary.length > 0) {
             sections.push(`Current Summary:\n${data.summary.map(s => `• ${s}`).join('\n')}`);
-        }
-
-        if (data.topic && data.topic.header && data.topic.bullets.length > 0) {
-            sections.push(`\n${data.topic.header}:\n${data.topic.bullets.map(b => `• ${b}`).join('\n')}`);
         }
 
         if (data.actions && data.actions.length > 0) {
@@ -305,11 +323,10 @@ export class SummaryView extends LitElement {
 
         const data = this.structuredData || {
             summary: [],
-            topic: { header: '', bullets: [] },
             actions: [],
         };
 
-        const hasAnyContent = data.summary.length > 0 || data.topic.bullets.length > 0 || data.actions.length > 0;
+        const hasAnyContent = data.summary.length > 0 || data.actions.length > 0;
 
         // Separate actions into fixed buttons and scrollable questions/defines
         const fixedActions = this.allActions.filter(
@@ -320,12 +337,12 @@ export class SummaryView extends LitElement {
         return html`
             <div class="insights-container">
                 ${!hasAnyContent && this.allActions.length === 0
-                    ? html`<div class="empty-state">No insights yet...</div>`
+                    ? html`<div class="empty-state">Insights will appear here</div>`
                     : html`
-                          <!-- Meeting Introduction (scrollable summary) -->
+                          <!-- Dynamic Section Title -->
+                          <insights-title>${data.summary.length > 0 ? 'Meeting Introduction' : 'Summary Insights'}</insights-title>
                           ${data.summary.length > 0
                               ? html`
-                                    <insights-title>Meeting Introduction</insights-title>
                                     <div class="meeting-intro-container">
                                         ${data.summary
                                             .slice(0, 4)
@@ -337,34 +354,21 @@ export class SummaryView extends LitElement {
                                                         data-original-text="${bullet}"
                                                         @click=${() => this.handleMarkdownClick(bullet)}
                                                     >
-                                                        ${bullet}
+                                                        • ${bullet}
                                                     </div>
                                                 `
                                             )}
                                     </div>
                                 `
-                              : ''}
+                              : this.hasReceivedFirstText
+                                ? html`
+                                    <div class="meeting-intro-item" style="font-style: normal;">
+                                        • No insights yet
+                                    </div>
+                                  `
+                                : ''}
 
-                          <!-- Current Topic Section -->
-                          ${data.topic.header
-                              ? html`
-                                    <insights-title>${data.topic.header}</insights-title>
-                                    ${data.topic.bullets
-                                        .slice(0, 3)
-                                        .map(
-                                            (bullet, index) => html`
-                                                <div
-                                                    class="markdown-content"
-                                                    data-markdown-id="topic-${index}"
-                                                    data-original-text="${bullet}"
-                                                    @click=${() => this.handleMarkdownClick(bullet)}
-                                                >
-                                                    ${bullet}
-                                                </div>
-                                            `
-                                        )}
-                                `
-                              : ''}
+                          <!-- Actions Section (always show fixed actions after first text) -->
                           <insights-title>Actions</insights-title>
 
                           <!-- Scrollable Questions and Defines -->
@@ -387,8 +391,8 @@ export class SummaryView extends LitElement {
                                 `
                               : ''}
 
-                          <!-- Fixed Action Buttons (below questions/defines) -->
-                          ${fixedActions.length > 0
+                          <!-- Fixed Action Buttons (always show after first text) -->
+                          ${this.hasReceivedFirstText
                               ? html`
                                     ${fixedActions.map(
                                         (action, index) => html`

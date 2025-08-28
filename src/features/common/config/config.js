@@ -32,7 +32,8 @@ class Config {
             enableDebugLogging: false,
 
             // Listen feature settings
-            analysisStep: 5,           // Trigger analysis every N utterances
+            analysisStep: 1,           // Trigger analysis every N utterances
+            utteranceSilenceMs: 1200,  // Silence debounce time for utterance completion (ms)
             activePromptProfile: 'whisper',  // Current prompt profile (whisper, sales, interview, etc)
             recapStep: 15,             // Show recap button after N utterances
         };

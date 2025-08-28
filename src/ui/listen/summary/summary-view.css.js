@@ -234,7 +234,7 @@ export const summaryViewStyles = css`
         font-style: italic;
     }
 
-    /* Meeting Introduction - scrollable summary */
+    /* Meeting Recap - scrollable summary */
     .meeting-intro-container {
         max-height: 100px;
         overflow-y: auto;

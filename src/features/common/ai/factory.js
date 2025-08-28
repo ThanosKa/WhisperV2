@@ -37,8 +37,6 @@ function sanitizeModelId(model) {
 }
 
 function createSTT(provider, opts) {
-    if (provider === 'openai-glass') provider = 'openai';
-
     const handler = PROVIDERS[provider]?.handler();
     if (!handler?.createSTT) {
         throw new Error(`STT not supported for provider: ${provider}`);
@@ -50,8 +48,6 @@ function createSTT(provider, opts) {
 }
 
 function createLLM(provider, opts) {
-    if (provider === 'openai-glass') provider = 'openai';
-
     const handler = PROVIDERS[provider]?.handler();
     if (!handler?.createLLM) {
         throw new Error(`LLM not supported for provider: ${provider}`);
@@ -63,8 +59,6 @@ function createLLM(provider, opts) {
 }
 
 function createStreamingLLM(provider, opts) {
-    if (provider === 'openai-glass') provider = 'openai';
-
     const handler = PROVIDERS[provider]?.handler();
     if (!handler?.createStreamingLLM) {
         throw new Error(`Streaming LLM not supported for provider: ${provider}`);
@@ -79,12 +73,6 @@ function getProviderClass(providerId) {
     const providerConfig = PROVIDERS[providerId];
     if (!providerConfig) return null;
 
-    // Handle special cases for glass providers
-    let actualProviderId = providerId;
-    if (providerId === 'openai-glass') {
-        actualProviderId = 'openai';
-    }
-
     // The handler function returns the module, from which we get the class.
     const module = providerConfig.handler();
 
@@ -98,7 +86,7 @@ function getProviderClass(providerId) {
         whisper: 'WhisperProvider',
     };
 
-    const className = classNameMap[actualProviderId];
+    const className = classNameMap[providerId];
     return className ? module[className] : null;
 }
 

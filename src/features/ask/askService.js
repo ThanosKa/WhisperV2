@@ -440,8 +440,6 @@ ${llmMessages}
                 model: modelInfo.model,
                 temperature: 0.7,
                 maxTokens: 2048,
-                usePortkey: modelInfo.provider === 'openai-glass',
-                portkeyVirtualKey: modelInfo.provider === 'openai-glass' ? modelInfo.apiKey : undefined,
             });
 
             try {

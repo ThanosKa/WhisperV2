@@ -2,8 +2,9 @@ const { BrowserWindow } = require('electron');
 const { spawn } = require('child_process');
 const { createSTT } = require('../../common/ai/factory');
 const modelStateService = require('../../common/services/modelStateService');
+const config = require('../../common/config/config');
 
-const COMPLETION_DEBOUNCE_MS = 2000;
+const COMPLETION_DEBOUNCE_MS = config.get('utteranceSilenceMs') || 1200;
 
 // ── New heartbeat / renewal constants ────────────────────────────────────────────
 // Interval to send low-cost keep-alive messages so the remote service does not
@@ -449,8 +450,6 @@ class SttService {
         const sttOptions = {
             apiKey: this.modelInfo.apiKey,
             language: effectiveLanguage,
-            usePortkey: this.modelInfo.provider === 'openai-glass',
-            portkeyVirtualKey: this.modelInfo.provider === 'openai-glass' ? this.modelInfo.apiKey : undefined,
         };
 
         // Add sessionType for Whisper to distinguish between My and Their sessions

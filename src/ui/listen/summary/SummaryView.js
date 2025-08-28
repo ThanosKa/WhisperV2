@@ -361,11 +361,7 @@ export class SummaryView extends LitElement {
                                     </div>
                                 `
                               : this.hasReceivedFirstText
-                                ? html`
-                                    <div class="meeting-intro-item" style="font-style: normal;">
-                                        • No insights yet
-                                    </div>
-                                  `
+                                ? html` <div class="meeting-intro-item" style="font-style: normal;">• No insights yet</div> `
                                 : ''}
 
                           <!-- Actions Section (always show fixed actions after first text) -->

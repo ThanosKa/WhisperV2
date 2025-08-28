@@ -289,8 +289,8 @@ ${llmMessages}
             followUps: ['✉️ Draft a follow-up email', '✅ Generate action items', '📝 Show summary'],
         };
 
-        // 이전 결과가 있으면 기본값으로 사용
-        if (previousResult) {
+        // 이전 결과가 있으면 기본값으로 사용 (단, 새로운 분석이 우선)
+        if (previousResult && structuredData.summary.length === 0) {
             structuredData.summary = [...previousResult.summary];
         }
 
@@ -302,8 +302,8 @@ ${llmMessages}
                 const trimmedLine = line.trim();
 
                 // 섹션 헤더 감지
-                if (trimmedLine.startsWith('**Summary Overview**')) {
-                    currentSection = 'summary-overview';
+                if (trimmedLine.startsWith('**Meeting Recap**') || trimmedLine.includes('Meeting Recap')) {
+                    currentSection = 'meeting-recap';
                     continue;
                 } else if (trimmedLine.startsWith('**Detected Questions')) {
                     currentSection = 'detected-questions';
@@ -314,7 +314,7 @@ ${llmMessages}
                 }
 
                 // 컨텐츠 파싱
-                if (trimmedLine.startsWith('-') && currentSection === 'summary-overview') {
+                if (trimmedLine.startsWith('-') && currentSection === 'meeting-recap') {
                     const summaryPoint = trimmedLine.substring(1).trim();
                     if (summaryPoint && !structuredData.summary.includes(summaryPoint)) {
                         // 기존 summary 업데이트 (최대 5개 유지)

@@ -1,5 +1,5 @@
 import { html, LitElement } from '../../assets/lit-core-2.7.4.min.js';
-import { summaryViewStyles } from './summary-view-css.js';
+import { summaryViewStyles } from './summary-view.css.js';
 
 export class SummaryView extends LitElement {
     static styles = summaryViewStyles;

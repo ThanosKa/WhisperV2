@@ -7,7 +7,18 @@ function buildSystemPrompt(promptParts, customPrompt = '', googleSearchEnabled =
         sections.push('\n\n', promptParts.searchUsage);
     }
 
-    sections.push('\n\n', promptParts.content, '\n\nUser-provided context\n-----\n', customPrompt, '\n-----\n\n', promptParts.outputInstructions);
+    // Add content section if it exists
+    if (promptParts.content && promptParts.content.trim()) {
+        sections.push('\n\n', promptParts.content);
+
+        // Only add context section if content exists (for prompts that need context)
+        sections.push('\n\nUser-provided context\n-----\n', customPrompt, '\n-----\n\n');
+    } else {
+        // For prompts without content (like define), skip context section entirely
+        sections.push('\n\n');
+    }
+
+    sections.push(promptParts.outputInstructions);
 
     return sections.join('');
 }

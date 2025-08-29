@@ -92,36 +92,7 @@ module.exports = {
                 return { success: false, error: error.message };
             }
         });
-        ipcMain.handle('listen:setPromptProfile', async (event, profile) => {
-            const config = require('../features/common/config/config');
-            const fs = require('fs');
-            const path = require('path');
-
-            config.set('activePromptProfile', profile);
-            config.saveUserConfig();
-            console.log(`[FeatureBridge] Prompt profile set to: ${profile}`);
-
-            // Write to insights.txt
-            try {
-                const rootPath = path.resolve(__dirname, '../../..');
-                const insightsPath = path.join(rootPath, 'insights.txt');
-                const timestamp = new Date().toISOString();
-                const insight = `[${timestamp}]\nUser prompt: (Profile Change)\nActive profile: ${profile}\nInsights\n\n`;
-                fs.appendFileSync(insightsPath, insight);
-            } catch (error) {
-                console.error('[FeatureBridge] Failed to write insights.txt:', error);
-            }
-
-            return { success: true };
-        });
-        ipcMain.handle('listen:getPromptProfile', async () => {
-            const config = require('../features/common/config/config');
-            return config.get('activePromptProfile') || 'whisper';
-        });
-        ipcMain.handle('listen:getAvailableProfiles', async () => {
-            const { profilePrompts } = require('../features/common/prompts/promptTemplates');
-            return Object.keys(profilePrompts);
-        });
+        // Profile management removed - simplified to single meeting copilot mode
 
         // ModelStateService
         ipcMain.handle('model:validate-key', async (e, { provider, key }) => await modelStateService.handleValidateKey(provider, key));

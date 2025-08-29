@@ -1,10 +1,9 @@
-const { BrowserWindow } = require('electron');
-const { getSystemPrompt } = require('../../common/prompts/promptBuilder.js');
 const { createLLM } = require('../../common/ai/factory');
 const sessionRepository = require('../../common/repositories/session');
 const summaryRepository = require('./repositories');
 const modelStateService = require('../../common/services/modelStateService');
 const config = require('../../common/config/config');
+const { getSystemPrompt } = require('../../common/prompts/promptBuilder');
 
 class SummaryService {
     constructor() {
@@ -13,6 +12,7 @@ class SummaryService {
         this.conversationHistory = [];
         this.currentSessionId = null;
         this.definedTerms = new Set(); // Track previously defined terms
+        this.lastAnalyzedIndex = 0; // Track how many utterances we've already analyzed
 
         // Callbacks
         this.onAnalysisComplete = null;
@@ -117,6 +117,7 @@ class SummaryService {
         this.previousAnalysisResult = null;
         this.analysisHistory = [];
         this.definedTerms.clear(); // Clear defined terms for new conversation
+        this.lastAnalyzedIndex = 0; // Reset analysis tracking
         console.log('🔄 Conversation history and analysis state reset');
     }
 
@@ -141,22 +142,25 @@ class SummaryService {
 
         const recentConversation = this.formatConversationForPrompt(conversationTexts, maxTurns);
 
-        // 이전 분석 결과를 프롬프트에 포함
+        // Only include previous context if we have meaningful insights (not just default actions)
         let contextualPrompt = '';
-        if (this.previousAnalysisResult) {
-            contextualPrompt = `
-Previous Analysis Context:
-- Key Points: ${this.previousAnalysisResult.summary.slice(0, 3).join(', ')}
-- Last Actions: ${this.previousAnalysisResult.actions.slice(0, 2).join(', ')}
+        if (this.previousAnalysisResult && this.previousAnalysisResult.summary.length > 0) {
+            const meaningfulSummary = this.previousAnalysisResult.summary.filter(s => s && !s.includes('No progress') && !s.includes('No specific'));
 
-Please build upon this context while analyzing the new conversation segments.
+            if (meaningfulSummary.length > 0) {
+                contextualPrompt = `
+Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}
+
+Build upon this context while analyzing the new conversation.
 `;
+            }
         }
 
-        const activeProfile = config.get('activePromptProfile') || 'whisper';
-        const analysisProfile = activeProfile + '_analysis';
-        const basePrompt = getSystemPrompt(analysisProfile, '', false);
-        const systemPrompt = basePrompt.replace('{{CONVERSATION_HISTORY}}', recentConversation);
+        // Combine contextual prompt with recent conversation for the template
+        const fullContext = contextualPrompt ? `${contextualPrompt}\n\n${recentConversation}` : recentConversation;
+
+        // Use meeting analysis prompt template
+        const systemPrompt = getSystemPrompt('meeting_analysis', fullContext, false);
 
         try {
             if (this.currentSessionId) {
@@ -176,31 +180,7 @@ Please build upon this context while analyzing the new conversation segments.
                 },
                 {
                     role: 'user',
-                    content: `${contextualPrompt}
-
-Analyze the conversation and provide a structured summary. Use ONLY the transcript content; do not invent questions or terms. Format your response exactly as follows:
-
-**Meeting Recap**
-- Key discussion points and decisions made so far
-- Current focus areas and topics being addressed
-- Progress updates and next steps discussed
-
-**Detected Questions (verbatim from transcript)**
-1. Exact question text as asked
-2. Another exact question text
-3. (Up to 5 total; include only if actually asked)
-
-**Define Candidates (from transcript, not invented)**
-- Term 1 (proper noun/technical term that may need definition)
-- Term 2
-- Term 3
-
-Rules:
-- Meeting Recap bullets should be concise but informative (6-10 words each)
-- Focus on actual content, decisions, and progress rather than just topic names
-- Detected Questions must be quoted verbatim from the transcript (no rephrasing).
-- Define Candidates must be terms that appear in the transcript, preferably near the end; do not add anything not present.
-- Provide meaningful meeting context and progress updates.`,
+                    content: contextualPrompt || 'Analyze the conversation provided in the context above.',
                 },
             ];
 
@@ -222,7 +202,7 @@ Rules:
 
                 const responseEntry = `[${timestamp}]
 User prompt: (Analysis Request)
-Active profile: ${activeProfile}
+Mode: Meeting Copilot
 
 What LLM got:
 ${llmMessages}
@@ -246,6 +226,10 @@ ${llmMessages}
 
             const responseText = completion.content;
             console.log(`✅ Analysis response received: ${responseText}`);
+
+            // Debug: Log the raw response for troubleshooting
+            console.log('🔍 Raw LLM response for parsing:', JSON.stringify(responseText));
+
             const structuredData = this.parseResponseText(responseText, this.previousAnalysisResult);
 
             if (this.currentSessionId) {
@@ -298,23 +282,43 @@ ${llmMessages}
             const lines = responseText.split('\n');
             let currentSection = '';
 
+            console.log('🔍 Parsing response lines:', lines.length);
+
             for (const line of lines) {
                 const trimmedLine = line.trim();
 
-                // 섹션 헤더 감지
-                if (trimmedLine.startsWith('**Meeting Recap**') || trimmedLine.includes('Meeting Recap')) {
-                    currentSection = 'meeting-recap';
+                // Debug log each line being processed
+                if (trimmedLine) {
+                    console.log(`🔍 Processing line: "${trimmedLine}" | Section: ${currentSection}`);
+                }
+
+                // 섹션 헤더 감지 - Updated to match the new prompt format
+                if (
+                    trimmedLine.startsWith('**Meeting Insights**') ||
+                    trimmedLine.includes('Meeting Insights') ||
+                    trimmedLine.startsWith('**Meeting Recap**') ||
+                    trimmedLine.includes('Meeting Recap')
+                ) {
+                    currentSection = 'meeting-insights';
                     continue;
-                } else if (trimmedLine.startsWith('**Detected Questions')) {
+                } else if (
+                    trimmedLine.startsWith('**Questions Detected**') ||
+                    trimmedLine.includes('Questions Detected') ||
+                    trimmedLine.startsWith('**Detected Questions')
+                ) {
                     currentSection = 'detected-questions';
                     continue;
-                } else if (trimmedLine.startsWith('**Define Candidates')) {
+                } else if (
+                    trimmedLine.startsWith('**Terms to Define**') ||
+                    trimmedLine.includes('Terms to Define') ||
+                    trimmedLine.startsWith('**Define Candidates')
+                ) {
                     currentSection = 'define-candidates';
                     continue;
                 }
 
                 // 컨텐츠 파싱
-                if (trimmedLine.startsWith('-') && currentSection === 'meeting-recap') {
+                if (trimmedLine.startsWith('-') && currentSection === 'meeting-insights') {
                     const summaryPoint = trimmedLine.substring(1).trim();
                     if (summaryPoint && !structuredData.summary.includes(summaryPoint)) {
                         // 기존 summary 업데이트 (최대 5개 유지)
@@ -340,10 +344,14 @@ ${llmMessages}
                 }
             }
 
-            // 기본 액션 추가
+            // 기본 액션 추가 - Using simple emojis to avoid encoding issues
             const defaultActions = ['✨ What should I say next?', '💬 Suggest follow-up questions'];
             defaultActions.forEach(action => {
-                if (!structuredData.actions.includes(action)) {
+                if (
+                    !structuredData.actions.some(
+                        existingAction => existingAction.includes('What should I say next') || existingAction.includes('Suggest follow-up questions')
+                    )
+                ) {
                     structuredData.actions.push(action);
                 }
             });
@@ -368,6 +376,16 @@ ${llmMessages}
         }
 
         console.log('📊 Final structured data:', JSON.stringify(structuredData, null, 2));
+        console.log('📊 Summary count:', structuredData.summary.length);
+        console.log('📊 Actions count:', structuredData.actions.length);
+
+        // Debug: Show what we actually parsed
+        if (structuredData.summary.length > 0) {
+            console.log('✅ Successfully parsed summary items:', structuredData.summary);
+        } else {
+            console.log('⚠️ No summary items were parsed - check section headers');
+        }
+
         return structuredData;
     }
 
@@ -381,7 +399,11 @@ ${llmMessages}
         if (this.conversationHistory.length >= analysisStep && this.conversationHistory.length % analysisStep === 0) {
             console.log(`Triggering analysis - ${this.conversationHistory.length} conversation texts accumulated`);
 
-            const data = await this.makeOutlineAndRequests(this.conversationHistory);
+            // Only send NEW utterances since last analysis
+            const newUtterances = this.conversationHistory.slice(this.lastAnalyzedIndex);
+            console.log(`📝 Analyzing ${newUtterances.length} new utterances (from index ${this.lastAnalyzedIndex})`);
+
+            const data = await this.makeOutlineAndRequests(newUtterances);
             if (data) {
                 data.actions = Array.isArray(data.actions) ? data.actions : [];
 
@@ -394,7 +416,12 @@ ${llmMessages}
                 }
 
                 console.log('Sending structured data to renderer');
+                console.log('📤 Data being sent:', JSON.stringify(data, null, 2));
                 this.sendToRenderer('summary-update', data);
+
+                // Update tracking - we've now analyzed up to the current conversation length
+                this.lastAnalyzedIndex = this.conversationHistory.length;
+                console.log(`✅ Analysis complete. Updated lastAnalyzedIndex to ${this.lastAnalyzedIndex}`);
 
                 // Notify callback
                 if (this.onAnalysisComplete) {

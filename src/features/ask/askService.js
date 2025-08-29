@@ -137,11 +137,10 @@ class AskService {
     }
 
     /**
-     * Expands common insight-click phrases into explicit task instructions
-     * so the LLM produces the intended output using the transcript context.
+     * Detects the intent/mode from user input to select the appropriate prompt template.
      *
      * @param {string} userPromptRaw
-     * @returns {{ prompt: string, mode: 'default'|'email'|'summary'|'actions' }}
+     * @returns {{ mode: 'default'|'define'|'email'|'actions'|'summary'|'recap'|'next'|'followup' }}
      */
     _expandInsightRequest(userPromptRaw) {
         const text = (userPromptRaw || '').toLowerCase();
@@ -150,15 +149,7 @@ class AskService {
 
         // Draft follow-up email
         if (normalized.includes('draft') && normalized.includes('email')) {
-            return {
-                mode: 'email',
-                prompt:
-                    'Draft a professional follow-up email based on the conversation transcript.\n' +
-                    '- Include a concise Subject line.\n' +
-                    '- Email body: greeting, 2–3 short paragraphs referencing specific points from the transcript, and a polite next-step/CTA.\n' +
-                    '- Write from "me" perspective.\n' +
-                    '- Keep it clear, friendly, and specific to the discussion.',
-            };
+            return { mode: 'email' };
         }
 
         // Define term (📘 Define "...")
@@ -175,40 +166,36 @@ class AskService {
                     .trim();
             term = term.replace(/^about\s+/i, '').trim();
             if (term && term.length > 1) {
-                return {
-                    mode: 'define',
-                    prompt:
-                        `Define "${term}" briefly in the professional context of this conversation. ` +
-                        'Give a 1–2 sentence definition and, if helpful, one short example bullet.',
-                };
+                return { mode: 'define' };
             }
         }
 
         // Generate action items
         if (normalized.includes('action') && normalized.includes('item')) {
-            return {
-                mode: 'actions',
-                prompt: 'From the conversation transcript, list concrete, owner-assignable action items with due dates if implied. Use short bullet points.',
-            };
+            return { mode: 'actions' };
         }
 
         // Show summary
         if (normalized.includes('show summary') || normalized === 'summary' || normalized.includes('summar')) {
-            return {
-                mode: 'summary',
-                prompt: 'Summarize the conversation transcript succinctly: 3–5 bullets capturing key points, decisions, and next steps.',
-            };
+            return { mode: 'summary' };
         }
 
         // Recap meeting so far
         if (normalized.includes('recap') && normalized.includes('meeting')) {
-            return {
-                mode: 'recap',
-                prompt: 'Give a concise recap of the meeting so far based on the conversation transcript. Provide 4-6 bullet points covering: key topics discussed, decisions made, action items identified, and next steps.',
-            };
+            return { mode: 'recap' };
         }
 
-        return { mode: 'default', prompt: userPromptRaw || '' };
+        // What should I say next
+        if (normalized.includes('what should i say next') || normalized.includes('what to say next')) {
+            return { mode: 'next' };
+        }
+
+        // Suggest follow-up questions
+        if (normalized.includes('suggest follow-up') || normalized.includes('follow-up questions')) {
+            return { mode: 'followup' };
+        }
+
+        return { mode: 'default' };
     }
 
     interruptStream() {
@@ -352,38 +339,46 @@ class AskService {
             const expansion = this._expandInsightRequest(userPrompt);
             console.log(`[AskService] expanded intent: mode=${expansion.mode}`);
 
-            const activeProfile = config.get('activePromptProfile') || 'whisper';
-
-            // Determine which prompt profile to use based on action type
-            let profileToUse = activeProfile;
+            // Simple context logic - let AI decide when to use context
+            let profileToUse = 'whisper';
             let useConversationContext = true;
 
             if (expansion.mode === 'define') {
-                profileToUse = activeProfile + '_define';
-                useConversationContext = false; // Definitions use general knowledge
+                profileToUse = 'whisper_define';
+                useConversationContext = false; // Definitions are universal - no context needed
             } else if (expansion.mode === 'email') {
-                profileToUse = activeProfile + '_email';
+                profileToUse = 'whisper_email';
+                useConversationContext = true; // Email needs meeting context
+            } else if (expansion.mode === 'actions') {
+                profileToUse = 'whisper_actions';
+                useConversationContext = true; // Action items need meeting context
+            } else if (expansion.mode === 'summary') {
+                profileToUse = 'whisper_summary';
+                useConversationContext = true; // Summary needs meeting context
+            } else if (expansion.mode === 'recap') {
+                profileToUse = 'whisper_recap';
+                useConversationContext = true; // Recap needs meeting context
+            } else if (expansion.mode === 'next') {
+                profileToUse = 'whisper_next';
+                useConversationContext = true; // Next steps need meeting context
+            } else if (expansion.mode === 'followup') {
+                profileToUse = 'whisper_followup';
+                useConversationContext = true; // Follow-up questions need meeting context
             } else if (userPrompt.startsWith('❓')) {
-                profileToUse = activeProfile + '_question';
-                useConversationContext = false; // Questions use general knowledge
+                profileToUse = 'whisper_question';
+                useConversationContext = true; // Provide context, let AI decide if relevant
             }
 
             // Use conversation context only for meeting-related actions
             const contextForPrompt = useConversationContext ? conversationHistory : '';
             const systemPrompt = getSystemPrompt(profileToUse, contextForPrompt, false);
 
-            const userTask = expansion.prompt || userPrompt.trim();
+            const userTask = userPrompt.trim();
             const messages = [
                 { role: 'system', content: systemPrompt },
                 {
                     role: 'user',
-                    content: [
-                        { type: 'text', text: `Task: ${userTask}` },
-                        {
-                            type: 'text',
-                            text: 'Use ONLY the conversation transcript as primary context. If context is insufficient, say so briefly.',
-                        },
-                    ],
+                    content: [{ type: 'text', text: `${userTask}` }],
                 },
             ];
 
@@ -422,7 +417,7 @@ class AskService {
 
                 const responseEntry = `[${timestamp}]
 User prompt: ${userPrompt}
-Active profile: ${activeProfile}
+Mode: Meeting Copilot
 Profile used: ${profileToUse}
 Using conversation context: ${useConversationContext}
 

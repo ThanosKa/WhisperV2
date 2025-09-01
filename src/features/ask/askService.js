@@ -229,7 +229,9 @@ class AskService {
         let shouldSendScreenOnly = false;
         if (inputScreenOnly && this.state.showTextInput && askWindow && askWindow.isVisible()) {
             shouldSendScreenOnly = true;
-            await this.sendMessage('', []);
+            const listenService = require('../listen/listenService');
+            const conversationHistory = listenService.getConversationHistory();
+            await this.sendMessage('', conversationHistory);
             return;
         }
 

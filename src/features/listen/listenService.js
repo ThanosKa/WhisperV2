@@ -92,6 +92,7 @@ class ListenService {
                     console.log('[ListenService] changeSession to "Done"');
                     internalBridge.emit('window:requestVisibility', { name: 'listen', visible: false });
                     listenWindow.webContents.send('session-state-changed', { isActive: false });
+                    this.summaryService.resetConversationHistory();
                     break;
 
                 default:

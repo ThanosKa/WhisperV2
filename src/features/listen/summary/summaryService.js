@@ -191,7 +191,7 @@ Build upon this context while analyzing the new conversation.
                 const fs = require('fs');
                 const path = require('path');
                 const rootPath = path.resolve(__dirname, '../../../');
-                const responsePath = path.join(rootPath, 'response.txt');
+                const responsePath = path.join(rootPath, 'analysis.txt');
                 const timestamp = new Date().toISOString();
 
                 const llmMessages = messages

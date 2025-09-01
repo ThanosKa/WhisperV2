@@ -11,8 +11,12 @@ function buildSystemPrompt(promptParts, customPrompt = '', googleSearchEnabled =
     if (promptParts.content && promptParts.content.trim()) {
         sections.push('\n\n', promptParts.content);
 
-        // Only add context section if content exists (for prompts that need context)
-        sections.push('\n\nUser-provided context\n-----\n', customPrompt, '\n-----\n\n');
+        // Only add context section if we have meaningful conversation context
+        if (customPrompt && customPrompt.trim()) {
+            sections.push('\n\nConversation context\n-----\n', customPrompt, '\n-----\n\n');
+        } else {
+            sections.push('\n\n');
+        }
     } else {
         // For prompts without content (like define), skip context section entirely
         sections.push('\n\n');

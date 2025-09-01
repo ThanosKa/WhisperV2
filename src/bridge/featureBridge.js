@@ -50,7 +50,16 @@ module.exports = {
         ipcMain.handle('get-web-url', () => process.env.pickleglass_WEB_URL || 'http://localhost:3000');
 
         // Ask
-        ipcMain.handle('ask:sendQuestionFromAsk', async (event, userPrompt) => await askService.sendMessage(userPrompt));
+        ipcMain.handle('ask:sendQuestionFromAsk', async (event, userPrompt) => {
+            // Get conversation history from listenService and pass it to askService
+            const conversationHistory = listenService.getConversationHistory();
+            console.log(`[FeatureBridge] ask:sendQuestionFromAsk: clickLen=${userPrompt?.length || 0}, historyItems=${conversationHistory.length}`);
+            if (Array.isArray(conversationHistory)) {
+                const preview = conversationHistory.slice(-2);
+                console.log('[FeatureBridge] history preview:', JSON.stringify(preview));
+            }
+            return await askService.sendMessage(userPrompt, conversationHistory);
+        });
         ipcMain.handle('ask:sendQuestionFromSummary', async (event, userPrompt) => {
             // Get conversation history from listenService and pass it to askService
             const conversationHistory = listenService.getConversationHistory();

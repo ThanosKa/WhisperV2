@@ -569,11 +569,11 @@ ${llmMessages}
                                 this._broadcastState();
 
                                 // Log first few tokens for debugging
-                                if (tokenCount <= 10) {
-                                    console.log(`📄 [AskService] Token ${tokenCount}:`, JSON.stringify(token));
-                                } else if (tokenCount === 11) {
-                                    console.log('📄 [AskService] Continuing stream... (further tokens not logged)');
-                                }
+                                // if (tokenCount <= 10) {
+                                //     console.log(`📄 [AskService] Token ${tokenCount}:`, JSON.stringify(token));
+                                // } else if (tokenCount === 11) {
+                                //     console.log('📄 [AskService] Continuing stream... (further tokens not logged)');
+                                // }
                             }
                         } catch (error) {}
                     }

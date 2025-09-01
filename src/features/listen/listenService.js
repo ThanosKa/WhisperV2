@@ -31,7 +31,7 @@ class ListenService {
         // Summary service callbacks
         this.summaryService.setCallbacks({
             onAnalysisComplete: data => {
-                console.log('📊 Analysis completed:', data);
+                // console.log('📊 Analysis completed:', data);
             },
             onStatusUpdate: status => {
                 this.sendToRenderer('update-status', status);
@@ -108,7 +108,7 @@ class ListenService {
     }
 
     async handleTranscriptionComplete(speaker, text) {
-        console.log(`[ListenService] Transcription complete: ${speaker} - ${text}`);
+        // console.log(`[ListenService] Transcription complete: ${speaker} - ${text}`);
 
         // Save to database
         await this.saveConversationTurn(speaker, text);

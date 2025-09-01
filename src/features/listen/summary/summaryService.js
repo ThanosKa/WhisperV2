@@ -100,8 +100,8 @@ class SummaryService {
     addConversationTurn(speaker, text) {
         const conversationText = `${speaker.toLowerCase()}: ${text.trim()}`;
         this.conversationHistory.push(conversationText);
-        console.log(`💬 Added conversation text: ${conversationText}`);
-        console.log(`📈 Total conversation history: ${this.conversationHistory.length} texts`);
+        // console.log(`💬 Added conversation text: ${conversationText}`);
+        // console.log(`📈 Total conversation history: ${this.conversationHistory.length} texts`);
 
         // Trigger analysis if needed
         this.triggerAnalysisIfNeeded();
@@ -171,7 +171,7 @@ Build upon this context while analyzing the new conversation.
             if (!modelInfo || !modelInfo.apiKey) {
                 throw new Error('AI model or API key is not configured.');
             }
-            console.log(`🤖 Sending analysis request to ${modelInfo.provider} using model ${modelInfo.model}`);
+            // console.log(`🤖 Sending analysis request to ${modelInfo.provider} using model ${modelInfo.model}`);
 
             const messages = [
                 {
@@ -225,10 +225,10 @@ ${llmMessages}
             const completion = await llm.chat(messages);
 
             const responseText = completion.content;
-            console.log(`✅ Analysis response received: ${responseText}`);
+            // console.log(`✅ Analysis response received: ${responseText}`);
 
             // Debug: Log the raw response for troubleshooting
-            console.log('🔍 Raw LLM response for parsing:', JSON.stringify(responseText));
+            // console.log('🔍 Raw LLM response for parsing:', JSON.stringify(responseText));
 
             const structuredData = this.parseResponseText(responseText, this.previousAnalysisResult);
 
@@ -289,7 +289,7 @@ ${llmMessages}
 
                 // Debug log each line being processed
                 if (trimmedLine) {
-                    console.log(`🔍 Processing line: "${trimmedLine}" | Section: ${currentSection}`);
+                    // console.log(`🔍 Processing line: "${trimmedLine}" | Section: ${currentSection}`);
                 }
 
                 // 섹션 헤더 감지 - Updated to match the new prompt format
@@ -375,15 +375,15 @@ ${llmMessages}
             );
         }
 
-        console.log('📊 Final structured data:', JSON.stringify(structuredData, null, 2));
-        console.log('📊 Summary count:', structuredData.summary.length);
-        console.log('📊 Actions count:', structuredData.actions.length);
+        // console.log('📊 Final structured data:', JSON.stringify(structuredData, null, 2));
+        // console.log('📊 Summary count:', structuredData.summary.length);
+        // console.log('📊 Actions count:', structuredData.actions.length);
 
         // Debug: Show what we actually parsed
         if (structuredData.summary.length > 0) {
-            console.log('✅ Successfully parsed summary items:', structuredData.summary);
+            // console.log('✅ Successfully parsed summary items:', structuredData.summary);
         } else {
-            console.log('⚠️ No summary items were parsed - check section headers');
+            // console.log('⚠️ No summary items were parsed - check section headers');
         }
 
         return structuredData;
@@ -416,12 +416,12 @@ ${llmMessages}
                 }
 
                 console.log('Sending structured data to renderer');
-                console.log('📤 Data being sent:', JSON.stringify(data, null, 2));
+                // console.log('📤 Data being sent:', JSON.stringify(data, null, 2));
                 this.sendToRenderer('summary-update', data);
 
                 // Update tracking - we've now analyzed up to the current conversation length
                 this.lastAnalyzedIndex = this.conversationHistory.length;
-                console.log(`✅ Analysis complete. Updated lastAnalyzedIndex to ${this.lastAnalyzedIndex}`);
+                // console.log(`✅ Analysis complete. Updated lastAnalyzedIndex to ${this.lastAnalyzedIndex}`);
 
                 // Notify callback
                 if (this.onAnalysisComplete) {

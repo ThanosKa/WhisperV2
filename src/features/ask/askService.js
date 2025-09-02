@@ -288,7 +288,8 @@ class AskService {
         if (!conversationTexts || conversationTexts.length === 0) {
             return 'No conversation history available.';
         }
-        return conversationTexts.slice(-30).join('\n');
+        // return conversationTexts.slice(-30).join('\n'); // Former limit
+        return conversationTexts.join('\n'); // Send full conversation
     }
 
     /**
@@ -559,7 +560,7 @@ ${llmMessages}
                             const token = json.choices[0]?.delta?.content || '';
                             if (token) {
                                 if (!firstTokenReceived) {
-                                    console.log('🔥 [AskService] First token received from LLM:', JSON.stringify(token));
+                                    // console.log('🔥 [AskService] First token received from LLM:', JSON.stringify(token));
                                     firstTokenReceived = true;
                                 }
 

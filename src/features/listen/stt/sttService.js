@@ -10,16 +10,16 @@ const COMPLETION_DEBOUNCE_MS = config.get('utteranceSilenceMs') || 1200;
 // Interval to send low-cost keep-alive messages so the remote service does not
 // treat the connection as idle. One minute is safely below the typical 2-5 min
 // idle timeout window seen on provider websockets.
-const KEEP_ALIVE_INTERVAL_MS = 60 * 1000; // 1 minute
+const KEEP_ALIVE_INTERVAL_MS = 30 * 1000; // 30 seconds
 
 // Interval after which we pro-actively tear down and recreate the STT sessions
-// to dodge the 30-minute hard timeout enforced by some providers. 20 minutes
-// gives a 10-minute safety buffer.
-const SESSION_RENEW_INTERVAL_MS = 20 * 60 * 1000; // 20 minutes
+// to dodge the 5-minute hard timeout enforced by some providers. 4 minutes
+// gives a 1-minute safety buffer.
+const SESSION_RENEW_INTERVAL_MS = 4 * 60 * 1000; // 4 minutes
 
 // Duration to allow the old and new sockets to run in parallel so we don't
 // miss any packets at the exact swap moment.
-const SOCKET_OVERLAP_MS = 2 * 1000; // 2 seconds
+const SOCKET_OVERLAP_MS = 1 * 1000; // 1 second
 
 class SttService {
     constructor() {

@@ -32,7 +32,7 @@ class Config {
             enableDebugLogging: false,
 
             // Listen feature settings
-            analysisStep: 2, // Trigger analysis every N utterances - more responsive for real-time
+            analysisStep: 1, // Trigger analysis every N utterances - more responsive for real-time
             utteranceSilenceMs: 1200, // Silence debounce time for utterance completion (ms)
             recapStep: 15, // Show recap button after N utterances
         };

@@ -166,10 +166,11 @@ class ModelStateService extends EventEmitter {
             console.warn(`[ModelStateService] API key validation failed for ${provider}: ${validationResult.error}`);
             return validationResult;
         }
-
-        const finalKey = key;
+        
+        // --- MODIFIED: Save a placeholder to the DB, NEVER the actual key. ---
         const existingSettings = (await providerSettingsRepository.getByProvider(provider)) || {};
-        await providerSettingsRepository.upsert(provider, { ...existingSettings, api_key: finalKey });
+        await providerSettingsRepository.upsert(provider, { ...existingSettings, api_key: 'loaded_from_env' });
+        // ---
 
         // 키가 추가/변경되었으므로, 해당 provider의 모델을 자동 선택할 수 있는지 확인
         await this._autoSelectAvailableModels([]);
@@ -293,11 +294,20 @@ class ModelStateService extends EventEmitter {
 
         const model = type === 'llm' ? activeSetting.selected_llm_model : activeSetting.selected_stt_model;
         if (!model) return null;
+        
+        // --- MODIFIED: Force read from process.env, never from database ---
+        let apiKey = null;
+        if (activeSetting.provider === 'openai') {
+            apiKey = process.env.OPENAI_API_KEY;
+        } else if (activeSetting.provider === 'gemini') {
+            apiKey = process.env.GEMINI_API_KEY;
+        }
+        // ---
 
         return {
             provider: activeSetting.provider,
             model: model,
-            apiKey: activeSetting.api_key,
+            apiKey: apiKey, // Use the key from .env
         };
     }
 
@@ -348,21 +358,15 @@ class ModelStateService extends EventEmitter {
     }
 
     async areProvidersConfigured() {
-        if (this.isLoggedInWithFirebase()) return true;
-        const allSettings = await providerSettingsRepository.getAll();
-        const apiKeyMap = {};
-        allSettings.forEach(s => (apiKeyMap[s.provider] = s.api_key));
-        // LLM
-        const hasLlmKey = Object.entries(apiKeyMap).some(([provider, key]) => {
-            if (!key) return false;
-            return PROVIDERS[provider]?.llmModels?.length > 0;
-        });
-        // STT
-        const hasSttKey = Object.entries(apiKeyMap).some(([provider, key]) => {
-            if (!key) return false;
-            return PROVIDERS[provider]?.sttModels?.length > 0;
-        });
+        // --- MODIFIED: Configuration is now determined SOLELY by the presence of keys in process.env ---
+        const hasLlmKey = (process.env.OPENAI_API_KEY && PROVIDERS['openai']?.llmModels?.length > 0) ||
+                        (process.env.GEMINI_API_KEY && PROVIDERS['gemini']?.llmModels?.length > 0);
+
+        const hasSttKey = (process.env.OPENAI_API_KEY && PROVIDERS['openai']?.sttModels?.length > 0) ||
+                        (process.env.GEMINI_API_KEY && PROVIDERS['gemini']?.sttModels?.length > 0);
+
         return hasLlmKey && hasSttKey;
+        // ---
     }
 }
 

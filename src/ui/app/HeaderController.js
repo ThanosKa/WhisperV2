@@ -1,20 +1,20 @@
 import './MainHeader.js';
 import './ApiKeyHeader.js';
 import './PermissionHeader.js';
-import './WelcomeHeader.js';
+// import './WelcomeHeader.js';
 
 class HeaderTransitionManager {
     constructor() {
         this.headerContainer = document.getElementById('header-container');
-        this.currentHeaderType = null; // 'welcome' | 'apikey' | 'main' | 'permission'
-        this.welcomeHeader = null;
+        this.currentHeaderType = null; // 'apikey' | 'main' | 'permission'
+        // this.welcomeHeader = null;
         this.apiKeyHeader = null;
         this.mainHeader = null;
         this.permissionHeader = null;
 
         /**
          * only one header window is allowed
-         * @param {'welcome'|'apikey'|'main'|'permission'} type
+         * @param {'apikey'|'main'|'permission'} type
          */
         this.ensureHeader = type => {
             console.log('[HeaderController] ensureHeader: Ensuring header of type:', type);
@@ -25,22 +25,15 @@ class HeaderTransitionManager {
 
             this.headerContainer.innerHTML = '';
 
-            this.welcomeHeader = null;
+            // this.welcomeHeader = null;
             this.apiKeyHeader = null;
             this.mainHeader = null;
             this.permissionHeader = null;
 
             // Create new header element
-            if (type === 'welcome') {
-                this.welcomeHeader = document.createElement('welcome-header');
-                this.welcomeHeader.loginCallback = () => this.handleLoginOption();
-                this.welcomeHeader.apiKeyCallback = () => this.handleApiKeyOption();
-                this.headerContainer.appendChild(this.welcomeHeader);
-                console.log('[HeaderController] ensureHeader: Header of type:', type, 'created.');
-            } else if (type === 'apikey') {
+            if (type === 'apikey') {
                 this.apiKeyHeader = document.createElement('apikey-header');
                 this.apiKeyHeader.stateUpdateCallback = userState => this.handleStateUpdate(userState);
-                this.apiKeyHeader.backCallback = () => this.transitionToWelcomeHeader();
                 this.apiKeyHeader.addEventListener('request-resize', e => {
                     this._resizeForApiKey(e.detail.height);
                 });
@@ -71,10 +64,6 @@ class HeaderTransitionManager {
 
         console.log('[HeaderController] Manager initialized');
 
-        // WelcomeHeader 콜백 메서드들
-        this.handleLoginOption = this.handleLoginOption.bind(this);
-        this.handleApiKeyOption = this.handleApiKeyOption.bind(this);
-
         this._bootstrap();
 
         if (window.api) {
@@ -92,14 +81,14 @@ class HeaderTransitionManager {
             });
             window.api.headerController.onForceShowApiKeyHeader(async () => {
                 console.log('[HeaderController] Received broadcast to show apikey header. Switching now.');
-                const isConfigured = await window.api.apiKeyHeader.areProvidersConfigured();
-                if (!isConfigured) {
-                    await this._resizeForWelcome();
-                    this.ensureHeader('welcome');
-                } else {
-                    await this._resizeForApiKey();
-                    this.ensureHeader('apikey');
-                }
+                // const isConfigured = await window.api.apiKeyHeader.areProvidersConfigured();
+                // if (!isConfigured) {
+                //     await this._resizeForWelcome();
+                //     this.ensureHeader('welcome');
+                // } else {
+                await this._resizeForApiKey();
+                this.ensureHeader('apikey');
+                // }
             });
         }
     }
@@ -120,56 +109,28 @@ class HeaderTransitionManager {
             this.handleStateUpdate(userState);
         } else {
             // Fallback for non-electron environment (testing/web)
-            this.ensureHeader('welcome');
+            this.ensureHeader('apikey');
         }
     }
 
     //////// after_modelStateService ////////
     async handleStateUpdate(userState) {
-        const isConfigured = await window.api.apiKeyHeader.areProvidersConfigured();
+        // const isConfigured = await window.api.apiKeyHeader.areProvidersConfigured();
 
-        if (isConfigured) {
-            // If providers are configured, always check permissions regardless of login state.
-            const permissionResult = await this.checkPermissions();
-            if (permissionResult.success) {
-                this.transitionToMainHeader();
-            } else {
-                this.transitionToPermissionHeader();
-            }
+        // if (isConfigured) {
+        // If providers are configured, always check permissions regardless of login state.
+        const permissionResult = await this.checkPermissions();
+        if (permissionResult.success) {
+            this.transitionToMainHeader();
         } else {
-            // If no providers are configured, show the welcome header to prompt for setup.
-            await this._resizeForWelcome();
-            this.ensureHeader('welcome');
+            this.transitionToPermissionHeader();
         }
+        // } else {
+        //     // If no providers are configured, show the apikey header to prompt for setup.
+        //     await this._resizeForApiKey(400);
+        //     this.ensureHeader('apikey');
+        // }
     }
-
-    // WelcomeHeader 콜백 메서드들
-    async handleLoginOption() {
-        console.log('[HeaderController] Login option selected');
-        if (window.api) {
-            await window.api.common.startFirebaseAuth();
-        }
-    }
-
-    async handleApiKeyOption() {
-        console.log('[HeaderController] API key option selected');
-        await this._resizeForApiKey(400);
-        this.ensureHeader('apikey');
-        // ApiKeyHeader에 뒤로가기 콜백 설정
-        if (this.apiKeyHeader) {
-            this.apiKeyHeader.backCallback = () => this.transitionToWelcomeHeader();
-        }
-    }
-
-    async transitionToWelcomeHeader() {
-        if (this.currentHeaderType === 'welcome') {
-            return this._resizeForWelcome();
-        }
-
-        await this._resizeForWelcome();
-        this.ensureHeader('welcome');
-    }
-    //////// after_modelStateService ////////
 
     async transitionToPermissionHeader() {
         // Prevent duplicate transitions

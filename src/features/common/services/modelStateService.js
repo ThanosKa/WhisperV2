@@ -120,7 +120,7 @@ class ModelStateService extends EventEmitter {
 
     async _autoSelectAvailableModels(forceReselectionForTypes = [], isInitialBoot = false) {
         console.log(`[ModelStateService] Running auto-selection. Force re-selection for: [${forceReselectionForTypes.join(', ')}]`);
-        const { apiKeys, selectedModels } = await this.getLiveState();
+        const { selectedModels } = await this.getLiveState();
         const types = ['llm', 'stt'];
 
         for (const type of types) {
@@ -130,7 +130,8 @@ class ModelStateService extends EventEmitter {
 
             if (currentModelId && !forceReselection) {
                 const provider = this.getProviderForModel(currentModelId, type);
-                const apiKey = apiKeys[provider];
+                // --- MODIFIED: Check process.env for key existence ---
+                const apiKey = provider === 'openai' ? process.env.OPENAI_API_KEY : process.env.GEMINI_API_KEY;
                 if (provider && apiKey) {
                     isCurrentModelValid = true;
                 }
@@ -277,11 +278,10 @@ class ModelStateService extends EventEmitter {
         const available = [];
         const modelListKey = type === 'llm' ? 'llmModels' : 'sttModels';
 
-        for (const setting of allSettings) {
-            if (!setting.api_key) continue;
-
-            const providerId = setting.provider;
-            if (PROVIDERS[providerId]?.[modelListKey]) {
+        for (const providerId in PROVIDERS) {
+            // --- MODIFIED: Check process.env for key existence ---
+            const apiKey = providerId === 'openai' ? process.env.OPENAI_API_KEY : process.env.GEMINI_API_KEY;
+            if (apiKey && PROVIDERS[providerId]?.[modelListKey]) {
                 available.push(...PROVIDERS[providerId][modelListKey]);
             }
         }

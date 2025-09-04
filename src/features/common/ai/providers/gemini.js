@@ -45,6 +45,7 @@ async function createSTT({ apiKey, language = 'en-US', callbacks = {}, ...config
             ...callbacks,
             onMessage: msg => {
                 if (!msg || typeof msg !== 'object') return;
+                console.log('[Gemini STT Message]:', msg);
                 msg.provider = 'gemini';
                 callbacks.onmessage?.(msg);
             },
@@ -101,6 +102,8 @@ function createLLM({ apiKey, model = 'gemini-2.5-flash', temperature = 0.7, maxT
             try {
                 const result = await geminiModel.generateContent(userContent);
                 const response = await result.response;
+
+                console.log('[Gemini Provider] Non-streaming usage metadata:', response.usageMetadata);
 
                 // Return plain text, not wrapped in JSON structure
                 return {
@@ -186,6 +189,8 @@ function createLLM({ apiKey, model = 'gemini-2.5-flash', temperature = 0.7, maxT
 
             const result = await chat.sendMessage(content);
             const response = await result.response;
+
+            console.log('[Gemini Provider] Chat usage metadata:', response.usageMetadata);
 
             // Return plain text content
             return {
@@ -314,10 +319,15 @@ function createStreamingLLM({ apiKey, model = 'gemini-2.5-flash', temperature = 
                         }
 
                         if (!signal?.aborted) {
+                            try {
+                                const finalResponse = await result.response;
+                                if (finalResponse.usageMetadata) {
+                                    console.log('[Gemini Provider] Streaming usage metadata:', finalResponse.usageMetadata);
+                                }
+                            } catch (e) {
+                                console.error('[Gemini Provider] Error getting usage metadata after stream:', e);
+                            }
                             controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
-                        }
-                        // Only close the controller if the stream was not aborted.
-                        if (!signal?.aborted) {
                             controller.close();
                         }
                     } catch (error) {

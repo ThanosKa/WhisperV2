@@ -186,7 +186,20 @@ Build upon this context while analyzing the new conversation.
 
             console.log('🤖 Sending analysis request to AI...');
 
-            // Write LLM input to response.txt
+            const llm = createLLM(modelInfo.provider, {
+                apiKey: modelInfo.apiKey,
+                model: modelInfo.model,
+                temperature: 0.7,
+                maxTokens: 1024,
+                usePortkey: modelInfo.provider === 'openai-glass',
+                portkeyVirtualKey: modelInfo.provider === 'openai-glass' ? modelInfo.apiKey : undefined,
+            });
+
+            const completion = await llm.chat(messages);
+
+            const responseText = completion.content;
+
+            // Write LLM input and output to analysis.txt
             try {
                 const fs = require('fs');
                 const path = require('path');
@@ -207,24 +220,14 @@ Mode: Meeting Copilot
 What LLM got:
 ${llmMessages}
 
+LLM Output:
+${responseText}
+
 `;
                 fs.appendFileSync(responsePath, responseEntry);
             } catch (error) {
-                console.error('[SummaryService] Failed to write response.txt:', error);
+                console.error('[SummaryService] Failed to write analysis.txt:', error);
             }
-
-            const llm = createLLM(modelInfo.provider, {
-                apiKey: modelInfo.apiKey,
-                model: modelInfo.model,
-                temperature: 0.7,
-                maxTokens: 1024,
-                usePortkey: modelInfo.provider === 'openai-glass',
-                portkeyVirtualKey: modelInfo.provider === 'openai-glass' ? modelInfo.apiKey : undefined,
-            });
-
-            const completion = await llm.chat(messages);
-
-            const responseText = completion.content;
             // console.log(`✅ Analysis response received: ${responseText}`);
 
             // Debug: Log the raw response for troubleshooting

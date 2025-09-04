@@ -204,9 +204,9 @@ class SttService {
                 }
                 return;
             } else if (this.modelInfo.provider === 'gemini') {
-                if (!message.serverContent?.modelTurn) {
-                    // console.log('[Gemini STT - Me]', JSON.stringify(message, null, 2));
-                }
+                const transcription = message.serverContent?.inputTranscription;
+                const textChunk = transcription?.text || '';
+                const turnComplete = !!message.serverContent?.turnComplete;
 
                 if (message.serverContent?.turnComplete) {
                     if (this.myCompletionTimer) {
@@ -216,12 +216,8 @@ class SttService {
                     return;
                 }
 
-                const transcription = message.serverContent?.inputTranscription;
-                if (!transcription || !transcription.text) return;
-
-                const textChunk = transcription.text;
-                if (!textChunk.trim() || textChunk.trim() === '<noise>') {
-                    return; // 1. Ignore whitespace-only chunks or noise
+                if (!transcription || !textChunk.trim() || textChunk.trim() === '<noise>') {
+                    return; // Ignore empty or noise-only chunks
                 }
 
                 this.debounceMyCompletion(textChunk);
@@ -342,6 +338,15 @@ class SttService {
                 }
                 return;
             } else if (this.modelInfo.provider === 'gemini') {
+                // Guard inside handleTheirMessage (and the same in handleMyMessage)
+                if (message?.serverContent?.usageMetadata) {
+                    console.log('[Gemini STT - Them] Tokens In:', message.serverContent.usageMetadata.promptTokenCount);
+                    console.log('[Gemini STT - Them] Tokens Out:', message.serverContent.usageMetadata.candidatesTokenCount);
+                }
+                const transcription = message.serverContent?.inputTranscription;
+                const textChunk = transcription?.text || '';
+                const turnComplete = !!message.serverContent?.turnComplete;
+
                 if (!message.serverContent?.modelTurn) {
                     // console.log('[Gemini STT - Them]', JSON.stringify(message, null, 2));
                 }
@@ -354,12 +359,8 @@ class SttService {
                     return;
                 }
 
-                const transcription = message.serverContent?.inputTranscription;
-                if (!transcription || !transcription.text) return;
-
-                const textChunk = transcription.text;
-                if (!textChunk.trim() || textChunk.trim() === '<noise>') {
-                    return; // 1. Ignore whitespace-only chunks or noise
+                if (!transcription || !textChunk.trim() || textChunk.trim() === '<noise>') {
+                    return; // Ignore empty or noise-only chunks
                 }
 
                 this.debounceTheirCompletion(textChunk);
@@ -433,7 +434,7 @@ class SttService {
             language: effectiveLanguage,
             callbacks: {
                 onmessage: handleMyMessage,
-                onerror: error => console.error('My STT session error:', error.message),
+                onerror: error => console.error('My STT session error:', error),
                 onclose: event => console.log('My STT session closed:', event.reason),
             },
         };
@@ -442,7 +443,7 @@ class SttService {
             language: effectiveLanguage,
             callbacks: {
                 onmessage: handleTheirMessage,
-                onerror: error => console.error('Their STT session error:', error.message),
+                onerror: error => console.error('Their STT session error:', error),
                 onclose: event => console.log('Their STT session closed:', event.reason),
             },
         };

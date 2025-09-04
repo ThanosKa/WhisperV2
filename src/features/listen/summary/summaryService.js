@@ -160,7 +160,10 @@ Build upon this context while analyzing the new conversation.
         const fullContext = contextualPrompt ? `${contextualPrompt}\n\n${recentConversation}` : recentConversation;
 
         // Use meeting analysis prompt template
-        const systemPrompt = getSystemPrompt('meeting_analysis', fullContext, false);
+        const systemPrompt = getSystemPrompt('meeting_analysis', {
+            context: fullContext,
+            existing_definitions: Array.from(this.definedTerms).join(', ') || 'None',
+        });
 
         try {
             if (this.currentSessionId) {

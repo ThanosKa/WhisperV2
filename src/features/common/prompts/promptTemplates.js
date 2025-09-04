@@ -187,7 +187,11 @@ Rules:
 - Be concise but informative (5-8 words per insight)
 - Only include questions actually asked in the transcript
 - Only include terms that appear in the conversation
-- Focus on meaningful content, not just topic names`,
+- Focus on meaningful content, not just topic names
+- **IMPORTANT**: Do not list terms under "Terms to Define" if they are already in the "Existing Definitions" list below.
+
+**Existing Definitions**:
+{existing_definitions}`,
 
         content: `Your task: Extract key information from this meeting conversation and format it clearly.`,
 

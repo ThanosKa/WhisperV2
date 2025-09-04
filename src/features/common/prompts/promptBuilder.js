@@ -1,9 +1,15 @@
 const { profilePrompts } = require('./promptTemplates.js');
 
-function buildSystemPrompt(promptParts, customPrompt = '', googleSearchEnabled = true) {
-    const sections = [promptParts.intro, '\n\n', promptParts.formatRequirements];
+function buildSystemPrompt(promptParts, context = {}, googleSearchEnabled = true) {
+    let finalFormatRequirements = promptParts.formatRequirements;
 
-    if (googleSearchEnabled) {
+    if (context.existing_definitions) {
+        finalFormatRequirements = finalFormatRequirements.replace('{existing_definitions}', context.existing_definitions);
+    }
+
+    const sections = [promptParts.intro, '\n\n', finalFormatRequirements];
+
+    if (googleSearchEnabled && promptParts.searchUsage) {
         sections.push('\n\n', promptParts.searchUsage);
     }
 
@@ -12,8 +18,8 @@ function buildSystemPrompt(promptParts, customPrompt = '', googleSearchEnabled =
         sections.push('\n\n', promptParts.content);
 
         // Only add context section if we have meaningful conversation context
-        if (customPrompt && customPrompt.trim()) {
-            sections.push('\n\nConversation context\n-----\n', customPrompt, '\n-----\n\n');
+        if (context.context && context.context.trim()) {
+            sections.push('\n\nConversation context\n-----\n', context.context, '\n-----\n\n');
         } else {
             sections.push('\n\n');
         }
@@ -27,9 +33,10 @@ function buildSystemPrompt(promptParts, customPrompt = '', googleSearchEnabled =
     return sections.join('');
 }
 
-function getSystemPrompt(profile, customPrompt = '', googleSearchEnabled = true) {
+function getSystemPrompt(profile, context, googleSearchEnabled = true) {
     const promptParts = profilePrompts[profile] || profilePrompts.interview;
-    return buildSystemPrompt(promptParts, customPrompt, googleSearchEnabled);
+    const promptContext = typeof context === 'string' ? { context } : context || {};
+    return buildSystemPrompt(promptParts, promptContext, googleSearchEnabled);
 }
 
 module.exports = {

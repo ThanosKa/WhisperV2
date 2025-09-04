@@ -73,6 +73,7 @@ export class ListenView extends LitElement {
                     this.hasCompletedRecording = true;
                     this.stopTimer();
                     this.requestUpdate();
+                    this.adjustWindowHeight();
                 }
             });
         }

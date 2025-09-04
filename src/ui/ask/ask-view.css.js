@@ -92,13 +92,57 @@ export const styles = css`
         cursor: text !important;
     }
 
-    .response-container pre {
+    .response-container .code-chrome {
         background: rgba(0, 0, 0, 0.4) !important;
         border-radius: 8px !important;
-        padding: 12px !important;
         margin: 8px 0 !important;
         overflow-x: auto !important;
         border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+
+    .response-container .code-bar {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        background: rgba(0, 0, 0, 0.6) !important;
+        padding: 6px 12px !important;
+        font-size: 11px !important;
+        color: rgba(255, 255, 255, 0.7) !important;
+        font-family: 'Monaco', 'Menlo', 'Consolas', monospace !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+
+    .response-container .code-lang {
+        color: rgba(255, 255, 255, 0.8) !important;
+        font-weight: 500 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
+        flex: 1 !important; /* Take available space */
+    }
+
+    .response-container .code-copy {
+        all: unset !important;
+        cursor: pointer !important;
+        padding: 3px 8px !important;
+        border-radius: 4px !important;
+        background: rgba(255, 255, 255, 0.1) !important;
+        color: #ffffff !important;
+        font-size: 10px !important;
+        font-family: 'Monaco', 'Menlo', 'Consolas', monospace !important;
+        transition: background-color 0.15s ease !important;
+    }
+
+    .response-container .code-copy:hover {
+        background: rgba(255, 255, 255, 0.2) !important;
+    }
+
+    .response-container .code-chrome pre {
+        margin: 0 !important;
+        padding: 12px !important;
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        overflow-x: auto !important;
         white-space: pre !important;
         word-wrap: normal !important;
         word-break: normal !important;
@@ -124,38 +168,27 @@ export const styles = css`
         background: rgba(255, 255, 255, 0.1) !important;
         padding: 2px 4px !important;
         border-radius: 3px !important;
-        color: #ffd700 !important;
+        color: #ffffff !important;
     }
 
-    .hljs-keyword {
-        color: #ff79c6 !important;
-    }
-    .hljs-string {
-        color: #f1fa8c !important;
-    }
-    .hljs-comment {
-        color: #6272a4 !important;
-    }
-    .hljs-number {
-        color: #bd93f9 !important;
-    }
-    .hljs-function {
-        color: #50fa7b !important;
-    }
-    .hljs-variable {
-        color: #8be9fd !important;
-    }
-    .hljs-built_in {
-        color: #ffb86c !important;
-    }
-    .hljs-title {
-        color: #50fa7b !important;
-    }
-    .hljs-attr {
-        color: #50fa7b !important;
-    }
+    /* White-only syntax highlighting - no more yellow! */
+    .hljs-keyword,
+    .hljs-string,
+    .hljs-comment,
+    .hljs-number,
+    .hljs-function,
+    .hljs-variable,
+    .hljs-built_in,
+    .hljs-title,
+    .hljs-attr,
     .hljs-tag {
-        color: #ff79c6 !important;
+        color: #ffffff !important;
+    }
+
+    /* Bold white for emphasis */
+    .hljs-strong {
+        color: #ffffff !important;
+        font-weight: 600 !important;
     }
 
     .ask-container {

@@ -1577,10 +1577,39 @@ export function default_add_token(data, type) {
         checkbox.disabled = true
         break
     case CODE_BLOCK:
-    case CODE_FENCE:
-        parent = parent.appendChild(document.createElement("pre"))
-        slot   = document.createElement("code")
-        break
+    case CODE_FENCE: {
+        /* ---- code chrome wrapper ---- */
+        const wrapper = document.createElement("div");
+        wrapper.className = "code-chrome";
+
+        /* ---- top bar ---- */
+        const bar = document.createElement("div");
+        bar.className = "code-bar";
+
+        /* ---- language label (empty for clean look) ---- */
+        const langLabel = document.createElement("span");
+        langLabel.className = "code-lang";
+        langLabel.textContent = ""; // Nothing at all
+        bar.appendChild(langLabel);
+
+        /* ---- copy button ---- */
+        const copyBtn = document.createElement("button");
+        copyBtn.className = "code-copy";
+        copyBtn.textContent = "Copy";
+        copyBtn.onclick = () => {
+            navigator.clipboard.writeText(slot.textContent || "");
+            copyBtn.textContent = "Copied";
+            setTimeout(() => copyBtn.textContent = "Copy", 1200);
+        };
+        bar.appendChild(copyBtn);
+        wrapper.appendChild(bar);
+
+        /* ---- pre and code elements ---- */
+        parent = parent.appendChild(wrapper);
+        parent = parent.appendChild(document.createElement("pre"));
+        slot   = document.createElement("code");
+        break;
+    }
     case TABLE:
         slot = document.createElement("table")
         break

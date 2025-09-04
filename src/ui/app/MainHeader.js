@@ -250,11 +250,14 @@ export class MainHeader extends LitElement {
     renderShortcut(accelerator) {
         if (!accelerator) return html``;
 
+        const isMac = navigator.userAgent.includes('Mac');
+        const processedAccelerator = accelerator.replace('CommandOrControl', isMac ? 'Cmd' : 'Ctrl');
+
         const keyMap = {
             Cmd: '⌘',
             Command: '⌘',
-            Ctrl: '⌘', // Unified to show Cmd symbol for all platforms
-            Control: '⌘', // Unified to show Cmd symbol for all platforms
+            Ctrl: 'Ctrl',
+            Control: 'Ctrl',
             Alt: '⌥',
             Option: '⌥',
             Shift: '⇧',
@@ -272,7 +275,7 @@ export class MainHeader extends LitElement {
             </svg>`,
         };
 
-        const keys = accelerator.split('+');
+        const keys = processedAccelerator.split('+');
         return html`${keys.map(key => html` <div class="icon-box">${keyMap[key] || key}</div> `)}`;
     }
 

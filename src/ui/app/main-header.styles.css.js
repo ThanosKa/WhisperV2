@@ -273,7 +273,7 @@ export const mainHeaderStyles = css`
             sans-serif;
         font-weight: 500;
         background-color: rgba(128, 128, 128, 0.3);
-        border-radius: 50%;
+        border-radius: 25%;
         width: 22px;
         height: 22px;
         display: flex;

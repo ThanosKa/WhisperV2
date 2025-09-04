@@ -249,10 +249,13 @@ export class SettingsView extends LitElement {
     renderShortcutKeys(accelerator) {
         if (!accelerator) return html`N/A`;
 
+        const isMac = navigator.userAgent.includes('Mac');
+        const processedAccelerator = accelerator.replace('CommandOrControl', isMac ? 'Cmd' : 'Ctrl');
+
         const keyMap = {
             Cmd: '⌘',
             Command: '⌘',
-            Ctrl: '⌘', // Unified to show Cmd symbol for all platforms
+            Ctrl: 'Ctrl',
             Alt: '⌥',
             Shift: '⇧',
             Enter: '↵',
@@ -263,13 +266,13 @@ export class SettingsView extends LitElement {
         };
 
         // scrollDown/scrollUp의 특수 처리
-        if (accelerator.includes('↕')) {
-            const keys = accelerator.replace('↕', '').split('+');
+        if (processedAccelerator.includes('↕')) {
+            const keys = processedAccelerator.replace('↕', '').split('+');
             keys.push('↕');
             return html`${keys.map(key => html`<span class="shortcut-key">${keyMap[key] || key}</span>`)}`;
         }
 
-        const keys = accelerator.split('+');
+        const keys = processedAccelerator.split('+');
         return html`${keys.map(key => html`<span class="shortcut-key">${keyMap[key] || key}</span>`)}`;
     }
 

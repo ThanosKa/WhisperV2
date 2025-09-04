@@ -1,5 +1,4 @@
 const { globalShortcut, screen } = require('electron');
-const shortcutsRepository = require('./repositories');
 const internalBridge = require('../../bridge/internalBridge');
 const askService = require('../ask/askService');
 
@@ -21,65 +20,24 @@ class ShortcutsService {
     }
 
     getDefaultKeybinds() {
-        // Unified shortcuts using 'Cmd' for all platforms for simplicity
+        // Use CommandOrControl for cross-platform compatibility.
         return {
-            moveUp: 'Cmd+Up',
-            moveDown: 'Cmd+Down',
-            moveLeft: 'Cmd+Left',
-            moveRight: 'Cmd+Right',
-            toggleVisibility: 'Cmd+\\',
-            toggleClickThrough: 'Cmd+M',
-            nextStep: 'Cmd+Enter',
-            manualScreenshot: 'Cmd+Shift+S',
-            previousResponse: 'Cmd+[',
-            nextResponse: 'Cmd+]',
+            moveUp: 'CommandOrControl+Up',
+            moveDown: 'CommandOrControl+Down',
+            moveLeft: 'CommandOrControl+Left',
+            moveRight: 'CommandOrControl+Right',
+            toggleVisibility: 'CommandOrControl+\\',
+            toggleClickThrough: 'CommandOrControl+M',
+            nextStep: 'CommandOrControl+Enter',
+            manualScreenshot: 'CommandOrControl+Shift+S',
+            previousResponse: 'CommandOrControl+[',
+            nextResponse: 'CommandOrControl+]',
         };
     }
 
     async loadKeybinds() {
-        let keybindsArray = await shortcutsRepository.getAllKeybinds();
-
-        if (!keybindsArray || keybindsArray.length === 0) {
-            console.log(`[Shortcuts] No keybinds found. Loading defaults.`);
-            const defaults = this.getDefaultKeybinds();
-            await this.saveKeybinds(defaults);
-            return defaults;
-        }
-
-        const keybinds = {};
-        keybindsArray.forEach(k => {
-            keybinds[k.action] = k.accelerator;
-        });
-
-        const defaults = this.getDefaultKeybinds();
-        let needsUpdate = false;
-        for (const action in defaults) {
-            if (!keybinds[action]) {
-                keybinds[action] = defaults[action];
-                needsUpdate = true;
-            }
-        }
-
-        if (needsUpdate) {
-            console.log('[Shortcuts] Updating missing keybinds with defaults.');
-            await this.saveKeybinds(keybinds);
-        }
-
-        return keybinds;
-    }
-
-    async saveKeybinds(newKeybinds) {
-        const keybindsToSave = [];
-        for (const action in newKeybinds) {
-            if (Object.prototype.hasOwnProperty.call(newKeybinds, action)) {
-                keybindsToSave.push({
-                    action: action,
-                    accelerator: newKeybinds[action],
-                });
-            }
-        }
-        await shortcutsRepository.upsertKeybinds(keybindsToSave);
-        console.log(`[Shortcuts] Saved keybinds.`);
+        // Always return default keybinds and don't touch the database.
+        return this.getDefaultKeybinds();
     }
 
     async toggleAllWindowsVisibility() {
@@ -129,8 +87,8 @@ class ShortcutsService {
         }
 
         // --- Hardcoded shortcuts ---
-        // Unified modifier using 'Cmd' for all platforms
-        const modifier = 'Cmd';
+        // Unified modifier using 'CommandOrControl' for all platforms
+        const modifier = 'CommandOrControl';
 
         // Monitor switching
         const displays = screen.getAllDisplays();

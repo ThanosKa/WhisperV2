@@ -485,6 +485,21 @@ export const styles = css`
         position: relative;
     }
 
+    /* Link styling inside AI response */
+    .response-container a,
+    .response-container a:visited {
+        color: #93c5fd;
+        text-decoration: underline;
+        cursor: pointer !important; /* override global text cursor */
+    }
+    .response-container a:hover {
+        color: #bfdbfe;
+        text-decoration: underline;
+    }
+    .response-container a:active {
+        color: #60a5fa;
+    }
+
     .response-container.hidden {
         display: none;
     }

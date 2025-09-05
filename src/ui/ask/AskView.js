@@ -72,6 +72,9 @@ export class AskView extends LitElement {
 
         // --- Resize helpers ---
         this.isThrottled = false;
+
+        // Link interception flag
+        this._linkHandlerAttached = false;
     }
 
     connectedCallback() {
@@ -392,6 +395,9 @@ export class AskView extends LitElement {
                                 block.setAttribute('data-highlighted', 'true');
                             });
                         }
+                        // Ensure links look and behave correctly
+                        this.decorateLinks(responseContainer);
+                        this.attachLinkInterceptor();
                         // Smart buffer handles resize frequency
                         this.adjustWindowHeightThrottled();
                     }
@@ -465,6 +471,10 @@ export class AskView extends LitElement {
                         this.hljs.highlightElement(block);
                     });
                 }
+
+                // Ensure links look and behave correctly
+                this.decorateLinks(responseContainer);
+                this.attachLinkInterceptor();
             } catch (error) {
                 console.error('Error in fallback rendering:', error);
                 responseContainer.textContent = textToRender;
@@ -482,7 +492,58 @@ export class AskView extends LitElement {
                 .replace(/`([^`]+)`/g, '<code>$1</code>');
 
             responseContainer.innerHTML = `<p>${basicHtml}</p>`;
+            this.decorateLinks(responseContainer);
+            this.attachLinkInterceptor();
         }
+    }
+
+    // Add target/rel/class to anchors as they appear
+    decorateLinks(container) {
+        if (!container) return;
+        const anchors = container.querySelectorAll('a');
+        anchors.forEach(a => {
+            if (a.dataset.linkDecorated === 'true') return;
+            a.dataset.linkDecorated = 'true';
+            a.setAttribute('target', '_blank');
+            a.setAttribute('rel', 'noopener noreferrer');
+            if (!a.classList.contains('ai-link')) a.classList.add('ai-link');
+        });
+    }
+
+    // Intercept clicks on anchors and open in system browser
+    attachLinkInterceptor() {
+        if (this._linkHandlerAttached) return;
+        this._linkHandlerAttached = true;
+
+        // Delegate on the component's shadow root to catch dynamic links
+        this.shadowRoot?.addEventListener('click', (e) => {
+            // Find the first anchor in the composed path
+            const path = e.composedPath ? e.composedPath() : [];
+            let anchor = null;
+            for (const el of path) {
+                if (el && el.tagName === 'A') { anchor = el; break; }
+            }
+            if (!anchor) return;
+
+            const href = anchor.getAttribute('href') || '';
+            if (!href) return;
+
+            // Only handle http/https, let others fall through
+            const isHttp = /^https?:\/\//i.test(href);
+            if (!isHttp) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+            try {
+                if (window.api?.common?.openExternal) {
+                    window.api.common.openExternal(href);
+                } else if (window?.open) {
+                    window.open(href, '_blank', 'noopener');
+                }
+            } catch (err) {
+                console.warn('Failed to open external link:', err);
+            }
+        });
     }
 
     requestWindowResize(targetHeight) {

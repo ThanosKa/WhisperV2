@@ -149,20 +149,20 @@ class SummaryService {
 
             if (meaningfulSummary.length > 0) {
                 contextualPrompt = `
-Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}
-
-Build upon this context while analyzing the new conversation.
-`;
+Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
             }
         }
 
         // Combine contextual prompt with recent conversation for the template
-        const fullContext = contextualPrompt ? `${contextualPrompt}\n\n${recentConversation}` : recentConversation;
+        // Make sections explicit so LLM analyzes only the transcript
+        const fullContext = contextualPrompt
+            ? `Previous Context (metadata):\n${contextualPrompt.trim()}\n\nTranscript:\n${recentConversation}`
+            : `Transcript:\n${recentConversation}`;
 
         // Use meeting analysis prompt template
         const systemPrompt = getSystemPrompt('meeting_analysis', {
             context: fullContext,
-            existing_definitions: Array.from(this.definedTerms).join(', ') || 'None',
+            existing_definitions: Array.from(this.definedTerms).join(', ') || '---',
         });
 
         try {
@@ -183,7 +183,7 @@ Build upon this context while analyzing the new conversation.
                 },
                 {
                     role: 'user',
-                    content: contextualPrompt || 'Analyze the conversation provided in the context above.',
+                    content: 'Analyze the conversation provided in the Transcript context above.',
                 },
             ];
 

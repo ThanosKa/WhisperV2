@@ -251,10 +251,10 @@ export const styles = css`
     }
 
     .response-icon {
-        width: 20px;
-        height: 20px;
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 50%;
+        width: 20px;  
+        height: 240x 
+        background: none;  
+        border-radius: 0;  
         display: flex;
         align-items: center;
         justify-content: center;
@@ -262,13 +262,13 @@ export const styles = css`
     }
 
     .response-icon svg {
-        width: 12px;
-        height: 12px;
+        width: 16px; 
+        height: 16px;  
         stroke: rgba(255, 255, 255, 0.9);
     }
 
     .response-label {
-        font-size: 13px;
+        font-size: 15px;  
         font-weight: 500;
         color: rgba(255, 255, 255, 0.9);
         white-space: nowrap;

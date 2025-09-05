@@ -133,6 +133,7 @@ class AskService {
             showTextInput: true,
             interrupted: false,
         };
+        this._forceDefaultProfileOnce = false;
         console.log('[AskService] Service instance created.');
     }
 
@@ -231,7 +232,7 @@ class AskService {
             shouldSendScreenOnly = true;
             const listenService = require('../listen/listenService');
             const conversationHistory = listenService.getConversationHistory();
-            await this.sendMessage('', conversationHistory);
+            await this.sendMessage('Assist me', conversationHistory);
             return;
         }
 
@@ -298,6 +299,15 @@ class AskService {
      * @returns {Promise<{success: boolean, response?: string, error?: string}>}
      */
     async sendMessage(userPrompt, conversationHistoryRaw = []) {
+        // Normalize and fallback to default help text when empty
+        try {
+            userPrompt = ((userPrompt ?? '') + '').trim();
+        } catch (_) {
+            userPrompt = '';
+        }
+        if (!userPrompt) {
+            userPrompt = 'Help me';
+        }
         internalBridge.emit('window:requestVisibility', { name: 'ask', visible: true });
         this.state = {
             ...this.state,
@@ -346,30 +356,34 @@ class AskService {
             let profileToUse = 'whisper';
             let useConversationContext = true;
 
-            if (expansion.mode === 'define') {
-                profileToUse = 'whisper_define';
-                useConversationContext = false; // Definitions are universal - no context needed
-            } else if (expansion.mode === 'email') {
-                profileToUse = 'whisper_email';
-                useConversationContext = true; // Email needs meeting context
-            } else if (expansion.mode === 'actions') {
-                profileToUse = 'whisper_actions';
-                useConversationContext = true; // Action items need meeting context
-            } else if (expansion.mode === 'summary') {
-                profileToUse = 'whisper_summary';
-                useConversationContext = true; // Summary needs meeting context
-            } else if (expansion.mode === 'recap') {
-                profileToUse = 'whisper_recap';
-                useConversationContext = true; // Recap needs meeting context
-            } else if (expansion.mode === 'next') {
-                profileToUse = 'whisper_next';
-                useConversationContext = true; // Next steps need meeting context
-            } else if (expansion.mode === 'followup') {
-                profileToUse = 'whisper_followup';
-                useConversationContext = true; // Follow-up questions need meeting context
-            } else if (userPrompt.startsWith('❓')) {
-                profileToUse = 'whisper_question';
-                useConversationContext = true; // Provide context, let AI decide if relevant
+            if (!this._forceDefaultProfileOnce) {
+                if (expansion.mode === 'define') {
+                    profileToUse = 'whisper_define';
+                    useConversationContext = false; // Definitions are universal - no context needed
+                } else if (expansion.mode === 'email') {
+                    profileToUse = 'whisper_email';
+                    useConversationContext = true; // Email needs meeting context
+                } else if (expansion.mode === 'actions') {
+                    profileToUse = 'whisper_actions';
+                    useConversationContext = true; // Action items need meeting context
+                } else if (expansion.mode === 'summary') {
+                    profileToUse = 'whisper_summary';
+                    useConversationContext = true; // Summary needs meeting context
+                } else if (expansion.mode === 'recap') {
+                    profileToUse = 'whisper_recap';
+                    useConversationContext = true; // Recap needs meeting context
+                } else if (expansion.mode === 'next') {
+                    profileToUse = 'whisper_next';
+                    useConversationContext = true; // Next steps need meeting context
+                } else if (expansion.mode === 'followup') {
+                    profileToUse = 'whisper_followup';
+                    useConversationContext = true; // Follow-up questions need meeting context
+                } else if (userPrompt.startsWith('❓')) {
+                    profileToUse = 'whisper_question';
+                    useConversationContext = true; // Provide context, let AI decide if relevant
+                }
+            } else {
+                console.log('[AskService] Manual Ask detected → forcing default profile: whisper');
             }
 
             // Use conversation context only for meeting-related actions
@@ -615,7 +629,7 @@ ${llmMessages}
      * 멀티모달 관련 에러인지 판단
      * @private
      */
-    _isMultimodalError(error) {
+    async _isMultimodalError(error) {
         const errorMessage = error.message?.toLowerCase() || '';
         return (
             errorMessage.includes('vision') ||
@@ -627,6 +641,15 @@ ${llmMessages}
             errorMessage.includes('invalid') ||
             errorMessage.includes('not supported')
         );
+    }
+
+    async sendMessageManual(userPrompt, conversationHistoryRaw = []) {
+        this._forceDefaultProfileOnce = true;
+        try {
+            return await this.sendMessage(userPrompt, conversationHistoryRaw);
+        } finally {
+            this._forceDefaultProfileOnce = false;
+        }
     }
 }
 

@@ -58,7 +58,7 @@ module.exports = {
                 const preview = conversationHistory.slice(-2);
                 console.log('[FeatureBridge] history preview:', JSON.stringify(preview));
             }
-            return await askService.sendMessage(userPrompt, conversationHistory);
+            return await askService.sendMessageManual(userPrompt, conversationHistory);
         });
         ipcMain.handle('ask:sendQuestionFromSummary', async (event, userPrompt) => {
             // Get conversation history from listenService and pass it to askService

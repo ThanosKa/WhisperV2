@@ -9,7 +9,7 @@ class ModelStateService extends EventEmitter {
     constructor() {
         super();
         this.authService = authService;
-        // electron-store는 오직 레거시 데이터 마이그레이션 용도로만 사용됩니다.
+        // electron-store is used exclusively for legacy data migration purposes.
         this.store = new Store({ name: 'pickle-glass-model-state' });
     }
 
@@ -154,8 +154,6 @@ class ModelStateService extends EventEmitter {
         }
     }
 
-
-
     async setApiKey(provider, key) {
         console.log(`[ModelStateService] setApiKey for ${provider}`);
         if (!provider) {
@@ -167,13 +165,13 @@ class ModelStateService extends EventEmitter {
             console.warn(`[ModelStateService] API key validation failed for ${provider}: ${validationResult.error}`);
             return validationResult;
         }
-        
+
         // --- MODIFIED: Save a placeholder to the DB, NEVER the actual key. ---
         const existingSettings = (await providerSettingsRepository.getByProvider(provider)) || {};
         await providerSettingsRepository.upsert(provider, { ...existingSettings, api_key: 'loaded_from_env' });
         // ---
 
-        // 키가 추가/변경되었으므로, 해당 provider의 모델을 자동 선택할 수 있는지 확인
+        // Key has been added/changed, so check if we can auto-select models for this provider
         await this._autoSelectAvailableModels([]);
 
         this.emit('state-updated', await this.getLiveState());
@@ -203,14 +201,14 @@ class ModelStateService extends EventEmitter {
     }
 
     /**
-     * 사용자가 Firebase에 로그인했는지 확인합니다.
+     * Checks if the user is logged in with Firebase.
      */
     isLoggedInWithFirebase() {
         return this.authService.getCurrentUser().isLoggedIn;
     }
 
     /**
-     * 유효한 API 키가 하나라도 설정되어 있는지 확인합니다.
+     * Checks if at least one valid API key is configured.
      */
     async hasValidApiKey() {
         if (this.isLoggedInWithFirebase()) return true;
@@ -294,7 +292,7 @@ class ModelStateService extends EventEmitter {
 
         const model = type === 'llm' ? activeSetting.selected_llm_model : activeSetting.selected_stt_model;
         if (!model) return null;
-        
+
         // --- MODIFIED: Force read from process.env, never from database ---
         let apiKey = null;
         if (activeSetting.provider === 'openai') {
@@ -311,7 +309,7 @@ class ModelStateService extends EventEmitter {
         };
     }
 
-    // --- 핸들러 및 유틸리티 메서드 ---
+    // --- Handler and utility methods ---
 
     async validateApiKey(provider, key) {
         if (!key || key.trim() === '') {
@@ -359,11 +357,13 @@ class ModelStateService extends EventEmitter {
 
     async areProvidersConfigured() {
         // --- MODIFIED: Configuration is now determined SOLELY by the presence of keys in process.env ---
-        const hasLlmKey = (process.env.OPENAI_API_KEY && PROVIDERS['openai']?.llmModels?.length > 0) ||
-                        (process.env.GEMINI_API_KEY && PROVIDERS['gemini']?.llmModels?.length > 0);
+        const hasLlmKey =
+            (process.env.OPENAI_API_KEY && PROVIDERS['openai']?.llmModels?.length > 0) ||
+            (process.env.GEMINI_API_KEY && PROVIDERS['gemini']?.llmModels?.length > 0);
 
-        const hasSttKey = (process.env.OPENAI_API_KEY && PROVIDERS['openai']?.sttModels?.length > 0) ||
-                        (process.env.GEMINI_API_KEY && PROVIDERS['gemini']?.sttModels?.length > 0);
+        const hasSttKey =
+            (process.env.OPENAI_API_KEY && PROVIDERS['openai']?.sttModels?.length > 0) ||
+            (process.env.GEMINI_API_KEY && PROVIDERS['gemini']?.sttModels?.length > 0);
 
         return hasLlmKey && hasSttKey;
         // ---

@@ -471,7 +471,7 @@ ${llmMessages}
                 signal.addEventListener('abort', () => {
                     console.log(`[AskService] Aborting stream reader. Reason: ${signal.reason}`);
                     reader.cancel(signal.reason).catch(() => {
-                        /* 이미 취소된 경우의 오류는 무시 */
+                        /* Ignore errors when already cancelled */
                     });
                 });
 
@@ -626,7 +626,7 @@ ${llmMessages}
     }
 
     /**
-     * 멀티모달 관련 에러인지 판단
+     * Determine if it's a multimodal-related error
      * @private
      */
     async _isMultimodalError(error) {

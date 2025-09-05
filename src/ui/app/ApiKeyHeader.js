@@ -334,7 +334,7 @@ export class ApiKeyHeader extends LitElement {
         this.sttApiKey = '';
         this.llmProvider = 'openai';
         this.sttProvider = 'openai';
-        this.providers = { llm: [], stt: [] }; // 초기화
+        this.providers = { llm: [], stt: [] }; // Initialization
         // Ollama related
         this.modelSuggestions = [];
         this.userModelHistory = [];
@@ -435,7 +435,7 @@ export class ApiKeyHeader extends LitElement {
             const sttProviders = [];
 
             for (const id in config) {
-                // 'openai-glass' 같은 가상 Provider는 UI에 표시하지 않음
+                // Virtual providers like 'openai-glass' are not displayed in the UI
                 if (id.includes('-glass')) continue;
                 const hasLlmModels = config[id].llmModels.length > 0 || id === 'ollama';
                 const hasSttModels = config[id].sttModels.length > 0 || id === 'whisper';
@@ -450,11 +450,11 @@ export class ApiKeyHeader extends LitElement {
 
             this.providers = { llm: llmProviders, stt: sttProviders };
 
-            // 기본 선택 값 설정
+            // Set default selection values
             if (llmProviders.length > 0) this.llmProvider = llmProviders[0].id;
             if (sttProviders.length > 0) this.sttProvider = sttProviders[0].id;
 
-            // Ollama 상태 및 모델 제안 로드
+            // Load Ollama status and model suggestions
             if (ollamaStatus?.success) {
                 this.ollamaStatus = {
                     installed: ollamaStatus.installed,
@@ -1036,7 +1036,7 @@ export class ApiKeyHeader extends LitElement {
             if (result?.success) {
                 this.modelSuggestions = result.suggestions || [];
 
-                // 기본 모델 선택 (설치된 모델 중 첫 번째)
+                // Select default model (first among installed models)
                 if (!this.selectedLlmModel && this.modelSuggestions.length > 0) {
                     const installedModel = this.modelSuggestions.find(m => m.status === 'installed');
                     if (installedModel) {
@@ -1091,7 +1091,7 @@ export class ApiKeyHeader extends LitElement {
         this.requestUpdate();
 
         const progressHandler = (event, data) => {
-            // 통합 LocalAI 이벤트에서 Ollama 진행률만 처리
+            // Only handle Ollama progress from integrated LocalAI events
             if (data.service !== 'ollama') return;
 
             let baseProgress = 0;
@@ -1140,18 +1140,18 @@ export class ApiKeyHeader extends LitElement {
         }, 15000); // 15 second timeout
 
         const completionHandler = async (event, data) => {
-            // 통합 LocalAI 이벤트에서 Ollama 완료만 처리
+            // Only handle Ollama completion from integrated LocalAI events
             if (data.service !== 'ollama') return;
             if (operationCompleted) return;
             operationCompleted = true;
             clearTimeout(completionTimeout);
 
             window.api.apiKeyHeader.removeOnLocalAIProgress(progressHandler);
-            // installation-complete 이벤트는 성공을 의미
+            // The installation-complete event means success
             await this._handleOllamaSetupCompletion(true);
         };
 
-        // 통합 LocalAI 이벤트 사용
+        // Use integrated LocalAI events
         window.api.apiKeyHeader.onLocalAIComplete(completionHandler);
         window.api.apiKeyHeader.onLocalAIProgress(progressHandler);
 
@@ -1321,7 +1321,7 @@ export class ApiKeyHeader extends LitElement {
                 }
             };
 
-            // Set up progress tracking - 통합 LocalAI 이벤트 사용
+            // Set up progress tracking - Use integrated LocalAI events
             window.api.apiKeyHeader.onLocalAIProgress(progressHandler);
 
             // Execute the model pull with timeout
@@ -1382,7 +1382,7 @@ export class ApiKeyHeader extends LitElement {
         let progressHandler = null;
 
         try {
-            // Set up robust progress listener - 통합 LocalAI 이벤트 사용
+            // Set up robust progress listener - Use integrated LocalAI events
             progressHandler = (event, data) => {
                 if (data.service === 'whisper' && data.model === modelId) {
                     const cleanProgress = Math.round(Math.max(0, Math.min(100, data.progress || 0)));
@@ -1620,7 +1620,7 @@ export class ApiKeyHeader extends LitElement {
     }
     //////// after_modelStateService ////////
 
-    ////TODO: 뭔가 넘어가는 애니메이션 로직에 문제가 있음
+    ////TODO: There seems to be a problem with the transitioning animation logic
     startSlideOutAnimation() {
         console.log('[ApiKeyHeader] startSlideOutAnimation: Starting slide out animation.');
         this.classList.add('sliding-out');

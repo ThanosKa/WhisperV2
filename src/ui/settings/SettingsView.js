@@ -1,7 +1,7 @@
 import { html, LitElement } from '../assets/lit-core-2.7.4.min.js';
 import { settingsViewStyles } from './settings-view.css.js';
 
-// import { getOllamaProgressTracker } from '../../features/common/services/localProgressTracker.js'; // 제거됨
+// import { getOllamaProgressTracker } from '../../features/common/services/localProgressTracker.js'; // removed
 
 export class SettingsView extends LitElement {
     static styles = settingsViewStyles;
@@ -160,14 +160,14 @@ export class SettingsView extends LitElement {
             this.requestUpdate();
         };
 
-        // 프리셋 업데이트 리스너 추가
+        // Add preset update listener
         this._presetsUpdatedListener = async event => {
             console.log('[SettingsView] Received presets-updated, refreshing presets');
             try {
                 const presets = await window.api.settingsView.getPresets();
                 this.presets = presets || [];
 
-                // 현재 선택된 프리셋이 삭제되었는지 확인 (사용자 프리셋만 고려)
+                // Check if currently selected preset was deleted (only consider user presets)
                 const userPresets = this.presets.filter(p => p.is_default === 0);
                 if (this.selectedPreset && !userPresets.find(p => p.id === this.selectedPreset.id)) {
                     this.selectedPreset = userPresets.length > 0 ? userPresets[0] : null;
@@ -216,9 +216,9 @@ export class SettingsView extends LitElement {
     }
 
     updateScrollHeight() {
-        // Electron 일부 시점에서 window.innerHeight 가 0 으로 보고되는 버그 보호
+        // Bug protection where window.innerHeight is reported as 0 at some point in Electron
         const rawHeight = window.innerHeight || (window.screen ? window.screen.height : 0);
-        const MIN_HEIGHT = 300; // 최소 보장 높이
+        const MIN_HEIGHT = 300; // minimum guaranteed height
         const maxHeight = Math.max(MIN_HEIGHT, rawHeight);
 
         this.style.maxHeight = `${maxHeight}px`;
@@ -265,7 +265,7 @@ export class SettingsView extends LitElement {
             Right: '→',
         };
 
-        // scrollDown/scrollUp의 특수 처리
+        // special handling for scrollDown/scrollUp
         if (processedAccelerator.includes('↕')) {
             const keys = processedAccelerator.replace('↕', '').split('+');
             keys.push('↕');

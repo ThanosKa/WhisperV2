@@ -54,7 +54,7 @@ class SttService {
     }
 
     sendToRenderer(channel, data) {
-        // Listen 관련 이벤트는 Listen 윈도우에만 전송 (Ask 윈도우 충돌 방지)
+        // Send Listen-related events only to Listen window (prevent Ask window conflicts)
         const { windowPool } = require('../../../window/windowManager');
         const listenWindow = windowPool?.get('listen');
 
@@ -239,12 +239,12 @@ class SttService {
                 console.log(`[SttService-Me-Deepgram] Received: isFinal=${isFinal}, text="${text}"`);
 
                 if (isFinal) {
-                    // 최종 결과가 도착하면, 현재 진행중인 부분 발화는 비우고
-                    // 최종 텍스트로 debounce를 실행합니다.
+                    // When final result arrives, clear current partial utterance
+                    // and execute debounce with final text.
                     this.myCurrentUtterance = '';
                     this.debounceMyCompletion(text);
                 } else {
-                    // 부분 결과(interim)인 경우, 화면에 실시간으로 업데이트합니다.
+                    // For interim results, update screen in real-time.
                     if (this.myCompletionTimer) clearTimeout(this.myCompletionTimer);
                     this.myCompletionTimer = null;
 

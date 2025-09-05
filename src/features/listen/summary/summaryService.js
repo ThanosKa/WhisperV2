@@ -253,7 +253,7 @@ ${responseText}
                 }
             }
 
-            // 분석 결과 저장
+            // Save analysis results
             this.previousAnalysisResult = structuredData;
             this.analysisHistory.push({
                 timestamp: Date.now(),
@@ -268,7 +268,7 @@ ${responseText}
             return structuredData;
         } catch (error) {
             console.error('❌ Error during analysis generation:', error.message);
-            return this.previousAnalysisResult; // 에러 시 이전 결과 반환
+            return this.previousAnalysisResult; // Return previous result on error
         }
     }
 
@@ -279,7 +279,7 @@ ${responseText}
             followUps: ['✉️ Draft a follow-up email', '✅ Generate action items', '📝 Show summary'],
         };
 
-        // 이전 결과가 있으면 기본값으로 사용 (단, 새로운 분석이 우선)
+        // If there are previous results, use them as default values (however, new analysis takes priority)
         if (previousResult && structuredData.summary.length === 0) {
             structuredData.summary = [...previousResult.summary];
         }
@@ -298,7 +298,7 @@ ${responseText}
                     // console.log(`🔍 Processing line: "${trimmedLine}" | Section: ${currentSection}`);
                 }
 
-                // 섹션 헤더 감지 - Updated to match the new prompt format
+                // Section header detection - Updated to match the new prompt format
                 if (
                     trimmedLine.startsWith('**Meeting Insights**') ||
                     trimmedLine.includes('Meeting Insights') ||
@@ -323,11 +323,11 @@ ${responseText}
                     continue;
                 }
 
-                // 컨텐츠 파싱
+                // Content parsing
                 if (trimmedLine.startsWith('-') && currentSection === 'meeting-insights') {
                     const summaryPoint = trimmedLine.substring(1).trim();
                     if (summaryPoint && !structuredData.summary.includes(summaryPoint)) {
-                        // 기존 summary 업데이트 (최대 5개 유지)
+                        // Update existing summary (maintain maximum 5 items)
                         structuredData.summary.unshift(summaryPoint);
                         if (structuredData.summary.length > 5) {
                             structuredData.summary.pop();
@@ -350,7 +350,7 @@ ${responseText}
                 }
             }
 
-            // 기본 액션 추가 - Using simple emojis to avoid encoding issues
+            // Add default actions - Using simple emojis to avoid encoding issues
             const defaultActions = ['✨ What should I say next?', '💬 Suggest follow-up questions'];
             defaultActions.forEach(action => {
                 if (
@@ -362,16 +362,16 @@ ${responseText}
                 }
             });
 
-            // 액션 개수 제한
+            // Limit action count
             structuredData.actions = structuredData.actions.slice(0, 10);
 
-            // 유효성 검증 및 이전 데이터 병합
+            // Validation check and merge with previous data
             if (structuredData.summary.length === 0 && previousResult) {
                 structuredData.summary = previousResult.summary;
             }
         } catch (error) {
             console.error('❌ Error parsing response text:', error);
-            // 에러 시 이전 결과 반환
+            // Return previous result on error
             return (
                 previousResult || {
                     summary: [],

@@ -1,18 +1,18 @@
 const createAecModule = require('./aec.js');
 
-let aecModPromise = null; // 한 번만 로드
+let aecModPromise = null; // load only once
 let aecMod = null;
-let aecPtr = 0; // Rust Aec* 1개만 재사용
+let aecPtr = 0; // reuse only one Rust Aec*
 
-/** WASM 모듈 가져오고 1회 초기화 */
+/** Import WASM module and initialize once */
 async function getAec() {
-    if (aecModPromise) return aecModPromise; // 캐시
+    if (aecModPromise) return aecModPromise; // cache
 
     aecModPromise = createAecModule().then(M => {
         aecMod = M;
 
         console.log('WASM Module Loaded:', M);
-        // C 심볼 → JS 래퍼 바인딩 (딱 1번)
+        // Bind C symbols to JS wrappers (only once)
         M.newPtr = M.cwrap('AecNew', 'number', ['number', 'number', 'number', 'number']);
         M.cancel = M.cwrap('AecCancelEcho', null, ['number', 'number', 'number', 'number', 'number']);
         M.destroy = M.cwrap('AecDestroy', null, ['number']);
@@ -22,7 +22,7 @@ async function getAec() {
     return aecModPromise;
 }
 
-// 바로 로드-실패 로그를 보기 위해
+// to see load-failure logs immediately
 // getAec().catch(console.error);
 // ---------------------------
 // Constants & Globals
@@ -101,12 +101,12 @@ function arrayBufferToBase64(buffer) {
     return btoa(binary);
 }
 
-/* ───────────────────────── JS ↔︎ WASM 헬퍼 ───────────────────────── */
+/* ───────────────────────── JS ↔︎ WASM helper ───────────────────────── */
 function int16PtrFromFloat32(mod, f32) {
     const len = f32.length;
     const bytes = len * 2;
     const ptr = mod._malloc(bytes);
-    // HEAP16이 없으면 HEAPU8.buffer로 직접 래핑
+    // if HEAP16 doesn't exist, directly wrap with HEAPU8.buffer
     const heapBuf = mod.HEAP16 ? mod.HEAP16.buffer : mod.HEAPU8.buffer;
     const i16 = new Int16Array(heapBuf, ptr, len);
     for (let i = 0; i < len; ++i) {
@@ -122,7 +122,7 @@ function float32FromInt16View(i16) {
     return out;
 }
 
-/* 필요하다면 종료 시 */
+/* if necessary, on termination */
 function disposeAec() {
     getAec().then(mod => {
         if (aecPtr) mod.destroy(aecPtr);
@@ -137,45 +137,45 @@ function runAecSync(micF32, sysF32) {
         return micF32;
     }
 
-    const frameSize = 160; // AEC 모듈 초기화 시 설정한 프레임 크기
+    const frameSize = 160; // frame size set during AEC module initialization
     const numFrames = Math.floor(micF32.length / frameSize);
 
-    // 최종 처리된 오디오 데이터를 담을 버퍼
+    // buffer to hold final processed audio data
     const processedF32 = new Float32Array(micF32.length);
 
-    // 시스템 오디오와 마이크 오디오의 길이를 맞춥니다. (안정성 확보)
+    // align the length of system audio and microphone audio (for stability)
     let alignedSysF32 = new Float32Array(micF32.length);
     if (sysF32.length > 0) {
-        // sysF32를 micF32 길이에 맞게 자르거나 채웁니다.
+        // truncate or pad sysF32 to match micF32 length
         const lengthToCopy = Math.min(micF32.length, sysF32.length);
         alignedSysF32.set(sysF32.slice(0, lengthToCopy));
     }
 
-    // 2400개 샘플을 160개 프레임으로 나누어 루프 실행
+    // loop execution by dividing 2400 samples into 160 frames
     for (let i = 0; i < numFrames; i++) {
         const offset = i * frameSize;
 
-        // 현재 프레임에 해당하는 160개 샘플을 잘라냅니다.
+        // cut out 160 samples corresponding to the current frame
         const micFrame = micF32.subarray(offset, offset + frameSize);
         const echoFrame = alignedSysF32.subarray(offset, offset + frameSize);
 
-        // WASM 메모리에 프레임 데이터 쓰기
+        // write frame data to WASM memory
         const micPtr = int16PtrFromFloat32(aecMod, micFrame);
         const echoPtr = int16PtrFromFloat32(aecMod, echoFrame);
         const outPtr = aecMod._malloc(frameSize * 2); // 160 * 2 bytes
 
-        // AEC 실행 (160개 샘플 단위)
+        // execute AEC (160 sample units)
         aecMod.cancel(aecPtr, micPtr.ptr, echoPtr.ptr, outPtr, frameSize);
 
-        // WASM 메모리에서 처리된 프레임 데이터 읽기
+        // read processed frame data from WASM memory
         const heapBuf = aecMod.HEAP16 ? aecMod.HEAP16.buffer : aecMod.HEAPU8.buffer;
         const outFrameI16 = new Int16Array(heapBuf, outPtr, frameSize);
         const outFrameF32 = float32FromInt16View(outFrameI16);
 
-        // 처리된 프레임을 최종 버퍼의 올바른 위치에 복사
+        // copy processed frame to the correct position in the final buffer
         processedF32.set(outFrameF32, offset);
 
-        // 할당된 메모리 해제
+        // free allocated memory
         aecMod._free(micPtr.ptr);
         aecMod._free(echoPtr.ptr);
         aecMod._free(outPtr);
@@ -183,7 +183,7 @@ function runAecSync(micF32, sysF32) {
 
     return processedF32;
     // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-    //                      여기까지가 새로운 로직
+    //                      this is the end of the new logic
     // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 }
 
@@ -194,7 +194,7 @@ window.api.listenCapture.onSystemAudioData((event, { data }) => {
         timestamp: Date.now(),
     });
 
-    // 오래된 데이터 제거
+    // remove old data
     if (systemAudioBuffer.length > MAX_SYSTEM_BUFFER_SIZE) {
         systemAudioBuffer = systemAudioBuffer.slice(-MAX_SYSTEM_BUFFER_SIZE);
     }
@@ -288,7 +288,7 @@ setInterval(() => {
 // Audio processing functions (exact from renderer.js)
 // ---------------------------
 async function setupMicProcessing(micStream) {
-    /* ── WASM 먼저 로드 ───────────────────────── */
+    /* ── Load WASM first ───────────────────────── */
     const mod = await getAec();
     if (!aecPtr) aecPtr = mod.newPtr(160, 1600, 24000, 1);
 
@@ -305,17 +305,17 @@ async function setupMicProcessing(micStream) {
         audioBuffer.push(...inputData);
         // console.log('🎤 micProcessor.onaudioprocess');
 
-        // samplesPerChunk(=2400) 만큼 모이면 전송
+        // send when samplesPerChunk(=2400) amount is gathered
         while (audioBuffer.length >= samplesPerChunk) {
             let chunk = audioBuffer.splice(0, samplesPerChunk);
-            let processedChunk = new Float32Array(chunk); // 기본값
+            let processedChunk = new Float32Array(chunk); // default value
 
             // ───────────────── WASM AEC ─────────────────
             if (systemAudioBuffer.length > 0) {
                 const latest = systemAudioBuffer[systemAudioBuffer.length - 1];
                 const sysF32 = base64ToFloat32Array(latest.data);
 
-                // **음성 구간일 때만 런**
+                // **run only during voice segments**
                 processedChunk = runAecSync(new Float32Array(chunk), sysF32);
                 // console.log('🔊 Applied WASM-AEC (speex)');
             } else {
@@ -431,7 +431,7 @@ async function startCapture(screenshotIntervalSeconds = 5, imageQuality = 'mediu
             if (!audioResult.success) {
                 console.warn('[listenCapture] macOS audio start failed:', audioResult.error);
 
-                // 이미 실행 중 → stop 후 재시도
+                // already running → stop then retry
                 if (audioResult.error === 'already_running') {
                     await window.api.listenCapture.stopMacosSystemAudio();
                     await new Promise(r => setTimeout(r, 500));
@@ -608,9 +608,9 @@ function stopCapture() {
 // Exports & global registration
 // ---------------------------
 module.exports = {
-    getAec, // 새로 만든 초기화 함수
-    runAecSync, // sync 버전
-    disposeAec, // 필요시 Rust 객체 파괴
+    getAec, // newly created initialization function
+    runAecSync, // sync version
+    disposeAec, // destroy Rust objects if necessary
     startCapture,
     stopCapture,
     isLinux,

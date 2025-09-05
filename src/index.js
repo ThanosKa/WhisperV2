@@ -196,7 +196,7 @@ app.whenReady().then(async () => {
         await modelStateService.initialize();
         //////// after_modelStateService ////////
 
-        featureBridge.initialize(); // 추가: featureBridge 초기화
+        featureBridge.initialize(); // Added: featureBridge initialization
         windowBridge.initialize();
         setupWebDataHandlers();
 
@@ -601,7 +601,7 @@ async function startWebStack() {
         timestamp: Date.now(),
     };
 
-    // 쓰기 가능한 임시 폴더에 런타임 설정 파일 생성
+    // Create runtime configuration file in writable temp folder
     const tempDir = app.getPath('temp');
     const configPath = path.join(tempDir, 'runtime-config.json');
     fs.writeFileSync(configPath, JSON.stringify(runtimeConfig, null, 2));
@@ -609,7 +609,7 @@ async function startWebStack() {
 
     const frontSrv = express();
 
-    // 프론트엔드에서 /runtime-config.json을 요청하면 임시 폴더의 파일을 제공
+    // When frontend requests /runtime-config.json, serve the file from temp folder
     frontSrv.get('/runtime-config.json', (req, res) => {
         res.sendFile(configPath);
     });

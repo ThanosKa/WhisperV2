@@ -128,6 +128,18 @@ export class AskView extends LitElement {
                     }
                 }
             });
+            // Fallback UI for AI/stream errors
+            this.handleAskStreamError = (event, payload) => {
+                console.warn('AskView: Stream error received', payload?.error);
+                this.isLoading = false;
+                this.isStreaming = true;
+                this.interrupted = false;
+                this.showTextInput = false;
+                this.currentResponse = 'Something went wrong.';
+                this.renderContent();
+                this.adjustWindowHeightThrottled();
+            };
+            window.api.askView.onAskStreamError(this.handleAskStreamError);
             console.log('AskView: IPC 이벤트 리스너 등록 완료');
         }
     }
@@ -161,6 +173,9 @@ export class AskView extends LitElement {
         if (window.api) {
             window.api.askView.removeOnAskStateUpdate(this.handleAskStateUpdate);
             window.api.askView.removeOnShowTextInput(this.handleShowTextInput);
+            if (this.handleAskStreamError) {
+                window.api.askView.removeOnAskStreamError(this.handleAskStreamError);
+            }
             console.log('✅ AskView: IPC 이벤트 리스너 제거 필요');
         }
     }

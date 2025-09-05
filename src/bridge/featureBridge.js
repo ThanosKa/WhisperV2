@@ -11,7 +11,7 @@ const permissionService = require('../features/common/services/permissionService
 const encryptionService = require('../features/common/services/encryptionService');
 
 module.exports = {
-    // Renderer로부터의 요청을 수신하고 서비스로 전달
+    // Receive requests from renderer and forward to services
     initialize() {
         // Settings Service
         ipcMain.handle('settings:getPresets', async () => await settingsService.getPresets());
@@ -115,7 +115,7 @@ module.exports = {
         ipcMain.handle('model:get-provider-config', () => modelStateService.getProviderConfig());
         ipcMain.handle('model:re-initialize-state', async () => await modelStateService.initialize());
 
-        // ModelStateService 이벤트를 모든 윈도우에 브로드캐스트
+        // Broadcast ModelStateService events to all windows
         modelStateService.on('state-updated', state => {
             BrowserWindow.getAllWindows().forEach(win => {
                 if (win && !win.isDestroyed()) {
@@ -141,7 +141,7 @@ module.exports = {
         console.log('[FeatureBridge] Initialized with all feature handlers.');
     },
 
-    // Renderer로 상태를 전송
+    // Send status to renderer
     sendAskProgress(win, progress) {
         win.webContents.send('feature:ask:progress', progress);
     },

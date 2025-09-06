@@ -515,11 +515,13 @@ ${llmMessages}
             }
         } catch (error) {
             console.error('[AskService] Error during message processing:', error);
+            // Push a visible fallback to the UI so the user sees something
             this.state = {
                 ...this.state,
                 isLoading: false,
                 isStreaming: false,
-                showTextInput: true,
+                showTextInput: false,
+                currentResponse: 'Something went wrong.',
             };
             this._broadcastState();
 
@@ -547,6 +549,7 @@ ${llmMessages}
         let fullResponse = '';
         let tokenCount = 0;
         let firstTokenReceived = false;
+        let hadStreamError = false;
 
         try {
             this.state.isLoading = false;
@@ -602,6 +605,10 @@ ${llmMessages}
                 console.log(`[AskService] Stream reading was intentionally cancelled. Reason: ${signal.reason}`);
             } else {
                 console.error('[AskService] Error while processing stream:', streamError);
+                // Ensure the renderer gets a visible fallback message immediately
+                this.state.currentResponse = 'Something went wrong.';
+                this._broadcastState();
+                hadStreamError = true;
                 if (askWin && !askWin.isDestroyed()) {
                     askWin.webContents.send('ask-response-stream-error', { error: streamError.message });
                 }
@@ -610,11 +617,12 @@ ${llmMessages}
             this.state.isStreaming = false;
             // If the stream was aborted, `interruptStream` is responsible for state.
             if (!signal.aborted) {
-                this.state.currentResponse = fullResponse;
+                this.state.currentResponse = hadStreamError ? 'Something went wrong.' : fullResponse;
                 this._broadcastState();
             }
 
-            if (fullResponse) {
+            // Avoid saving fallback error text to history
+            if (!hadStreamError && fullResponse) {
                 try {
                     await askRepository.addAiMessage({ sessionId, role: 'assistant', content: fullResponse });
                     console.log(`[AskService] DB: Saved partial or full assistant response to session ${sessionId} after stream ended.`);

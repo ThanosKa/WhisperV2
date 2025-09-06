@@ -1,28 +1,103 @@
 import { html } from '../../ui/assets/lit-core-2.7.4.min.js';
 
 export const renderTemplate = self => {
-    const hasResponse = self.isLoading || self.currentResponse || self.isStreaming;
-    let headerText = 'AI Response';
-    let headerClass = '';
+    // Determine state
+    const isThinking = self.isLoading || (self.isStreaming && !self.currentResponse);
+    const hasHistoryOrContent = !!(self.currentResponse || (self.messages && self.messages.length > 0));
 
-    if (self.isLoading || (self.isStreaming && !self.currentResponse)) {
-        headerText = 'Thinking';
-        headerClass = 'pulsing';
-    }
+    // Header should be visible during Thinking and during/after response
+    const showHeader = isThinking || hasHistoryOrContent;
+    // Response container (bubbles) should be hidden during pure Thinking
+    const showResponseContainer = !isThinking && hasHistoryOrContent;
+
+    let headerText = isThinking ? 'Thinking' : 'AI Response';
+    let headerClass = isThinking ? 'pulsing' : '';
 
     const isCompact = self.windowHeight < 50;
-    const inputPulsing = !hasResponse ? 'pulsing' : '';
+    const inputPulsing = !showResponseContainer ? 'pulsing' : '';
 
     // Show dots for thinking state only
-    const showThinkingDots = self.isLoading || (self.isStreaming && !self.currentResponse);
+    const showThinkingDots = isThinking;
 
-    // Determine which icon to show based on state
-    const isThinking = self.isLoading || (self.isStreaming && !self.currentResponse);
+    // Helper to render assistant message content as sanitized HTML (non-streaming)
+    const renderMessageHTML = text => {
+        if (!text) return '';
+        try {
+            if (self.isLibrariesLoaded && self.marked && self.DOMPurify) {
+                const parsed = self.marked.parse(text);
+                return self.DOMPurify.sanitize(parsed, {
+                    ALLOWED_TAGS: [
+                        'h1',
+                        'h2',
+                        'h3',
+                        'h4',
+                        'h5',
+                        'h6',
+                        'p',
+                        'br',
+                        'strong',
+                        'b',
+                        'em',
+                        'i',
+                        's',
+                        'ul',
+                        'ol',
+                        'li',
+                        'blockquote',
+                        'code',
+                        'pre',
+                        'a',
+                        'img',
+                        'table',
+                        'thead',
+                        'tbody',
+                        'tr',
+                        'th',
+                        'td',
+                        'hr',
+                        'sup',
+                        'sub',
+                        'del',
+                        'ins',
+                        // Allow checklist inputs (GFM task lists)
+                        'input',
+                    ],
+                    ALLOWED_ATTR: [
+                        'href',
+                        'src',
+                        'alt',
+                        'title',
+                        'class',
+                        'id',
+                        'target',
+                        'rel',
+                        // Attributes for checklist inputs
+                        'type',
+                        'checked',
+                        'disabled',
+                        'value',
+                    ],
+                });
+            }
+            // Basic fallback
+            return (text || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/\n/g, '<br>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`([^`]+)`/g, '<code>$1</code>');
+        } catch (e) {
+            return text;
+        }
+    };
 
     return html`
         <div class="ask-container ${isCompact ? 'compact' : ''}">
             <!-- Response Header -->
-            <div class="response-header ${!hasResponse ? 'hidden' : ''}">
+            <div class="response-header ${!showHeader ? 'hidden' : ''}">
                 <div class="header-left">
                     <div class="response-icon">
                         ${isThinking
@@ -104,13 +179,67 @@ export const renderTemplate = self => {
                 </div>
             </div>
 
-            <!-- Response Container -->
-            <div class="response-container ${!hasResponse ? 'hidden' : ''}" id="responseContainer">
-                <!-- Content is dynamically generated in updateResponseContent() -->
+            <!-- Chat History Container -->
+            <div class="response-container ${!showResponseContainer ? 'hidden' : ''}">
+                <div class="chat-list">
+                    ${self.messages.map((m, idx) => {
+                        const isAssistant = m.role === 'assistant';
+                        const isLast = idx === self.messages.length - 1;
+                        // Only stream into bubble when not in Thinking state
+                        const isStreamingTarget = isAssistant && isLast && self.isStreaming && !isThinking;
+                        return html` <div class="message ${isAssistant ? 'assistant' : 'user'}">
+                            <div class="bubble ${isAssistant ? 'bubble-assistant' : 'bubble-user'}">
+                                ${isAssistant
+                                    ? html`
+                                          <button
+                                              class="copy-button bubble-copy ${self.messageCopyState?.[m.id] ? 'copied' : ''}"
+                                              @click=${() => self.handleCopyMessage(m.id)}
+                                              title="Copy reply"
+                                          >
+                                              <svg
+                                                  class="copy-icon"
+                                                  width="14"
+                                                  height="14"
+                                                  viewBox="0 0 24 24"
+                                                  fill="none"
+                                                  stroke="currentColor"
+                                                  stroke-width="2"
+                                              >
+                                                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                                              </svg>
+                                              <svg
+                                                  class="check-icon"
+                                                  width="16"
+                                                  height="16"
+                                                  viewBox="0 0 24 24"
+                                                  fill="none"
+                                                  stroke="currentColor"
+                                                  stroke-width="2.5"
+                                              >
+                                                  <path d="M20 6L9 17l-5-5" />
+                                              </svg>
+                                          </button>
+                                      `
+                                    : ''}
+                                ${isStreamingTarget
+                                    ? html`<div class="assistant-stream" id="responseContainer"></div>`
+                                    : isAssistant
+                                      ? html`
+                                            <div class="assistant-html" .innerHTML=${renderMessageHTML(m.content || '')}></div>
+                                            ${self.interrupted && isLast && !self.isStreaming
+                                                ? html`<div class="interruption-indicator">Interrupted</div>`
+                                                : ''}
+                                        `
+                                      : html`<div class="user-text">${m.content || ''}</div>`}
+                            </div>
+                        </div>`;
+                    })}
+                </div>
             </div>
 
             <!-- Text Input Container -->
-            <div class="text-input-container ${!hasResponse ? 'no-response' : ''} ${!self.showTextInput ? 'hidden' : ''}">
+            <div class="text-input-container ${!showResponseContainer ? 'no-response' : ''} ${!self.showTextInput ? 'hidden' : ''}">
                 <input
                     type="text"
                     id="textInput"

@@ -17,6 +17,7 @@ export class AskView extends LitElement {
         currentQuestion: { type: String },
         isLoading: { type: Boolean },
         copyState: { type: String },
+        messageCopyState: { type: Object },
         isHovering: { type: Boolean },
         hoveredLineIndex: { type: Number },
         lineCopyState: { type: Object },
@@ -26,6 +27,8 @@ export class AskView extends LitElement {
         isStreaming: { type: Boolean },
         windowHeight: { type: Number },
         interrupted: { type: Boolean },
+        // In-memory chat history; not persisted or fetched
+        messages: { type: Array },
     };
 
     static styles = styles;
@@ -36,12 +39,19 @@ export class AskView extends LitElement {
         this.currentQuestion = '';
         this.isLoading = false;
         this.copyState = 'idle';
+        this.messageCopyState = {};
         this.showTextInput = true;
         this.headerText = 'AI Response';
         this.headerAnimating = false;
         this.isStreaming = false;
         this.windowHeight = window.innerHeight;
         this.interrupted = false;
+        this.messages = [];
+        this._pendingAssistantIndex = null; // index of assistant message being streamed
+        this._lastQuestionSeen = '';
+        this._pendingUserQuestion = '';
+        this._userBubbleAppended = false;
+        this._idCounter = 0; // for unique message IDs
 
         this.isAnimating = false; // Tracks typewriter animation state
 
@@ -63,6 +73,7 @@ export class AskView extends LitElement {
         this.handleSendText = this.handleSendText.bind(this);
         this.handleTextKeydown = this.handleTextKeydown.bind(this);
         this.handleCopy = this.handleCopy.bind(this);
+        this.handleCopyMessage = this.handleCopyMessage.bind(this);
         this.clearResponseContent = this.clearResponseContent.bind(this);
         this.handleEscKey = this.handleEscKey.bind(this);
         this.handleCloseAskWindow = this.handleCloseAskWindow.bind(this);
@@ -75,6 +86,12 @@ export class AskView extends LitElement {
 
         // Link interception flag
         this._linkHandlerAttached = false;
+    }
+
+    generateId() {
+        // Monotonic unique id for messages
+        this._idCounter += 1;
+        return `${Date.now()}-${this._idCounter}`;
     }
 
     connectedCallback() {
@@ -120,8 +137,64 @@ export class AskView extends LitElement {
                 this.isStreaming = newState.isStreaming;
                 this.interrupted = newState.interrupted;
 
+                // If a new question was initiated outside AskView, store it as pending only (no bubble yet)
+                if (newState.isLoading && newState.currentQuestion) {
+                    const q = (newState.currentQuestion || '').trim();
+                    if (q && q !== this._lastQuestionSeen) {
+                        this._pendingUserQuestion = q;
+                        this._lastQuestionSeen = q; // prevent duplicates
+                        this._userBubbleAppended = false;
+                    }
+                }
+
                 const wasHidden = !this.showTextInput;
                 this.showTextInput = newState.showTextInput;
+
+                // Chat history management (no DB fetch):
+                // - No bubbles during pure Thinking
+                // - Only when first content arrives, append pending user bubble, then create assistant bubble
+                if (newState.currentResponse && newState.currentResponse.length > 0 && this._pendingAssistantIndex === null) {
+                    if (this._pendingUserQuestion && !this._userBubbleAppended) {
+                        this.messages = [...this.messages, { id: this.generateId(), role: 'user', content: this._pendingUserQuestion }];
+                        this._userBubbleAppended = true;
+                    }
+                    const lastMsg = this.messages[this.messages.length - 1];
+                    const needsPlaceholder = !lastMsg || lastMsg.role !== 'assistant';
+                    if (needsPlaceholder) {
+                        this._pendingAssistantIndex = this.messages.length;
+                        this.messages = [...this.messages, { id: this.generateId(), role: 'assistant', content: newState.currentResponse || '' }];
+                    }
+                }
+
+                // - While streaming, update the pending assistant content so it persists after stream
+                if (newState.isStreaming && typeof newState.currentResponse === 'string' && this._pendingAssistantIndex !== null) {
+                    const updated = [...this.messages];
+                    if (updated[this._pendingAssistantIndex]) {
+                        updated[this._pendingAssistantIndex] = {
+                            ...updated[this._pendingAssistantIndex],
+                            content: newState.currentResponse,
+                        };
+                        this.messages = updated;
+                    }
+                }
+
+                // - When stream finishes, ensure content is finalized
+                if (
+                    !newState.isStreaming &&
+                    !newState.isLoading &&
+                    typeof newState.currentResponse === 'string' &&
+                    this._pendingAssistantIndex !== null
+                ) {
+                    const updated = [...this.messages];
+                    if (updated[this._pendingAssistantIndex]) {
+                        updated[this._pendingAssistantIndex] = {
+                            ...updated[this._pendingAssistantIndex],
+                            content: newState.currentResponse,
+                        };
+                        this.messages = updated;
+                    }
+                    // Keep pointer for safety but next turn will overwrite
+                }
 
                 if (newState.showTextInput) {
                     if (wasHidden) {
@@ -130,6 +203,9 @@ export class AskView extends LitElement {
                         this.focusTextInput();
                     }
                 }
+
+                // Auto-scroll chat to bottom on updates
+                this.updateComplete.then(() => this.scrollChatToBottom());
             });
             // Fallback UI for AI/stream errors
             this.handleAskStreamError = (event, payload) => {
@@ -139,6 +215,24 @@ export class AskView extends LitElement {
                 this.interrupted = false;
                 this.showTextInput = false;
                 this.currentResponse = 'Something went wrong.';
+                // Ensure bubbles exist so the error can render
+                if (this._pendingUserQuestion && !this._userBubbleAppended) {
+                    this.messages = [...this.messages, { id: this.generateId(), role: 'user', content: this._pendingUserQuestion }];
+                    this._userBubbleAppended = true;
+                }
+                if (this._pendingAssistantIndex === null) {
+                    this._pendingAssistantIndex = this.messages.length;
+                    this.messages = [...this.messages, { id: this.generateId(), role: 'assistant', content: this.currentResponse }];
+                } else {
+                    const updated = [...this.messages];
+                    if (updated[this._pendingAssistantIndex]) {
+                        updated[this._pendingAssistantIndex] = {
+                            ...updated[this._pendingAssistantIndex],
+                            content: this.currentResponse,
+                        };
+                        this.messages = updated;
+                    }
+                }
                 this.renderContent();
                 this.adjustWindowHeightThrottled();
             };
@@ -240,7 +334,13 @@ export class AskView extends LitElement {
     }
 
     handleCloseAskWindow() {
-        // this.clearResponseContent();
+        // Clear chat history when user closes the window
+        this.messages = [];
+        this._pendingAssistantIndex = null;
+        this._lastQuestionSeen = '';
+        this._pendingUserQuestion = '';
+        this._userBubbleAppended = false;
+        this.clearResponseContent();
         window.api.askView.closeAskWindow();
     }
 
@@ -277,6 +377,13 @@ export class AskView extends LitElement {
 
     handleInputFocus() {
         this.isInputFocused = true;
+    }
+
+    scrollChatToBottom() {
+        const list = this.shadowRoot?.querySelector('.chat-list');
+        if (list) {
+            list.scrollTop = list.scrollHeight;
+        }
     }
 
     focusTextInput() {
@@ -440,6 +547,7 @@ export class AskView extends LitElement {
                         'b',
                         'em',
                         'i',
+                        's',
                         'ul',
                         'ol',
                         'li',
@@ -459,8 +567,24 @@ export class AskView extends LitElement {
                         'sub',
                         'del',
                         'ins',
+                        // Allow checklist inputs (GFM task lists)
+                        'input',
                     ],
-                    ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id', 'target', 'rel'],
+                    ALLOWED_ATTR: [
+                        'href',
+                        'src',
+                        'alt',
+                        'title',
+                        'class',
+                        'id',
+                        'target',
+                        'rel',
+                        // Attributes for checklist inputs
+                        'type',
+                        'checked',
+                        'disabled',
+                        'value',
+                    ],
                 });
 
                 responseContainer.innerHTML = cleanHtml;
@@ -475,6 +599,7 @@ export class AskView extends LitElement {
                 // Ensure links look and behave correctly
                 this.decorateLinks(responseContainer);
                 this.attachLinkInterceptor();
+                this.scrollChatToBottom();
             } catch (error) {
                 console.error('Error in fallback rendering:', error);
                 responseContainer.textContent = textToRender;
@@ -494,6 +619,7 @@ export class AskView extends LitElement {
             responseContainer.innerHTML = `<p>${basicHtml}</p>`;
             this.decorateLinks(responseContainer);
             this.attachLinkInterceptor();
+            this.scrollChatToBottom();
         }
     }
 
@@ -510,18 +636,64 @@ export class AskView extends LitElement {
         });
     }
 
+    // Wrap plain <pre><code> blocks with a header bar and copy button (for non-streaming renders)
+    decorateCodeBlocks(container) {
+        if (!container) return;
+        const codePres = container.querySelectorAll('pre > code');
+        codePres.forEach(codeEl => {
+            const pre = codeEl.parentElement;
+            if (!pre) return;
+            // Skip if already wrapped by our SMD chrome
+            if (pre.parentElement && pre.parentElement.classList.contains('code-chrome')) return;
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'code-chrome';
+
+            const bar = document.createElement('div');
+            bar.className = 'code-bar';
+
+            const langLabel = document.createElement('span');
+            langLabel.className = 'code-lang';
+            const className = codeEl.className || '';
+            const langMatch = className.match(/language-([a-z0-9+-]+)/i);
+            langLabel.textContent = langMatch ? (langMatch[1] || '').toUpperCase() : '';
+            bar.appendChild(langLabel);
+
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'code-copy';
+            copyBtn.textContent = 'Copy';
+            copyBtn.onclick = () => {
+                try {
+                    navigator.clipboard.writeText(codeEl.textContent || '');
+                    copyBtn.textContent = 'Copied';
+                    setTimeout(() => (copyBtn.textContent = 'Copy'), 1200);
+                } catch (_) {}
+            };
+            bar.appendChild(copyBtn);
+
+            // Insert wrapper before pre and move pre inside
+            const parent = pre.parentElement;
+            parent.insertBefore(wrapper, pre);
+            wrapper.appendChild(bar);
+            wrapper.appendChild(pre);
+        });
+    }
+
     // Intercept clicks on anchors and open in system browser
     attachLinkInterceptor() {
         if (this._linkHandlerAttached) return;
         this._linkHandlerAttached = true;
 
         // Delegate on the component's shadow root to catch dynamic links
-        this.shadowRoot?.addEventListener('click', (e) => {
+        this.shadowRoot?.addEventListener('click', e => {
             // Find the first anchor in the composed path
             const path = e.composedPath ? e.composedPath() : [];
             let anchor = null;
             for (const el of path) {
-                if (el && el.tagName === 'A') { anchor = el; break; }
+                if (el && el.tagName === 'A') {
+                    anchor = el;
+                    break;
+                }
             }
             if (!anchor) return;
 
@@ -689,6 +861,39 @@ export class AskView extends LitElement {
         }
     }
 
+    async handleCopyMessage(messageId) {
+        try {
+            const msg = (this.messages || []).find(m => m.id === messageId);
+            if (!msg) return;
+
+            const text = msg.content || '';
+            console.log('[AskView] Copying assistant message:', {
+                id: messageId,
+                role: msg.role,
+                preview: (text || '').slice(0, 80),
+            });
+            await navigator.clipboard.writeText(text);
+
+            // Mark copied state for this message
+            this.messageCopyState = { ...(this.messageCopyState || {}), [messageId]: true };
+            this.requestUpdate();
+
+            // Clear any previous timeout and set a new one to reset state
+            if (!this._messageCopyTimeouts) this._messageCopyTimeouts = {};
+            if (this._messageCopyTimeouts[messageId]) {
+                clearTimeout(this._messageCopyTimeouts[messageId]);
+            }
+            this._messageCopyTimeouts[messageId] = setTimeout(() => {
+                const next = { ...(this.messageCopyState || {}) };
+                delete next[messageId];
+                this.messageCopyState = next;
+                this.requestUpdate();
+            }, 1500);
+        } catch (err) {
+            console.error('Failed to copy message:', err);
+        }
+    }
+
     async handleInterrupt() {
         console.log('[AskView] User interrupted stream from frontend.');
         this.interrupted = true; // Set state immediately on frontend
@@ -710,9 +915,19 @@ export class AskView extends LitElement {
         }
         if (this.smdParser) {
             parser_end(this.smdParser);
+            // Ensure we don't carry parser state into the next render
+            this.resetStreamingParser();
         }
         this.isStreaming = false;
         this.isAnimating = false;
+
+        // After finalizing stream, ensure container shows clean HTML
+        const container = this.shadowRoot?.getElementById('responseContainer');
+        if (container) {
+            try {
+                this.renderFallbackContent(container);
+            } catch (_) {}
+        }
 
         // Final highlight check
         if (this.hljs && this.smdContainer) {
@@ -740,6 +955,14 @@ export class AskView extends LitElement {
         if (!text) return;
 
         textInput.value = '';
+
+        // Defer user bubble until first tokens arrive (pure Thinking UX)
+        this._pendingUserQuestion = text;
+        this._lastQuestionSeen = text;
+        this._userBubbleAppended = false;
+        // Reset pending assistant pointer to ensure a fresh placeholder for next turn
+        this._pendingAssistantIndex = null;
+        this.updateComplete.then(() => this.scrollChatToBottom());
 
         if (window.api) {
             window.api.askView.sendMessage(text).catch(error => {
@@ -777,6 +1000,26 @@ export class AskView extends LitElement {
 
         if (changedProperties.has('showTextInput') && this.showTextInput) {
             this.focusTextInput();
+        }
+
+        // After DOM updates, decorate any static assistant HTML blocks with code chrome + copy
+        if (changedProperties.has('messages') || changedProperties.has('currentResponse')) {
+            this.updateComplete.then(() => {
+                const assistants = this.shadowRoot?.querySelectorAll('.assistant-html');
+                if (!assistants || assistants.length === 0) return;
+                assistants.forEach(container => {
+                    this.decorateCodeBlocks(container);
+                    this.decorateLinks(container);
+                    if (this.hljs) {
+                        container.querySelectorAll('pre code:not([data-highlighted])').forEach(block => {
+                            try {
+                                this.hljs.highlightElement(block);
+                                block.setAttribute('data-highlighted', 'true');
+                            } catch (_) {}
+                        });
+                    }
+                });
+            });
         }
     }
 

@@ -251,10 +251,10 @@ export const styles = css`
     }
 
     .response-icon {
-        width: 20px;  
-        height: 240x 
-        background: none;  
-        border-radius: 0;  
+        width: 20px;
+        height: 24px;
+        background: none;
+        border-radius: 0;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -262,13 +262,13 @@ export const styles = css`
     }
 
     .response-icon svg {
-        width: 16px; 
-        height: 16px;  
+        width: 16px;
+        height: 16px;
         stroke: rgba(255, 255, 255, 0.9);
     }
 
     .response-label {
-        font-size: 15px;  
+        font-size: 15px;
         font-weight: 500;
         color: rgba(255, 255, 255, 0.9);
         white-space: nowrap;
@@ -483,6 +483,91 @@ export const styles = css`
         // max-height: 70vh;
         max-height: 500px;
         position: relative;
+    }
+
+    /* Chat layout */
+    .chat-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding-right: 8px;
+    }
+
+    .message {
+        display: flex;
+        width: 100%;
+    }
+
+    .message.user {
+        justify-content: flex-end;
+    }
+
+    .message.assistant {
+        justify-content: flex-start;
+    }
+
+    .bubble {
+        max-width: 85%;
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: transparent !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        backdrop-filter: none !important;
+        position: relative; /* allow absolute-positioned controls */
+    }
+
+    .bubble-user {
+        background: transparent !important;
+        border: inherit !important;
+        color: rgba(255, 255, 255, 0.95);
+    }
+
+    .bubble-assistant {
+        background: transparent !important;
+        border: inherit !important;
+        color: rgba(255, 255, 255, 1);
+        /* Reserve space on the right so content never sits under the copy button */
+        padding-right: 46px; /* 12px base padding + 24px button + ~10px gap */
+    }
+
+    .user-text {
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .assistant-plain {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: inherit;
+        color: inherit;
+        background: transparent;
+        border: none;
+    }
+
+    /* Assistant HTML (markdown-rendered) content */
+    .assistant-html {
+        width: 100%;
+    }
+
+    .assistant-stream {
+        /* Container for streaming markdown */
+        width: 100%;
+    }
+
+    /* Copy button inside assistant bubble */
+    .bubble .bubble-copy {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        z-index: 2;
+    }
+
+    /* Ensure code header bars and inline content respect the reserved right padding */
+    .assistant-html,
+    .assistant-stream {
+        width: 100%;
+        box-sizing: border-box;
     }
 
     /* Link styling inside AI response */

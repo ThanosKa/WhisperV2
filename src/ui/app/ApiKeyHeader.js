@@ -51,7 +51,7 @@ export class ApiKeyHeader extends LitElement {
             align-items: flex-start;
             gap: 24px;
             display: flex;
-            -webkit-app-region: drag;
+            -webkit-app-region: no-drag;
         }
         .header {
             width: 100%;
@@ -474,25 +474,8 @@ export class ApiKeyHeader extends LitElement {
     }
 
     async handleMouseDown(e) {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT') {
-            return;
-        }
-
-        e.preventDefault();
-
-        if (!window.api?.apiKeyHeader) return;
-        const initialPosition = await window.api.apiKeyHeader.getHeaderPosition();
-
-        this.dragState = {
-            initialMouseX: e.screenX,
-            initialMouseY: e.screenY,
-            initialWindowX: initialPosition.x,
-            initialWindowY: initialPosition.y,
-            moved: false,
-        };
-
-        window.addEventListener('mousemove', this.handleMouseMove);
-        window.addEventListener('mouseup', this.handleMouseUp, { once: true });
+        // Draggable behavior disabled
+        return;
     }
 
     handleMouseMove(e) {

@@ -48,20 +48,8 @@ export class MainHeader extends LitElement {
     }
 
     async handleMouseDown(e) {
-        e.preventDefault();
-
-        const initialPosition = await window.api.mainHeader.getHeaderPosition();
-
-        this.dragState = {
-            initialMouseX: e.screenX,
-            initialMouseY: e.screenY,
-            initialWindowX: initialPosition.x,
-            initialWindowY: initialPosition.y,
-            moved: false,
-        };
-
-        window.addEventListener('mousemove', this.handleMouseMove, { capture: true });
-        window.addEventListener('mouseup', this.handleMouseUp, { once: true, capture: true });
+        // Draggable behavior disabled
+        return;
     }
 
     handleMouseMove(e) {

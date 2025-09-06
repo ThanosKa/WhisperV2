@@ -37,7 +37,7 @@ export const mainHeaderStyles = css`
     }
 
     .header {
-        -webkit-app-region: drag;
+        -webkit-app-region: no-drag;
         width: max-content;
         height: 45px;
         padding: 2px 10px 2px 13px;

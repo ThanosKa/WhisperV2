@@ -34,7 +34,7 @@ export class PermissionHeader extends LitElement {
         }
 
         .container {
-            -webkit-app-region: drag;
+            -webkit-app-region: no-drag;
             width: 285px;
             /* height is now set dynamically */
             padding: 18px 20px;

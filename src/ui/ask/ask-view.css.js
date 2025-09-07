@@ -485,6 +485,49 @@ export const styles = css`
         position: relative;
     }
 
+    /* Chat thread */
+    .response-container .msg {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 10px;
+        align-items: flex-start;
+    }
+    .response-container .msg-user {
+        justify-content: flex-end;
+    }
+    .response-container .msg-assistant {
+        justify-content: flex-start;
+    }
+    .response-container .msg-avatar {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.15);
+        color: #fff;
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 20px;
+        user-select: none;
+    }
+    .response-container .msg-user .msg-avatar {
+        order: 2;
+    }
+    .response-container .msg-bubble {
+        max-width: 85%;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 10px;
+        padding: 8px 10px;
+    }
+    .response-container .msg-user .msg-bubble {
+        background: rgba(255, 255, 255, 0.12);
+    }
+    .response-container .msg-content {
+        overflow: hidden;
+    }
+
     /* Link styling inside AI response */
     .response-container a,
     .response-container a:visited {

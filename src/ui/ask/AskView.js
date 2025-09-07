@@ -346,18 +346,10 @@ export class AskView extends LitElement {
         const responseContainer = this.shadowRoot.getElementById('responseContainer');
         if (!responseContainer) return;
 
-        // Check loading state
+        // Preserve history; do not clear on loading/empty.
         if (this.isLoading) {
-            responseContainer.innerHTML = '';
-            this.resetStreamingParser();
-            return;
-        }
-
-        // If there is no response, show empty state
-        if (!this.currentResponse) {
-            responseContainer.innerHTML = '';
-            this.resetStreamingParser();
-            return;
+            // Prepare a streaming target so we don't wipe history
+            this.ensureAssistantStreamContainer(responseContainer);
         }
 
         // Ensure scroll handler exists
@@ -379,9 +371,10 @@ export class AskView extends LitElement {
 
     renderStreamingMarkdown(responseContainer) {
         try {
-            if (!this.smdParser || this.smdContainer !== responseContainer) {
-                this.smdContainer = responseContainer;
-                responseContainer.innerHTML = '';
+            const streamTarget = this.ensureAssistantStreamContainer(responseContainer);
+            if (!this.smdParser || this.smdContainer !== streamTarget) {
+                this.smdContainer = streamTarget;
+                streamTarget.innerHTML = '';
                 const renderer = default_renderer(this.smdContainer);
                 this.smdParser = parser(renderer);
                 this.displayBuffer = '';
@@ -411,13 +404,13 @@ export class AskView extends LitElement {
                         this.wordCount++;
 
                         if (this.hljs) {
-                            responseContainer.querySelectorAll('pre code:not([data-highlighted])').forEach(block => {
+                            this.smdContainer.querySelectorAll('pre code:not([data-highlighted])').forEach(block => {
                                 this.hljs.highlightElement(block);
                                 block.setAttribute('data-highlighted', 'true');
                             });
                         }
                         // Ensure links look and behave correctly
-                        this.decorateLinks(responseContainer);
+                        this.decorateLinks(this.smdContainer);
                         this.attachLinkInterceptor();
                         // Smart buffer handles resize frequency
                         this.adjustWindowHeightThrottled();
@@ -447,6 +440,54 @@ export class AskView extends LitElement {
         }
     }
 
+    ensureAssistantStreamContainer(responseContainer) {
+        // Return existing active stream if present
+        let active = responseContainer.querySelector('#assistantStream');
+        if (active) return active;
+
+        // Create assistant message wrapper
+        const msg = document.createElement('div');
+        msg.className = 'msg msg-assistant';
+        const avatar = document.createElement('div');
+        avatar.className = 'msg-avatar';
+        avatar.textContent = 'AI';
+        const bubble = document.createElement('div');
+        bubble.className = 'msg-bubble';
+        const inner = document.createElement('div');
+        inner.className = 'msg-content';
+        inner.id = 'assistantStream';
+        bubble.appendChild(inner);
+        msg.appendChild(avatar);
+        msg.appendChild(bubble);
+        responseContainer.appendChild(msg);
+        return inner;
+    }
+
+    appendUserMessage(text) {
+        const responseContainer = this.shadowRoot.getElementById('responseContainer');
+        if (!responseContainer) return;
+        const msg = document.createElement('div');
+        msg.className = 'msg msg-user';
+        const avatar = document.createElement('div');
+        avatar.className = 'msg-avatar';
+        avatar.textContent = 'You';
+        const bubble = document.createElement('div');
+        bubble.className = 'msg-bubble';
+        const inner = document.createElement('div');
+        inner.className = 'msg-content';
+        inner.textContent = text; // plain text to avoid injection
+        bubble.appendChild(inner);
+        msg.appendChild(bubble);
+        msg.appendChild(avatar);
+        responseContainer.appendChild(msg);
+
+        requestAnimationFrame(() => {
+            try {
+                responseContainer.scrollTop = responseContainer.scrollHeight;
+            } catch (_) {}
+        });
+    }
+
     attachResponseScrollHandler() {
         if (this._scrollHandlerAttached) return;
         const resp = this.shadowRoot?.getElementById('responseContainer');
@@ -462,6 +503,8 @@ export class AskView extends LitElement {
 
     renderFallbackContent(responseContainer) {
         const textToRender = this.currentResponse || '';
+        // Render into the active assistant stream container if available
+        const target = this.ensureAssistantStreamContainer(responseContainer);
 
         if (this.isLibrariesLoaded && this.marked && this.DOMPurify) {
             try {
@@ -506,21 +549,21 @@ export class AskView extends LitElement {
                     ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id', 'target', 'rel'],
                 });
 
-                responseContainer.innerHTML = cleanHtml;
+                target.innerHTML = cleanHtml;
 
                 // Apply code highlighting
                 if (this.hljs) {
-                    responseContainer.querySelectorAll('pre code').forEach(block => {
+                    target.querySelectorAll('pre code').forEach(block => {
                         this.hljs.highlightElement(block);
                     });
                 }
 
                 // Ensure links look and behave correctly
-                this.decorateLinks(responseContainer);
+                this.decorateLinks(target);
                 this.attachLinkInterceptor();
             } catch (error) {
                 console.error('Error in fallback rendering:', error);
-                responseContainer.textContent = textToRender;
+                target.textContent = textToRender;
             }
         } else {
             // Basic rendering when libraries are not loaded
@@ -534,8 +577,8 @@ export class AskView extends LitElement {
                 .replace(/\*(.*?)\*/g, '<em>$1</em>')
                 .replace(/`([^`]+)`/g, '<code>$1</code>');
 
-            responseContainer.innerHTML = `<p>${basicHtml}</p>`;
-            this.decorateLinks(responseContainer);
+            target.innerHTML = `<p>${basicHtml}</p>`;
+            this.decorateLinks(target);
             this.attachLinkInterceptor();
         }
     }
@@ -757,6 +800,11 @@ export class AskView extends LitElement {
         this.isStreaming = false;
         this.isAnimating = false;
 
+        // Finalize streaming container so a new one is created next time
+        const responseContainer = this.shadowRoot.getElementById('responseContainer');
+        const active = responseContainer?.querySelector('#assistantStream');
+        if (active) active.removeAttribute('id');
+
         // Final highlight check
         if (this.hljs && this.smdContainer) {
             this.smdContainer.querySelectorAll('pre code:not([data-highlighted])').forEach(block => {
@@ -783,6 +831,9 @@ export class AskView extends LitElement {
         if (!text) return;
 
         textInput.value = '';
+
+        // Append user's message to the chat thread immediately
+        this.appendUserMessage(text);
 
         if (window.api) {
             window.api.askView.sendMessage(text).catch(error => {

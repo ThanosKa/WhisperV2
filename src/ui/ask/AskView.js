@@ -26,6 +26,7 @@ export class AskView extends LitElement {
         isStreaming: { type: Boolean },
         windowHeight: { type: Number },
         interrupted: { type: Boolean },
+        isAnalyzing: { type: Boolean },
     };
 
     static styles = styles;
@@ -42,6 +43,7 @@ export class AskView extends LitElement {
         this.isStreaming = false;
         this.windowHeight = window.innerHeight;
         this.interrupted = false;
+        this.isAnalyzing = false;
 
         this.isAnimating = false; // Tracks typewriter animation state
 
@@ -70,6 +72,9 @@ export class AskView extends LitElement {
         this.handleEscKey = this.handleEscKey.bind(this);
         this.handleCloseAskWindow = this.handleCloseAskWindow.bind(this);
         this.handleCloseIfNoContent = this.handleCloseIfNoContent.bind(this);
+        
+        // Analyze timeout reference
+        this.analyzeTimeout = null;
 
         this.loadLibraries();
 
@@ -134,6 +139,11 @@ export class AskView extends LitElement {
                 this.isStreaming = newState.isStreaming;
                 this.interrupted = newState.interrupted;
 
+                // Handle analyze state transition
+                if (newState.isLoading && !wasLoading) {
+                    this.startAnalyzeState();
+                }
+
                 const wasHidden = !this.showTextInput;
                 this.showTextInput = newState.showTextInput;
 
@@ -193,6 +203,10 @@ export class AskView extends LitElement {
 
         if (this.streamingTimeout) {
             clearTimeout(this.streamingTimeout);
+        }
+
+        if (this.analyzeTimeout) {
+            clearTimeout(this.analyzeTimeout);
         }
 
         Object.values(this.lineCopyTimeouts).forEach(timeout => clearTimeout(timeout));
@@ -299,6 +313,7 @@ export class AskView extends LitElement {
         this.currentQuestion = '';
         this.isLoading = false;
         this.isStreaming = false;
+        this.isAnalyzing = false;
         this.headerText = 'AI Response';
         this.showTextInput = true;
         this.lastProcessedLength = 0;
@@ -307,6 +322,12 @@ export class AskView extends LitElement {
         this.wordCount = 0;
         this.interrupted = false;
         this._appendedCurrentQuestion = false;
+        
+        // Clear analyze timeout
+        if (this.analyzeTimeout) {
+            clearTimeout(this.analyzeTimeout);
+            this.analyzeTimeout = null;
+        }
     }
 
     clearConversationHistory() {
@@ -315,6 +336,23 @@ export class AskView extends LitElement {
             responseContainer.innerHTML = '';
         }
         console.log('Conversation history cleared');
+    }
+
+    startAnalyzeState() {
+        this.isAnalyzing = true;
+        
+        // Clear any existing timeout
+        if (this.analyzeTimeout) {
+            clearTimeout(this.analyzeTimeout);
+        }
+        
+        // Transition to thinking after 800ms
+        this.analyzeTimeout = setTimeout(() => {
+            this.isAnalyzing = false;
+            this.requestUpdate();
+        }, 800);
+        
+        this.requestUpdate();
     }
 
     handleInputFocus() {
@@ -1104,8 +1142,8 @@ export class AskView extends LitElement {
     updated(changedProperties) {
         super.updated(changedProperties);
 
-        // Redraw the view whenever isLoading or currentResponse changes
-        if (changedProperties.has('isLoading') || changedProperties.has('currentResponse')) {
+        // Redraw the view whenever isLoading, isAnalyzing, or currentResponse changes
+        if (changedProperties.has('isLoading') || changedProperties.has('isAnalyzing') || changedProperties.has('currentResponse')) {
             this.renderContent();
         }
 

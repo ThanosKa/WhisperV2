@@ -309,6 +309,22 @@ export const styles = css`
         animation: pulse 1.5s ease-in-out infinite;
     }
 
+    /* Thinking slide-in animation */
+    .response-label.thinking-slide-in {
+        animation: thinkingSlideIn 0.4s ease-out;
+    }
+
+    @keyframes thinkingSlideIn {
+        0% {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
     #textInput.pulsing::placeholder {
         animation: pulse 1.5s ease-in-out infinite;
     }

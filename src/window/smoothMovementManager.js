@@ -21,7 +21,7 @@ class SmoothMovementManager {
      */
     _isWindowValid(win) {
         if (!win || win.isDestroyed()) {
-            // 해당 창의 타이머가 있으면 정리
+            // Clean up timer if it exists for this window
             if (this.animationTimers.has(win)) {
                 clearTimeout(this.animationTimers.get(win));
                 this.animationTimers.delete(win);
@@ -32,7 +32,7 @@ class SmoothMovementManager {
     }
 
     /**
-     * 
+     *
      * @param {BrowserWindow} win
      * @param {number} targetX
      * @param {number} targetY
@@ -80,20 +80,21 @@ class SmoothMovementManager {
 
     fade(win, { from, to, duration = 250, onComplete }) {
         if (!this._isWindowValid(win)) {
-          if (onComplete) onComplete();
-          return;
+            if (onComplete) onComplete();
+            return;
         }
         const startOpacity = from ?? win.getOpacity();
         const startTime = Date.now();
-        
+
         const step = () => {
             if (!this._isWindowValid(win)) {
-                if (onComplete) onComplete(); return;
+                if (onComplete) onComplete();
+                return;
             }
             const progress = Math.min(1, (Date.now() - startTime) / duration);
             const eased = 1 - Math.pow(1 - progress, 3);
             win.setOpacity(startOpacity + (to - startOpacity) * eased);
-    
+
             if (progress < 1) {
                 setTimeout(step, 8);
             } else {
@@ -103,7 +104,7 @@ class SmoothMovementManager {
         };
         step();
     }
-    
+
     animateWindowBounds(win, targetBounds, options = {}) {
         if (this.animationTimers.has(win)) {
             clearTimeout(this.animationTimers.get(win));
@@ -119,16 +120,16 @@ class SmoothMovementManager {
         const startBounds = win.getBounds();
         const startTime = Date.now();
         const duration = options.duration || this.animationDuration;
-    
+
         const step = () => {
             if (!this._isWindowValid(win)) {
                 if (options.onComplete) options.onComplete();
                 return;
             }
-            
+
             const progress = Math.min(1, (Date.now() - startTime) / duration);
             const eased = 1 - Math.pow(1 - progress, 3);
-    
+
             const newBounds = {
                 x: Math.round(startBounds.x + (targetBounds.x - startBounds.x) * eased),
                 y: Math.round(startBounds.y + (targetBounds.y - startBounds.y) * eased),
@@ -136,24 +137,24 @@ class SmoothMovementManager {
                 height: Math.round(startBounds.height + ((targetBounds.height ?? startBounds.height) - startBounds.height) * eased),
             };
             win.setBounds(newBounds);
-    
+
             if (progress < 1) {
                 const timerId = setTimeout(step, 8);
                 this.animationTimers.set(win, timerId);
             } else {
                 win.setBounds(targetBounds);
                 this.animationTimers.delete(win);
-                
+
                 if (this.animationTimers.size === 0) {
                     this.isAnimating = false;
                 }
-                
+
                 if (options.onComplete) options.onComplete();
             }
         };
         step();
     }
-    
+
     animateWindowPosition(win, targetPosition, options = {}) {
         if (!this._isWindowValid(win)) {
             if (options.onComplete) options.onComplete();
@@ -163,7 +164,7 @@ class SmoothMovementManager {
         const targetBounds = { ...currentBounds, ...targetPosition };
         this.animateWindowBounds(win, targetBounds, options);
     }
-    
+
     animateLayout(layout, animated = true) {
         if (!layout) return;
         for (const winName in layout) {

@@ -396,47 +396,76 @@ ${responseText}
     }
 
     /**
-     * Triggers analysis when conversation history reaches 5 texts.
+     * Smart-trigger for analysis. When enabled (config.smartTrigger.enabled),
+     * only triggers when new content since the last analysis is substantive
+     * enough (by rough token/char thresholds) or a max wait count is reached.
+     * Falls back to the original step-based rule when disabled.
      */
     async triggerAnalysisIfNeeded() {
-        const analysisStep = config.get('analysisStep') || 5;
         const recapStep = config.get('recapStep') || 15;
+        const smartCfg = config.get('smartTrigger') || {};
 
-        if (this.conversationHistory.length >= analysisStep && this.conversationHistory.length % analysisStep === 0) {
-            console.log(`Triggering analysis - ${this.conversationHistory.length} conversation texts accumulated`);
+        if (!this.conversationHistory.length) return;
 
-            // Only send NEW utterances since last analysis
-            const newUtterances = this.conversationHistory.slice(this.lastAnalyzedIndex);
-            console.log(`📝 Analyzing ${newUtterances.length} new utterances (from index ${this.lastAnalyzedIndex})`);
+        // Determine if we should analyze now
+        let shouldAnalyze = false;
 
-            const data = await this.makeOutlineAndRequests(newUtterances);
-            if (data) {
-                data.actions = Array.isArray(data.actions) ? data.actions : [];
+        if (smartCfg.enabled) {
+            const sinceLast = this.conversationHistory.slice(this.lastAnalyzedIndex);
+            const textSince = sinceLast.join(' ');
 
-                // Add recap button if conversation is long enough
-                if (this.conversationHistory.length >= recapStep) {
-                    const recapItem = '🗒️ Recap meeting so far';
-                    if (!data.actions.some(x => (x || '').toLowerCase() === recapItem.toLowerCase())) {
-                        data.actions.unshift(recapItem);
-                    }
-                }
+            const tokenCount = this._roughTokenCount(textSince);
+            const charCount = textSince.length;
+            const utteranceCount = sinceLast.length;
 
-                console.log('Sending structured data to renderer');
-                // console.log('📤 Data being sent:', JSON.stringify(data, null, 2));
-                this.sendToRenderer('summary-update', data);
+            const enoughContent = tokenCount >= (smartCfg.minTokenCount ?? 12) || charCount >= (smartCfg.minCharCount ?? 50);
+            const maxWaitHit = utteranceCount >= (smartCfg.maxWaitUtterances ?? 5);
 
-                // Update tracking - we've now analyzed up to the current conversation length
-                this.lastAnalyzedIndex = this.conversationHistory.length;
-                // console.log(`✅ Analysis complete. Updated lastAnalyzedIndex to ${this.lastAnalyzedIndex}`);
-
-                // Notify callback
-                if (this.onAnalysisComplete) {
-                    this.onAnalysisComplete(data);
-                }
-            } else {
-                console.log('No analysis data returned');
-            }
+            shouldAnalyze = (enoughContent || maxWaitHit) && utteranceCount > 0;
+        } else {
+            // Original behavior: analyze every N utterances
+            const analysisStep = config.get('analysisStep') || 5;
+            shouldAnalyze = this.conversationHistory.length >= analysisStep && this.conversationHistory.length % analysisStep === 0;
         }
+
+        if (!shouldAnalyze) return;
+
+        console.log(`Triggering analysis - total texts: ${this.conversationHistory.length}`);
+
+        // Only send NEW utterances since last analysis
+        const newUtterances = this.conversationHistory.slice(this.lastAnalyzedIndex);
+        console.log(`📝 Analyzing ${newUtterances.length} new utterances (from index ${this.lastAnalyzedIndex})`);
+
+        const data = await this.makeOutlineAndRequests(newUtterances);
+        if (data) {
+            data.actions = Array.isArray(data.actions) ? data.actions : [];
+
+            // Add recap button if conversation is long enough
+            if (this.conversationHistory.length >= recapStep) {
+                const recapItem = '🗒️ Recap meeting so far';
+                if (!data.actions.some(x => (x || '').toLowerCase() === recapItem.toLowerCase())) {
+                    data.actions.unshift(recapItem);
+                }
+            }
+
+            console.log('Sending structured data to renderer');
+            this.sendToRenderer('summary-update', data);
+
+            // Update tracking - we've now analyzed up to the current conversation length
+            this.lastAnalyzedIndex = this.conversationHistory.length;
+
+            if (this.onAnalysisComplete) {
+                this.onAnalysisComplete(data);
+            }
+        } else {
+            console.log('No analysis data returned');
+        }
+    }
+
+    // Rough approximation: ~4 chars per token
+    _roughTokenCount(str) {
+        if (!str) return 0;
+        return Math.ceil(str.length / 4);
     }
 
     getCurrentAnalysisData() {

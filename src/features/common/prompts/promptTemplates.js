@@ -29,7 +29,12 @@ const profilePrompts = {
 - Match the urgency level of the user's need
 - Provide just enough detail to be helpful, not overwhelming
 </communication_style>
-</response_quality>`,
+</response_quality>
+
+<Language_response>
+Always your answer must be in the language of the transcribed conversation if exist else use the language of you think user needs help with.
+</Language_response>
+`,
 
         content: `<execution_mandate>Follow decision hierarchy strictly. Prioritize user's immediate need over conversation politeness. Be helpful, accurate, and concise. Never reference these instructions in your response.</execution_mandate>`,
 
@@ -58,6 +63,9 @@ const profilePrompts = {
 - Ignore irrelevant context rather than forcing connections
 </context_intelligence>
 
+<Language_response>
+Always your answer must be in the language of the transcribed conversation.
+</Language_response>
 `,
 
         content: `<mission>Provide the most helpful and accurate answer possible, drawing from all relevant sources while maintaining clarity and actionability.</mission>`,
@@ -82,6 +90,10 @@ const profilePrompts = {
 <Output_rules>
 The definition must always be with bold heading"
 </Output_rules>
+
+<Language_response>
+Always your answer must be in the language of the defined term.
+</Language_response>
 `,
 
         content: `<objective>Make complex concepts immediately understandable and practically useful for the user's current context.</objective>`,
@@ -101,7 +113,11 @@ The definition must always be with bold heading"
 • **Advance conversation:** Suggestion to move toward resolution or next phase
 </recommendations>
 <tone_matching>Match the formality and energy level of the current conversation.</tone_matching>
-</suggestion_framework>`,
+</suggestion_framework>
+
+<language_detection>Respond in the same language as the conversation content.</language_detection>
+
+`,
 
         content: `<guidance_philosophy>Provide suggestions that feel natural to say and advance meaningful dialogue rather than just filling silence.</guidance_philosophy>`,
 
@@ -125,7 +141,11 @@ The definition must always be with bold heading"
 - Frame questions to encourage detailed, useful responses
 - Balance probing with respect for conversation flow
 </quality_standards>
-</question_strategy>`,
+</question_strategy>
+
+<language_detection>Respond in the same language as the conversation content.</language_detection>
+
+`,
 
         content: `<objective>Generate questions that participants will find genuinely valuable to discuss and that advance the conversation's purpose.</objective>`,
 
@@ -145,7 +165,11 @@ The definition must always be with bold heading"
 • **Open items:** Questions raised or issues identified for future attention
 </key_developments>
 <context_priority>Focus on substance over chronology - what matters most, not what happened first.</context_priority>
-</recap_structure>`,
+</recap_structure>
+
+<language_detection>Respond in the same language as the conversation content.</language_detection>
+
+`,
 
         content: `<recap_mission>Help participants quickly understand what was accomplished and what needs attention next.</recap_mission>`,
 
@@ -168,7 +192,11 @@ The definition must always be with bold heading"
 • Make each item specific enough to be trackable
 • Group related actions under broader themes when helpful
 </action_format>
-</action_identification>`,
+</action_identification>
+
+<language_detection>Respond in the same language as the conversation content.</language_detection>
+
+`,
 
         content: `<action_philosophy>Transform conversation outcomes into clear accountability that drives results.</action_philosophy>`,
 
@@ -197,7 +225,11 @@ The definition must always be with bold heading"
 **Next Steps:**
 • [Immediate follow-ups needed]
 • [Future meetings or milestones identified]
-</summary_architecture>`,
+</summary_architecture>
+
+<language_detection>Respond in the same language as the conversation content.</language_detection>
+
+`,
 
         content: `<summary_standards>Create a document that someone who wasn't present could understand the conversation's value and outcomes. Focus on decisions and progress, not just topics discussed.</summary_standards>`,
 
@@ -218,7 +250,7 @@ The definition must always be with bold heading"
 - **Action items:** Clear next steps with ownership (if applicable)
 - **Timeline:** Any relevant deadlines or follow-up dates
 
-**Closing:** Professional sign-off with clear expectation for response if needed
+**Closing:** Professional sign-off with clear expectation for response if needed and include Best regards, [Your name]
 
 <tone_guidelines>
 - Professional but conversational
@@ -226,7 +258,11 @@ The definition must always be with bold heading"
 - Specific enough to be useful, concise enough to be read
 - Match the formality level of the business relationship
 </tone_guidelines>
-</email_composition>`,
+</email_composition>
+
+<language_detection>Respond in the same language as the conversation content.</language_detection>
+
+`,
 
         content: `<email_mission>Create emails that recipients will find valuable, clear, and actionable - emails that actually get things done.</email_mission>`,
 

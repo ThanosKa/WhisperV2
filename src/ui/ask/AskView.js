@@ -75,6 +75,11 @@ export class AskView extends LitElement {
 
         // Link interception flag
         this._linkHandlerAttached = false;
+
+        // Auto-scroll state
+        this._autoScroll = true; // keep scrolled to bottom while streaming
+        this._scrollHandlerAttached = false;
+        this._onResponseScroll = null;
     }
 
     connectedCallback() {
@@ -97,6 +102,9 @@ export class AskView extends LitElement {
 
         const container = this.shadowRoot?.querySelector('.ask-container');
         if (container) this.resizeObserver.observe(container);
+
+        // Attach scroll listener when response container is available
+        this.updateComplete.then(() => this.attachResponseScrollHandler());
 
         this.handleQuestionFromAssistant = (event, question) => {
             console.log('AskView: Received question from ListenView:', question);
@@ -181,6 +189,14 @@ export class AskView extends LitElement {
             }
             console.log('✅ AskView: IPC event listeners removal needed');
         }
+
+        // Detach scroll listener
+        const resp = this.shadowRoot?.getElementById('responseContainer');
+        if (resp && this._onResponseScroll) {
+            resp.removeEventListener('scroll', this._onResponseScroll);
+        }
+        this._scrollHandlerAttached = false;
+        this._onResponseScroll = null;
     }
 
     async loadLibraries() {
@@ -344,6 +360,9 @@ export class AskView extends LitElement {
             return;
         }
 
+        // Ensure scroll handler exists
+        this.attachResponseScrollHandler();
+
         // Set streaming markdown parser
         this.renderStreamingMarkdown(responseContainer);
 
@@ -369,6 +388,8 @@ export class AskView extends LitElement {
                 this.pendingText = '';
                 this.lastProcessedLength = 0;
                 this.wordCount = 0;
+                // New stream: re-enable auto-scroll by default
+                this._autoScroll = true;
             }
 
             this.pendingText = this.currentResponse;
@@ -400,6 +421,15 @@ export class AskView extends LitElement {
                         this.attachLinkInterceptor();
                         // Smart buffer handles resize frequency
                         this.adjustWindowHeightThrottled();
+
+                        // Auto-scroll to bottom while streaming unless user scrolled up
+                        if (this._autoScroll) {
+                            requestAnimationFrame(() => {
+                                try {
+                                    responseContainer.scrollTop = responseContainer.scrollHeight;
+                                } catch (_) {}
+                            });
+                        }
                     }
 
                     if (this.displayBuffer.length < this.pendingText.length || this.isStreaming) {
@@ -415,6 +445,19 @@ export class AskView extends LitElement {
             console.error('Streaming render error:', err);
             this.renderFallbackContent(responseContainer);
         }
+    }
+
+    attachResponseScrollHandler() {
+        if (this._scrollHandlerAttached) return;
+        const resp = this.shadowRoot?.getElementById('responseContainer');
+        if (!resp) return;
+        this._onResponseScroll = () => {
+            const threshold = 24; // px from bottom treated as "at bottom"
+            const distanceFromBottom = resp.scrollHeight - resp.scrollTop - resp.clientHeight;
+            this._autoScroll = distanceFromBottom <= threshold;
+        };
+        resp.addEventListener('scroll', this._onResponseScroll, { passive: true });
+        this._scrollHandlerAttached = true;
     }
 
     renderFallbackContent(responseContainer) {

@@ -94,11 +94,13 @@ export class AskView extends LitElement {
 
         this.resizeObserver = new ResizeObserver(entries => {
             for (const entry of entries) {
-                const needed = entry.contentRect.height;
-                const current = window.innerHeight;
+                const contentHeight = entry.contentRect.height;
+                const borderPadding = 10;
+                const targetHeight = Math.min(650, Math.max(50, contentHeight + borderPadding));
 
-                if (needed > current - 4) {
-                    this.requestWindowResize(Math.ceil(needed));
+                // Only resize if window is smaller than needed content
+                if (targetHeight > window.innerHeight - 4) {
+                    this.requestWindowResize(targetHeight);
                 }
             }
         });
@@ -373,6 +375,8 @@ export class AskView extends LitElement {
         // Show loading indicator during initial loading (before any response content)
         if (this.isLoading && !this.currentResponse) {
             this.ensureLoadingContainer(responseContainer);
+            // Enable auto-scroll for new loading state
+            this._autoScroll = true;
         } else {
             // Remove loading container when we start streaming content
             const loadingContainer = responseContainer.querySelector('#loadingContainer');
@@ -384,6 +388,8 @@ export class AskView extends LitElement {
         // Show streaming loading indicator when we're streaming but no content yet
         if (this.isStreaming && !this.currentResponse) {
             this.ensureStreamingLoadingContainer(responseContainer);
+            // Enable auto-scroll for new streaming loading state
+            this._autoScroll = true;
         } else {
             // Remove streaming loading container when content starts arriving
             const streamingLoadingContainer = responseContainer.querySelector('#streamingLoadingContainer');
@@ -552,6 +558,14 @@ export class AskView extends LitElement {
         msg.appendChild(inner);
         msg.appendChild(copyButton);
         responseContainer.appendChild(msg);
+
+        // Auto-scroll to show the loading indicator
+        requestAnimationFrame(() => {
+            try {
+                responseContainer.scrollTop = responseContainer.scrollHeight;
+            } catch (_) {}
+        });
+
         return inner;
     }
 
@@ -592,6 +606,14 @@ export class AskView extends LitElement {
         msg.appendChild(inner);
         msg.appendChild(copyButton);
         responseContainer.appendChild(msg);
+
+        // Auto-scroll to show the streaming loading indicator
+        requestAnimationFrame(() => {
+            try {
+                responseContainer.scrollTop = responseContainer.scrollHeight;
+            } catch (_) {}
+        });
+
         return inner;
     }
 
@@ -786,7 +808,7 @@ export class AskView extends LitElement {
 
     requestWindowResize(targetHeight) {
         if (window.api) {
-            window.api.askView.adjustWindowHeight(targetHeight);
+            window.api.askView.adjustWindowHeight('ask', targetHeight);
         }
     }
 
@@ -1110,38 +1132,21 @@ export class AskView extends LitElement {
         return renderTemplate(this);
     }
 
-    // Simple window height with small buffer
+    // Simple window height calculation based on actual content
     adjustWindowHeight() {
         if (!window.api) return;
 
         this.updateComplete
             .then(() => {
-                const headerEl = this.shadowRoot.querySelector('.response-header');
-                const responseEl = this.shadowRoot.querySelector('.response-container');
-                const inputEl = this.shadowRoot.querySelector('.text-input-container');
+                const container = this.shadowRoot.querySelector('.ask-container');
+                if (!container) return;
 
-                if (!headerEl || !responseEl) return;
+                // Get the actual content height by measuring the container's scroll height
+                const contentHeight = container.scrollHeight;
+                const borderPadding = 10; // Small buffer for borders/padding
 
-                const headerHeight = headerEl.classList.contains('hidden') ? 0 : headerEl.offsetHeight;
-                const responseHeight = responseEl.classList.contains('hidden') ? 0 : responseEl.scrollHeight;
-                const inputHeight = inputEl && !inputEl.classList.contains('hidden') ? inputEl.offsetHeight : 0;
+                const targetHeight = Math.min(650, Math.max(50, contentHeight + borderPadding));
 
-                const borderPadding = 10;
-                let idealHeight = headerHeight + responseHeight + inputHeight + borderPadding;
-
-                const hasResponse = this.isLoading || this.currentResponse || this.isStreaming;
-                const CONSISTENT_BASE_HEIGHT = 50;
-
-                if (!hasResponse) {
-                    idealHeight = CONSISTENT_BASE_HEIGHT;
-                } else if (this.isLoading && !this.currentResponse) {
-                    idealHeight = CONSISTENT_BASE_HEIGHT;
-                } else {
-                    // Add buffer to reduce resizing
-                    idealHeight += 0;
-                }
-
-                const targetHeight = Math.min(650, Math.max(CONSISTENT_BASE_HEIGHT, idealHeight));
                 this.windowHeight = targetHeight;
                 window.api.askView.adjustWindowHeight('ask', targetHeight);
             })

@@ -56,7 +56,9 @@ const profilePrompts = {
 - Clearly distinguish between general knowledge and context-specific information
 - If context contradicts your knowledge, acknowledge both perspectives
 - Ignore irrelevant context rather than forcing connections
-</context_intelligence>`,
+</context_intelligence>
+
+`,
 
         content: `<mission>Provide the most helpful and accurate answer possible, drawing from all relevant sources while maintaining clarity and actionability.</mission>`,
 
@@ -75,7 +77,12 @@ const profilePrompts = {
 - For general terms: Focus on most relevant meaning for the situation
 </context_adaptation>
 <enhancement>Add one key insight that makes the definition more useful (origin, significance, common misconceptions, or related concepts).</enhancement>
-</definition_strategy>`,
+</definition_strategy>
+
+<Output_rules>
+The definition must always be with bold heading"
+</Output_rules>
+`,
 
         content: `<objective>Make complex concepts immediately understandable and practically useful for the user's current context.</objective>`,
 
@@ -235,18 +242,17 @@ const profilePrompts = {
 
 <insight_extraction>
 **Meeting Insights**
-• [Current discussion themes and their significance]
-• [Key decisions or conclusions with context]  
-• [Progress indicators or achievements noted]
-• [Challenges or concerns identified]
+- Key discussion points and current topics
+- Important decisions or conclusions reached
+- Progress made or next steps mentioned
 
 **Questions Detected**
-1. "[Exact question text from transcript]"
-2. "[Additional questions only if present]"
+1. [Exact question text from transcript]
+2. [Another exact question if present]
 
 **Terms to Define**
-• [Technical, business, or specialized terms that participants might benefit from having defined]
-• [Industry-specific terminology or concepts mentioned]
+- [Technical term that may need explanation]
+- [Another term if present]
 
 <quality_criteria>
 - Insights should be substantive (5-10 words each) and actionable
@@ -256,6 +262,14 @@ const profilePrompts = {
 - Exclude terms already in existing definitions list
 </quality_criteria>
 </insight_extraction>
+
+<Output_rules>
+If there are no questions or terms to define, don't include them in the output.
+If there are no insights, don't include them in the output.
+Never return "No questions detected" or "No terms to define" or "No insights" e.t.c in the output
+The terms to be defined must be a term not an answer for e.g Define X
+Do not return multiple exact same terms. For example Define AI, define Articifical Inteligence. These defines are the same.
+</Output_rules>
 
 <existing_definitions>
 {existing_definitions}

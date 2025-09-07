@@ -82,8 +82,8 @@ class AuthService {
                         const idToken = await user.getIdToken(true);
                         const virtualKey = await getVirtualKeyByEmail(user.email, idToken);
 
-                        if (global.modelStateService) {
-                            // The model state service now writes directly to the DB, no in-memory state.
+                        if (global.modelStateService && typeof global.modelStateService.setFirebaseVirtualKey === 'function') {
+                            // Optional integration: only call if supported
                             await global.modelStateService.setFirebaseVirtualKey(virtualKey);
                         }
                         console.log(`[AuthService] Virtual key for ${user.email} has been processed and state updated.`);
@@ -96,9 +96,13 @@ class AuthService {
                     console.log(`[AuthService] No Firebase user.`);
                     if (previousUser) {
                         console.log(`[AuthService] Clearing API key for logged-out user: ${previousUser.uid}`);
-                        if (global.modelStateService) {
-                            // The model state service now writes directly to the DB.
-                            await global.modelStateService.setFirebaseVirtualKey(null);
+                        if (global.modelStateService && typeof global.modelStateService.setFirebaseVirtualKey === 'function') {
+                            try {
+                                // Optional integration: only call if supported
+                                await global.modelStateService.setFirebaseVirtualKey(null);
+                            } catch (e) {
+                                console.warn('[AuthService] Failed to clear virtual key during logout:', e.message);
+                            }
                         }
                     }
                     this.currentUser = null;

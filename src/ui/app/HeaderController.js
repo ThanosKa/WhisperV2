@@ -1,4 +1,5 @@
 import './MainHeader.js';
+import './AuthHeader.js';
 import './ApiKeyHeader.js';
 import './PermissionHeader.js';
 // import './WelcomeHeader.js';
@@ -6,7 +7,7 @@ import './PermissionHeader.js';
 class HeaderTransitionManager {
     constructor() {
         this.headerContainer = document.getElementById('header-container');
-        this.currentHeaderType = null; // 'apikey' | 'main' | 'permission'
+        this.currentHeaderType = null; // 'auth' | 'apikey' | 'main' | 'permission'
         // this.welcomeHeader = null;
         this.apiKeyHeader = null;
         this.mainHeader = null;
@@ -29,9 +30,15 @@ class HeaderTransitionManager {
             this.apiKeyHeader = null;
             this.mainHeader = null;
             this.permissionHeader = null;
+            this.authHeader = null;
 
             // Create new header element
-            if (type === 'apikey') {
+            if (type === 'auth') {
+                this.authHeader = document.createElement('auth-header');
+                this.headerContainer.appendChild(this.authHeader);
+                this.authHeader.startSlideInAnimation?.();
+                console.log('[HeaderController] ensureHeader: Header of type:', type, 'created.');
+            } else if (type === 'apikey') {
                 this.apiKeyHeader = document.createElement('apikey-header');
                 this.apiKeyHeader.stateUpdateCallback = userState => this.handleStateUpdate(userState);
                 this.apiKeyHeader.addEventListener('request-resize', e => {
@@ -109,27 +116,25 @@ class HeaderTransitionManager {
             this.handleStateUpdate(userState);
         } else {
             // Fallback for non-electron environment (testing/web)
-            this.ensureHeader('apikey');
+            this.ensureHeader('auth');
         }
     }
 
     //////// after_modelStateService ////////
     async handleStateUpdate(userState) {
-        // const isConfigured = await window.api.apiKeyHeader.areProvidersConfigured();
+        const isLoggedIn = !!(userState && userState.isLoggedIn);
+        if (!isLoggedIn) {
+            await this._resizeForAuth();
+            this.ensureHeader('auth');
+            return;
+        }
 
-        // if (isConfigured) {
-        // If providers are configured, always check permissions regardless of login state.
         const permissionResult = await this.checkPermissions();
         if (permissionResult.success) {
             this.transitionToMainHeader();
         } else {
             this.transitionToPermissionHeader();
         }
-        // } else {
-        //     // If no providers are configured, show the apikey header to prompt for setup.
-        //     await this._resizeForApiKey(400);
-        //     this.ensureHeader('apikey');
-        // }
     }
 
     async transitionToPermissionHeader() {
@@ -196,6 +201,12 @@ class HeaderTransitionManager {
         if (!window.api) return;
         console.log(`[HeaderController] _resizeForApiKey: Resizing window to 456x${height}`);
         return window.api.headerController.resizeHeaderWindow({ width: 456, height: height }).catch(() => {});
+    }
+
+    async _resizeForAuth(height = 50) {
+        if (!window.api) return;
+        console.log(`[HeaderController] _resizeForAuth: Resizing window to 520x${height}`);
+        return window.api.headerController.resizeHeaderWindow({ width: 520, height }).catch(() => {});
     }
 
     async _resizeForPermissionHeader(height) {

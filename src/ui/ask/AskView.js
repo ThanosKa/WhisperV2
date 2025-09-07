@@ -49,6 +49,9 @@ export class AskView extends LitElement {
         this.typewriterInterval = null; // interval id
         this.pendingText = ''; // full answer still arriving
 
+        // Tracks whether we already appended the current question locally
+        this._appendedCurrentQuestion = false;
+
         this.marked = null;
         this.hljs = null;
         this.DOMPurify = null;
@@ -122,6 +125,7 @@ export class AskView extends LitElement {
                 }
             });
             window.api.askView.onAskStateUpdate((event, newState) => {
+                const wasLoading = this.isLoading;
                 this.currentResponse = newState.currentResponse;
                 this.currentQuestion = newState.currentQuestion;
                 this.isLoading = newState.isLoading;
@@ -136,6 +140,16 @@ export class AskView extends LitElement {
                         this.updateComplete.then(() => this.focusTextInput());
                     } else {
                         this.focusTextInput();
+                    }
+                }
+
+                // If a new request started from backend (no local append), add user bubble
+                if (newState.isLoading && !wasLoading && newState.currentQuestion) {
+                    if (this._appendedCurrentQuestion) {
+                        // We already appended locally for this question; reset flag to avoid duplicates
+                        this._appendedCurrentQuestion = false;
+                    } else {
+                        this.appendUserMessage(newState.currentQuestion);
                     }
                 }
             });
@@ -256,7 +270,8 @@ export class AskView extends LitElement {
     }
 
     handleCloseAskWindow() {
-        // this.clearResponseContent();
+        this.clearResponseContent();
+        this.clearConversationHistory();
         window.api.askView.closeAskWindow();
     }
 
@@ -289,6 +304,15 @@ export class AskView extends LitElement {
         this.smdContainer = null;
         this.wordCount = 0;
         this.interrupted = false;
+        this._appendedCurrentQuestion = false;
+    }
+
+    clearConversationHistory() {
+        const responseContainer = this.shadowRoot?.getElementById('responseContainer');
+        if (responseContainer) {
+            responseContainer.innerHTML = '';
+        }
+        console.log('Conversation history cleared');
     }
 
     handleInputFocus() {
@@ -346,17 +370,35 @@ export class AskView extends LitElement {
         const responseContainer = this.shadowRoot.getElementById('responseContainer');
         if (!responseContainer) return;
 
-        // Preserve history; do not clear on loading/empty.
-        if (this.isLoading) {
-            // Prepare a streaming target so we don't wipe history
-            this.ensureAssistantStreamContainer(responseContainer);
+        // Show loading indicator during initial loading (before any response content)
+        if (this.isLoading && !this.currentResponse) {
+            this.ensureLoadingContainer(responseContainer);
+        } else {
+            // Remove loading container when we start streaming content
+            const loadingContainer = responseContainer.querySelector('#loadingContainer');
+            if (loadingContainer) {
+                loadingContainer.parentElement.remove();
+            }
+        }
+
+        // Show streaming loading indicator when we're streaming but no content yet
+        if (this.isStreaming && !this.currentResponse) {
+            this.ensureStreamingLoadingContainer(responseContainer);
+        } else {
+            // Remove streaming loading container when content starts arriving
+            const streamingLoadingContainer = responseContainer.querySelector('#streamingLoadingContainer');
+            if (streamingLoadingContainer) {
+                streamingLoadingContainer.parentElement.remove();
+            }
         }
 
         // Ensure scroll handler exists
         this.attachResponseScrollHandler();
 
         // Set streaming markdown parser
-        this.renderStreamingMarkdown(responseContainer);
+        if (this.currentResponse) {
+            this.renderStreamingMarkdown(responseContainer);
+        }
 
         // After updating content, recalculate window height
         this.adjustWindowHeightThrottled();
@@ -445,20 +487,110 @@ export class AskView extends LitElement {
         let active = responseContainer.querySelector('#assistantStream');
         if (active) return active;
 
-        // Create assistant message wrapper
+        // Create minimal assistant message block (no avatar/text, no background)
         const msg = document.createElement('div');
         msg.className = 'msg msg-assistant';
-        const avatar = document.createElement('div');
-        avatar.className = 'msg-avatar';
-        avatar.textContent = 'AI';
-        const bubble = document.createElement('div');
-        bubble.className = 'msg-bubble';
         const inner = document.createElement('div');
         inner.className = 'msg-content';
         inner.id = 'assistantStream';
-        bubble.appendChild(inner);
-        msg.appendChild(avatar);
-        msg.appendChild(bubble);
+
+        // Add copy button for AI messages (hidden during streaming)
+        const copyButton = document.createElement('button');
+        copyButton.className = 'msg-copy-button';
+        copyButton.style.display = 'none'; // Hide during streaming
+        copyButton.innerHTML = `
+            <svg class="copy-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+            </svg>
+            <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M20 6L9 17l-5-5" />
+            </svg>
+        `;
+        copyButton.addEventListener('click', () => this.handleMessageCopy(inner));
+
+        msg.appendChild(inner);
+        msg.appendChild(copyButton);
+        responseContainer.appendChild(msg);
+        return inner;
+    }
+
+    ensureLoadingContainer(responseContainer) {
+        // Return existing loading container if present
+        let loading = responseContainer.querySelector('#loadingContainer');
+        if (loading) return loading;
+
+        // Create loading message block with bouncing dots
+        const msg = document.createElement('div');
+        msg.className = 'msg msg-assistant';
+        const inner = document.createElement('div');
+        inner.className = 'msg-content loading-indicator';
+        inner.id = 'loadingContainer';
+        inner.innerHTML = `
+            <div class="thinking-dots">
+                <div class="thinking-dot"></div>
+                <div class="thinking-dot"></div>
+                <div class="thinking-dot"></div>
+            </div>
+        `;
+
+        // Add copy button for loading messages (hidden initially)
+        const copyButton = document.createElement('button');
+        copyButton.className = 'msg-copy-button';
+        copyButton.style.display = 'none'; // Hide for loading state
+        copyButton.innerHTML = `
+            <svg class="copy-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+            </svg>
+            <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M20 6L9 17l-5-5" />
+            </svg>
+        `;
+        copyButton.addEventListener('click', () => this.handleMessageCopy(inner));
+
+        msg.appendChild(inner);
+        msg.appendChild(copyButton);
+        responseContainer.appendChild(msg);
+        return inner;
+    }
+
+    ensureStreamingLoadingContainer(responseContainer) {
+        // Return existing streaming loading container if present
+        let loading = responseContainer.querySelector('#streamingLoadingContainer');
+        if (loading) return loading;
+
+        // Create streaming loading message block with bouncing dots
+        const msg = document.createElement('div');
+        msg.className = 'msg msg-assistant';
+        const inner = document.createElement('div');
+        inner.className = 'msg-content loading-indicator';
+        inner.id = 'streamingLoadingContainer';
+        inner.innerHTML = `
+            <div class="thinking-dots">
+                <div class="thinking-dot"></div>
+                <div class="thinking-dot"></div>
+                <div class="thinking-dot"></div>
+            </div>
+        `;
+
+        // Add copy button for streaming loading messages (hidden initially)
+        const copyButton = document.createElement('button');
+        copyButton.className = 'msg-copy-button';
+        copyButton.style.display = 'none'; // Hide for loading state
+        copyButton.innerHTML = `
+            <svg class="copy-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+            </svg>
+            <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M20 6L9 17l-5-5" />
+            </svg>
+        `;
+        copyButton.addEventListener('click', () => this.handleMessageCopy(inner));
+
+        msg.appendChild(inner);
+        msg.appendChild(copyButton);
         responseContainer.appendChild(msg);
         return inner;
     }
@@ -468,17 +600,26 @@ export class AskView extends LitElement {
         if (!responseContainer) return;
         const msg = document.createElement('div');
         msg.className = 'msg msg-user';
-        const avatar = document.createElement('div');
-        avatar.className = 'msg-avatar';
-        avatar.textContent = 'You';
-        const bubble = document.createElement('div');
-        bubble.className = 'msg-bubble';
         const inner = document.createElement('div');
-        inner.className = 'msg-content';
+        inner.className = 'msg-content msg-user-bubble';
         inner.textContent = text; // plain text to avoid injection
-        bubble.appendChild(inner);
-        msg.appendChild(bubble);
-        msg.appendChild(avatar);
+
+        // Add copy button for user messages
+        const copyButton = document.createElement('button');
+        copyButton.className = 'msg-copy-button';
+        copyButton.innerHTML = `
+            <svg class="copy-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+            </svg>
+            <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M20 6L9 17l-5-5" />
+            </svg>
+        `;
+        copyButton.addEventListener('click', () => this.handleMessageCopy(inner));
+
+        msg.appendChild(inner);
+        msg.appendChild(copyButton);
         responseContainer.appendChild(msg);
 
         requestAnimationFrame(() => {
@@ -486,6 +627,7 @@ export class AskView extends LitElement {
                 responseContainer.scrollTop = responseContainer.scrollHeight;
             } catch (_) {}
         });
+        this.adjustWindowHeightThrottled();
     }
 
     attachResponseScrollHandler() {
@@ -581,6 +723,13 @@ export class AskView extends LitElement {
             this.decorateLinks(target);
             this.attachLinkInterceptor();
         }
+
+        // Show copy button for completed fallback content
+        const msgContainer = target.closest('.msg');
+        const copyButton = msgContainer?.querySelector('.msg-copy-button');
+        if (copyButton) {
+            copyButton.style.display = 'flex';
+        }
     }
 
     // Add target/rel/class to anchors as they appear
@@ -602,12 +751,15 @@ export class AskView extends LitElement {
         this._linkHandlerAttached = true;
 
         // Delegate on the component's shadow root to catch dynamic links
-        this.shadowRoot?.addEventListener('click', (e) => {
+        this.shadowRoot?.addEventListener('click', e => {
             // Find the first anchor in the composed path
             const path = e.composedPath ? e.composedPath() : [];
             let anchor = null;
             for (const el of path) {
-                if (el && el.tagName === 'A') { anchor = el; break; }
+                if (el && el.tagName === 'A') {
+                    anchor = el;
+                    break;
+                }
             }
             if (!anchor) return;
 
@@ -707,6 +859,58 @@ export class AskView extends LitElement {
         return text;
     }
 
+    async handleMessageCopy(messageElement) {
+        const messageText = messageElement.textContent?.trim() || '';
+        if (!messageText) return;
+
+        try {
+            await navigator.clipboard.writeText(messageText);
+            console.log('Message copied to clipboard');
+
+            // Add visual feedback - find the copy button in the parent message container
+            const msgContainer = messageElement.closest('.msg');
+            const copyButton = msgContainer?.querySelector('.msg-copy-button');
+            if (copyButton) {
+                copyButton.classList.add('copied');
+                setTimeout(() => {
+                    copyButton.classList.remove('copied');
+                }, 1500);
+            }
+        } catch (err) {
+            console.error('Failed to copy message:', err);
+        }
+    }
+
+    getConversationHistory() {
+        const responseContainer = this.shadowRoot?.getElementById('responseContainer');
+        if (!responseContainer) return '';
+
+        const messages = [];
+        const userMessages = responseContainer.querySelectorAll('.msg-user .msg-content');
+        const aiMessages = responseContainer.querySelectorAll('.msg-assistant .msg-content');
+
+        // Assuming alternating pattern: user message, then AI response
+        const maxLength = Math.max(userMessages.length, aiMessages.length);
+
+        for (let i = 0; i < maxLength; i++) {
+            if (userMessages[i]) {
+                const questionText = userMessages[i].textContent?.trim() || '';
+                if (questionText) {
+                    messages.push(`Question ${i + 1}: ${questionText}`);
+                }
+            }
+            if (aiMessages[i]) {
+                const answerText = aiMessages[i].textContent?.trim() || '';
+                if (answerText) {
+                    messages.push(`Answer ${i + 1}: ${answerText}`);
+                }
+            }
+            if (i < maxLength - 1) messages.push(''); // Empty line between Q&A pairs
+        }
+
+        return messages.join('\n');
+    }
+
     async handleCopy() {
         if (this.copyState === 'copied') return;
 
@@ -722,7 +926,9 @@ export class AskView extends LitElement {
             }
         }
 
-        const textToCopy = `Question: ${this.currentQuestion}\n\nAnswer: ${responseToCopy}`;
+        // For global copy, include full conversation context
+        const conversationHistory = this.getConversationHistory();
+        const textToCopy = conversationHistory.length > 0 ? conversationHistory : `Question: ${this.currentQuestion}\n\nAnswer: ${responseToCopy}`;
 
         try {
             await navigator.clipboard.writeText(textToCopy);
@@ -803,7 +1009,15 @@ export class AskView extends LitElement {
         // Finalize streaming container so a new one is created next time
         const responseContainer = this.shadowRoot.getElementById('responseContainer');
         const active = responseContainer?.querySelector('#assistantStream');
-        if (active) active.removeAttribute('id');
+        if (active) {
+            active.removeAttribute('id');
+            // Show copy button for completed AI message
+            const msgContainer = active.closest('.msg');
+            const copyButton = msgContainer?.querySelector('.msg-copy-button');
+            if (copyButton) {
+                copyButton.style.display = 'flex';
+            }
+        }
 
         // Final highlight check
         if (this.hljs && this.smdContainer) {
@@ -827,13 +1041,21 @@ export class AskView extends LitElement {
 
     async handleSendText(e, overridingText = '') {
         const textInput = this.shadowRoot?.getElementById('textInput');
-        const text = (overridingText || textInput?.value || '').trim();
-        if (!text) return;
+        let text = (overridingText || textInput?.value || '').trim();
 
-        textInput.value = '';
+        // If no text provided, use the hardcoded fallback
+        if (!text) {
+            text = 'Assist me';
+        }
+
+        if (textInput) {
+            textInput.value = '';
+        }
 
         // Append user's message to the chat thread immediately
         this.appendUserMessage(text);
+        // Mark that we've appended locally so backend update won't duplicate
+        this._appendedCurrentQuestion = true;
 
         if (window.api) {
             window.api.askView.sendMessage(text).catch(error => {

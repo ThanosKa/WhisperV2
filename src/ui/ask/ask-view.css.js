@@ -85,11 +85,20 @@ export const styles = css`
         user-select: none;
     }
 
-    /* Allow text selection in assistant responses */
+    /* Allow text selection in assistant responses (no I-beam cursor) */
     .response-container,
     .response-container * {
         user-select: text !important;
-        cursor: text !important;
+        /* Do not force text cursor; keep default so no hover cursor change */
+    }
+
+    /* Override cursor for interactive elements */
+    .response-container button,
+    .response-container .copy-button,
+    .response-container .msg-copy-button,
+    .response-container .line-copy-button,
+    .response-container a {
+        cursor: pointer !important;
     }
 
     .response-container .code-chrome {
@@ -345,15 +354,13 @@ export const styles = css`
     }
 
     @keyframes thinkingDotPulse {
-        0%,
-        80%,
-        100% {
-            opacity: 0.3;
-            transform: scale(0.8);
+        0%, 80%, 100% {
+            opacity: 0.4;
+            transform: scale(0.8) translateY(0);
         }
         40% {
             opacity: 1;
-            transform: scale(1.2);
+            transform: scale(1.2) translateY(-6px);
         }
     }
 
@@ -397,7 +404,7 @@ export const styles = css`
         border: 1px solid rgba(255, 255, 255, 0.15);
         padding: 4px;
         border-radius: 3px;
-        cursor: pointer;
+        cursor: pointer !important;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -421,6 +428,8 @@ export const styles = css`
         transition:
             opacity 0.2s ease-in-out,
             transform 0.2s ease-in-out;
+        cursor: pointer !important;
+        pointer-events: none;
     }
 
     .copy-button .check-icon {
@@ -491,6 +500,69 @@ export const styles = css`
         gap: 8px;
         margin-bottom: 10px;
         align-items: flex-start;
+        animation: messageSlideIn 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        position: relative;
+    }
+    
+    /* Hover state for messages to show copy button */
+    .response-container .msg:hover .msg-copy-button {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    
+    /* Per-message copy button */
+    .msg-copy-button {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: rgba(0, 0, 0, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 4px;
+        padding: 4px;
+        cursor: pointer !important;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease, background-color 0.15s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        z-index: 10;
+    }
+    
+    .msg-copy-button:hover {
+        background: rgba(0, 0, 0, 0.9);
+    }
+    
+    /* Match header copy button behavior on copy (icon swap only, no green bg) */
+    .msg-copy-button.copied {
+        background: rgba(0, 0, 0, 0.8);
+    }
+    
+    .msg-copy-button svg {
+        width: 12px;
+        height: 12px;
+        color: rgba(255, 255, 255, 0.9);
+        transition: opacity 0.2s ease, transform 0.2s ease;
+        cursor: pointer !important;
+        pointer-events: none;
+    }
+    
+    .msg-copy-button .check-icon {
+        opacity: 0;
+        transform: scale(0.5);
+        position: absolute;
+    }
+    
+    .msg-copy-button.copied .copy-icon {
+        opacity: 0;
+        transform: scale(0.5);
+    }
+    
+    .msg-copy-button.copied .check-icon {
+        opacity: 1;
+        transform: scale(1);
     }
     .response-container .msg-user {
         justify-content: flex-end;
@@ -498,36 +570,38 @@ export const styles = css`
     .response-container .msg-assistant {
         justify-content: flex-start;
     }
-    .response-container .msg-avatar {
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.15);
-        color: #fff;
-        font-size: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex: 0 0 20px;
-        user-select: none;
-    }
+    .response-container .msg-avatar { display: none; }
     .response-container .msg-user .msg-avatar {
         order: 2;
     }
-    .response-container .msg-bubble {
-        max-width: 85%;
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        border-radius: 10px;
-        padding: 8px 10px;
-    }
-    .response-container .msg-user .msg-bubble {
-        background: rgba(255, 255, 255, 0.12);
-    }
-    .response-container .msg-content {
-        overflow: hidden;
+    .response-container .msg-bubble { background: transparent; border: none; padding: 0; }
+    .response-container .msg-content { overflow: hidden; margin: 6px 0; }
+    
+    .response-container .msg-assistant .msg-content {
+        /* Reserve space on the right for the copy button to avoid overlap */
+        padding-right: 36px;
+        box-sizing: border-box;
     }
 
+    /* User message bubble styling */
+    .response-container .msg-user-bubble {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 12px;
+        /* Reserve space on the right for the copy button to avoid overlap */
+        padding: 8px 36px 8px 12px;
+        max-width: 300px;
+        word-wrap: break-word;
+        color: rgba(255, 255, 255, 0.95);
+    }
+    
+    /* AI loading indicator */
+    .response-container .loading-indicator {
+        display: flex;
+        align-items: center;
+        padding: 8px 0;
+    }
+    
     /* Link styling inside AI response */
     .response-container a,
     .response-container a:visited {
@@ -636,15 +710,13 @@ export const styles = css`
     }
 
     @keyframes pulse {
-        0%,
-        80%,
-        100% {
-            opacity: 0.3;
-            transform: scale(0.8);
+        0%, 80%, 100% {
+            opacity: 0.4;
+            transform: scale(0.8) translateY(0);
         }
         40% {
             opacity: 1;
-            transform: scale(1.2);
+            transform: scale(1.2) translateY(-5px);
         }
     }
 
@@ -669,7 +741,7 @@ export const styles = css`
         border: 1px solid rgba(255, 255, 255, 0.2);
         border-radius: 3px;
         padding: 2px;
-        cursor: pointer;
+        cursor: pointer !important;
         opacity: 0;
         transition:
             opacity 0.15s ease,
@@ -697,6 +769,8 @@ export const styles = css`
         width: 12px;
         height: 12px;
         stroke: rgba(255, 255, 255, 0.9);
+        cursor: pointer !important;
+        pointer-events: none;
     }
 
     .text-input-container {
@@ -837,6 +911,17 @@ export const styles = css`
         }
     }
 
+    @keyframes messageSlideIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
     .empty-state {
         display: flex;
         align-items: center;
@@ -861,6 +946,7 @@ export const styles = css`
     :host-context(body.has-glass) .copy-button,
     :host-context(body.has-glass) .close-button,
     :host-context(body.has-glass) .line-copy-button,
+    :host-context(body.has-glass) .msg-copy-button,
     :host-context(body.has-glass) .text-input-container,
     :host-context(body.has-glass) .response-container pre,
     :host-context(body.has-glass) .response-container p code,
@@ -881,7 +967,9 @@ export const styles = css`
     :host-context(body.has-glass) .close-button:hover,
     :host-context(body.has-glass) .line-copy-button,
     :host-context(body.has-glass) .line-copy-button:hover,
-    :host-context(body.has-glass) .response-line:hover {
+    :host-context(body.has-glass) .msg-copy-button:hover,
+    :host-context(body.has-glass) .response-line:hover,
+    :host-context(body.has-glass) .msg:hover {
         background: transparent !important;
     }
 
@@ -1014,6 +1102,9 @@ export const styles = css`
         display: flex;
         align-items: center;
         gap: 4px;
+    }
+
+    .response-header .thinking-dots {
         margin-left: 8px;
     }
 
@@ -1053,16 +1144,15 @@ export const styles = css`
         animation-delay: 0.4s;
     }
 
-    /* Dot wave animation - exact copy from previous project */
+    /* Dot wave animation - bouncing version for typing indicator */
     @keyframes dotWave {
-        0%,
-        100% {
-            opacity: 0.3;
-            transform: scale(0.8);
+        0%, 80%, 100% {
+            opacity: 0.4;
+            transform: scale(0.8) translateY(0);
         }
-        50% {
+        40% {
             opacity: 1;
-            transform: scale(1.2);
+            transform: scale(1.2) translateY(-6px);
         }
     }
 `;

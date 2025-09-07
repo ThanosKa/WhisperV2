@@ -52,6 +52,9 @@ export class SttView extends LitElement {
             font-size: 13px;
             margin-bottom: 4px;
             box-sizing: border-box;
+            position: relative;
+            cursor: pointer;
+            transition: background-color 0.15s ease;
         }
 
         .stt-message.them {
@@ -62,12 +65,81 @@ export class SttView extends LitElement {
             margin-right: auto;
         }
 
+        .stt-message.them:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
         .stt-message.me {
             background: rgba(0, 122, 255, 0.8);
             color: white;
             align-self: flex-end;
             border-bottom-right-radius: 4px;
             margin-left: auto;
+        }
+
+        .stt-message.me:hover {
+            background: rgba(0, 122, 255, 0.9);
+        }
+
+        /* Hover state for messages to show copy button */
+        .stt-message:hover .msg-copy-button {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* Per-message copy button - matching AskView styles */
+        .msg-copy-button {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            padding: 4px;
+            cursor: pointer !important;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease, background-color 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            z-index: 10;
+        }
+
+        .msg-copy-button:hover {
+            background: rgba(0, 0, 0, 0.9);
+        }
+
+        /* Match header copy button behavior on copy (icon swap only, no green bg) */
+        .msg-copy-button.copied {
+            background: rgba(0, 0, 0, 0.8);
+        }
+
+        .msg-copy-button svg {
+            width: 12px;
+            height: 12px;
+            color: rgba(255, 255, 255, 0.9);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            cursor: pointer !important;
+            pointer-events: none;
+        }
+
+        .msg-copy-button .check-icon {
+            opacity: 0;
+            transform: scale(0.5);
+            position: absolute;
+        }
+
+        .msg-copy-button.copied .copy-icon {
+            opacity: 0;
+            transform: scale(0.5);
+        }
+
+        .msg-copy-button.copied .check-icon {
+            opacity: 1;
+            transform: scale(1);
         }
 
         .empty-state {
@@ -84,6 +156,7 @@ export class SttView extends LitElement {
     static properties = {
         sttMessages: { type: Array },
         isVisible: { type: Boolean },
+        copyStates: { type: Object, state: true },
     };
 
     constructor() {
@@ -92,8 +165,10 @@ export class SttView extends LitElement {
         this.isVisible = true;
         this.messageIdCounter = 0;
         this._shouldScrollAfterUpdate = false;
+        this.copyStates = new Map(); // Track copy states for each message
 
         this.handleSttUpdate = this.handleSttUpdate.bind(this);
+        this.handleCopyMessage = this.handleCopyMessage.bind(this);
     }
 
     connectedCallback() {
@@ -197,6 +272,27 @@ export class SttView extends LitElement {
         return this.sttMessages.map(msg => `${msg.speaker}: ${msg.text}`).join('\n');
     }
 
+    async handleCopyMessage(event, messageId, messageText) {
+        event.stopPropagation();
+        event.preventDefault();
+        
+        try {
+            await navigator.clipboard.writeText(messageText);
+            
+            // Set copy state
+            this.copyStates.set(messageId, 'copied');
+            this.requestUpdate();
+            
+            // Reset after 2 seconds
+            setTimeout(() => {
+                this.copyStates.delete(messageId);
+                this.requestUpdate();
+            }, 2000);
+        } catch (err) {
+            console.error('Failed to copy text: ', err);
+        }
+    }
+
     updated(changedProperties) {
         super.updated(changedProperties);
 
@@ -217,7 +313,27 @@ export class SttView extends LitElement {
             <div class="transcription-container">
                 ${this.sttMessages.length === 0
                     ? html`<div class="empty-state">Waiting for speech...</div>`
-                    : this.sttMessages.map(msg => html` <div class="stt-message ${this.getSpeakerClass(msg.speaker)}">${msg.text}</div> `)}
+                    : this.sttMessages.map(msg => {
+                        const copyState = this.copyStates.get(msg.id);
+                        return html`
+                            <div class="stt-message ${this.getSpeakerClass(msg.speaker)}">
+                                ${msg.text}
+                                <button 
+                                    class="msg-copy-button ${copyState === 'copied' ? 'copied' : ''}"
+                                    @click=${(e) => this.handleCopyMessage(e, msg.id, msg.text)}
+                                    title="Copy message"
+                                >
+                                    <svg class="copy-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                                    </svg>
+                                    <svg class="check-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <path d="M20 6L9 17l-5-5" />
+                                    </svg>
+                                </button>
+                            </div>
+                        `;
+                    })}
             </div>
         `;
     }

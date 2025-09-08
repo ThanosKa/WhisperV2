@@ -12,12 +12,22 @@ if (require('electron-squirrel-startup')) {
 }
 
 const { app, BrowserWindow, shell, ipcMain, dialog, desktopCapturer, session } = require('electron');
+const path = require('node:path');
+
+// Ensure single instance and register handlers BEFORE any argv parsing or protocol work
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+    app.quit();
+    process.exit(0);
+}
+
+// Setup protocol after single instance lock so second-instance events are caught correctly
+setupProtocolHandling();
 const { createWindows } = require('./window/windowManager.js');
 const listenService = require('./features/listen/listenService');
 const { initializeFirebase } = require('./features/common/services/firebaseClient');
 const databaseInitializer = require('./features/common/services/databaseInitializer');
 const authService = require('./features/common/services/authService');
-const path = require('node:path');
 const express = require('express');
 const fetch = require('node-fetch');
 const { autoUpdater } = require('electron-updater');
@@ -44,8 +54,16 @@ let pendingDeepLinkUrl = null;
 function setupProtocolHandling() {
     // Protocol registration - must be done before app is ready
     try {
+        const isDevRegistration = process.defaultApp || !app.isPackaged;
         if (!app.isDefaultProtocolClient('pickleglass')) {
-            const success = app.setAsDefaultProtocolClient('pickleglass');
+            // In dev, pass the app folder as an argument so Windows launches the correct project
+            let success = false;
+            if (isDevRegistration) {
+                const appArg = process.argv.length >= 2 ? [path.resolve(process.argv[1])] : [];
+                success = app.setAsDefaultProtocolClient('pickleglass', process.execPath, appArg);
+            } else {
+                success = app.setAsDefaultProtocolClient('pickleglass');
+            }
             if (success) {
                 console.log('[Protocol] Successfully set as default protocol client for pickleglass://');
             } else {
@@ -156,14 +174,7 @@ if (process.platform === 'win32') {
     console.log('[Protocol] Initial process.argv:', process.argv);
 }
 
-const gotTheLock = app.requestSingleInstanceLock();
-if (!gotTheLock) {
-    app.quit();
-    process.exit(0);
-}
-
-// setup protocol after single instance lock
-setupProtocolHandling();
+// (moved earlier)
 
 app.whenReady().then(async () => {
     // Setup native loopback audio capture for Windows

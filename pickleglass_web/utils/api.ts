@@ -332,6 +332,36 @@ export const getSessions = async (): Promise<Session[]> => {
   }
 };
 
+export const getMeetings = async (): Promise<Session[]> => {
+  if (isFirebaseMode()) {
+    const uid = firebaseAuth.currentUser!.uid;
+    const firestoreSessions = await FirestoreSessionService.getSessions(uid);
+    // Filter for listen/meeting sessions
+    return firestoreSessions
+      .filter(session => session.session_type === 'listen')
+      .map(session => convertFirestoreSession(session, uid));
+  } else {
+    const response = await apiCall(`/api/conversations/meetings`, { method: 'GET' });
+    if (!response.ok) throw new Error('Failed to fetch meetings');
+    return response.json();
+  }
+};
+
+export const getQuestions = async (): Promise<Session[]> => {
+  if (isFirebaseMode()) {
+    const uid = firebaseAuth.currentUser!.uid;
+    const firestoreSessions = await FirestoreSessionService.getSessions(uid);
+    // Filter for ask/question sessions
+    return firestoreSessions
+      .filter(session => session.session_type === 'ask')
+      .map(session => convertFirestoreSession(session, uid));
+  } else {
+    const response = await apiCall(`/api/conversations/questions`, { method: 'GET' });
+    if (!response.ok) throw new Error('Failed to fetch questions');
+    return response.json();
+  }
+};
+
 export const getSessionDetails = async (sessionId: string): Promise<SessionDetails> => {
   if (isFirebaseMode()) {
     const uid = firebaseAuth.currentUser!.uid;

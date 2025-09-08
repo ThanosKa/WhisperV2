@@ -359,7 +359,19 @@ class AskService {
             console.log(`[AskService] 🤖 Processing message: ${userPrompt.substring(0, 50)}...`);
             console.log(`[AskService] history: items=${conversationHistoryRaw?.length || 0}`);
 
-            sessionId = await sessionRepository.getOrCreateActive('ask');
+            // Check if we're in a meeting context (listen service has active session)
+            const listenService = require('../listen/listenService');
+            const isInMeeting = listenService.isSessionActive();
+            
+            if (isInMeeting) {
+                // We're in a meeting - use or promote to listen session for context
+                sessionId = await sessionRepository.getOrCreateActive('listen');
+                console.log(`[AskService] 📋 Using meeting session ${sessionId} for ask question`);
+            } else {
+                // Standalone question - create new session for each question
+                sessionId = await sessionRepository.create('ask');
+                console.log(`[AskService] ❓ Created new question session ${sessionId}`);
+            }
             await askRepository.addAiMessage({ sessionId, role: 'user', content: userPrompt.trim() });
             console.log(`[AskService] DB: Saved user prompt to session ${sessionId}`);
 

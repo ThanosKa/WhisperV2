@@ -168,16 +168,49 @@ setupProtocolHandling();
 app.whenReady().then(async () => {
     // Setup native loopback audio capture for Windows
     session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
-        desktopCapturer
-            .getSources({ types: ['screen'] })
-            .then(sources => {
-                // Grant access to the first screen found with loopback audio
-                callback({ video: sources[0], audio: 'loopback' });
-            })
-            .catch(error => {
-                console.error('Failed to get desktop capturer sources:', error);
-                callback({});
-            });
+        try {
+            // Try to detect which display the app is on (prefer Ask window)
+            const { windowPool } = require('./window/windowManager');
+            const { screen } = require('electron');
+            const askWin = windowPool.get('ask');
+            const headerWin = windowPool.get('header');
+            const refWin = askWin && !askWin.isDestroyed() && askWin.isVisible() ? askWin : headerWin;
+
+            let targetDisplayId = null;
+            if (refWin && !refWin.isDestroyed()) {
+                const b = refWin.getBounds();
+                const center = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+                const disp = screen.getDisplayNearestPoint(center);
+                targetDisplayId = disp?.id;
+            }
+
+            desktopCapturer
+                .getSources({ types: ['screen'] })
+                .then(sources => {
+                    let videoSource = sources[0];
+                    if (targetDisplayId != null) {
+                        const idStr = String(targetDisplayId);
+                        const byDisplayId = sources.find(s => String(s.display_id || '') === idStr);
+                        if (byDisplayId) {
+                            videoSource = byDisplayId;
+                        } else {
+                            const parsed = sources.find(s => {
+                                const parts = String(s.id || '').split(':');
+                                return parts.length >= 2 && parts[1] === idStr;
+                            });
+                            if (parsed) videoSource = parsed;
+                        }
+                    }
+                    callback({ video: videoSource, audio: 'loopback' });
+                })
+                .catch(error => {
+                    console.error('Failed to get desktop capturer sources:', error);
+                    callback({});
+                });
+        } catch (e) {
+            console.error('DisplayMediaRequestHandler error:', e);
+            callback({});
+        }
     });
 
     // Initialize core services

@@ -20,7 +20,7 @@ const fs = require('node:fs');
 const os = require('os');
 const util = require('util');
 const execFile = util.promisify(require('child_process').execFile);
-const { desktopCapturer } = require('electron');
+const { desktopCapturer, screen } = require('electron');
 const modelStateService = require('../common/services/modelStateService');
 const config = require('../common/config/config');
 
@@ -86,6 +86,20 @@ async function captureScreenshot(options = {}) {
     }
 
     try {
+        // Determine which display the app is currently on (prefer Ask window, fallback to header)
+        let targetDisplay = null;
+        try {
+            const pool = getWindowPool?.() || null;
+            const askWin = pool?.get('ask');
+            const headerWin = pool?.get('header');
+            const refWin = askWin && !askWin.isDestroyed() && askWin.isVisible() ? askWin : headerWin;
+            if (refWin && !refWin.isDestroyed()) {
+                const b = refWin.getBounds();
+                const center = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+                targetDisplay = screen.getDisplayNearestPoint(center);
+            }
+        } catch (_) {}
+
         const sources = await desktopCapturer.getSources({
             types: ['screen'],
             thumbnailSize: {
@@ -97,7 +111,20 @@ async function captureScreenshot(options = {}) {
         if (sources.length === 0) {
             throw new Error('No screen sources available');
         }
-        const source = sources[0];
+        let source = sources[0];
+        if (targetDisplay) {
+            const targetId = String(targetDisplay.id);
+            const matchByDisplayId = sources.find(s => String(s.display_id || '') === targetId);
+            if (matchByDisplayId) {
+                source = matchByDisplayId;
+            } else {
+                const parsedMatch = sources.find(s => {
+                    const parts = String(s.id || '').split(':');
+                    return parts.length >= 2 && parts[1] === targetId;
+                });
+                if (parsedMatch) source = parsedMatch;
+            }
+        }
         const buffer = source.thumbnail.toJPEG(70);
         const base64 = buffer.toString('base64');
         const size = source.thumbnail.getSize();

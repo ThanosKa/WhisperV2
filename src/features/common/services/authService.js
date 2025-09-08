@@ -48,6 +48,7 @@ class AuthService {
         sessionRepository.setAuthService(this);
     }
 
+    /*
     initialize() {
         if (this.isInitialized) return this.initializationPromise;
 
@@ -126,6 +127,41 @@ class AuthService {
 
         return this.initializationPromise;
     }
+    */
+    async initialize() {
+        if (this.isInitialized) return this.initializationPromise;
+
+        this.initializationPromise = (async () => {
+            // First, ensure the encryption key is initialized for the default user.
+            // This is crucial for accessing any stored API keys.
+            await encryptionService.initializeKey(this.currentUserId);
+            console.log('[AuthService] Initialized default user encryption key.');
+
+            const auth = getFirebaseAuth();
+            onAuthStateChanged(auth, async user => {
+                if (user) {
+                    console.log(`[AuthService] Firebase user signed in:`, user.uid);
+                    this.currentUser = user;
+                    this.currentUserId = user.uid;
+                    this.currentUserMode = 'firebase';
+                    await encryptionService.initializeKey(user.uid);
+                } else {
+                    console.log(`[AuthService] No Firebase user.`);
+                    this.currentUser = null;
+                    this.currentUserId = 'default_user';
+                    this.currentUserMode = 'local';
+                    // Re-initialize for default user if logged out
+                    await encryptionService.initializeKey(this.currentUserId);
+                }
+                this.broadcastUserState();
+            });
+
+            this.isInitialized = true;
+            console.log('[AuthService] Initialized.');
+        })();
+
+        return this.initializationPromise;
+    }
 
     async startFirebaseAuthFlow() {
         try {
@@ -182,6 +218,7 @@ class AuthService {
     }
 
     getCurrentUser() {
+        /*
         const isLoggedIn = !!(this.currentUserMode === 'firebase' && this.currentUser);
 
         if (isLoggedIn) {
@@ -206,6 +243,27 @@ class AuthService {
             // hasApiKey: this.hasApiKey
             //////// before_modelStateService ////////
         };
+        */
+        const isLoggedIn = this.getIsLoggedIn();
+        if (isLoggedIn) {
+            return {
+                uid: this.currentUser.uid,
+                email: this.currentUser.email,
+                displayName: this.currentUser.displayName,
+                mode: 'firebase',
+                hasApiKey: true, // Always true for firebase users, but good practice
+            };
+        }
+        return {
+            uid: this.currentUserId, // returns 'default_user'
+            email: 'contact@pickle.com',
+            displayName: 'Default User',
+            mode: 'local',
+            hasApiKey: this.hasApiKey,
+        };
+    }
+    getIsLoggedIn() {
+        return this.currentUserMode === 'firebase' && this.currentUser;
     }
 }
 

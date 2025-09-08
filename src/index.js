@@ -14,6 +14,30 @@ if (require('electron-squirrel-startup')) {
 const { app, BrowserWindow, shell, ipcMain, dialog, desktopCapturer, session } = require('electron');
 const path = require('node:path');
 
+// -------------------------------------------------
+//  auto-register protocol for dev (Windows only)
+// -------------------------------------------------
+if (process.platform === 'win32' && !app.isPackaged) {
+    const { spawnSync } = require('child_process');
+    const repoRoot = path.resolve(__dirname, '..'); // repo folder
+    const correctCmd = `"${process.execPath}" "${repoRoot}" "%1"`;
+
+    const key = 'HKCU\\Software\\Classes\\pickleglass\\shell\\open\\command';
+
+    // 1) check current value
+    const { stdout } = spawnSync('reg', ['query', key, '/ve'], { encoding: 'utf8' });
+    const needsUpdate = !stdout || !stdout.includes(correctCmd);
+
+    if (needsUpdate) {
+        console.log('[Dev] Re-registering pickleglass:// protocol');
+        // 2) set new value
+        const { status, stderr } = spawnSync('reg', ['add', key, '/ve', '/d', correctCmd, '/f'], { encoding: 'utf8' });
+        if (status !== 0) {
+            console.warn('[Dev] Protocol auto-registration failed:', stderr);
+        }
+    }
+}
+
 // Ensure single instance and register handlers BEFORE any argv parsing or protocol work
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {

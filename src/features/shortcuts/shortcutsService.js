@@ -90,13 +90,16 @@ class ShortcutsService {
         // Unified modifier using 'CommandOrControl' for all platforms
         const modifier = 'CommandOrControl';
 
-        // Monitor switching
-        const displays = screen.getAllDisplays();
-        if (displays.length > 1) {
-            displays.forEach((display, index) => {
-                const key = `${modifier}+Shift+${index + 1}`;
-                globalShortcut.register(key, () => internalBridge.emit('window:moveToDisplay', { displayId: display.id }));
-            });
+        // Monitor switching (temporarily disabled to prevent cross-monitor moves)
+        const ALLOW_MONITOR_SWITCHING = false;
+        if (ALLOW_MONITOR_SWITCHING) {
+            const displays = screen.getAllDisplays();
+            if (displays.length > 1) {
+                displays.forEach((display, index) => {
+                    const key = `${modifier}+Shift+${index + 1}`;
+                    globalShortcut.register(key, () => internalBridge.emit('window:moveToDisplay', { displayId: display.id }));
+                });
+            }
         }
 
         // Edge snapping

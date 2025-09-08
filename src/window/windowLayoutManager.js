@@ -110,8 +110,8 @@ class WindowLayoutManager {
 
     calculateClampedPosition(header, { x: newX, y: newY }) {
         if (!header) return null;
-        const targetDisplay = screen.getDisplayNearestPoint({ x: newX, y: newY });
-        const { x: workAreaX, y: workAreaY, width, height } = targetDisplay.workArea;
+        const currentDisplay = getCurrentDisplay(header);
+        const { x: workAreaX, y: workAreaY, width, height } = currentDisplay.workArea;
         const headerBounds = header.getBounds();
         const clampedX = Math.max(workAreaX, Math.min(newX, workAreaX + width - headerBounds.width));
         const clampedY = Math.max(workAreaY, Math.min(newY, workAreaY + height - headerBounds.height));

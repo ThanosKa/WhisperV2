@@ -392,6 +392,42 @@ const openLoginPage = () => {
     console.log('Opening personalization page:', personalizeUrl);
 };
 
+// List available displays and identify current/primary
+function listDisplays() {
+    try {
+        const allDisplays = screen.getAllDisplays();
+        const primaryId = screen.getPrimaryDisplay().id;
+        const header = windowPool.get('header');
+        const currentDisplay = getCurrentDisplay(header);
+        const currentDisplayId = currentDisplay?.id ?? primaryId;
+
+        const displays = allDisplays.map((d, index) => ({
+            id: d.id,
+            name: `Monitor ${index + 1}${d.id === primaryId ? ' (Primary)' : ''}`,
+            isPrimary: d.id === primaryId,
+            bounds: d.bounds,
+            workArea: d.workArea,
+            scaleFactor: d.scaleFactor,
+        }));
+
+        return { currentDisplayId, displays };
+    } catch (e) {
+        console.error('[WindowManager] Failed to list displays:', e);
+        return { currentDisplayId: null, displays: [] };
+    }
+}
+
+// Move header (and thus the app) to a specific display via internal bridge
+function moveToDisplay(displayId) {
+    try {
+        internalBridge.emit('window:moveToDisplay', { displayId });
+        return { success: true };
+    } catch (e) {
+        console.error('[WindowManager] Failed to move to display:', e);
+        return { success: false, error: e?.message || 'unknown' };
+    }
+}
+
 function createFeatureWindows(header, namesToCreate) {
     // if (windowPool.has('listen')) return;
 
@@ -690,4 +726,6 @@ module.exports = {
     getHeaderPosition,
     moveHeaderTo,
     adjustWindowHeight,
+    listDisplays,
+    moveToDisplay,
 };

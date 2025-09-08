@@ -26,6 +26,10 @@ module.exports = {
         ipcMain.handle('get-header-position', () => windowManager.getHeaderPosition());
         ipcMain.handle('move-header-to', (event, newX, newY) => windowManager.moveHeaderTo(newX, newY));
         ipcMain.handle('adjust-window-height', (event, { winName, height }) => windowManager.adjustWindowHeight(winName, height));
+
+        // Display management
+        ipcMain.handle('get-displays', () => windowManager.listDisplays());
+        ipcMain.handle('move-to-display', (event, displayId) => windowManager.moveToDisplay(displayId));
     },
 
     notifyFocusChange(win, isFocused) {

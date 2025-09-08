@@ -237,6 +237,8 @@ contextBridge.exposeInMainWorld('api', {
 
         // Window Management
         moveWindowStep: direction => ipcRenderer.invoke('move-window-step', direction),
+        getDisplays: () => ipcRenderer.invoke('get-displays'),
+        moveToDisplay: displayId => ipcRenderer.invoke('move-to-display', displayId),
         cancelHideSettingsWindow: () => ipcRenderer.send('cancel-hide-settings-window'),
         hideSettingsWindow: () => ipcRenderer.send('hide-settings-window'),
 

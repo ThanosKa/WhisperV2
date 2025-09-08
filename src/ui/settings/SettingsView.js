@@ -17,6 +17,9 @@ export class SettingsView extends LitElement {
         showPresets: { type: Boolean, state: true },
         autoUpdateEnabled: { type: Boolean, state: true },
         autoUpdateLoading: { type: Boolean, state: true },
+        displays: { type: Array, state: true },
+        currentDisplayId: { type: Number, state: true },
+        showMonitors: { type: Boolean, state: true },
     };
     //////// after_modelStateService ////////
 
@@ -32,6 +35,9 @@ export class SettingsView extends LitElement {
         this.handleUsePicklesKey = this.handleUsePicklesKey.bind(this);
         this.autoUpdateEnabled = true;
         this.autoUpdateLoading = true;
+        this.displays = [];
+        this.currentDisplayId = null;
+        this.showMonitors = true;
         this.loadInitialData();
     }
 
@@ -91,6 +97,7 @@ export class SettingsView extends LitElement {
                 const firstUserPreset = this.presets.find(p => p.is_default === 0);
                 if (firstUserPreset) this.selectedPreset = firstUserPreset;
             }
+            await this.loadDisplays();
         } catch (error) {
             console.error('Error loading initial settings data:', error);
         } finally {
@@ -118,6 +125,7 @@ export class SettingsView extends LitElement {
         this.setupIpcListeners();
         this.setupWindowResize();
         this.loadAutoUpdateSetting();
+        this.loadDisplays();
         // Force one height calculation immediately (innerHeight may be 0 at first)
         setTimeout(() => this.updateScrollHeight(), 0);
     }
@@ -233,6 +241,7 @@ export class SettingsView extends LitElement {
         window.api.settingsView.cancelHideSettingsWindow();
         // Recalculate height in case it was set to 0 before
         this.updateScrollHeight();
+        this.loadDisplays();
     };
 
     handleMouseLeave = () => {
@@ -278,6 +287,33 @@ export class SettingsView extends LitElement {
 
     togglePresets() {
         this.showPresets = !this.showPresets;
+    }
+
+    async loadDisplays() {
+        try {
+            if (!window.api) return;
+            const result = await window.api.settingsView.getDisplays();
+            if (result && Array.isArray(result.displays)) {
+                this.displays = result.displays;
+                this.currentDisplayId = result.currentDisplayId;
+                this.requestUpdate();
+            }
+        } catch (e) {
+            console.error('[SettingsView] Failed to load displays:', e);
+        }
+    }
+
+    async handleSelectDisplay(display) {
+        try {
+            if (!window.api) return;
+            const res = await window.api.settingsView.moveToDisplay(display.id);
+            if (res && res.success) {
+                this.currentDisplayId = display.id;
+                this.requestUpdate();
+            }
+        } catch (e) {
+            console.error('[SettingsView] Failed to move to display:', e);
+        }
     }
 
     async handlePresetSelect(preset) {
@@ -372,6 +408,29 @@ export class SettingsView extends LitElement {
                         `
                     )}
                 </div>
+
+                ${this.displays && this.displays.length > 1
+                    ? html`
+                          <div class="preset-section">
+                              <div class="preset-header">
+                                  <span class="preset-title">Monitor display</span>
+                              </div>
+                              <div class="preset-list">
+                                  ${this.displays.map(
+                                      d => html`
+                                          <div
+                                              class="preset-item ${this.currentDisplayId === d.id ? 'selected' : ''}"
+                                              @click=${() => this.handleSelectDisplay(d)}
+                                          >
+                                              <span class="preset-name">${d.name}</span>
+                                              ${this.currentDisplayId === d.id ? html`<span class="preset-status">Current</span>` : ''}
+                                          </div>
+                                      `
+                                  )}
+                              </div>
+                          </div>
+                      `
+                    : ''}
 
                 <div class="preset-section">
                     <div class="preset-header">

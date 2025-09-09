@@ -64,15 +64,13 @@ export class AuthHeader extends LitElement {
     render() {
         return html`
             <div class="header">
-                <button class="left-label">Login Required</button>
-                <button class="listen-button" @click=${this._handleLoginClick} ?disabled=${this.isLoggingIn}>
-                    ${this.isLoggingIn
-                        ? html`<div class="loading-dots"><span></span><span></span><span></span></div>`
-                        : html`
-                              <div class="action-text">
-                                  <div class="action-text-content">Login</div>
-                              </div>
-                          `}
+                <button class="listen-button text-link" @click=${this._handleLoginClick} ?disabled=${this.isLoggingIn}>
+                    <div class="action-text">
+                        <div class="action-text-content">Open broswer to login</div>
+                        ${this.isLoggingIn
+                            ? html`<div class="loading-dots"><span></span><span></span><span></span></div>`
+                            : ''}
+                    </div>
                 </button>
             </div>
         `;

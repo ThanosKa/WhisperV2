@@ -648,7 +648,7 @@ export class PermissionHeader extends LitElement {
             },
             {
                 title: 'Clear',
-                description: 'Clear current conversation',
+                description: 'Clear current conversation and reload',
                 shortcuts: ['⌘', 'R'],
             },
             {

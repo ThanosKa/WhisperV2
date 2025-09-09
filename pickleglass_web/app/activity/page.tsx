@@ -20,12 +20,14 @@ export default function ActivityPage() {
   const [activeTab, setActiveTab] = useState<'meetings' | 'questions'>('meetings')
   const [isLoading, setIsLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [totalMeetingSeconds, setTotalMeetingSeconds] = useState<number>(0)
+  const [totalQuestions, setTotalQuestions] = useState<number>(0)
 
   const fetchSessions = async () => {
     try {
       const [fetchedMeetings, fetchedQuestions] = await Promise.all([
         getMeetings(),
-        getQuestions()
+        getQuestions(),
       ]);
       setMeetings(fetchedMeetings);
       setQuestions(fetchedQuestions);
@@ -39,6 +41,16 @@ export default function ActivityPage() {
 
   useEffect(() => {
     fetchSessions()
+    // Fetch stats in background (non-blocking)
+    import('@/utils/api').then(async ({ getConversationStats }) => {
+      try {
+        const stats = await getConversationStats();
+        setTotalMeetingSeconds(stats.totalMeetingSeconds || 0);
+        setTotalQuestions(stats.totalQuestions || 0);
+      } catch (e) {
+        console.warn('Failed to fetch conversation stats')
+      }
+    })
   }, [])
 
   if (!userInfo) {
@@ -83,6 +95,17 @@ export default function ActivityPage() {
           <h1 className="text-2xl text-gray-600">
             {getGreeting()}, {userInfo.display_name}
           </h1>
+        </div>
+        {/* Quick stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
+          <div className="bg-white rounded-lg p-5 border border-gray-200">
+            <div className="text-sm text-gray-500 mb-1">Total time in meetings</div>
+            <div className="text-2xl font-semibold text-gray-900">{formatDuration(totalMeetingSeconds)}</div>
+          </div>
+          <div className="bg-white rounded-lg p-5 border border-gray-200">
+            <div className="text-sm text-gray-500 mb-1">Total questions</div>
+            <div className="text-2xl font-semibold text-gray-900">{totalQuestions}</div>
+          </div>
         </div>
         <div>
           <h2 className="text-2xl font-semibold text-gray-900 mb-8 text-center">
@@ -159,25 +182,60 @@ function SessionCard({ session, onDelete, deletingId }: {
 }) {
   const typeLabel = session.session_type === 'listen' ? 'Meeting' : 'Question';
   const typeColor = session.session_type === 'listen' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800';
+  const [isEditing, setIsEditing] = useState(false);
+  const [title, setTitle] = useState(session.title || '');
+  const [saving, setSaving] = useState(false);
+  
+  const save = async () => {
+    const t = (title || '').trim();
+    if (!t || saving) return;
+    setSaving(true);
+    try {
+      const { updateSessionTitle } = await import('@/utils/api');
+      await updateSessionTitle(session.id, t);
+      setIsEditing(false);
+    } catch (e) {
+      alert('Failed to save');
+      console.error(e);
+    } finally {
+      setSaving(false);
+    }
+  }
   
   return (
     <div className="block bg-white rounded-lg p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer">
       <div className="flex justify-between items-start mb-3">
-        <div>
-          <Link href={`/activity/details?sessionId=${session.id}`} className="text-lg font-medium text-gray-900 hover:underline">
-            {session.title || `${typeLabel} - ${new Date(session.started_at * 1000).toLocaleDateString()}`}
-          </Link>
+        <div className="min-w-0 flex-1">
+          {isEditing ? (
+            <div className="flex items-center gap-2">
+              <input className="border rounded px-2 py-1 text-sm w-full" value={title} onChange={e => setTitle(e.target.value)} placeholder="Title" />
+              <button onClick={save} className="px-2 py-1 rounded text-xs bg-blue-600 text-white" disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+              <button onClick={() => { setIsEditing(false); setTitle(session.title || ''); }} className="px-2 py-1 rounded text-xs border">Cancel</button>
+            </div>
+          ) : (
+            <Link href={`/activity/details?sessionId=${session.id}`} className="text-lg font-medium text-gray-900 hover:underline truncate block">
+              {session.title || `${typeLabel} - ${new Date(session.started_at * 1000).toLocaleDateString()}`}
+            </Link>
+          )}
           <div className="text-sm text-gray-500">
             {new Date(session.started_at * 1000).toLocaleString()}
           </div>
         </div>
-        <button
-          onClick={() => onDelete(session.id)}
-          disabled={deletingId === session.id}
-          className={`ml-4 px-3 py-1 rounded text-xs font-medium border border-red-200 text-red-700 bg-red-50 hover:bg-red-100 transition-colors ${deletingId === session.id ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
-          {deletingId === session.id ? 'Deleting...' : 'Delete'}
-        </button>
+        <div className="flex items-center gap-2 ml-4 shrink-0">
+          <button
+            onClick={() => setIsEditing(true)}
+            className="px-3 py-1 rounded text-xs font-medium border hover:bg-gray-50"
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => onDelete(session.id)}
+            disabled={deletingId === session.id}
+            className={`px-3 py-1 rounded text-xs font-medium border border-red-200 text-red-700 bg-red-50 hover:bg-red-100 transition-colors ${deletingId === session.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            {deletingId === session.id ? 'Deleting...' : 'Delete'}
+          </button>
+        </div>
       </div>
       <span className={`capitalize inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${typeColor}`}>
         {typeLabel}
@@ -205,4 +263,12 @@ function EmptyState({ type }: { type: 'meetings' | 'questions' }) {
       <div className="text-sm text-gray-400">{content.tip}</div>
     </div>
   )
-} 
+}
+
+// utils
+function formatDuration(totalSeconds: number) {
+  if (!totalSeconds || totalSeconds <= 0) return '0h 00m';
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+}

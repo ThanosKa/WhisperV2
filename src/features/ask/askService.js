@@ -164,6 +164,21 @@ class AskService {
         console.log('[AskService] Service instance created.');
     }
 
+    _deriveTitleFromPrompt(prompt) {
+        try {
+            const raw = (prompt || '').replace(/[\p{Emoji}\p{Extended_Pictographic}]/gu, '').trim();
+            if (!raw) return '';
+            // Use first sentence or up to ~12 words
+            const sentence = raw.split(/(?<=[\.\!\?])\s+/)[0] || raw;
+            const words = sentence.split(/\s+/).slice(0, 12).join(' ');
+            const cleaned = words.replace(/[\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+            // Capitalize first letter
+            return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+        } catch (_) {
+            return '';
+        }
+    }
+
     /**
      * Detects the intent/mode from user input to select the appropriate prompt template.
      *
@@ -332,6 +347,7 @@ class AskService {
         } catch (_) {
             userPrompt = '';
         }
+        const originalPrompt = userPrompt; // Keep for title derivation
         if (!userPrompt) {
             userPrompt = 'Help me';
         }
@@ -359,9 +375,10 @@ class AskService {
             console.log(`[AskService] 🤖 Processing message: ${userPrompt.substring(0, 50)}...`);
             console.log(`[AskService] history: items=${conversationHistoryRaw?.length || 0}`);
 
-            // Check if we're in a meeting context (listen service has active session)
+            // Check if we're in a meeting context (open listen session exists)
             const listenService = require('../listen/listenService');
-            const isInMeeting = listenService.isSessionActive();
+            const currentListenSessionId = listenService.getCurrentSessionData()?.sessionId || null;
+            const isInMeeting = Boolean(currentListenSessionId);
             
             if (isInMeeting) {
                 // We're in a meeting - use or promote to listen session for context
@@ -371,6 +388,16 @@ class AskService {
                 // Standalone question - create new session for each question
                 sessionId = await sessionRepository.create('ask');
                 console.log(`[AskService] ❓ Created new question session ${sessionId}`);
+                // Derive and save a concise title from user prompt
+                const derived = this._deriveTitleFromPrompt(originalPrompt);
+                if (derived) {
+                    try {
+                        await sessionRepository.updateTitle(sessionId, derived);
+                        console.log(`[AskService] 🏷️ Titled question session ${sessionId}: ${derived}`);
+                    } catch (e) {
+                        console.warn('[AskService] Failed to update session title for ask session:', e.message);
+                    }
+                }
             }
             await askRepository.addAiMessage({ sessionId, role: 'user', content: userPrompt.trim() });
             console.log(`[AskService] DB: Saved user prompt to session ${sessionId}`);

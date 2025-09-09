@@ -362,6 +362,17 @@ export const getQuestions = async (): Promise<Session[]> => {
   }
 };
 
+export interface ConversationStats {
+  totalMeetingSeconds: number;
+  totalQuestions: number;
+}
+
+export const getConversationStats = async (): Promise<ConversationStats> => {
+  const response = await apiCall(`/api/conversations/stats`, { method: 'GET' });
+  if (!response.ok) throw new Error('Failed to fetch conversation stats');
+  return response.json();
+};
+
 export const getSessionDetails = async (sessionId: string): Promise<SessionDetails> => {
   if (isFirebaseMode()) {
     const uid = firebaseAuth.currentUser!.uid;
@@ -387,6 +398,17 @@ export const getSessionDetails = async (sessionId: string): Promise<SessionDetai
     const response = await apiCall(`/api/conversations/${sessionId}`, { method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch session details');
     return response.json();
+  }
+};
+
+export const updateSessionTitle = async (sessionId: string, title: string): Promise<void> => {
+  const response = await apiCall(`/api/conversations/${sessionId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ title })
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Failed to update title: ${response.status} ${text}`);
   }
 };
 

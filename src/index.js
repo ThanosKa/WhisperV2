@@ -388,6 +388,12 @@ function setupWebDataHandlers() {
                     }
                     result = { id };
                     break;
+                case 'update-session-title':
+                    if (!payload || !payload.id || !payload.title) {
+                        throw new Error('id and title are required');
+                    }
+                    result = await sessionRepository.updateTitle(payload.id, payload.title);
+                    break;
 
                 // USER
                 case 'get-user-profile':

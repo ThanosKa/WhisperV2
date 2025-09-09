@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRedirectIfNotAuth } from '@/utils/auth';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { UserProfile, SessionDetails, Transcript, AiMessage, getSessionDetails, deleteSession } from '@/utils/api';
+import { UserProfile, SessionDetails, Transcript, AiMessage, getSessionDetails, deleteSession, updateSessionTitle } from '@/utils/api';
 import dynamic from 'next/dynamic';
 
 const Markdown = dynamic(() => import('@/components/Markdown'), { ssr: false });
@@ -26,6 +26,8 @@ function SessionDetailsContent() {
     const sessionId = searchParams.get('sessionId');
     const router = useRouter();
     const [deleting, setDeleting] = useState(false);
+    const [editingTitle, setEditingTitle] = useState(false);
+    const [newTitle, setNewTitle] = useState('');
 
     useEffect(() => {
         if (userInfo && sessionId) {
@@ -34,6 +36,7 @@ function SessionDetailsContent() {
                 try {
                     const details = await getSessionDetails(sessionId as string);
                     setSessionDetails(details);
+                    setNewTitle(details.session.title || '');
                 } catch (error) {
                     console.error('Failed to load session details:', error);
                 } finally {
@@ -55,6 +58,20 @@ function SessionDetailsContent() {
             alert('Failed to delete activity.');
             setDeleting(false);
             console.error(error);
+        }
+    };
+
+    const handleSaveTitle = async () => {
+        if (!sessionId) return;
+        const t = (newTitle || '').trim();
+        if (!t) return;
+        try {
+            await updateSessionTitle(sessionId, t);
+            setSessionDetails(prev => prev ? { ...prev, session: { ...prev.session, title: t } } : prev);
+            setEditingTitle(false);
+        } catch (e) {
+            alert('Failed to save title');
+            console.error(e);
         }
     };
 
@@ -99,11 +116,27 @@ function SessionDetailsContent() {
 
                 <div className="bg-white p-8 rounded-xl shadow-md border border-gray-100">
                     <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                                {sessionDetails.session.title ||
-                                    `Conversation on ${new Date(sessionDetails.session.started_at * 1000).toLocaleDateString()}`}
-                            </h1>
+                        <div className="flex-1 min-w-0">
+                            {editingTitle ? (
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        className="border rounded px-2 py-1 text-lg w-full"
+                                        value={newTitle}
+                                        onChange={e => setNewTitle(e.target.value)}
+                                        placeholder="Title"
+                                    />
+                                    <button onClick={handleSaveTitle} className="px-3 py-1 rounded text-sm bg-blue-600 text-white">Save</button>
+                                    <button onClick={() => { setEditingTitle(false); setNewTitle(sessionDetails.session.title || ''); }} className="px-3 py-1 rounded text-sm border">Cancel</button>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-3">
+                                    <h1 className="text-2xl font-bold text-gray-900 mb-2 truncate">
+                                        {sessionDetails.session.title ||
+                                            `Conversation on ${new Date(sessionDetails.session.started_at * 1000).toLocaleDateString()}`}
+                                    </h1>
+                                    <button onClick={() => setEditingTitle(true)} className="px-2 py-1 rounded text-xs border">Edit</button>
+                                </div>
+                            )}
                             <div className="flex items-center text-sm text-gray-500 space-x-4">
                                 <span>
                                     {new Date(sessionDetails.session.started_at * 1000).toLocaleDateString('en-US', {

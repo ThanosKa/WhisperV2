@@ -82,7 +82,7 @@ class ListenService {
 
                 case 'Stop':
                     console.log('[ListenService] changeSession to "Stop"');
-                    await this.closeSession();
+                    await this.pauseSession();
                     if (listenWindow && !listenWindow.isDestroyed()) {
                         listenWindow.webContents.send('session-state-changed', { isActive: false });
                     }
@@ -90,6 +90,7 @@ class ListenService {
 
                 case 'Done':
                     console.log('[ListenService] changeSession to "Done"');
+                    await this.closeSession();
                     internalBridge.emit('window:requestVisibility', { name: 'listen', visible: false });
                     listenWindow.webContents.send('session-state-changed', { isActive: false });
                     this.summaryService.resetConversationHistory();
@@ -247,8 +248,18 @@ class ListenService {
 
             // End database session
             if (this.currentSessionId) {
-                await sessionRepository.end(this.currentSessionId);
-                console.log(`[DB] Session ${this.currentSessionId} ended.`);
+                const endedSessionId = this.currentSessionId;
+                await sessionRepository.end(endedSessionId);
+                console.log(`[DB] Session ${endedSessionId} ended.`);
+
+                // Fire-and-forget: generate and save a concise meeting title
+                (async () => {
+                    try {
+                        await this._generateAndSaveMeetingTitle(endedSessionId);
+                    } catch (e) {
+                        console.warn('[ListenService] Failed to generate meeting title:', e.message);
+                    }
+                })();
             }
 
             // Reset state
@@ -258,6 +269,22 @@ class ListenService {
             return { success: true };
         } catch (error) {
             console.error('Error closing listen service session:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async pauseSession() {
+        try {
+            this.sendToRenderer('change-listen-capture-state', { status: 'stop' });
+            // Close STT sessions and stop macOS capture
+            await this.sttService.closeSessions();
+            await this.stopMacOSAudioCapture();
+
+            // Do NOT end database session; keep currentSessionId so Ask can attach.
+            console.log(`[DB] Session ${this.currentSessionId} paused (not ended).`);
+            return { success: true };
+        } catch (error) {
+            console.error('Error pausing listen service session:', error);
             return { success: false, error: error.message };
         }
     }
@@ -273,6 +300,72 @@ class ListenService {
 
     getConversationHistory() {
         return this.summaryService.getConversationHistory();
+    }
+
+    async _generateAndSaveMeetingTitle(sessionId) {
+        // Prefer summary TL;DR, then fall back to transcript snippet; 
+        // if LLM available, ask for a short title in the transcript language.
+        try {
+            const summaryRepository = require('./summary/repositories');
+            const sttRepository = require('./stt/repositories');
+            const modelStateService = require('../common/services/modelStateService');
+            const { createLLM } = require('../common/ai/factory');
+
+            // 1) Gather context
+            let tldr = null;
+            try {
+                const s = await summaryRepository.getSummaryBySessionId(sessionId);
+                tldr = s?.tldr || null;
+            } catch (_) {}
+
+            let transcriptSample = '';
+            try {
+                const all = await sttRepository.getAllTranscriptsBySessionId(sessionId);
+                const lastFew = (all || []).slice(-8).map(t => `${t.speaker || ''}: ${t.text || ''}`.trim());
+                transcriptSample = lastFew.join('\n');
+            } catch (_) {}
+
+            const baseCandidate = (tldr || '').trim() || (transcriptSample || '').trim();
+            if (!baseCandidate) return; // nothing to title
+
+            // 2) Try LLM for best-quality title
+            let title = '';
+            try {
+                const modelInfo = await modelStateService.getCurrentModelInfo('llm');
+                if (modelInfo && modelInfo.apiKey) {
+                    const llm = createLLM(modelInfo.provider, {
+                        apiKey: modelInfo.apiKey,
+                        model: modelInfo.model,
+                        temperature: 0.2,
+                        maxTokens: 64,
+                        usePortkey: modelInfo.provider === 'openai-glass',
+                        portkeyVirtualKey: modelInfo.provider === 'openai-glass' ? modelInfo.apiKey : undefined,
+                    });
+                    const messages = [
+                        { role: 'system', content: 'You create concise, descriptive meeting titles. Respond with title only.' },
+                        { role: 'user', content: `Create a short (max 8 words) meeting title in the same language as this content.\n\nContent:\n${baseCandidate}` },
+                    ];
+                    const completion = await llm.chat(messages);
+                    title = (completion?.content || '').split('\n')[0].replace(/^"|"$/g, '').trim();
+                }
+            } catch (e) {
+                console.warn('[ListenService] LLM title generation failed, using heuristic:', e.message);
+            }
+
+            // 3) Heuristic fallback if needed
+            if (!title) {
+                const from = baseCandidate.split(/\n+/)[0];
+                title = (from || '').replace(/[\p{Emoji}\p{Extended_Pictographic}]/gu, '').split(/\s+/).slice(0, 10).join(' ').trim();
+                if (title) title = title.charAt(0).toUpperCase() + title.slice(1);
+            }
+
+            if (title) {
+                await sessionRepository.updateTitle(sessionId, title);
+                console.log(`[ListenService] 🏷️ Saved meeting title for ${sessionId}: ${title}`);
+            }
+        } catch (err) {
+            console.warn('[ListenService] Error in _generateAndSaveMeetingTitle:', err.message);
+        }
     }
 
     _createHandler(asyncFn, successMessage, errorMessage) {

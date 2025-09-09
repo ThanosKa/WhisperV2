@@ -17,7 +17,17 @@ router.get('/meetings', async (req, res) => {
     try {
         const sessions = await ipcRequest(req, 'get-sessions');
         const meetings = (sessions || []).filter(s => s.session_type === 'listen');
-        res.json(meetings);
+
+        // Basic in-memory pagination: offset + limit
+        const limit = Math.max(1, Math.min(parseInt(req.query.limit, 10) || 10, 50));
+        const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+
+        const page = meetings.slice(offset, offset + limit);
+        res.json({
+            items: page,
+            nextOffset: offset + page.length < meetings.length ? offset + page.length : null,
+            total: meetings.length,
+        });
     } catch (error) {
         console.error('Failed to get meetings via IPC:', error);
         res.status(500).json({ error: 'Failed to retrieve meetings' });
@@ -28,7 +38,17 @@ router.get('/questions', async (req, res) => {
     try {
         const sessions = await ipcRequest(req, 'get-sessions');
         const questions = (sessions || []).filter(s => s.session_type === 'ask');
-        res.json(questions);
+
+        // Basic in-memory pagination: offset + limit
+        const limit = Math.max(1, Math.min(parseInt(req.query.limit, 10) || 10, 50));
+        const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+
+        const page = questions.slice(offset, offset + limit);
+        res.json({
+            items: page,
+            nextOffset: offset + page.length < questions.length ? offset + page.length : null,
+            total: questions.length,
+        });
     } catch (error) {
         console.error('Failed to get questions via IPC:', error);
         res.status(500).json({ error: 'Failed to retrieve questions' });

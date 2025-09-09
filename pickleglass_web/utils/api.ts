@@ -343,7 +343,9 @@ export const getMeetings = async (): Promise<Session[]> => {
   } else {
     const response = await apiCall(`/api/conversations/meetings`, { method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch meetings');
-    return response.json();
+    const data = await response.json();
+    // Backward compatibility with pre-pagination responses
+    return Array.isArray(data) ? data : data.items;
   }
 };
 
@@ -358,6 +360,46 @@ export const getQuestions = async (): Promise<Session[]> => {
   } else {
     const response = await apiCall(`/api/conversations/questions`, { method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch questions');
+    const data = await response.json();
+    return Array.isArray(data) ? data : data.items;
+  }
+};
+
+export interface PagedResult<T> {
+  items: T[];
+  nextOffset: number | null;
+  total: number;
+}
+
+export const getMeetingsPage = async (offset = 0, limit = 10): Promise<PagedResult<Session>> => {
+  if (isFirebaseMode()) {
+    // Not used in firebase mode for web; keeping signature
+    const all = await getMeetings();
+    const items = all.slice(offset, offset + limit);
+    return {
+      items,
+      nextOffset: offset + items.length < all.length ? offset + items.length : null,
+      total: all.length,
+    };
+  } else {
+    const response = await apiCall(`/api/conversations/meetings?offset=${offset}&limit=${limit}`, { method: 'GET' });
+    if (!response.ok) throw new Error('Failed to fetch meetings page');
+    return response.json();
+  }
+};
+
+export const getQuestionsPage = async (offset = 0, limit = 10): Promise<PagedResult<Session>> => {
+  if (isFirebaseMode()) {
+    const all = await getQuestions();
+    const items = all.slice(offset, offset + limit);
+    return {
+      items,
+      nextOffset: offset + items.length < all.length ? offset + items.length : null,
+      total: all.length,
+    };
+  } else {
+    const response = await apiCall(`/api/conversations/questions?offset=${offset}&limit=${limit}`, { method: 'GET' });
+    if (!response.ok) throw new Error('Failed to fetch questions page');
     return response.json();
   }
 };

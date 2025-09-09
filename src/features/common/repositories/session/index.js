@@ -36,6 +36,7 @@ const sessionRepositoryAdapter = {
         return getBaseRepository().getAllByUserId(uid);
     },
 
+
     updateTitle: (id, title) => getBaseRepository().updateTitle(id, title),
 
     deleteWithRelatedData: id => getBaseRepository().deleteWithRelatedData(id),

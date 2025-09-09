@@ -59,8 +59,19 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const query = e.target.value;
         setSearchQuery(query);
-        handleSearch(query);
     };
+
+    // Debounce search
+    useEffect(() => {
+        const id = setTimeout(() => {
+            if (searchQuery.trim()) {
+                handleSearch(searchQuery);
+            } else {
+                setSearchResults([]);
+            }
+        }, 300);
+        return () => clearTimeout(id);
+    }, [searchQuery]);
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>

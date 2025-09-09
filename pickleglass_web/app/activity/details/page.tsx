@@ -4,6 +4,8 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRedirectIfNotAuth } from '@/utils/auth';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { UserProfile, SessionDetails, Transcript, AiMessage, getSessionDetails, deleteSession, updateSessionTitle } from '@/utils/api';
 import dynamic from 'next/dynamic';
 
@@ -27,6 +29,7 @@ function SessionDetailsContent() {
     const router = useRouter();
     const [deleting, setDeleting] = useState(false);
     const [editingTitle, setEditingTitle] = useState(false);
+    const [savingTitle, setSavingTitle] = useState(false);
     const [newTitle, setNewTitle] = useState('');
 
     useEffect(() => {
@@ -62,17 +65,33 @@ function SessionDetailsContent() {
     };
 
     const handleSaveTitle = async () => {
-        if (!sessionId) return;
+        if (!sessionId || savingTitle) return;
         const t = (newTitle || '').trim();
         if (!t) return;
+
+        setSavingTitle(true);
         try {
             await updateSessionTitle(sessionId, t);
-            setSessionDetails(prev => prev ? { ...prev, session: { ...prev.session, title: t } } : prev);
+            setSessionDetails(prev => (prev ? { ...prev, session: { ...prev.session, title: t } } : prev));
             setEditingTitle(false);
+
+            // Dispatch custom event to notify parent components of session update
+            window.dispatchEvent(
+                new CustomEvent('sessionUpdated', {
+                    detail: { sessionId, title: t },
+                })
+            );
         } catch (e) {
             alert('Failed to save title');
             console.error(e);
+        } finally {
+            setSavingTitle(false);
         }
+    };
+
+    const handleCancelEdit = () => {
+        setEditingTitle(false);
+        setNewTitle(sessionDetails?.session.title || '');
     };
 
     if (!userInfo || isLoading) {
@@ -119,14 +138,23 @@ function SessionDetailsContent() {
                         <div className="flex-1 min-w-0">
                             {editingTitle ? (
                                 <div className="flex items-center gap-2">
-                                    <input
-                                        className="border rounded px-2 py-1 text-lg w-full"
+                                    <Input
+                                        className="flex-1 bg-transparent border border-transparent p-0 h-auto text-2xl font-bold focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none"
                                         value={newTitle}
                                         onChange={e => setNewTitle(e.target.value)}
-                                        placeholder="Title"
+                                        placeholder="Enter title..."
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') handleSaveTitle();
+                                            if (e.key === 'Escape') handleCancelEdit();
+                                        }}
+                                        disabled={savingTitle}
                                     />
-                                    <button onClick={handleSaveTitle} className="px-3 py-1 rounded text-sm bg-blue-600 text-white">Save</button>
-                                    <button onClick={() => { setEditingTitle(false); setNewTitle(sessionDetails.session.title || ''); }} className="px-3 py-1 rounded text-sm border">Cancel</button>
+                                    <Button onClick={handleSaveTitle} size="sm" disabled={savingTitle || !newTitle.trim()}>
+                                        {savingTitle ? 'Saving...' : 'Save'}
+                                    </Button>
+                                    <Button onClick={handleCancelEdit} variant="outline" size="sm" disabled={savingTitle}>
+                                        Cancel
+                                    </Button>
                                 </div>
                             ) : (
                                 <div className="flex items-center gap-3">
@@ -134,7 +162,9 @@ function SessionDetailsContent() {
                                         {sessionDetails.session.title ||
                                             `Conversation on ${new Date(sessionDetails.session.started_at * 1000).toLocaleDateString()}`}
                                     </h1>
-                                    <button onClick={() => setEditingTitle(true)} className="px-2 py-1 rounded text-xs border">Edit</button>
+                                    <Button onClick={() => setEditingTitle(true)} variant="outline" size="sm">
+                                        Edit
+                                    </Button>
                                 </div>
                             )}
                             <div className="flex items-center text-sm text-gray-500 space-x-4">
@@ -159,13 +189,9 @@ function SessionDetailsContent() {
                                 </span>
                             </div>
                         </div>
-                        <button
-                            onClick={handleDelete}
-                            disabled={deleting}
-                            className={`px-4 py-2 rounded text-sm font-medium border border-red-200 text-red-700 bg-red-50 hover:bg-red-100 transition-colors ${deleting ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
+                        <Button onClick={handleDelete} variant="destructive" size="sm" disabled={deleting}>
                             {deleting ? 'Deleting...' : 'Delete Activity'}
-                        </button>
+                        </Button>
                     </div>
 
                     {sessionDetails.summary && (

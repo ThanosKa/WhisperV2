@@ -12,6 +12,29 @@ router.get('/', async (req, res) => {
     }
 });
 
+// Filtered views: meetings (listen) and questions (ask)
+router.get('/meetings', async (req, res) => {
+    try {
+        const sessions = await ipcRequest(req, 'get-sessions');
+        const meetings = (sessions || []).filter(s => s.session_type === 'listen');
+        res.json(meetings);
+    } catch (error) {
+        console.error('Failed to get meetings via IPC:', error);
+        res.status(500).json({ error: 'Failed to retrieve meetings' });
+    }
+});
+
+router.get('/questions', async (req, res) => {
+    try {
+        const sessions = await ipcRequest(req, 'get-sessions');
+        const questions = (sessions || []).filter(s => s.session_type === 'ask');
+        res.json(questions);
+    } catch (error) {
+        console.error('Failed to get questions via IPC:', error);
+        res.status(500).json({ error: 'Failed to retrieve questions' });
+    }
+});
+
 router.post('/', async (req, res) => {
     try {
         const result = await ipcRequest(req, 'create-session', req.body);

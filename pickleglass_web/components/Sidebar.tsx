@@ -7,6 +7,8 @@ import { useState, createElement, useEffect, useMemo, useCallback, memo } from '
 import { Search, Activity, HelpCircle, Download, ChevronDown, User, Shield, Database, CreditCard, LogOut, LucideIcon } from 'lucide-react';
 import { logout, UserProfile, checkApiKeyStatus } from '@/utils/api';
 import { useAuth } from '@/utils/auth';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 const ANIMATION_DURATION = {
     SIDEBAR: 500,
@@ -268,10 +270,11 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
             if (item.action) {
                 return (
                     <li key={item.name}>
-                        <button
+                        <Button
                             onClick={item.action}
                             onKeyDown={e => handleKeyDown(e, item.action)}
-                            className={`${baseButtonClasses} ${getStateClasses(false)}`}
+                            variant="ghost"
+                            className={`${baseButtonClasses} ${getStateClasses(false)} justify-start h-auto py-[10px] px-[12px]`}
                             title={isCollapsed ? item.name : undefined}
                             aria-label={item.ariaLabel || item.name}
                             style={{ willChange: 'background-color, color' }}
@@ -285,7 +288,7 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
                                     {item.name}
                                 </span>
                             </div>
-                        </button>
+                        </Button>
                     </li>
                 );
             }
@@ -364,22 +367,18 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
                                 ))}
                                 <li role="none">
                                     {isFirebaseUser ? (
-                                        <button
+                                        <Button
                                             onClick={handleLogout}
                                             onKeyDown={e => handleKeyDown(e, handleLogout)}
-                                            className={`
-                                    group flex items-center rounded-lg px-[12px] py-[8px] text-[13px] gap-x-[9px]
-                                    text-red-600 hover:text-red-700 hover:bg-[#f7f7f7] w-full 
-                                    transition-colors duration-${ANIMATION_DURATION.COLOR_TRANSITION} ease-out
-                                    focus:outline-none
-                                  `}
+                                            variant="ghost"
+                                            className="group flex items-center rounded-lg px-[12px] py-[8px] text-[13px] gap-x-[9px] text-red-600 hover:text-red-700 hover:bg-[#f7f7f7] w-full justify-start h-auto"
                                             style={{ willChange: 'background-color, color' }}
                                             role="menuitem"
                                             aria-label="Logout"
                                         >
                                             <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
                                             <span className="whitespace-nowrap">Logout</span>
-                                        </button>
+                                        </Button>
                                     ) : (
                                         <Link
                                             href="/login"
@@ -573,14 +572,9 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
                     role="region"
                     aria-label="User profile"
                 >
-                    <div
-                        className={`
-              h-[30px] w-[30px] rounded-full border border-[#8d8d8d] flex items-center justify-center text-[#282828] text-[13px] 
-              shrink-0 cursor-pointer transition-all duration-${ANIMATION_DURATION.ICON_HOVER} 
-              hover:bg-[#f7f7f7] focus:outline-none
-            `}
+                    <Avatar
+                        className="h-[30px] w-[30px] cursor-pointer hover:bg-muted transition-colors"
                         title={getUserDisplayName()}
-                        style={{ willChange: 'background-color, transform' }}
                         tabIndex={0}
                         role="button"
                         aria-label={`User: ${getUserDisplayName()}`}
@@ -593,9 +587,16 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
                                 }
                             })
                         }
+                        onClick={() => {
+                            if (isFirebaseUser) {
+                                router.push('/settings');
+                            } else {
+                                router.push('/login');
+                            }
+                        }}
                     >
-                        {getUserInitial()}
-                    </div>
+                        <AvatarFallback className="text-xs">{getUserInitial()}</AvatarFallback>
+                    </Avatar>
 
                     <div className="ml-[0px] overflow-hidden" style={getTextContainerStyle()}>
                         <span className="block text-[13px] leading-6 text-[#282828]" style={getUniformTextStyle()}>

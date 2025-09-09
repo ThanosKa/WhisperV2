@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import { Search, X } from 'lucide-react';
 import { searchConversations, Session } from '@/utils/api';
 import { MessageSquare } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 interface SearchPopupProps {
     isOpen: boolean;
@@ -59,38 +62,39 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
         handleSearch(query);
     };
 
-    const handleBackgroundClick = (e: React.MouseEvent) => {
-        if (e.target === e.currentTarget) {
-            onClose();
-        }
-    };
-
-    if (!isOpen) return null;
-
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-25 flex items-start justify-center pt-16 z-50" onClick={handleBackgroundClick}>
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
-                <div className="flex items-center px-4 py-3">
-                    <Search className="h-5 w-5 text-gray-400 mr-3 flex-shrink-0" />
-                    <input
-                        ref={inputRef}
-                        type="text"
-                        value={searchQuery}
-                        onChange={handleInputChange}
-                        placeholder="Search..."
-                        className="flex-1 text-gray-900 text-base border-0 focus:outline-none placeholder-gray-400 bg-transparent"
-                    />
-                    <button onClick={onClose} className="ml-3 p-1 hover:bg-gray-100 rounded-full flex-shrink-0">
-                        <X className="h-4 w-4 text-gray-400" />
-                    </button>
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="max-w-lg">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <Search className="h-5 w-5" />
+                        Search Conversations
+                    </DialogTitle>
+                </DialogHeader>
+
+                <div className="flex items-center space-x-2">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            ref={inputRef}
+                            type="text"
+                            placeholder="Search conversations..."
+                            value={searchQuery}
+                            onChange={handleInputChange}
+                            className="pl-8"
+                        />
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={onClose}>
+                        <X className="h-4 w-4" />
+                    </Button>
                 </div>
 
-                <div className="px-4 py-2 bg-gray-50 border-t border-gray-100">
-                    <div className="flex items-center text-sm text-gray-600">
+                <div className="px-3 py-2 bg-muted/50 rounded-md">
+                    <div className="flex items-center text-sm text-muted-foreground">
                         <span>Type</span>
-                        <span className="mx-2 px-1.5 py-0.5 bg-white border border-gray-200 rounded text-xs font-mono">#</span>
+                        <span className="mx-2 px-1.5 py-0.5 bg-background border rounded text-xs font-mono">#</span>
                         <span>to access summaries,</span>
-                        <span className="mx-2 px-1.5 py-0.5 bg-white border border-gray-200 rounded text-xs font-mono">?</span>
+                        <span className="mx-2 px-1.5 py-0.5 bg-background border rounded text-xs font-mono">?</span>
                         <span>for help.</span>
                     </div>
                 </div>
@@ -99,31 +103,29 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
                     <div className="max-h-[400px] overflow-y-auto">
                         {isLoading ? (
                             <div className="p-6 text-center">
-                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-3"></div>
-                                <p className="text-gray-500 text-sm">Searching...</p>
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-3"></div>
+                                <p className="text-muted-foreground text-sm">Searching...</p>
                             </div>
                         ) : searchResults.length > 0 ? (
-                            <div className="divide-y divide-gray-100">
+                            <div className="divide-y">
                                 {searchResults.map(result => {
                                     const timestamp = new Date(result.started_at * 1000).toLocaleString();
 
                                     return (
                                         <div
                                             key={result.id}
-                                            className="p-3 hover:bg-gray-50 cursor-pointer transition-colors"
+                                            className="p-3 hover:bg-muted/50 cursor-pointer transition-colors rounded-sm"
                                             onClick={() => {
-                                                router.push(`/activity/${result.id}`);
+                                                router.push(`/activity/details?sessionId=${result.id}`);
                                                 onClose();
                                             }}
                                         >
                                             <div className="flex items-start gap-3">
-                                                <MessageSquare className="h-5 w-5 text-gray-400 mt-0.5 shrink-0" />
+                                                <MessageSquare className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
                                                 <div className="flex-1 min-w-0">
-                                                    <h3 className="text-sm font-medium text-gray-900 mb-1 truncate">
-                                                        {result.title || 'Untitled Conversation'}
-                                                    </h3>
-                                                    <div className="flex items-center gap-2 mt-2">
-                                                        <span className="text-xs text-gray-500">{timestamp}</span>
+                                                    <h3 className="text-sm font-medium mb-1 truncate">{result.title || 'Untitled Conversation'}</h3>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs text-muted-foreground">{timestamp}</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -133,13 +135,13 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
                             </div>
                         ) : (
                             <div className="p-6 text-center">
-                                <Search className="h-8 w-8 text-gray-300 mx-auto mb-3" />
-                                <p className="text-gray-500 text-sm">No results found for "{searchQuery}"</p>
+                                <Search className="h-8 w-8 text-muted-foreground/50 mx-auto mb-3" />
+                                <p className="text-muted-foreground text-sm">No results found for "{searchQuery}"</p>
                             </div>
                         )}
                     </div>
                 )}
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 }

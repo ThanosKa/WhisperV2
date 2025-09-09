@@ -159,6 +159,8 @@ class AskService {
             currentResponse: '',
             showTextInput: true,
             interrupted: false,
+            isSearching: false,
+            searchSources: [],
         };
         this._forceDefaultProfileOnce = false;
         console.log('[AskService] Service instance created.');
@@ -171,7 +173,10 @@ class AskService {
             // Use first sentence or up to ~12 words
             const sentence = raw.split(/(?<=[\.\!\?])\s+/)[0] || raw;
             const words = sentence.split(/\s+/).slice(0, 12).join(' ');
-            const cleaned = words.replace(/[\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+            const cleaned = words
+                .replace(/[\r\n]+/g, ' ')
+                .replace(/\s{2,}/g, ' ')
+                .trim();
             // Capitalize first letter
             return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
         } catch (_) {
@@ -179,12 +184,6 @@ class AskService {
         }
     }
 
-    /**
-     * Detects the intent/mode from user input to select the appropriate prompt template.
-     *
-     * @param {string} userPromptRaw
-     * @returns {{ mode: 'default'|'define'|'email'|'actions'|'summary'|'recap'|'next'|'followup' }}
-     */
     _expandInsightRequest(userPromptRaw) {
         const text = (userPromptRaw || '').toLowerCase();
         const stripEmoji = s => s.replace(/[\p{Emoji}\p{Extended_Pictographic}]/gu, '').trim();
@@ -313,6 +312,8 @@ class AskService {
             currentResponse: '',
             showTextInput: true,
             interrupted: false,
+            isSearching: false,
+            searchSources: [],
         };
         this._broadcastState();
 
@@ -335,12 +336,7 @@ class AskService {
         return conversationTexts.join('\n'); // Send full conversation
     }
 
-    /**
-     *
-     * @param {string} userPrompt
-     * @returns {Promise<{success: boolean, response?: string, error?: string}>}
-     */
-    async sendMessage(userPrompt, conversationHistoryRaw = []) {
+    async sendMessage(userPrompt, conversationHistoryRaw = [], enableSearch = false) {
         // Normalize and fallback to default help text when empty
         try {
             userPrompt = ((userPrompt ?? '') + '').trim();
@@ -360,6 +356,8 @@ class AskService {
             currentResponse: '',
             showTextInput: false,
             interrupted: false,
+            isSearching: enableSearch,
+            searchSources: [],
         };
         this._broadcastState();
 
@@ -374,12 +372,13 @@ class AskService {
         try {
             console.log(`[AskService] 🤖 Processing message: ${userPrompt.substring(0, 50)}...`);
             console.log(`[AskService] history: items=${conversationHistoryRaw?.length || 0}`);
+            console.log(`[AskService] Google Search enabled: ${enableSearch}`);
 
             // Check if we're in a meeting context (open listen session exists)
             const listenService = require('../listen/listenService');
             const currentListenSessionId = listenService.getCurrentSessionData()?.sessionId || null;
             const isInMeeting = Boolean(currentListenSessionId);
-            
+
             if (isInMeeting) {
                 // We're in a meeting - use or promote to listen session for context
                 sessionId = await sessionRepository.getOrCreateActive('listen');
@@ -503,6 +502,7 @@ User prompt: ${userPrompt}
 Mode: Meeting Copilot
 Profile used: ${profileToUse}
 Using conversation context: ${useConversationContext}
+Google Search enabled: ${modelInfo.provider === 'gemini'}
 
 What LLM got:
 ${llmMessages}
@@ -518,6 +518,7 @@ ${llmMessages}
                 model: modelInfo.model,
                 temperature: 0.7,
                 maxTokens: 2048,
+                enableGoogleSearch: enableSearch, // Use the parameter
             });
 
             try {
@@ -709,10 +710,10 @@ ${llmMessages}
         );
     }
 
-    async sendMessageManual(userPrompt, conversationHistoryRaw = []) {
+    async sendMessageManual(userPrompt, conversationHistoryRaw = [], enableSearch = false) {
         this._forceDefaultProfileOnce = true;
         try {
-            return await this.sendMessage(userPrompt, conversationHistoryRaw);
+            return await this.sendMessage(userPrompt, conversationHistoryRaw, enableSearch);
         } finally {
             this._forceDefaultProfileOnce = false;
         }

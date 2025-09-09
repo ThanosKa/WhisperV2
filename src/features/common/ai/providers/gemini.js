@@ -1,6 +1,56 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { GoogleGenAI } = require('@google/genai');
 
+// Best-effort extraction of web source URLs from Gemini responses
+function extractSourceUrlsFromGeminiResponse(resp) {
+    try {
+        const urls = new Set();
+
+        const addIfUrl = v => {
+            if (!v || typeof v !== 'string') return;
+            if (/^https?:\/\//i.test(v)) urls.add(v);
+        };
+
+        const scanObj = obj => {
+            if (!obj || typeof obj !== 'object') return;
+            for (const [k, v] of Object.entries(obj)) {
+                if (k === 'uri' || k === 'url') addIfUrl(v);
+                if (v && typeof v === 'object') scanObj(v);
+                if (Array.isArray(v)) v.forEach(scanObj);
+            }
+        };
+
+        // Known likely locations
+        const candidates = resp?.candidates || [];
+        for (const c of candidates) {
+            // 1) citation metadata
+            const citationMeta = c?.citationMetadata || c?.content?.citationMetadata || resp?.citationMetadata;
+            if (citationMeta?.citationSources) {
+                for (const src of citationMeta.citationSources) addIfUrl(src?.uri || src?.url);
+            }
+
+            // 2) grounding metadata variants
+            const gm = c?.groundingMetadata || resp?.groundingMetadata;
+            if (gm) {
+                // groundingAttributions[].source.web.uri
+                const atts = gm.groundingAttributions || gm.attributions || [];
+                for (const a of atts) addIfUrl(a?.source?.web?.uri || a?.source?.uri || a?.web?.uri);
+
+                // groundingChunks[].web.uri
+                const chunks = gm.groundingChunks || gm.chunks || [];
+                for (const ch of chunks) addIfUrl(ch?.web?.uri || ch?.uri);
+            }
+        }
+
+        // Fallback deep scan for any uri/url values
+        if (urls.size === 0) scanObj(resp);
+
+        return Array.from(urls);
+    } catch (_) {
+        return [];
+    }
+}
+
 class GeminiProvider {
     static async validateApiKey(key) {
         if (!key || typeof key !== 'string') {
@@ -64,15 +114,24 @@ async function createSTT({ apiKey, language = 'en-US', callbacks = {}, ...config
 }
 
 /**
- * Creates a Gemini LLM instance with proper text response handling
+ * Creates a Gemini LLM instance with proper text response handling and optional Google Search
  */
-function createLLM({ apiKey, model = 'gemini-2.5-flash', temperature = 0.7, maxTokens = 8192, ...config }) {
+function createLLM({ apiKey, model = 'gemini-2.5-flash', temperature = 0.7, maxTokens = 8192, enableGoogleSearch = false, ...config }) {
     const client = new GoogleGenerativeAI(apiKey);
+
+    // Configure tools array with optional Google Search
+    const tools = [];
+    if (enableGoogleSearch) {
+        tools.push({
+            googleSearch: {},
+        });
+    }
 
     return {
         generateContent: async parts => {
             const geminiModel = client.getGenerativeModel({
                 model: model,
+                tools: tools.length > 0 ? tools : undefined,
                 generationConfig: {
                     temperature,
                     maxOutputTokens: maxTokens,
@@ -104,6 +163,16 @@ function createLLM({ apiKey, model = 'gemini-2.5-flash', temperature = 0.7, maxT
                 const response = await result.response;
 
                 console.log('[Gemini Provider] Non-streaming usage metadata:', response.usageMetadata);
+
+                // If Google Search was enabled, attempt to log web source URLs
+                if (tools.length > 0) {
+                    const urls = extractSourceUrlsFromGeminiResponse(response);
+                    if (urls.length > 0) {
+                        console.log('[Gemini Web Search Sources]', urls);
+                    } else {
+                        console.log('[Gemini Web Search Sources] No explicit sources found');
+                    }
+                }
 
                 // Return plain text, not wrapped in JSON structure
                 return {
@@ -149,6 +218,7 @@ function createLLM({ apiKey, model = 'gemini-2.5-flash', temperature = 0.7, maxT
 
             const geminiModel = client.getGenerativeModel({
                 model: model,
+                tools: tools.length > 0 ? tools : undefined,
                 systemInstruction:
                     systemInstruction ||
                     'Respond naturally in plain text format. Do not use JSON or structured responses unless specifically requested.',
@@ -202,16 +272,24 @@ function createLLM({ apiKey, model = 'gemini-2.5-flash', temperature = 0.7, maxT
 }
 
 /**
- * Creates a Gemini streaming LLM instance with text response fix
+ * Creates a Gemini streaming LLM instance with text response fix and optional Google Search
  */
-function createStreamingLLM({ apiKey, model = 'gemini-2.5-flash', temperature = 0.7, maxTokens = 8192, ...config }) {
+function createStreamingLLM({ apiKey, model = 'gemini-2.5-flash', temperature = 0.7, maxTokens = 8192, enableGoogleSearch = false, ...config }) {
     const client = new GoogleGenerativeAI(apiKey);
+
+    // Configure tools array with optional Google Search
+    const tools = [];
+    if (enableGoogleSearch) {
+        tools.push({
+            googleSearch: {},
+        });
+    }
 
     return {
         streamChat: async (messages, options = {}) => {
             const signal = options.signal;
 
-            console.log('[Gemini Provider] Starting streaming request');
+            console.log('[Gemini Provider] Starting streaming request' + (enableGoogleSearch ? ' with Google Search' : ''));
 
             let systemInstruction = '';
             const nonSystemMessages = [];
@@ -234,6 +312,7 @@ function createStreamingLLM({ apiKey, model = 'gemini-2.5-flash', temperature = 
 
             const geminiModel = client.getGenerativeModel({
                 model: model,
+                tools: tools.length > 0 ? tools : undefined,
                 systemInstruction:
                     systemInstruction ||
                     'Respond naturally in plain text format. Do not use JSON or structured responses unless specifically requested.',
@@ -324,8 +403,17 @@ function createStreamingLLM({ apiKey, model = 'gemini-2.5-flash', temperature = 
                                 if (finalResponse.usageMetadata) {
                                     console.log('[Gemini Provider] Streaming usage metadata:', finalResponse.usageMetadata);
                                 }
+                                // If Google Search was enabled, attempt to log web source URLs
+                                if (tools.length > 0) {
+                                    const urls = extractSourceUrlsFromGeminiResponse(finalResponse);
+                                    if (urls.length > 0) {
+                                        console.log('[Gemini Web Search Sources]', urls);
+                                    } else {
+                                        console.log('[Gemini Web Search Sources] No explicit sources found');
+                                    }
+                                }
                             } catch (e) {
-                                console.error('[Gemini Provider] Error getting usage metadata after stream:', e);
+                                console.error('[Gemini Provider] Error getting usage metadata/sources after stream:', e);
                             }
                             controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
                             controller.close();

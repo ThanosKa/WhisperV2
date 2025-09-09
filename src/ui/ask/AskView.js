@@ -27,6 +27,9 @@ export class AskView extends LitElement {
         windowHeight: { type: Number },
         interrupted: { type: Boolean },
         isAnalyzing: { type: Boolean },
+        isSearching: { type: Boolean },
+        searchEnabled: { type: Boolean },
+        searchSources: { type: Array },
     };
 
     static styles = styles;
@@ -44,6 +47,9 @@ export class AskView extends LitElement {
         this.windowHeight = window.innerHeight;
         this.interrupted = false;
         this.isAnalyzing = false;
+        this.isSearching = false;
+        this.searchEnabled = false;
+        this.searchSources = [];
 
         this.isAnimating = false; // Tracks typewriter animation state
 
@@ -72,7 +78,8 @@ export class AskView extends LitElement {
         this.handleEscKey = this.handleEscKey.bind(this);
         this.handleCloseAskWindow = this.handleCloseAskWindow.bind(this);
         this.handleCloseIfNoContent = this.handleCloseIfNoContent.bind(this);
-        
+        this.handleToggleSearch = this.handleToggleSearch.bind(this);
+
         // Analyze timeout reference
         this.analyzeTimeout = null;
 
@@ -133,15 +140,30 @@ export class AskView extends LitElement {
             });
             window.api.askView.onAskStateUpdate((event, newState) => {
                 const wasLoading = this.isLoading;
+                const wasSearching = this.isSearching;
                 this.currentResponse = newState.currentResponse;
                 this.currentQuestion = newState.currentQuestion;
                 this.isLoading = newState.isLoading;
                 this.isStreaming = newState.isStreaming;
                 this.interrupted = newState.interrupted;
+                this.isSearching = newState.isSearching || false;
+                this.searchSources = newState.searchSources || [];
 
                 // Handle analyze state transition
                 if (newState.isLoading && !wasLoading) {
                     this.startAnalyzeState();
+                }
+
+                // When search finishes and we start getting response, reset states
+                if (wasSearching && !this.isSearching && newState.currentResponse) {
+                    this.isAnalyzing = false;
+                    this.isSearching = false;
+                }
+
+                // When response content starts arriving, clear analyze state
+                if (newState.currentResponse && newState.currentResponse.trim()) {
+                    this.isAnalyzing = false;
+                    this.isSearching = false;
                 }
 
                 const wasHidden = !this.showTextInput;
@@ -314,6 +336,8 @@ export class AskView extends LitElement {
         this.isLoading = false;
         this.isStreaming = false;
         this.isAnalyzing = false;
+        this.isSearching = false;
+        this.searchSources = [];
         this.headerText = 'AI Response';
         this.showTextInput = true;
         this.lastProcessedLength = 0;
@@ -322,7 +346,7 @@ export class AskView extends LitElement {
         this.wordCount = 0;
         this.interrupted = false;
         this._appendedCurrentQuestion = false;
-        
+
         // Clear analyze timeout
         if (this.analyzeTimeout) {
             clearTimeout(this.analyzeTimeout);
@@ -340,18 +364,18 @@ export class AskView extends LitElement {
 
     startAnalyzeState() {
         this.isAnalyzing = true;
-        
+
         // Clear any existing timeout
         if (this.analyzeTimeout) {
             clearTimeout(this.analyzeTimeout);
         }
-        
+
         // Transition to thinking after 800ms
         this.analyzeTimeout = setTimeout(() => {
             this.isAnalyzing = false;
             this.requestUpdate();
         }, 800);
-        
+
         this.requestUpdate();
     }
 
@@ -409,6 +433,12 @@ export class AskView extends LitElement {
     renderContent() {
         const responseContainer = this.shadowRoot.getElementById('responseContainer');
         if (!responseContainer) return;
+
+        // Clear analyze state when we start getting response content
+        if (this.currentResponse && this.currentResponse.trim()) {
+            this.isAnalyzing = false;
+            this.isSearching = false;
+        }
 
         // Show loading indicator during initial loading (before any response content)
         if (this.isLoading && !this.currentResponse) {
@@ -1099,6 +1129,11 @@ export class AskView extends LitElement {
         console.log('Typewriter stopped');
     }
 
+    handleToggleSearch() {
+        this.searchEnabled = !this.searchEnabled;
+        console.log(`[AskView] Search toggled: ${this.searchEnabled ? 'enabled' : 'disabled'}`);
+    }
+
     async handleSendText(e, overridingText = '') {
         const textInput = this.shadowRoot?.getElementById('textInput');
         let text = (overridingText || textInput?.value || '').trim();
@@ -1118,7 +1153,7 @@ export class AskView extends LitElement {
         this._appendedCurrentQuestion = true;
 
         if (window.api) {
-            window.api.askView.sendMessage(text).catch(error => {
+            window.api.askView.sendMessage(text, this.searchEnabled).catch(error => {
                 console.error('Error sending text:', error);
             });
         }
@@ -1164,6 +1199,66 @@ export class AskView extends LitElement {
         if (!question) return '';
         if (question.length <= maxLength) return question;
         return question.substring(0, maxLength) + '...';
+    }
+
+    getSourceLogo(domain) {
+        if (!domain) return '';
+
+        const lowerDomain = domain.toLowerCase();
+
+        // Common website logos as SVG icons
+        if (lowerDomain.includes('reddit')) {
+            return html`
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#ff4500">
+                    <path
+                        d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"
+                    />
+                </svg>
+            `;
+        } else if (lowerDomain.includes('github')) {
+            return html`
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path
+                        d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"
+                    />
+                </svg>
+            `;
+        } else if (lowerDomain.includes('stackoverflow')) {
+            return html`
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#f48024">
+                    <path
+                        d="M15.725 0l-1.72 1.277 6.39 8.588 1.716-1.277L15.725 0zm-3.94 3.418l-1.369 1.644 8.225 6.85 1.369-1.644-8.225-6.85zm-3.15 4.465l-.905 1.94 9.702 4.517.904-1.94-9.701-4.517zm-1.85 4.86l-.44 2.093 10.473 2.201.44-2.092-10.473-2.203zM1.89 15.47V24h19.19v-8.53h-2.133v6.397H4.021v-6.396H1.89zm4.265 2.133v2.13h10.66v-2.13H6.154z"
+                    />
+                </svg>
+            `;
+        } else if (lowerDomain.includes('wikipedia')) {
+            return html`
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path
+                        d="M12.09 13.119c-.936 1.932-2.217 4.548-2.853 5.728-.616 1.14-1.1 1.857-1.732 1.857s-1.115-.717-1.731-1.857c-.635-1.175-1.918-3.796-2.853-5.728C1.085 10.32.35 8.331.35 6.466c0-3.192 2.581-5.773 5.772-5.773s5.772 2.581 5.772 5.773c0 1.865-.736 3.854-2.572 6.653zm.729-6.878c.015-.23.045-.457.045-.692 0-2.061-1.675-3.736-3.736-3.736S5.392 3.488 5.392 5.549c0 .235.03.462.045.692.53-.14 1.096-.217 1.68-.217s1.15.077 1.681.217c1.862-.007 3.679.414 5.031 1.19z"
+                    />
+                </svg>
+            `;
+        } else {
+            // Generic globe icon for unknown domains
+            return html`
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+                    <path d="M2 12h20" />
+                </svg>
+            `;
+        }
     }
 
     render() {

@@ -99,7 +99,7 @@ contextBridge.exposeInMainWorld('api', {
         adjustWindowHeight: (winName, height) => ipcRenderer.invoke('adjust-window-height', { winName, height }),
 
         // Message Handling
-        sendMessage: text => ipcRenderer.invoke('ask:sendQuestionFromAsk', text),
+        sendMessage: (text, enableSearch = false) => ipcRenderer.invoke('ask:sendQuestionFromAsk', { userPrompt: text, enableSearch }),
         interruptStream: () => ipcRenderer.invoke('ask:interruptStream'),
 
         // Listeners

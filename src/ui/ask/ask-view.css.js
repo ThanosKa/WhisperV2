@@ -309,12 +309,28 @@ export const styles = css`
         animation: pulse 1.5s ease-in-out infinite;
     }
 
+    .response-label.searching {
+        color: rgba(255, 255, 255, 0.9);
+        animation: searchingSlideIn 0.4s ease-out;
+    }
+
     /* Thinking slide-in animation */
     .response-label.thinking-slide-in {
         animation: thinkingSlideIn 0.4s ease-out;
     }
 
     @keyframes thinkingSlideIn {
+        0% {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes searchingSlideIn {
         0% {
             opacity: 0;
             transform: translateY(-10px);
@@ -818,6 +834,46 @@ export const styles = css`
         border-top: none;
     }
 
+    .input-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+    }
+
+    .search-toggle-btn {
+        background: transparent;
+        border: none;
+        padding: 4px;
+        cursor: pointer !important;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        transition: color 0.2s ease;
+        color: rgba(255, 255, 255, 0.7);
+        flex-shrink: 0;
+    }
+
+    .search-toggle-btn:hover {
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+    .search-toggle-btn.active {
+        color: rgba(147, 197, 253, 1);
+    }
+
+    .search-toggle-btn.active:hover {
+        color: rgba(191, 219, 254, 1);
+    }
+
+    .search-toggle-btn svg {
+        width: 16px;
+        height: 16px;
+        pointer-events: none;
+    }
+
     #textInput {
         flex: 1;
         padding: 0;
@@ -1170,5 +1226,100 @@ export const styles = css`
             opacity: 1;
             transform: scale(1.2) translateY(-6px);
         }
+    }
+
+    /* Search Sources Display */
+    .search-sources-container {
+        padding: 12px 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.02);
+        animation: slideInSources 0.3s ease-out;
+    }
+
+    @keyframes slideInSources {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .search-sources-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 8px;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.7);
+        font-weight: 500;
+    }
+
+    .search-sources-header .search-icon {
+        width: 14px;
+        height: 14px;
+        stroke: rgba(255, 255, 255, 0.6);
+    }
+
+    .search-sources-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .search-source-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        transition: background-color 0.15s ease;
+        cursor: pointer;
+    }
+
+    .search-source-item:hover {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .source-logo {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+    }
+
+    .source-logo svg {
+        width: 16px;
+        height: 16px;
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    .source-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .source-title {
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.9);
+        font-weight: 500;
+        line-height: 1.2;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .source-domain {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.6);
+        line-height: 1.2;
+        margin-top: 2px;
     }
 `;

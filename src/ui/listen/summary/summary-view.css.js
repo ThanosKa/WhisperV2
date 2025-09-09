@@ -231,7 +231,6 @@ export const summaryViewStyles = css`
         height: 100px;
         color: rgba(255, 255, 255, 0.6);
         font-size: 12px;
-        font-style: italic;
     }
 
     /* Meeting Recap - scrollable summary */
@@ -265,14 +264,7 @@ export const summaryViewStyles = css`
         padding: 6px 8px;
         border-radius: 4px;
         background: transparent;
-        cursor: pointer;
         word-wrap: break-word;
-        transition: all 0.15s ease;
-    }
-
-    .meeting-intro-item:hover {
-        background: rgba(255, 255, 255, 0.1);
-        transform: translateX(2px);
     }
 
     /* Scrollable Questions and Defines only */
@@ -354,5 +346,15 @@ export const summaryViewStyles = css`
     .followup-item:hover {
         background: rgba(255, 255, 255, 0.1);
         transform: translateX(2px);
+    }
+
+    /* Click to ask Whisper prompt */
+    .whisper-prompt {
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 13px;
+        font-weight: 400;
+        text-align: center;
+        margin: 16px 0 8px 0;
+        padding: 4px 8px;
     }
 `;

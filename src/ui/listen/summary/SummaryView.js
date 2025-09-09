@@ -204,6 +204,32 @@ export class SummaryView extends LitElement {
         this.handleRequestClick(originalText);
     }
 
+    scrollToFollowUps() {
+        const container = this.shadowRoot.querySelector('.insights-container');
+        if (container && this.allFollowUps.length > 0) {
+            // Find the Follow-Ups title element using data attribute
+            const followUpsTitle = this.shadowRoot.querySelector('insights-title[data-section="followups"]');
+            if (followUpsTitle) {
+                // Get the position of the Follow-Ups title relative to the container
+                const titleRect = followUpsTitle.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+
+                // Calculate the scroll position to center the Follow-Ups section
+                const titleTop = titleRect.top - containerRect.top;
+                const containerHeight = containerRect.height;
+                const scrollTo = titleTop - containerHeight / 2 + titleRect.height / 2;
+
+                // Smooth scroll to the Follow-Ups section
+                container.scrollTo({
+                    top: Math.max(0, scrollTo),
+                    behavior: 'smooth',
+                });
+
+                console.log('[SummaryView] Auto-scrolled to Follow-Ups section');
+            }
+        }
+    }
+
     renderMarkdownContent() {
         if (!this.isLibrariesLoaded || !this.marked) {
             return;
@@ -293,6 +319,11 @@ export class SummaryView extends LitElement {
                 );
             }, 100);
 
+            // Auto-scroll to follow-ups section smoothly
+            setTimeout(() => {
+                this.scrollToFollowUps();
+            }, 200);
+
             // Debug container dimensions
             setTimeout(() => {
                 const container = this.shadowRoot.querySelector('.insights-container');
@@ -348,12 +379,7 @@ export class SummaryView extends LitElement {
                                             .slice(0, 4)
                                             .map(
                                                 (bullet, index) => html`
-                                                    <div
-                                                        class="meeting-intro-item"
-                                                        data-markdown-id="intro-${index}"
-                                                        data-original-text="${bullet}"
-                                                        @click=${() => this.handleMarkdownClick(bullet)}
-                                                    >
+                                                    <div class="meeting-intro-item" data-markdown-id="intro-${index}" data-original-text="${bullet}">
                                                         • ${bullet}
                                                     </div>
                                                 `
@@ -408,7 +434,7 @@ export class SummaryView extends LitElement {
                           <!-- Follow-Ups Section (no border, as before) -->
                           ${this.hasCompletedRecording && this.allFollowUps.length > 0
                               ? html`
-                                    <insights-title>Follow-Ups</insights-title>
+                                    <insights-title data-section="followups">Follow-Ups</insights-title>
                                     ${this.allFollowUps.map(
                                         (followUp, index) => html`
                                             <div
@@ -423,6 +449,9 @@ export class SummaryView extends LitElement {
                                     )}
                                 `
                               : ''}
+
+                          <!-- Click to ask Whisper prompt -->
+                          ${hasAnyContent ? html` <div class="whisper-prompt">Click to ask Whisper</div> ` : ''}
                       `}
             </div>
         `;

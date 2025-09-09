@@ -1,21 +1,28 @@
 import './MainHeader.js';
 import './AuthHeader.js';
-import './ApiKeyHeader.js';
 import './PermissionHeader.js';
 // import './WelcomeHeader.js';
+
+// DEV: Set to 'auth' | 'permission' | 'main' to force a header.
+// Leave as null to use normal app logic based on login and permissions.
+const DEV_HEADER_OVERRIDE = null;
+
+// App content dimensions for Permission header
+const APP_CONTENT_WIDTH = 950;
+const APP_CONTENT_HEIGHT = 750;
 
 class HeaderTransitionManager {
     constructor() {
         this.headerContainer = document.getElementById('header-container');
-        this.currentHeaderType = null; // 'auth' | 'apikey' | 'main' | 'permission'
+        this.currentHeaderType = null; // 'auth' | 'main' | 'permission'
+        this.devOverride = DEV_HEADER_OVERRIDE;
         // this.welcomeHeader = null;
-        this.apiKeyHeader = null;
         this.mainHeader = null;
         this.permissionHeader = null;
 
         /**
          * only one header window is allowed
-         * @param {'apikey'|'main'|'permission'} type
+         * @param {'auth'|'main'|'permission'} type
          */
         this.ensureHeader = type => {
             console.log('[HeaderController] ensureHeader: Ensuring header of type:', type);
@@ -27,7 +34,6 @@ class HeaderTransitionManager {
             this.headerContainer.innerHTML = '';
 
             // this.welcomeHeader = null;
-            this.apiKeyHeader = null;
             this.mainHeader = null;
             this.permissionHeader = null;
             this.authHeader = null;
@@ -37,14 +43,6 @@ class HeaderTransitionManager {
                 this.authHeader = document.createElement('auth-header');
                 this.headerContainer.appendChild(this.authHeader);
                 this.authHeader.startSlideInAnimation?.();
-                console.log('[HeaderController] ensureHeader: Header of type:', type, 'created.');
-            } else if (type === 'apikey') {
-                this.apiKeyHeader = document.createElement('apikey-header');
-                this.apiKeyHeader.stateUpdateCallback = userState => this.handleStateUpdate(userState);
-                this.apiKeyHeader.addEventListener('request-resize', e => {
-                    this._resizeForApiKey(e.detail.height);
-                });
-                this.headerContainer.appendChild(this.apiKeyHeader);
                 console.log('[HeaderController] ensureHeader: Header of type:', type, 'created.');
             } else if (type === 'permission') {
                 this.permissionHeader = document.createElement('permission-setup');
@@ -66,42 +64,55 @@ class HeaderTransitionManager {
             }
 
             this.currentHeaderType = type;
-            this.notifyHeaderState(type === 'permission' ? 'apikey' : type); // Keep permission state as apikey for compatibility
+            this.notifyHeaderState(type);
         };
 
         console.log('[HeaderController] Manager initialized');
 
-        this._bootstrap();
+        // If a dev override is set, apply it and skip bootstrap logic
+        if (this.devOverride) {
+            this.applyDevOverride();
+        } else {
+            this._bootstrap();
+        }
 
         if (window.api) {
             window.api.headerController.onUserStateChanged((event, userState) => {
                 console.log('[HeaderController] Received user state change:', userState);
+                // Ignore state changes if a dev override is active
+                if (this.devOverride) return;
                 this.handleStateUpdate(userState);
             });
 
             window.api.headerController.onAuthFailed((event, { message }) => {
                 console.error('[HeaderController] Received auth failure from main process:', message);
-                if (this.apiKeyHeader) {
-                    this.apiKeyHeader.errorMessage = 'Authentication failed. Please try again.';
-                    this.apiKeyHeader.isLoading = false;
-                }
-            });
-            window.api.headerController.onForceShowApiKeyHeader(async () => {
-                console.log('[HeaderController] Received broadcast to show apikey header. Switching now.');
-                // const isConfigured = await window.api.apiKeyHeader.areProvidersConfigured();
-                // if (!isConfigured) {
-                //     await this._resizeForWelcome();
-                //     this.ensureHeader('welcome');
-                // } else {
-                await this._resizeForApiKey();
-                this.ensureHeader('apikey');
-                // }
             });
         }
     }
 
+    async applyDevOverride() {
+        const type = String(this.devOverride).toLowerCase();
+        switch (type) {
+            case 'auth':
+                await this._resizeForAuth();
+                this.ensureHeader('auth');
+                break;
+            case 'permission':
+                await this._resizeForPermissionHeader();
+                this.ensureHeader('permission');
+                break;
+            case 'main':
+                await this._resizeForMain();
+                this.ensureHeader('main');
+                break;
+            default:
+                console.warn('[HeaderController] Unknown DEV_HEADER_OVERRIDE:', this.devOverride);
+        }
+        this.notifyHeaderState(type);
+    }
+
     notifyHeaderState(stateOverride) {
-        const state = stateOverride || this.currentHeaderType || 'apikey';
+        const state = stateOverride || this.currentHeaderType || 'auth';
         if (window.api) {
             window.api.headerController.sendHeaderStateChanged(state);
         }
@@ -113,10 +124,17 @@ class HeaderTransitionManager {
         if (window.api) {
             const userState = await window.api.common.getCurrentUser();
             console.log('[HeaderController] Bootstrapping with initial user state:', userState);
-            this.handleStateUpdate(userState);
+            // Ignore bootstrap state if a dev override is active
+            if (!this.devOverride) {
+                this.handleStateUpdate(userState);
+            }
         } else {
             // Fallback for non-electron environment (testing/web)
-            this.ensureHeader('auth');
+            if (this.devOverride) {
+                this.applyDevOverride();
+            } else {
+                this.ensureHeader('auth');
+            }
         }
     }
 
@@ -166,18 +184,7 @@ class HeaderTransitionManager {
             }
         }
 
-        let initialHeight = 220;
-        if (window.api) {
-            try {
-                const userState = await window.api.common.getCurrentUser();
-                if (userState.mode === 'firebase') {
-                    initialHeight = 280;
-                }
-            } catch (e) {
-                console.error('Could not get user state for resize', e);
-            }
-        }
-
+        const initialHeight = APP_CONTENT_HEIGHT;
         await this._resizeForPermissionHeader(initialHeight);
         this.ensureHeader('permission');
     }
@@ -197,12 +204,6 @@ class HeaderTransitionManager {
         return window.api.headerController.resizeHeaderWindow({ width: 520, height: 50 }).catch(() => {});
     }
 
-    async _resizeForApiKey(height = 370) {
-        if (!window.api) return;
-        console.log(`[HeaderController] _resizeForApiKey: Resizing window to 456x${height}`);
-        return window.api.headerController.resizeHeaderWindow({ width: 456, height: height }).catch(() => {});
-    }
-
     async _resizeForAuth(height = 50) {
         if (!window.api) return;
         console.log(`[HeaderController] _resizeForAuth: Resizing window to 520x${height}`);
@@ -211,15 +212,11 @@ class HeaderTransitionManager {
 
     async _resizeForPermissionHeader(height) {
         if (!window.api) return;
-        const finalHeight = height || 220;
-        return window.api.headerController.resizeHeaderWindow({ width: 285, height: finalHeight }).catch(() => {});
+        const finalHeight = height || APP_CONTENT_HEIGHT;
+        return window.api.headerController.resizeHeaderWindow({ width: APP_CONTENT_WIDTH, height: finalHeight }).catch(() => {});
     }
 
-    async _resizeForWelcome() {
-        if (!window.api) return;
-        console.log('[HeaderController] _resizeForWelcome: Resizing window to 456x370');
-        return window.api.headerController.resizeHeaderWindow({ width: 456, height: 364 }).catch(() => {});
-    }
+    // _resizeForWelcome removed with ApiKey flow
 
     async checkPermissions() {
         if (!window.api) {

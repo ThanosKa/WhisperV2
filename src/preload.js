@@ -27,55 +27,6 @@ contextBridge.exposeInMainWorld('api', {
     },
 
     // UI Component specific namespaces
-    // src/ui/app/ApiKeyHeader.js
-    apiKeyHeader: {
-        // Model & Provider Management
-        getProviderConfig: () => ipcRenderer.invoke('model:get-provider-config'),
-        // LocalAI 통합 API
-        getLocalAIStatus: service => ipcRenderer.invoke('localai:get-status', service),
-        installLocalAI: (service, options) => ipcRenderer.invoke('localai:install', { service, options }),
-        startLocalAIService: service => ipcRenderer.invoke('localai:start-service', service),
-        stopLocalAIService: service => ipcRenderer.invoke('localai:stop-service', service),
-        installLocalAIModel: (service, modelId, options) => ipcRenderer.invoke('localai:install-model', { service, modelId, options }),
-        getInstalledModels: service => ipcRenderer.invoke('localai:get-installed-models', service),
-
-        // Legacy support (호환성 위해 유지)
-        getOllamaStatus: () => ipcRenderer.invoke('localai:get-status', 'ollama'),
-        getModelSuggestions: () => ipcRenderer.invoke('ollama:get-model-suggestions'),
-        ensureOllamaReady: () => ipcRenderer.invoke('ollama:ensure-ready'),
-        installOllama: () => ipcRenderer.invoke('localai:install', { service: 'ollama' }),
-        startOllamaService: () => ipcRenderer.invoke('localai:start-service', 'ollama'),
-        pullOllamaModel: modelName => ipcRenderer.invoke('ollama:pull-model', modelName),
-        downloadWhisperModel: modelId => ipcRenderer.invoke('whisper:download-model', modelId),
-        validateKey: data => ipcRenderer.invoke('model:validate-key', data),
-        setSelectedModel: data => ipcRenderer.invoke('model:set-selected-model', data),
-        areProvidersConfigured: () => ipcRenderer.invoke('model:are-providers-configured'),
-
-        // Window Management
-        getHeaderPosition: () => ipcRenderer.invoke('get-header-position'),
-        moveHeaderTo: (x, y) => ipcRenderer.invoke('move-header-to', x, y),
-
-        // Listeners
-        // LocalAI 통합 이벤트 리스너
-        onLocalAIProgress: callback => ipcRenderer.on('localai:install-progress', callback),
-        removeOnLocalAIProgress: callback => ipcRenderer.removeListener('localai:install-progress', callback),
-        onLocalAIComplete: callback => ipcRenderer.on('localai:installation-complete', callback),
-        removeOnLocalAIComplete: callback => ipcRenderer.removeListener('localai:installation-complete', callback),
-        onLocalAIError: callback => ipcRenderer.on('localai:error-notification', callback),
-        removeOnLocalAIError: callback => ipcRenderer.removeListener('localai:error-notification', callback),
-        onLocalAIModelReady: callback => ipcRenderer.on('localai:model-ready', callback),
-        removeOnLocalAIModelReady: callback => ipcRenderer.removeListener('localai:model-ready', callback),
-
-        // Remove all listeners (for cleanup)
-        removeAllListeners: () => {
-            // LocalAI 통합 이벤트
-            ipcRenderer.removeAllListeners('localai:install-progress');
-            ipcRenderer.removeAllListeners('localai:installation-complete');
-            ipcRenderer.removeAllListeners('localai:error-notification');
-            ipcRenderer.removeAllListeners('localai:model-ready');
-            ipcRenderer.removeAllListeners('localai:service-status-changed');
-        },
-    },
 
     // src/ui/app/HeaderController.js
     headerController: {
@@ -95,8 +46,7 @@ contextBridge.exposeInMainWorld('api', {
         removeOnUserStateChanged: callback => ipcRenderer.removeListener('user-state-changed', callback),
         onAuthFailed: callback => ipcRenderer.on('auth-failed', callback),
         removeOnAuthFailed: callback => ipcRenderer.removeListener('auth-failed', callback),
-        onForceShowApiKeyHeader: callback => ipcRenderer.on('force-show-apikey-header', callback),
-        removeOnForceShowApiKeyHeader: callback => ipcRenderer.removeListener('force-show-apikey-header', callback),
+        // Removed ApiKey header force-show in SaaS mode
     },
 
     // src/ui/app/MainHeader.js

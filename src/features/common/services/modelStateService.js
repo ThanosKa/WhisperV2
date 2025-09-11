@@ -339,9 +339,7 @@ class ModelStateService extends EventEmitter {
         const success = await this.removeApiKey(provider);
         if (success) {
             const selectedModels = await this.getSelectedModels();
-            if (!selectedModels.llm && !selectedModels.stt) {
-                this.emit('force-show-apikey-header');
-            }
+            // Removed force-show-apikey-header emission (no ApiKey UI)
         }
         return success;
     }

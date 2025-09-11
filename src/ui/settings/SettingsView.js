@@ -20,6 +20,7 @@ export class SettingsView extends LitElement {
         displays: { type: Array, state: true },
         currentDisplayId: { type: Number, state: true },
         showMonitors: { type: Boolean, state: true },
+        isLoggingOut: { type: Boolean, state: true },
     };
     //////// after_modelStateService ////////
 
@@ -38,6 +39,7 @@ export class SettingsView extends LitElement {
         this.displays = [];
         this.currentDisplayId = null;
         this.showMonitors = true;
+        this.isLoggingOut = false;
         this.loadInitialData();
     }
 
@@ -157,6 +159,7 @@ export class SettingsView extends LitElement {
             } else {
                 this.firebaseUser = null;
             }
+            this.isLoggingOut = false; // Reset logout state
             this.loadAutoUpdateSetting();
             // Reload model settings when user state changes (Firebase login/logout)
             this.loadInitialData();
@@ -354,6 +357,8 @@ export class SettingsView extends LitElement {
 
     handleFirebaseLogout() {
         console.log('Firebase Logout clicked');
+        this.isLoggingOut = true;
+        this.requestUpdate();
         window.api.settingsView.firebaseLogout();
     }
 
@@ -470,9 +475,22 @@ export class SettingsView extends LitElement {
                         <span>Personalize / Meeting Notes</span>
                     </button>
                     <div class="toggle-container">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 8px;">
-                            <path d="M12 6v6l4 2" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                            <circle cx="12" cy="12" r="9" stroke="white" stroke-width="2" />
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="white"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-download-icon lucide-download"
+                            style="margin-right: 8px;"
+                        >
+                            <path d="M12 15V3" />
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <path d="m7 10 5 5 5-5" />
                         </svg>
                         <span class="toggle-label" style="color: white;">Automatic Updates</span>
                         <div class="toggle-switch ${this.autoUpdateEnabled ? 'active' : ''}" @click=${this.handleToggleAutoUpdate}>
@@ -489,11 +507,23 @@ export class SettingsView extends LitElement {
                         </button>
                     </div>
 
-                    <div class="bottom-buttons">
+                    <div class="move-buttons">
                         ${this.firebaseUser
                             ? html`
-                                  <button class="settings-button half-width danger" @click=${this.handleFirebaseLogout}>
+                                  <button
+                                      class="settings-button half-width ${this.isLoggingOut ? 'logout-loading' : ''}"
+                                      @click=${this.handleFirebaseLogout}
+                                  >
                                       <span>Logout</span>
+                                      ${this.isLoggingOut
+                                          ? html`
+                                                <div class="thinking-dots thinking-slide">
+                                                    <div class="thinking-dot"></div>
+                                                    <div class="thinking-dot"></div>
+                                                    <div class="thinking-dot"></div>
+                                                </div>
+                                            `
+                                          : ''}
                                   </button>
                               `
                             : html`
@@ -501,7 +531,7 @@ export class SettingsView extends LitElement {
                                       <span>Login</span>
                                   </button>
                               `}
-                        <button class="settings-button half-width danger" @click=${this.handleQuit}>
+                        <button class="settings-button half-width" @click=${this.handleQuit}>
                             <span>Quit</span>
                         </button>
                     </div>

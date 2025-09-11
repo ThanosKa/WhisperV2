@@ -114,13 +114,6 @@ class ShortcutsService {
         });
 
         // --- User-configurable shortcuts ---
-        if (header?.currentHeaderState === 'apikey') {
-            if (keybinds.toggleVisibility) {
-                globalShortcut.register(keybinds.toggleVisibility, () => this.toggleAllWindowsVisibility());
-            }
-            console.log('[Shortcuts] ApiKeyHeader is active, only toggleVisibility shortcut is registered.');
-            return;
-        }
 
         for (const action in keybinds) {
             const accelerator = keybinds[action];

@@ -441,6 +441,73 @@ export const settingsViewStyles = css`
         display: none;
     }
 
+    /* ────────────────[ THINKING DOTS ANIMATION ]─────────────── */
+    .thinking-dots {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        margin-left: 8px;
+    }
+
+    .thinking-dot {
+        width: 4px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.6);
+        border-radius: 50%;
+        animation: thinking-pulse 1.4s infinite ease-in-out;
+    }
+
+    .thinking-dot:nth-child(1) {
+        animation-delay: -0.32s;
+    }
+
+    .thinking-dot:nth-child(2) {
+        animation-delay: -0.16s;
+    }
+
+    .thinking-dot:nth-child(3) {
+        animation-delay: 0s;
+    }
+
+    @keyframes thinking-pulse {
+        0%,
+        80%,
+        100% {
+            transform: scale(0.8);
+            opacity: 0.5;
+        }
+        40% {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+
+    .thinking-slide {
+        animation: slideInFromRight 0.3s ease-out;
+    }
+
+    @keyframes slideInFromRight {
+        0% {
+            transform: translateX(10px);
+            opacity: 0;
+        }
+        100% {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    /* Logout button loading state */
+    .logout-loading {
+        opacity: 0.7;
+        pointer-events: none;
+    }
+
+    .logout-loading:hover {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.1);
+    }
+
     /* ────────────────[ GLASS BYPASS ]─────────────── */
     :host-context(body.has-glass) {
         animation: none !important;

@@ -130,13 +130,7 @@ module.exports = {
                 }
             });
         });
-        modelStateService.on('force-show-apikey-header', () => {
-            BrowserWindow.getAllWindows().forEach(win => {
-                if (win && !win.isDestroyed()) {
-                    win.webContents.send('force-show-apikey-header');
-                }
-            });
-        });
+        // Removed force-show-apikey-header broadcast (ApiKeyHeader removed)
 
         console.log('[FeatureBridge] Initialized with all feature handlers.');
     },

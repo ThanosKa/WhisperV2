@@ -397,7 +397,11 @@ function setupWebDataHandlers() {
                 // USER
                 case 'get-user-profile':
                     // Adapter injects UID
+                    console.log('[WebData] get-user-profile request - current auth state:');
+                    console.log('[WebData] - authService.getCurrentUserId():', authService.getCurrentUserId());
+                    console.log('[WebData] - authService.getCurrentUser():', authService.getCurrentUser());
                     result = await userRepository.getById();
+                    console.log('[WebData] - userRepository.getById() result:', result);
                     break;
                 case 'update-user-profile':
                     // Adapter injects UID
@@ -535,6 +539,8 @@ async function handleWebappAuthCallback(params) {
     const userRepository = require('./features/common/repositories/user');
     const { sessionUuid, uid, email, displayName } = params;
 
+    console.log('[Auth] Deep link callback received with params:', params);
+
     if (!sessionUuid) {
         console.error('[Auth] Webapp auth callback is missing session UUID.');
         return;
@@ -543,12 +549,12 @@ async function handleWebappAuthCallback(params) {
     console.log('[Auth] Received session UUID from deep link, validating session...');
 
     try {
-        // Use authService to sign in with session
-        await authService.signInWithSession(sessionUuid, { uid, email, displayName });
+        // Use authService to sign in with session (this will fetch real user data)
+        await authService.signInWithSession(sessionUuid);
 
         console.log('[Auth] Successfully signed in with session UUID:', sessionUuid);
 
-        // Create/update user data in local repository if provided
+        // Create/update user data in local repository if provided from deep link
         if (uid && email) {
             const webappUser = {
                 uid: uid,
@@ -558,7 +564,7 @@ async function handleWebappAuthCallback(params) {
 
             // Sync user data to local DB
             userRepository.findOrCreate(webappUser);
-            console.log('[Auth] User data synced with local DB.');
+            console.log('[Auth] User data synced with local DB:', webappUser);
         }
 
         // Focus the app window

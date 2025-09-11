@@ -18,7 +18,27 @@ export default function LoginPage() {
         const urlParams = new URLSearchParams(window.location.search);
         const mode = urlParams.get('mode');
         setIsElectronMode(mode === 'electron');
+        
+        // If in electron mode, check if user is already authenticated
+        if (mode === 'electron') {
+            checkElectronAuth();
+        }
     }, []);
+
+    const checkElectronAuth = async () => {
+        try {
+            const response = await fetch('/api/user/profile');
+            if (response.ok) {
+                const user = await response.json();
+                console.log('🔍 User already authenticated in Electron:', user);
+                // Redirect to settings since user is already logged in
+                router.push('/settings');
+                return;
+            }
+        } catch (error) {
+            console.log('📱 No existing authentication found');
+        }
+    };
 
     const handleWebappSignIn = async () => {
         setIsLoading(true);

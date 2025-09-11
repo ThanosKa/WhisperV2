@@ -9,8 +9,9 @@ const permissionService = require('./permissionService');
 // Webapp configuration
 const WEBAPP_CONFIG = {
     domain: 'http://localhost:3000',
-    loginUrl: 'http://localhost:3000/auth/sign-in?mode=electron',
-    userProfileUrl: 'http://localhost:3000/api/auth/user-by-session',
+    sessionInitUrl: 'http://localhost:3000/api/auth/session/init',
+    sessionStatusUrl: 'http://localhost:3000/api/auth/session',
+    sessionPageUrl: 'http://localhost:3000/session',
 };
 
 // Session storage using electron-store
@@ -21,20 +22,40 @@ async function validateSession(sessionUuid) {
         throw new Error('Session UUID is required for validation');
     }
 
-    const response = await fetch(`${WEBAPP_CONFIG.userProfileUrl}/${sessionUuid}`, {
+    // First check session status
+    const statusResponse = await fetch(`${WEBAPP_CONFIG.sessionStatusUrl}/${sessionUuid}`, {
         method: 'GET',
         headers: {
             'Content-Type': 'application/json',
         },
     });
 
-    const data = await response.json();
+    const statusData = await statusResponse.json();
 
-    if (!response.ok || !data.success) {
-        throw new Error(data.error || `HTTP ${response.status}: Session validation failed`);
+    if (!statusResponse.ok || !statusData.success) {
+        throw new Error(statusData.error || `HTTP ${statusResponse.status}: Session validation failed`);
     }
 
-    return data.data; // User profile data
+    // Check if session is authenticated
+    if (statusData.data.status !== 'authenticated') {
+        throw new Error(`Session status: ${statusData.data.status}`);
+    }
+
+    // Fetch user profile data
+    const profileResponse = await fetch(`${WEBAPP_CONFIG.domain}/api/auth/user-by-session/${sessionUuid}`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+    });
+
+    const profileData = await profileResponse.json();
+
+    if (!profileResponse.ok || !profileData.success) {
+        throw new Error(profileData.error || `Failed to fetch user profile: ${profileResponse.status}`);
+    }
+
+    return profileData.data; // Real user profile data from your API
 }
 
 class AuthService {
@@ -152,16 +173,95 @@ class AuthService {
 
     async startWebappAuthFlow() {
         try {
-            console.log(`[AuthService] Opening webapp auth URL in browser: ${WEBAPP_CONFIG.loginUrl}`);
-            await shell.openExternal(WEBAPP_CONFIG.loginUrl);
-            return { success: true };
+            // 1. Initialize session with webapp
+            console.log('[AuthService] Initializing session with webapp...');
+            const initResponse = await fetch(WEBAPP_CONFIG.sessionInitUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (!initResponse.ok) {
+                throw new Error(`Session initialization failed: ${initResponse.status}`);
+            }
+
+            const initData = await initResponse.json();
+            if (!initData.success || !initData.data?.session_uuid) {
+                throw new Error('Invalid session initialization response');
+            }
+
+            const sessionUuid = initData.data.session_uuid;
+            console.log('[AuthService] Session initialized:', sessionUuid);
+
+            // 2. Open browser to session page
+            const sessionUrl = `${WEBAPP_CONFIG.sessionPageUrl}/${sessionUuid}`;
+            console.log(`[AuthService] Opening session URL: ${sessionUrl}`);
+            await shell.openExternal(sessionUrl);
+
+            // 3. Start polling for authentication
+            this.startSessionPolling(sessionUuid);
+
+            return { success: true, sessionUuid };
         } catch (error) {
-            console.error('[AuthService] Failed to open webapp auth URL:', error);
+            console.error('[AuthService] Failed to start webapp auth flow:', error);
             return { success: false, error: error.message };
         }
     }
 
-    async signInWithSession(sessionUuid, userInfo) {
+    startSessionPolling(sessionUuid) {
+        const pollInterval = setInterval(async () => {
+            try {
+                console.log('[AuthService] Polling session status...');
+                const statusResponse = await fetch(`${WEBAPP_CONFIG.sessionStatusUrl}/${sessionUuid}`);
+
+                if (!statusResponse.ok) {
+                    console.error('[AuthService] Session status check failed:', statusResponse.status);
+                    return;
+                }
+
+                const statusData = await statusResponse.json();
+                if (!statusData.success) {
+                    console.error('[AuthService] Session status error:', statusData.error);
+                    return;
+                }
+
+                const status = statusData.data.status;
+                console.log('[AuthService] Session status:', status);
+
+                switch (status) {
+                    case 'authenticated':
+                        clearInterval(pollInterval);
+                        console.log('[AuthService] Session authenticated successfully!');
+                        await this.signInWithSession(sessionUuid);
+                        break;
+
+                    case 'expired':
+                    case 'not_found':
+                        clearInterval(pollInterval);
+                        console.error('[AuthService] Session expired or not found');
+                        // Could trigger error UI or restart flow
+                        break;
+
+                    case 'pending':
+                        // Continue polling
+                        break;
+
+                    default:
+                        console.warn('[AuthService] Unknown session status:', status);
+                }
+            } catch (error) {
+                console.error('[AuthService] Error polling session status:', error);
+            }
+        }, 2000); // Poll every 2 seconds
+
+        // Stop polling after 5 minutes to prevent infinite polling
+        setTimeout(() => {
+            clearInterval(pollInterval);
+            console.log('[AuthService] Session polling timeout - stopped after 5 minutes');
+        }, 300000);
+    }
+    async signInWithSession(sessionUuid, userInfo = null) {
         try {
             // Validate the session with the webapp
             const userProfile = await validateSession(sessionUuid);

@@ -7,7 +7,6 @@
 
 </p>
 
-
 <p align="center">
   <a href="https://discord.gg/UCZH5B5Hpd"><img src="./public/assets/button_dc.png" width="80" alt="Pickle Discord"></a>&ensp;<a href="https://pickle.com"><img src="./public/assets/button_we.png" width="105" alt="Pickle Website"></a>&ensp;<a href="https://x.com/intent/user?screen_name=leinadpark"><img src="./public/assets/button_xe.png" width="109" alt="Follow Daniel"></a>
 </p>
@@ -24,7 +23,7 @@ To have fun building with us, join our [Discord](https://discord.gg/UCZH5B5Hpd)!
 
 ## Instant Launch
 
-⚡️  Skip the setup—launch instantly with our ready-to-run macOS app.  [[Download Here]](https://www.dropbox.com/scl/fi/znid09apxiwtwvxer6oc9/Glass_latest.dmg?rlkey=gwvvyb3bizkl25frhs4k1zwds&st=37q31b4w&dl=1)
+⚡️  Skip the setup—launch instantly with our ready-to-run macOS app. [[Download Here]](https://www.dropbox.com/scl/fi/znid09apxiwtwvxer6oc9/Glass_latest.dmg?rlkey=gwvvyb3bizkl25frhs4k1zwds&st=37q31b4w&dl=1)
 
 ## Quick Start (Local Build)
 
@@ -53,7 +52,6 @@ npm run setup
 
 ## Highlights
 
-
 ### Ask: get answers based on all your previous screen actions & audio
 
 <img width="100%" alt="booking-screen" src="./public/assets/00.gif">
@@ -67,6 +65,7 @@ npm run setup
 <img width="100%" alt="booking-screen" src="./public/assets/02.gif">
 
 **Currently Supporting:**
+
 - OpenAI API: Get OpenAI API Key [here](https://platform.openai.com/api-keys)
 - Gemini API: Get Gemini API Key [here](https://aistudio.google.com/apikey)
 - Local LLM Ollama & Whisper
@@ -82,7 +81,6 @@ npm run setup
   </i>
 </p>
 
-
 ## Keyboard Shortcuts
 
 `Ctrl/Cmd + \` : show and hide main window
@@ -93,11 +91,12 @@ npm run setup
 
 ## Repo Activity
 
-![Alt](https://repobeats.axiom.co/api/embed/a23e342faafa84fa8797fa57762885d82fac1180.svg "Repobeats analytics image")
+![Alt](https://repobeats.axiom.co/api/embed/a23e342faafa84fa8797fa57762885d82fac1180.svg 'Repobeats analytics image')
 
 ## Contributing
 
 We love contributions! Feel free to open issues for bugs or feature requests. For detailed guide, please see our [contributing guide](/CONTRIBUTING.md).
+
 > Currently, we're working on a full code refactor and modularization. Once that's completed, we'll jump into addressing the major issues.
 
 ### Contributors
@@ -110,12 +109,11 @@ We love contributions! Feel free to open issues for bugs or feature requests. Fo
 
 We have a list of [help wanted](https://github.com/pickle-com/glass/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22%F0%9F%99%8B%E2%80%8D%E2%99%82%EF%B8%8Fhelp%20wanted%22) that contain small features and bugs which have a relatively limited scope. This is a great place to get started, gain experience, and get familiar with our contribution process.
 
-
 ### 🛠 Current Issues & Improvements
 
-| Status | Issue                          | Description                                       |
-|--------|--------------------------------|---------------------------------------------------|
-| 🚧 WIP      | Liquid Glass                    | Liquid Glass UI for MacOS 26 |
+| Status | Issue        | Description                  |
+| ------ | ------------ | ---------------------------- |
+| 🚧 WIP | Liquid Glass | Liquid Glass UI for MacOS 26 |
 
 ### Changelog
 
@@ -123,12 +121,12 @@ We have a list of [help wanted](https://github.com/pickle-com/glass/issues?q=is%
 - Jul 6: Full code refactoring has done.
 - Jul 7: Now support Claude, LLM/STT model selection
 - Jul 8: Now support Windows(beta), Improved AEC by Rust(to seperate mic/system audio), shortcut editing(beta)
-- Jul 8: Now support Local LLM & STT, Webapp Authentication 
-
+- Jul 8: Now support Local LLM & STT, Webapp Authentication
 
 ## About Pickle
 
 **Our mission is to build a living digital clone for everyone.** Glass is part of Step 1—a trusted pipeline that transforms your daily data into a scalable clone. Visit [pickle.com](https://pickle.com) to learn more.
 
 ## Star History
+
 [![Star History Chart](https://api.star-history.com/svg?repos=pickle-com/glass&type=Date)](https://www.star-history.com/#pickle-com/glass&Date)

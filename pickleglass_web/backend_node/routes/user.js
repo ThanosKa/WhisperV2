@@ -14,12 +14,18 @@ router.put('/profile', async (req, res) => {
 
 router.get('/profile', async (req, res) => {
     try {
+        console.log('[API] /profile request - req.uid:', req.uid);
         const user = await ipcRequest(req, 'get-user-profile');
-        if (!user) return res.status(404).json({ error: 'User not found' });
+        console.log('[API] /profile IPC response:', user);
+        if (!user) {
+            console.log('[API] /profile - User not found, returning 404');
+            return res.status(404).json({ error: 'User not found' });
+        }
+        console.log('[API] /profile - Returning user data:', user);
         res.json(user);
     } catch (error) {
         console.error('Failed to get profile via IPC:', error);
-        res.status(500).json({ error: 'Failed to get profile' });
+        res.status(500).json({ error: 'Failed to get profile', details: error.message });
     }
 });
 

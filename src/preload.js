@@ -10,6 +10,11 @@ contextBridge.exposeInMainWorld('api', {
         platform: process.platform,
     },
 
+    // Environment variables exposed to renderer
+    env: {
+        API_BASE_URL: process.env.API_BASE_URL || 'https://www.app-whisper.com',
+    },
+
     // Common utilities used across multiple components
     common: {
         // User & Auth
@@ -71,6 +76,9 @@ contextBridge.exposeInMainWorld('api', {
         // Listeners
         onListenChangeSessionResult: callback => ipcRenderer.on('listen:changeSessionResult', callback),
         removeOnListenChangeSessionResult: callback => ipcRenderer.removeListener('listen:changeSessionResult', callback),
+
+        // Plan tooltip window
+        showPlanWindow: visible => ipcRenderer.send('window:showPlanWindow', { visible }),
     },
 
     // src/ui/app/PermissionHeader.js

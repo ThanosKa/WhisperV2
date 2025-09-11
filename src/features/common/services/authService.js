@@ -8,10 +8,10 @@ const permissionService = require('./permissionService');
 
 // Webapp configuration
 const WEBAPP_CONFIG = {
-    domain: 'http://localhost:3000',
-    sessionInitUrl: 'http://localhost:3000/api/auth/session/init',
-    sessionStatusUrl: 'http://localhost:3000/api/auth/session',
-    sessionPageUrl: 'http://localhost:3000/session',
+    domain: process.env.API_BASE_URL || 'http://localhost:3000',
+    sessionInitUrl: `${process.env.API_BASE_URL || 'http://localhost:3000'}/api/auth/session/init`,
+    sessionStatusUrl: `${process.env.API_BASE_URL || 'http://localhost:3000'}/api/auth/session`,
+    sessionPageUrl: `${process.env.API_BASE_URL || 'http://localhost:3000'}/session`,
 };
 
 // Session storage using electron-store

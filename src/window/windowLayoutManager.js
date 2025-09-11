@@ -97,6 +97,36 @@ class WindowLayoutManager {
         return newPosition;
     }
 
+    /**
+     * Position the small plan/quota tooltip window near the left side of the header
+     * @returns {{x:number,y:number}|null}
+     */
+    calculatePlanWindowPosition() {
+        const header = this.windowPool.get('header');
+        const plan = this.windowPool.get('plan');
+
+        if (!header || header.isDestroyed() || !plan || plan.isDestroyed()) {
+            return null;
+        }
+
+        const headerBounds = header.getBounds();
+        const planBounds = plan.getBounds();
+
+        const display = getCurrentDisplay(header);
+        const { x: workAreaX, y: workAreaY, width: screenWidth, height: screenHeight } = display.workArea;
+
+        const PAD = 5;
+        // Place under left edge near the left label button
+        const leftPadding = 12;
+        const x = headerBounds.x + leftPadding;
+        const y = headerBounds.y + headerBounds.height + PAD;
+
+        const clampedX = Math.max(workAreaX + 10, Math.min(workAreaX + screenWidth - planBounds.width - 10, x));
+        const clampedY = Math.max(workAreaY + 10, Math.min(workAreaY + screenHeight - planBounds.height - 10, y));
+
+        return { x: Math.round(clampedX), y: Math.round(clampedY) };
+    }
+
     calculateHeaderResize(header, { width, height }) {
         if (!header) return null;
         const currentBounds = header.getBounds();

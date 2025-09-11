@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useState, createElement, useEffect, useMemo, useCallback, memo } from 'react';
 import { Search, Activity, HelpCircle, Download, ChevronDown, User, Shield, Database, CreditCard, LogOut, LucideIcon } from 'lucide-react';
-import { logout, UserProfile, checkApiKeyStatus } from '@/utils/api';
+import { UserProfile, checkApiKeyStatus } from '@/utils/api';
 import { useAuth } from '@/utils/auth';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -238,12 +238,9 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
         }
     }, [pathname]);
 
+    // Logout is desktop-only; remove handler in localhost webapp
     const handleLogout = useCallback(async () => {
-        try {
-            await logout();
-        } catch (error) {
-            console.error('An error occurred during logout:', error);
-        }
+        return;
     }, []);
 
     const handleKeyDown = useCallback((event: React.KeyboardEvent, action?: () => void) => {
@@ -367,18 +364,7 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
                                 ))}
                                 <li role="none">
                                     {isAuthenticatedUser ? (
-                                        <Button
-                                            onClick={handleLogout}
-                                            onKeyDown={e => handleKeyDown(e, handleLogout)}
-                                            variant="ghost"
-                                            className="group flex items-center rounded-lg px-[12px] py-[8px] text-[13px] gap-x-[9px] text-red-600 hover:text-red-700 hover:bg-[#f7f7f7] w-full justify-start h-auto"
-                                            style={{ willChange: 'background-color, color' }}
-                                            role="menuitem"
-                                            aria-label="Logout"
-                                        >
-                                            <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
-                                            <span className="whitespace-nowrap">Logout</span>
-                                        </Button>
+                                        <></>
                                     ) : (
                                         <Link
                                             href="/login"

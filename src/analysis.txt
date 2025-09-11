@@ -1,0 +1,600 @@
+[2025-09-11T18:53:38.673Z]
+User prompt: (Analysis Request)
+Mode: Meeting Copilot
+
+What LLM got:
+SYSTEM: <role>You are an AI meeting analyst who extracts structured insights and identifies key elements that support effective follow-up and knowledge management.</role>
+
+<analysis_framework>
+<language_detection>Respond in the same language as the conversation content.</language_detection>
+
+<insight_extraction>
+**Meeting Insights**
+- Key discussion points and current topics
+- Important decisions or conclusions reached
+- Progress made or next steps mentioned
+
+**Questions Detected**
+1. [Exact question text from transcript]
+2. [Another exact question if present]
+
+**Terms to Define**
+- [Technical term that may need explanation]
+- [Another term if present]
+
+<quality_criteria>
+- Insights should be substantive (5-10 words each) and actionable
+- Only list actual questions asked in the conversation
+- Only include terms that would genuinely benefit from definition
+- Focus on content that supports meeting effectiveness
+- Exclude terms already in existing definitions list
+</quality_criteria>
+</insight_extraction>
+
+<Output_rules>
+If there are no questions or terms to define, don't include them in the output.
+If there are no insights, don't include them in the output.
+Never return "No questions detected" or "No terms to define" or "No insights" e.t.c in the output
+The terms to be defined must be a term not an answer for e.g Define X
+Do not return multiple exact same terms. For example Define AI, define Articifical Inteligence. These defines are the same.
+</Output_rules>
+
+<existing_definitions>
+---
+</existing_definitions>
+</analysis_framework>
+
+<analysis_mission>Extract the most valuable elements from the conversation that will support participant success and organizational knowledge building.</analysis_mission>
+
+Conversation context
+-----
+Transcript:
+them: έχουμε σαν λαός, ας πούμε, που ξαφνικά μέχρι το 2009 όλοι προσπαθούμε να μπούμε στο δημόσιο, μέχρι το απ το 99 και μετά όλοι προσπαθήσαμε να φτιαξουμε unicorn. Δηλαδή κανένας. Επίσης
+-----
+
+
+
+USER: Analyze the conversation provided in the Transcript context above.
+
+LLM Output:
+**Συνοπτικά Σημεία Συνάντησης**
+- Αναφέρθηκε μια αλλαγή στους στόχους των πολιτών, από την είσοδο στο δημόσιο (έως το 2009) στην προσπάθεια δημιουργίας "unicorn" (μετά το 1999).
+- Υπονοήθηκε έλλειψη επιτυχίας ή γενικευμένης υλοποίησης αυτών των στόχων.
+
+**Όροι προς Επεξήγηση**
+- **δημόσιο**: Ο τομέας της οικονομίας που ελέγχεται από το κράτος και περιλαμβάνει κρατικές υπηρεσίες, οργανισμούς και επιχειρήσεις.
+- **unicorn**: Στον κόσμο των startups, αναφέρεται σε μια ιδιωτική εταιρεία που αποτιμάται σε πάνω από 1 δισεκατομμύριο δολάρια.
+
+[2025-09-11T18:53:47.335Z]
+User prompt: (Analysis Request)
+Mode: Meeting Copilot
+
+What LLM got:
+SYSTEM: <role>You are an AI meeting analyst who extracts structured insights and identifies key elements that support effective follow-up and knowledge management.</role>
+
+<analysis_framework>
+<language_detection>Respond in the same language as the conversation content.</language_detection>
+
+<insight_extraction>
+**Meeting Insights**
+- Key discussion points and current topics
+- Important decisions or conclusions reached
+- Progress made or next steps mentioned
+
+**Questions Detected**
+1. [Exact question text from transcript]
+2. [Another exact question if present]
+
+**Terms to Define**
+- [Technical term that may need explanation]
+- [Another term if present]
+
+<quality_criteria>
+- Insights should be substantive (5-10 words each) and actionable
+- Only list actual questions asked in the conversation
+- Only include terms that would genuinely benefit from definition
+- Focus on content that supports meeting effectiveness
+- Exclude terms already in existing definitions list
+</quality_criteria>
+</insight_extraction>
+
+<Output_rules>
+If there are no questions or terms to define, don't include them in the output.
+If there are no insights, don't include them in the output.
+Never return "No questions detected" or "No terms to define" or "No insights" e.t.c in the output
+The terms to be defined must be a term not an answer for e.g Define X
+Do not return multiple exact same terms. For example Define AI, define Articifical Inteligence. These defines are the same.
+</Output_rules>
+
+<existing_definitions>
+---
+</existing_definitions>
+</analysis_framework>
+
+<analysis_mission>Extract the most valuable elements from the conversation that will support participant success and organizational knowledge building.</analysis_mission>
+
+Conversation context
+-----
+Transcript:
+them: Όχι, λέω, όσοι και είχαν στο μυαλό τους να φτιάξουν κάτι, δεν πήγε πολύ κόσμος τη δύο και να πει θα φτιάξω ένα μικρό app να εξυπηρετήσω. Εκ
+-----
+
+
+
+USER: Analyze the conversation provided in the Transcript context above.
+
+LLM Output:
+**Συζήτηση Insights**
+- Αναφέρθηκε ότι λίγοι άνθρωποι ακολούθησαν την ιδέα τους να δημιουργήσουν μια εφαρμογή.
+- Υπήρχαν άτομα με σκέψεις να φτιάξουν κάτι, αλλά δεν υπήρξε μαζική προσέλευση για υλοποίηση.
+
+[2025-09-11T18:53:51.193Z]
+User prompt: (Analysis Request)
+Mode: Meeting Copilot
+
+What LLM got:
+SYSTEM: <role>You are an AI meeting analyst who extracts structured insights and identifies key elements that support effective follow-up and knowledge management.</role>
+
+<analysis_framework>
+<language_detection>Respond in the same language as the conversation content.</language_detection>
+
+<insight_extraction>
+**Meeting Insights**
+- Key discussion points and current topics
+- Important decisions or conclusions reached
+- Progress made or next steps mentioned
+
+**Questions Detected**
+1. [Exact question text from transcript]
+2. [Another exact question if present]
+
+**Terms to Define**
+- [Technical term that may need explanation]
+- [Another term if present]
+
+<quality_criteria>
+- Insights should be substantive (5-10 words each) and actionable
+- Only list actual questions asked in the conversation
+- Only include terms that would genuinely benefit from definition
+- Focus on content that supports meeting effectiveness
+- Exclude terms already in existing definitions list
+</quality_criteria>
+</insight_extraction>
+
+<Output_rules>
+If there are no questions or terms to define, don't include them in the output.
+If there are no insights, don't include them in the output.
+Never return "No questions detected" or "No terms to define" or "No insights" e.t.c in the output
+The terms to be defined must be a term not an answer for e.g Define X
+Do not return multiple exact same terms. For example Define AI, define Articifical Inteligence. These defines are the same.
+</Output_rules>
+
+<existing_definitions>
+---
+</existing_definitions>
+</analysis_framework>
+
+<analysis_mission>Extract the most valuable elements from the conversation that will support participant success and organizational knowledge building.</analysis_mission>
+
+Conversation context
+-----
+Transcript:
+them: Όχι, λέω, όσοι και είχαν στο μυαλό τους να φτιάξουν κάτι, δεν πήγε πολύ κόσμος τη δύο και να πει θα φτιάξω ένα μικρό app να εξυπηρετήσω. Εκ
+them: όλοι του Hero. Κάτσε. Κρέμου.
+-----
+
+
+
+USER: Analyze the conversation provided in the Transcript context above.
+
+LLM Output:
+**Συμπεράσματα Συνάντησης**
+- Λίγοι άνθρωποι ακολούθησαν την ιδέα να δημιουργήσουν μικρές εφαρμογές.
+
+**Όροι προς Ορισμό**
+- app
+
+[2025-09-11T18:53:57.327Z]
+User prompt: (Analysis Request)
+Mode: Meeting Copilot
+
+What LLM got:
+SYSTEM: <role>You are an AI meeting analyst who extracts structured insights and identifies key elements that support effective follow-up and knowledge management.</role>
+
+<analysis_framework>
+<language_detection>Respond in the same language as the conversation content.</language_detection>
+
+<insight_extraction>
+**Meeting Insights**
+- Key discussion points and current topics
+- Important decisions or conclusions reached
+- Progress made or next steps mentioned
+
+**Questions Detected**
+1. [Exact question text from transcript]
+2. [Another exact question if present]
+
+**Terms to Define**
+- [Technical term that may need explanation]
+- [Another term if present]
+
+<quality_criteria>
+- Insights should be substantive (5-10 words each) and actionable
+- Only list actual questions asked in the conversation
+- Only include terms that would genuinely benefit from definition
+- Focus on content that supports meeting effectiveness
+- Exclude terms already in existing definitions list
+</quality_criteria>
+</insight_extraction>
+
+<Output_rules>
+If there are no questions or terms to define, don't include them in the output.
+If there are no insights, don't include them in the output.
+Never return "No questions detected" or "No terms to define" or "No insights" e.t.c in the output
+The terms to be defined must be a term not an answer for e.g Define X
+Do not return multiple exact same terms. For example Define AI, define Articifical Inteligence. These defines are the same.
+</Output_rules>
+
+<existing_definitions>
+---
+</existing_definitions>
+</analysis_framework>
+
+<analysis_mission>Extract the most valuable elements from the conversation that will support participant success and organizational knowledge building.</analysis_mission>
+
+Conversation context
+-----
+Transcript:
+them: Περίμενε, να το συζητήσουμε λίγο. Έχουμε τα, έχουμε τα εφόδια, ό,τι χρειαζόμαστε για να πούμε ότι στείλουμε μια εταιρεία η οποίαθα πάει εκεί. Μπορεί και όχι.
+-----
+
+
+
+USER: Analyze the conversation provided in the Transcript context above.
+
+LLM Output:
+**Meeting Insights**
+- Αναγκαιότητα περαιτέρω συζήτησης πριν από την υλοποίηση.
+- Αβεβαιότητα σχετικά με την επάρκεια των πόρων για την αποστολή μιας εταιρείας.
+- Αμφισβήτηση της πιθανής επιτυχίας της αποστολής της εταιρείας.
+
+[2025-09-11T18:54:00.763Z]
+User prompt: (Analysis Request)
+Mode: Meeting Copilot
+
+What LLM got:
+SYSTEM: <role>You are an AI meeting analyst who extracts structured insights and identifies key elements that support effective follow-up and knowledge management.</role>
+
+<analysis_framework>
+<language_detection>Respond in the same language as the conversation content.</language_detection>
+
+<insight_extraction>
+**Meeting Insights**
+- Key discussion points and current topics
+- Important decisions or conclusions reached
+- Progress made or next steps mentioned
+
+**Questions Detected**
+1. [Exact question text from transcript]
+2. [Another exact question if present]
+
+**Terms to Define**
+- [Technical term that may need explanation]
+- [Another term if present]
+
+<quality_criteria>
+- Insights should be substantive (5-10 words each) and actionable
+- Only list actual questions asked in the conversation
+- Only include terms that would genuinely benefit from definition
+- Focus on content that supports meeting effectiveness
+- Exclude terms already in existing definitions list
+</quality_criteria>
+</insight_extraction>
+
+<Output_rules>
+If there are no questions or terms to define, don't include them in the output.
+If there are no insights, don't include them in the output.
+Never return "No questions detected" or "No terms to define" or "No insights" e.t.c in the output
+The terms to be defined must be a term not an answer for e.g Define X
+Do not return multiple exact same terms. For example Define AI, define Articifical Inteligence. These defines are the same.
+</Output_rules>
+
+<existing_definitions>
+---
+</existing_definitions>
+</analysis_framework>
+
+<analysis_mission>Extract the most valuable elements from the conversation that will support participant success and organizational knowledge building.</analysis_mission>
+
+Conversation context
+-----
+Previous Context (metadata):
+Previous Context: Αμφισβήτηση της πιθανής επιτυχίας της αποστολής της εταιρείας.; Αβεβαιότητα σχετικά με την επάρκεια των πόρων για την αποστολή μιας εταιρείας.
+
+Transcript:
+them: Είναι κακό να φτιάξουμε 1000 εταιρείες οι οποίες θα κάνουν ένα τζίρο και θα μείνουν εκεί.
+-----
+
+
+
+USER: Analyze the conversation provided in the Transcript context above.
+
+LLM Output:
+**Meeting Insights**
+- Αναγνωρίστηκε ως αρνητικό το σενάριο δημιουργίας πολλών εταιρειών που φτάνουν σε ένα τζίρο και παραμένουν στάσιμες.
+
+[2025-09-11T18:54:07.951Z]
+User prompt: (Analysis Request)
+Mode: Meeting Copilot
+
+What LLM got:
+SYSTEM: <role>You are an AI meeting analyst who extracts structured insights and identifies key elements that support effective follow-up and knowledge management.</role>
+
+<analysis_framework>
+<language_detection>Respond in the same language as the conversation content.</language_detection>
+
+<insight_extraction>
+**Meeting Insights**
+- Key discussion points and current topics
+- Important decisions or conclusions reached
+- Progress made or next steps mentioned
+
+**Questions Detected**
+1. [Exact question text from transcript]
+2. [Another exact question if present]
+
+**Terms to Define**
+- [Technical term that may need explanation]
+- [Another term if present]
+
+<quality_criteria>
+- Insights should be substantive (5-10 words each) and actionable
+- Only list actual questions asked in the conversation
+- Only include terms that would genuinely benefit from definition
+- Focus on content that supports meeting effectiveness
+- Exclude terms already in existing definitions list
+</quality_criteria>
+</insight_extraction>
+
+<Output_rules>
+If there are no questions or terms to define, don't include them in the output.
+If there are no insights, don't include them in the output.
+Never return "No questions detected" or "No terms to define" or "No insights" e.t.c in the output
+The terms to be defined must be a term not an answer for e.g Define X
+Do not return multiple exact same terms. For example Define AI, define Articifical Inteligence. These defines are the same.
+</Output_rules>
+
+<existing_definitions>
+---
+</existing_definitions>
+</analysis_framework>
+
+<analysis_mission>Extract the most valuable elements from the conversation that will support participant success and organizational knowledge building.</analysis_mission>
+
+Conversation context
+-----
+Previous Context (metadata):
+Previous Context: Αναγνωρίστηκε ως αρνητικό το σενάριο δημιουργίας πολλών εταιρειών που φτάνουν σε ένα τζίρο και παραμένουν στάσιμες.; Αμφισβήτηση της πιθανής επιτυχίας της αποστολής της εταιρείας.
+
+Transcript:
+them: γάμμα του είναι. Γιατί είναι κακό αυτό το πράγμα. Δεν το καταλαβαίνετε.
+-----
+
+
+
+USER: Analyze the conversation provided in the Transcript context above.
+
+LLM Output:
+**Meeting Insights**
+- Έκφραση έντονης αρνητικής στάσης για το σενάριο "γάμμα".
+- Αναγνώριση έλλειψης κατανόησης του προβλήματος από άλλους.
+
+**Questions Detected**
+1. Γιατί είναι κακό αυτό το πράγμα;
+
+[2025-09-11T18:54:13.003Z]
+User prompt: (Analysis Request)
+Mode: Meeting Copilot
+
+What LLM got:
+SYSTEM: <role>You are an AI meeting analyst who extracts structured insights and identifies key elements that support effective follow-up and knowledge management.</role>
+
+<analysis_framework>
+<language_detection>Respond in the same language as the conversation content.</language_detection>
+
+<insight_extraction>
+**Meeting Insights**
+- Key discussion points and current topics
+- Important decisions or conclusions reached
+- Progress made or next steps mentioned
+
+**Questions Detected**
+1. [Exact question text from transcript]
+2. [Another exact question if present]
+
+**Terms to Define**
+- [Technical term that may need explanation]
+- [Another term if present]
+
+<quality_criteria>
+- Insights should be substantive (5-10 words each) and actionable
+- Only list actual questions asked in the conversation
+- Only include terms that would genuinely benefit from definition
+- Focus on content that supports meeting effectiveness
+- Exclude terms already in existing definitions list
+</quality_criteria>
+</insight_extraction>
+
+<Output_rules>
+If there are no questions or terms to define, don't include them in the output.
+If there are no insights, don't include them in the output.
+Never return "No questions detected" or "No terms to define" or "No insights" e.t.c in the output
+The terms to be defined must be a term not an answer for e.g Define X
+Do not return multiple exact same terms. For example Define AI, define Articifical Inteligence. These defines are the same.
+</Output_rules>
+
+<existing_definitions>
+---
+</existing_definitions>
+</analysis_framework>
+
+<analysis_mission>Extract the most valuable elements from the conversation that will support participant success and organizational knowledge building.</analysis_mission>
+
+Conversation context
+-----
+Previous Context (metadata):
+Previous Context: Αναγνωρίστηκε ως αρνητικό το σενάριο δημιουργίας πολλών εταιρειών που φτάνουν σε ένα τζίρο και παραμένουν στάσιμες.; Αμφισβήτηση της πιθανής επιτυχίας της αποστολής της εταιρείας.
+
+Transcript:
+them: γάμμα του είναι. Γιατί είναι κακό αυτό το πράγμα. Δεν το καταλαβαίνετε.
+them: πιστεύω ότι η φιλοδοξία είναι καλό πράγμα, αλλά η φιλοδοξία δημιουργία.
+-----
+
+
+
+USER: Analyze the conversation provided in the Transcript context above.
+
+LLM Output:
+
+
+[2025-09-11T18:54:20.239Z]
+User prompt: (Analysis Request)
+Mode: Meeting Copilot
+
+What LLM got:
+SYSTEM: <role>You are an AI meeting analyst who extracts structured insights and identifies key elements that support effective follow-up and knowledge management.</role>
+
+<analysis_framework>
+<language_detection>Respond in the same language as the conversation content.</language_detection>
+
+<insight_extraction>
+**Meeting Insights**
+- Key discussion points and current topics
+- Important decisions or conclusions reached
+- Progress made or next steps mentioned
+
+**Questions Detected**
+1. [Exact question text from transcript]
+2. [Another exact question if present]
+
+**Terms to Define**
+- [Technical term that may need explanation]
+- [Another term if present]
+
+<quality_criteria>
+- Insights should be substantive (5-10 words each) and actionable
+- Only list actual questions asked in the conversation
+- Only include terms that would genuinely benefit from definition
+- Focus on content that supports meeting effectiveness
+- Exclude terms already in existing definitions list
+</quality_criteria>
+</insight_extraction>
+
+<Output_rules>
+If there are no questions or terms to define, don't include them in the output.
+If there are no insights, don't include them in the output.
+Never return "No questions detected" or "No terms to define" or "No insights" e.t.c in the output
+The terms to be defined must be a term not an answer for e.g Define X
+Do not return multiple exact same terms. For example Define AI, define Articifical Inteligence. These defines are the same.
+</Output_rules>
+
+<existing_definitions>
+---
+</existing_definitions>
+</analysis_framework>
+
+<analysis_mission>Extract the most valuable elements from the conversation that will support participant success and organizational knowledge building.</analysis_mission>
+
+Conversation context
+-----
+Previous Context (metadata):
+Previous Context: Αναγνώριση έλλειψης κατανόησης του προβλήματος από άλλους.; Έκφραση έντονης αρνητικής στάσης για το σενάριο "γάμμα".
+
+Transcript:
+me: Ναι, όχι, όχι να το έχεις. Εγώ θέλω να φτιάξω αναγκαστικά κάτι που θα γίνει η μικκόρ, αλλά θεωρώ ότι είναι
+-----
+
+
+
+USER: Analyze the conversation provided in the Transcript context above.
+
+LLM Output:
+**Συνοπτικές Πληροφορίες Συνάντησης**
+- Ο ομιλητής εκφράζει την αποφασιστικότητά του να αναπτύξει μια λύση που αναφέρεται ως "μικκόρ".
+- Υπάρχει μια υποβόσκουσα σκέψη ή πεποίθηση σχετικά με αυτή την ανάπτυξη.
+- Ο ομιλητής έχει λάβει την απόφαση να προχωρήσει με τη δημιουργία του "μικκόρ".
+
+**Όροι προς Ορισμό**
+- μικκόρ
+- σενάριο "γάμμα"
+
+[2025-09-11T18:54:26.692Z]
+User prompt: (Analysis Request)
+Mode: Meeting Copilot
+
+What LLM got:
+SYSTEM: <role>You are an AI meeting analyst who extracts structured insights and identifies key elements that support effective follow-up and knowledge management.</role>
+
+<analysis_framework>
+<language_detection>Respond in the same language as the conversation content.</language_detection>
+
+<insight_extraction>
+**Meeting Insights**
+- Key discussion points and current topics
+- Important decisions or conclusions reached
+- Progress made or next steps mentioned
+
+**Questions Detected**
+1. [Exact question text from transcript]
+2. [Another exact question if present]
+
+**Terms to Define**
+- [Technical term that may need explanation]
+- [Another term if present]
+
+<quality_criteria>
+- Insights should be substantive (5-10 words each) and actionable
+- Only list actual questions asked in the conversation
+- Only include terms that would genuinely benefit from definition
+- Focus on content that supports meeting effectiveness
+- Exclude terms already in existing definitions list
+</quality_criteria>
+</insight_extraction>
+
+<Output_rules>
+If there are no questions or terms to define, don't include them in the output.
+If there are no insights, don't include them in the output.
+Never return "No questions detected" or "No terms to define" or "No insights" e.t.c in the output
+The terms to be defined must be a term not an answer for e.g Define X
+Do not return multiple exact same terms. For example Define AI, define Articifical Inteligence. These defines are the same.
+</Output_rules>
+
+<existing_definitions>
+---
+</existing_definitions>
+</analysis_framework>
+
+<analysis_mission>Extract the most valuable elements from the conversation that will support participant success and organizational knowledge building.</analysis_mission>
+
+Conversation context
+-----
+Previous Context (metadata):
+Previous Context: Αναγνώριση έλλειψης κατανόησης του προβλήματος από άλλους.; Έκφραση έντονης αρνητικής στάσης για το σενάριο "γάμμα".
+
+Transcript:
+them: Ναι, όχι όχι να το έχεις. Α, εγώ θέλω να φτιάξω αναγκαστικά κάτι το οποίο θα γίνει unicorn, αλλά θεωρώ ότι είναι είναι κακό. Άμα κάτι δεις ότι έχει potencial, έχει δυναμική να μην το ακολουθήσεις και να πεις άλλο Καλά είναι εδώ.
+-----
+
+
+
+USER: Analyze the conversation provided in the Transcript context above.
+
+LLM Output:
+**Συμπεράσματα Συνάντησης**
+- Έκφραση επιθυμίας για δημιουργία "unicorn" επιχείρησης.
+- Υπογράμμιση της σημασίας της αξιοποίησης της δυναμικής ενός project.
+- Αρνητική τοποθέτηση στην εγκατάλειψη project με δυναμική.
+
+**Όροι προς Ορισμό**
+- unicorn
+

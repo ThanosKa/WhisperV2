@@ -6,6 +6,8 @@ export class MainHeader extends LitElement {
         isTogglingSession: { type: Boolean, state: true },
         shortcuts: { type: Object, state: true },
         listenSessionStatus: { type: String, state: true },
+        userPlan: { type: String, state: true },
+        apiQuota: { type: Object, state: true },
     };
 
     static styles = mainHeaderStyles;
@@ -25,6 +27,10 @@ export class MainHeader extends LitElement {
         this.handleMouseUp = this.handleMouseUp.bind(this);
         this.dragState = null;
         this.wasJustDragged = false;
+
+        // Plan / quota state
+        this.userPlan = 'free';
+        this.apiQuota = null; // { daily, used, remaining }
     }
 
     async loadShortcuts() {
@@ -143,6 +149,19 @@ export class MainHeader extends LitElement {
         this.loadShortcuts();
 
         if (window.api) {
+            // Bootstrap current user and fetch full profile for quota
+            window.api.common
+                .getCurrentUser()
+                .then(user => {
+                    if (user) {
+                        this.userPlan = user.plan || 'free';
+                        if (user.sessionUuid) {
+                            this._fetchUserProfile(user.sessionUuid);
+                        }
+                    }
+                })
+                .catch(() => {});
+
             this._sessionStateTextListener = (event, { success }) => {
                 if (success) {
                     this.listenSessionStatus =
@@ -157,6 +176,19 @@ export class MainHeader extends LitElement {
                 this.isTogglingSession = false; // ✨ 로딩 상태만 해제
             };
             window.api.mainHeader.onListenChangeSessionResult(this._sessionStateTextListener);
+
+            // React to auth user state changes
+            this._userStateListener = (event, userState) => {
+                if (userState) {
+                    this.userPlan = userState.plan || 'free';
+                    if (userState.sessionUuid) {
+                        this._fetchUserProfile(userState.sessionUuid);
+                    } else {
+                        this.apiQuota = null;
+                    }
+                }
+            };
+            window.api.headerController.onUserStateChanged(this._userStateListener);
         }
     }
 
@@ -172,6 +204,9 @@ export class MainHeader extends LitElement {
         if (window.api) {
             if (this._sessionStateTextListener) {
                 window.api.mainHeader.removeOnListenChangeSessionResult(this._sessionStateTextListener);
+            }
+            if (this._userStateListener) {
+                window.api.headerController.removeOnUserStateChanged(this._userStateListener);
             }
         }
     }
@@ -267,6 +302,50 @@ export class MainHeader extends LitElement {
         return html`${keys.map(key => html` <div class="icon-box">${keyMap[key] || key}</div> `)}`;
     }
 
+    async _fetchUserProfile(sessionUuid) {
+        try {
+            const baseUrl = (window.api?.env?.API_BASE_URL || 'https://www.app-whisper.com').replace(/\/$/, '');
+            const res = await fetch(`${baseUrl}/api/auth/user-by-session/${sessionUuid}`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data && data.success && data.data) {
+                this.userPlan = data.data.plan || this.userPlan || 'free';
+                this.apiQuota = data.data.apiQuota || null;
+                this.requestUpdate();
+            }
+        } catch (e) {
+            // ignore network errors
+        }
+    }
+
+    _getPlanLabel() {
+        return (this.userPlan || 'free') === 'pro' ? 'Pro plan' : 'Upgrade to Pro';
+    }
+
+    _getPlanTooltip() {
+        const isPro = (this.userPlan || 'free') !== 'free';
+        if (isPro) return 'You have unlimited responses.';
+        const remaining = this.apiQuota?.remaining;
+        if (typeof remaining === 'number') {
+            return `You have ${remaining} free responses left today.`;
+        }
+        return 'Free plan: limited responses.';
+    }
+
+    _handlePlanClick() {
+        const isFree = (this.userPlan || 'free') === 'free';
+        if (!isFree) return;
+        const baseUrl = (window.api?.env?.API_BASE_URL || 'https://www.app-whisper.com').replace(/\/$/, '');
+        const url = `${baseUrl}/pricing`;
+        if (window.api) {
+            window.api.common.openExternal(url);
+        } else {
+            window.open(url, '_blank');
+        }
+    }
+
     render() {
         const listenButtonText = this._getListenButtonText(this.listenSessionStatus);
 
@@ -278,7 +357,15 @@ export class MainHeader extends LitElement {
 
         return html`
             <div class="header" @mousedown=${this.handleMouseDown}>
-                <button class="left-label">Upgrade to Pro</button>
+                <button
+                    class="left-label"
+                    @mouseenter=${() => window.api?.mainHeader?.showPlanWindow?.(true)}
+                    @mouseleave=${() => window.api?.mainHeader?.showPlanWindow?.(false)}
+                    @click=${() => this._handlePlanClick()}
+                    title=${this._getPlanTooltip()}
+                >
+                    ${this._getPlanLabel()}
+                </button>
                 <button
                     class="listen-button ${Object.keys(buttonClasses)
                         .filter(k => buttonClasses[k])

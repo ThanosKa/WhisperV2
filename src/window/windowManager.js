@@ -55,6 +55,11 @@ const cancelHideSettingsWindow = () => {
     internalBridge.emit('window:requestVisibility', { name: 'settings', visible: true });
 };
 
+// Plan tooltip window show/hide via external IPC
+const showPlanWindow = visible => {
+    internalBridge.emit('window:showPlanWindow', { visible });
+};
+
 const moveWindowStep = direction => {
     internalBridge.emit('window:moveStep', { direction });
 };
@@ -192,6 +197,22 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
                     updateChildWindowLayouts(true);
                 },
             });
+        }
+    });
+
+    // Plan tooltip show/hide
+    internalBridge.on('window:showPlanWindow', ({ visible }) => {
+        const plan = windowPool.get('plan');
+        if (!plan || plan.isDestroyed()) return;
+        if (visible) {
+            const pos = layoutManager.calculatePlanWindowPosition();
+            if (pos) plan.setPosition(pos.x, pos.y);
+            plan.showInactive();
+            plan.moveTop();
+            plan.setAlwaysOnTop(true);
+        } else {
+            plan.setAlwaysOnTop(false);
+            plan.hide();
         }
     });
 }
@@ -386,7 +407,7 @@ const toggleContentProtection = () => {
 };
 
 const openLoginPage = () => {
-    const webUrl = process.env.pickleglass_WEB_URL || 'http://localhost:3000';
+    const webUrl = process.env.API_BASE_URL || 'http://localhost:3000';
     const personalizeUrl = `${webUrl}/personalize?desktop=true`;
     shell.openExternal(personalizeUrl);
     console.log('Opening personalization page:', personalizeUrl);
@@ -535,6 +556,23 @@ function createFeatureWindows(header, namesToCreate) {
                 console.log(`[WindowManager] Settings window created with maxHeight: ${settings.getMaximumSize()[1]}`);
                 break;
             }
+            // plan tooltip (small ephemeral window)
+            case 'plan': {
+                const plan = new BrowserWindow({
+                    ...commonChildOptions,
+                    width: 220,
+                    height: 44,
+                });
+                plan.setContentProtection(isContentProtectionOn);
+                plan.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+                if (process.platform === 'darwin') {
+                    plan.setWindowButtonVisibility(false);
+                }
+                const planLoadOptions = { query: { view: 'plan' } };
+                plan.loadFile(path.join(__dirname, '../ui/app/content.html'), planLoadOptions).catch(console.error);
+                windowPool.set('plan', plan);
+                break;
+            }
         }
     };
 
@@ -546,11 +584,12 @@ function createFeatureWindows(header, namesToCreate) {
         createFeatureWindow('listen');
         createFeatureWindow('ask');
         createFeatureWindow('settings');
+        createFeatureWindow('plan');
     }
 }
 
 function destroyFeatureWindows() {
-    const featureWindows = ['listen', 'ask', 'settings'];
+    const featureWindows = ['listen', 'ask', 'settings', 'plan'];
     if (settingsHideTimer) {
         clearTimeout(settingsHideTimer);
         settingsHideTimer = null;
@@ -719,6 +758,7 @@ module.exports = {
     showSettingsWindow,
     hideSettingsWindow,
     cancelHideSettingsWindow,
+    showPlanWindow,
     openLoginPage,
     moveWindowStep,
     handleHeaderStateChanged,

@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/utils/auth';
-import { UserProfile, getUserProfile, updateUserProfile, checkApiKeyStatus, saveApiKey, deleteAccount, logout } from '@/utils/api';
+import { checkApiKeyStatus, saveApiKey, logout } from '@/utils/api';
 import { useRouter } from 'next/navigation';
 
 declare global {
@@ -22,11 +22,9 @@ type BillingCycle = 'monthly' | 'annually';
 export default function SettingsPage() {
     const { user: userInfo, isLoading, mode } = useAuth();
     const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
-    const [profile, setProfile] = useState<UserProfile | null>(null);
     const [hasApiKey, setHasApiKey] = useState(false);
     const [apiKeyInput, setApiKeyInput] = useState('');
     const [isSaving, setIsSaving] = useState(false);
-    const [displayNameInput, setDisplayNameInput] = useState('');
     const router = useRouter();
 
     const fetchApiKeyStatus = async () => {
@@ -41,17 +39,7 @@ export default function SettingsPage() {
     useEffect(() => {
         if (!userInfo) return;
 
-        const fetchProfileData = async () => {
-            try {
-                const userProfile = await getUserProfile();
-                setProfile(userProfile);
-                setDisplayNameInput(userProfile.display_name);
-                await fetchApiKeyStatus();
-            } catch (error) {
-                console.error('Failed to fetch profile data:', error);
-            }
-        };
-        fetchProfileData();
+        fetchApiKeyStatus();
 
         if (window.ipcRenderer) {
             window.ipcRenderer.on('api-key-updated', () => {
@@ -107,41 +95,9 @@ export default function SettingsPage() {
         }
     };
 
-    const handleUpdateDisplayName = async () => {
-        if (!profile || displayNameInput === profile.display_name) return;
-        setIsSaving(true);
-        try {
-            await updateUserProfile({ displayName: displayNameInput });
-            setProfile(prev => (prev ? { ...prev, display_name: displayNameInput } : null));
-        } catch (error) {
-            console.error('Failed to update display name:', error);
-        } finally {
-            setIsSaving(false);
-        }
-    };
+    // Display name and account deletion are disabled in the localhost webapp
 
-    const handleDeleteAccount = async () => {
-        const confirmMessage = isWebappMode
-            ? 'Are you sure you want to delete your account? This action cannot be undone and all local data will be cleared.'
-            : 'Are you sure you want to delete your account? This action cannot be undone and all data will be deleted.';
-
-        if (window.confirm(confirmMessage)) {
-            try {
-                await deleteAccount();
-                router.push('/login');
-            } catch (error) {
-                console.error('Failed to delete account:', error);
-            }
-        }
-    };
-
-    const handleLogout = async () => {
-        try {
-            await logout();
-        } catch (error) {
-            console.error('Logout failed:', error);
-        }
-    };
+    // Logout is desktop-only; UI removed in localhost webapp
 
     return (
         <div className="bg-stone-50 min-h-screen">
@@ -184,36 +140,11 @@ export default function SettingsPage() {
                                     <Badge variant={isWebappMode ? 'default' : 'secondary'}>{isWebappMode ? 'Cloud Auth' : 'Local Mode'}</Badge>
                                 </div>
                             </div>
-                            {isWebappMode && (
-                                <Button onClick={handleLogout} variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700">
-                                    Logout
-                                </Button>
-                            )}
+                            {/* Logout button removed in localhost webapp */}
                         </div>
                     </div>
 
-                    <div className="bg-white border border-gray-200 rounded-lg p-6">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1">Display Name</h3>
-                        <p className="text-sm text-gray-600 mb-4">Enter your full name or a display name you're comfortable using.</p>
-                        <div className="max-w-sm">
-                            <Input
-                                type="text"
-                                id="display-name"
-                                value={displayNameInput}
-                                onChange={e => setDisplayNameInput(e.target.value)}
-                                maxLength={32}
-                            />
-                            <p className="text-xs text-muted-foreground mt-2">You can use up to 32 characters.</p>
-                        </div>
-                        <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end">
-                            <Button
-                                onClick={handleUpdateDisplayName}
-                                disabled={isSaving || !displayNameInput || displayNameInput === profile?.display_name}
-                            >
-                                Update
-                            </Button>
-                        </div>
-                    </div>
+                    {/* Display Name section intentionally removed in localhost webapp */}
 
                     {!isWebappMode && (
                         <div className="bg-white border border-gray-200 rounded-lg p-6">
@@ -250,21 +181,7 @@ export default function SettingsPage() {
                         </div>
                     )}
 
-                    {(isWebappMode || (!isWebappMode && !hasApiKey)) && (
-                        <div className="bg-white border border-red-300 rounded-lg p-6">
-                            <h3 className="text-lg font-semibold text-gray-900 mb-1">Delete Account</h3>
-                            <p className="text-sm text-gray-600 mb-4">
-                                {isWebappMode
-                                    ? 'Permanently remove your webapp account and all content. This action cannot be undone, so please proceed carefully.'
-                                    : 'Permanently remove your personal account and all content from the Pickle Glass platform. This action cannot be undone, so please proceed carefully.'}
-                            </p>
-                            <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end">
-                                <Button onClick={handleDeleteAccount} variant="destructive">
-                                    Delete
-                                </Button>
-                            </div>
-                        </div>
-                    )}
+                    {/* Delete Account section intentionally removed in localhost webapp */}
                 </div>
             </div>
         </div>

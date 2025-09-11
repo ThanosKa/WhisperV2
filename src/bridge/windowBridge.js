@@ -14,6 +14,8 @@ module.exports = {
         ipcMain.on('show-settings-window', () => windowManager.showSettingsWindow());
         ipcMain.on('hide-settings-window', () => windowManager.hideSettingsWindow());
         ipcMain.on('cancel-hide-settings-window', () => windowManager.cancelHideSettingsWindow());
+        // Plan tooltip show/hide
+        ipcMain.on('window:showPlanWindow', (event, { visible }) => windowManager.showPlanWindow(visible));
 
         ipcMain.handle('open-login-page', () => windowManager.openLoginPage());
         ipcMain.handle('open-personalize-page', () => windowManager.openLoginPage());

@@ -25,7 +25,7 @@ export class AuthHeader extends LitElement {
         this.isLoggingIn = true;
         try {
             if (window.api?.common) {
-                await window.api.common.startFirebaseAuth();
+                await window.api.common.startWebappAuth();
             }
         } catch (e) {
             console.error('[AuthHeader] Failed to start auth:', e);
@@ -67,9 +67,7 @@ export class AuthHeader extends LitElement {
                 <button class="listen-button text-link" @click=${this._handleLoginClick} ?disabled=${this.isLoggingIn}>
                     <div class="action-text">
                         <div class="action-text-content">Open broswer to login</div>
-                        ${this.isLoggingIn
-                            ? html`<div class="loading-dots"><span></span><span></span><span></span></div>`
-                            : ''}
+                        ${this.isLoggingIn ? html`<div class="loading-dots"><span></span><span></span><span></span></div>` : ''}
                     </div>
                 </button>
             </div>

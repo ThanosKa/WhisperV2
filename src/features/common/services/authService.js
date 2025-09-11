@@ -1,46 +1,49 @@
-const { onAuthStateChanged, signInWithCustomToken, signOut } = require('firebase/auth');
 const { BrowserWindow, shell } = require('electron');
-const { getFirebaseAuth } = require('./firebaseClient');
 const fetch = require('node-fetch');
+const Store = require('electron-store');
 const encryptionService = require('./encryptionService');
-const migrationService = require('./migrationService');
 const sessionRepository = require('../repositories/session');
 const providerSettingsRepository = require('../repositories/providerSettings');
 const permissionService = require('./permissionService');
 
-async function getVirtualKeyByEmail(email, idToken) {
-    if (!idToken) {
-        throw new Error('Firebase ID token is required for virtual key request');
+// Webapp configuration
+const WEBAPP_CONFIG = {
+    domain: 'http://localhost:3000',
+    loginUrl: 'http://localhost:3000/auth/sign-in?mode=electron',
+    userProfileUrl: 'http://localhost:3000/api/auth/user-by-session',
+};
+
+// Session storage using electron-store
+const sessionStore = new Store({ name: 'auth-session' });
+
+async function validateSession(sessionUuid) {
+    if (!sessionUuid) {
+        throw new Error('Session UUID is required for validation');
     }
 
-    const resp = await fetch('https://serverless-api-sf3o.vercel.app/api/virtual_key', {
-        method: 'POST',
+    const response = await fetch(`${WEBAPP_CONFIG.userProfileUrl}/${sessionUuid}`, {
+        method: 'GET',
         headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify({ email: email.trim().toLowerCase() }),
-        redirect: 'follow',
     });
 
-    const json = await resp.json().catch(() => ({}));
-    if (!resp.ok) {
-        console.error('[VK] API request failed:', json.message || 'Unknown error');
-        throw new Error(json.message || `HTTP ${resp.status}: Virtual key request failed`);
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+        throw new Error(data.error || `HTTP ${response.status}: Session validation failed`);
     }
 
-    const vKey = json?.data?.virtualKey || json?.data?.virtual_key || json?.data?.newVKey?.slug;
-
-    if (!vKey) throw new Error('virtual key missing in response');
-    return vKey;
+    return data.data; // User profile data
 }
 
 class AuthService {
     constructor() {
         this.currentUserId = 'default_user';
-        this.currentUserMode = 'local'; // 'local' or 'firebase'
+        this.currentUserMode = 'local'; // 'local' or 'webapp'
         this.currentUser = null;
         this.isInitialized = false;
+        this.sessionUuid = null;
 
         // This ensures the key is ready before any login/logout state change.
         this.initializationPromise = null;
@@ -51,117 +54,137 @@ class AuthService {
     initialize() {
         if (this.isInitialized) return this.initializationPromise;
 
-        this.initializationPromise = new Promise(resolve => {
-            const auth = getFirebaseAuth();
-            onAuthStateChanged(auth, async user => {
-                const previousUser = this.currentUser;
+        this.initializationPromise = new Promise(async resolve => {
+            // Check for existing session from electron-store
+            const storedSession = sessionStore.get('sessionUuid');
+            const storedUser = sessionStore.get('userProfile');
 
-                if (user) {
-                    // User signed IN
-                    console.log(`[AuthService] Firebase user signed in:`, user.uid);
-                    this.currentUser = user;
-                    this.currentUserId = user.uid;
-                    this.currentUserMode = 'firebase';
-
-                    // Clean up any zombie sessions from a previous run for this user.
-                    await sessionRepository.endAllActiveSessions();
-
-                    // ** Initialize encryption key for the logged-in user if permissions are already granted **
-                    if (process.platform === 'darwin' && !(await permissionService.checkKeychainCompleted(this.currentUserId))) {
-                        console.warn('[AuthService] Keychain permission not yet completed for this user. Deferring key initialization.');
-                    } else {
-                        await encryptionService.initializeKey(user.uid);
-                    }
-
-                    // ** Check for and run data migration for the user **
-                    // No 'await' here, so it runs in the background without blocking startup.
-                    migrationService.checkAndRunMigration(user);
-
-                    // ***** CRITICAL: Wait for the virtual key and model state update to complete *****
-                    try {
-                        const idToken = await user.getIdToken(true);
-                        const virtualKey = await getVirtualKeyByEmail(user.email, idToken);
-
-                        if (global.modelStateService && typeof global.modelStateService.setFirebaseVirtualKey === 'function') {
-                            // Optional integration: only call if supported
-                            await global.modelStateService.setFirebaseVirtualKey(virtualKey);
-                        }
-                        console.log(`[AuthService] Virtual key for ${user.email} has been processed and state updated.`);
-                    } catch (error) {
-                        console.error('[AuthService] Failed to fetch or save virtual key:', error);
-                        // This is not critical enough to halt the login, but we should log it.
-                    }
-                } else {
-                    // User signed OUT
-                    console.log(`[AuthService] No Firebase user.`);
-                    if (previousUser) {
-                        console.log(`[AuthService] Clearing API key for logged-out user: ${previousUser.uid}`);
-                        if (global.modelStateService && typeof global.modelStateService.setFirebaseVirtualKey === 'function') {
-                            try {
-                                // Optional integration: only call if supported
-                                await global.modelStateService.setFirebaseVirtualKey(null);
-                            } catch (e) {
-                                console.warn('[AuthService] Failed to clear virtual key during logout:', e.message);
-                            }
-                        }
-                    }
-                    this.currentUser = null;
-                    this.currentUserId = 'default_user';
-                    this.currentUserMode = 'local';
-
-                    // End active sessions for the local/default user as well.
-                    await sessionRepository.endAllActiveSessions();
-
-                    encryptionService.resetSessionKey();
+            if (storedSession && storedUser) {
+                try {
+                    // Validate existing session
+                    const userProfile = await validateSession(storedSession);
+                    await this.handleUserSignIn(userProfile, storedSession);
+                    console.log('[AuthService] Restored session from storage');
+                } catch (error) {
+                    console.log('[AuthService] Stored session invalid, clearing:', error.message);
+                    sessionStore.clear();
+                    this.handleUserSignOut();
                 }
-                this.broadcastUserState();
+            } else {
+                console.log('[AuthService] No stored session found, starting in local mode');
+                this.handleUserSignOut();
+            }
 
-                if (!this.isInitialized) {
-                    this.isInitialized = true;
-                    console.log('[AuthService] Initialized and resolved initialization promise.');
-                    resolve();
-                }
-            });
+            this.broadcastUserState();
+            this.isInitialized = true;
+            console.log('[AuthService] Initialized and resolved initialization promise.');
+            resolve();
         });
 
         return this.initializationPromise;
     }
 
-    async startFirebaseAuthFlow() {
+    async handleUserSignIn(userProfile, sessionUuid) {
+        const previousUser = this.currentUser;
+
+        console.log(`[AuthService] User signed in:`, userProfile.uid);
+        this.currentUser = userProfile;
+        this.currentUserId = userProfile.uid;
+        this.currentUserMode = 'webapp';
+        this.sessionUuid = sessionUuid;
+
+        // Store session and user data
+        sessionStore.set('sessionUuid', sessionUuid);
+        sessionStore.set('userProfile', userProfile);
+
+        // Clean up any zombie sessions from a previous run for this user.
+        await sessionRepository.endAllActiveSessions();
+
+        // Initialize encryption key for the logged-in user if permissions are already granted
+        if (process.platform === 'darwin' && !(await permissionService.checkKeychainCompleted(this.currentUserId))) {
+            console.warn('[AuthService] Keychain permission not yet completed for this user. Deferring key initialization.');
+        } else {
+            await encryptionService.initializeKey(userProfile.uid);
+        }
+
+        // Check for and run data migration for the user
+        // Migration service disabled - using local-first data strategy with webapp authentication
+
+        // Update model state with user plan information
+        if (global.modelStateService && typeof global.modelStateService.setUserPlan === 'function') {
+            try {
+                await global.modelStateService.setUserPlan(userProfile.plan, userProfile.apiQuota);
+                console.log(`[AuthService] User plan (${userProfile.plan}) has been processed and state updated.`);
+            } catch (error) {
+                console.error('[AuthService] Failed to update model state with user plan:', error);
+            }
+        }
+    }
+
+    handleUserSignOut() {
+        const previousUser = this.currentUser;
+
+        console.log(`[AuthService] User signed out or no session found.`);
+        if (previousUser) {
+            console.log(`[AuthService] Clearing user data for logged-out user: ${previousUser.uid}`);
+            if (global.modelStateService && typeof global.modelStateService.setUserPlan === 'function') {
+                try {
+                    global.modelStateService.setUserPlan(null, null);
+                } catch (e) {
+                    console.warn('[AuthService] Failed to clear user plan during logout:', e.message);
+                }
+            }
+        }
+
+        this.currentUser = null;
+        this.currentUserId = 'default_user';
+        this.currentUserMode = 'local';
+        this.sessionUuid = null;
+
+        // Clear stored session data
+        sessionStore.clear();
+
+        // End active sessions for the local/default user as well.
+        sessionRepository.endAllActiveSessions();
+
+        encryptionService.resetSessionKey();
+    }
+
+    async startWebappAuthFlow() {
         try {
-            const webUrl = process.env.pickleglass_WEB_URL || 'http://localhost:3000';
-            const authUrl = `${webUrl}/login?mode=electron`;
-            console.log(`[AuthService] Opening Firebase auth URL in browser: ${authUrl}`);
-            await shell.openExternal(authUrl);
+            console.log(`[AuthService] Opening webapp auth URL in browser: ${WEBAPP_CONFIG.loginUrl}`);
+            await shell.openExternal(WEBAPP_CONFIG.loginUrl);
             return { success: true };
         } catch (error) {
-            console.error('[AuthService] Failed to open Firebase auth URL:', error);
+            console.error('[AuthService] Failed to open webapp auth URL:', error);
             return { success: false, error: error.message };
         }
     }
 
-    async signInWithCustomToken(token) {
-        const auth = getFirebaseAuth();
+    async signInWithSession(sessionUuid, userInfo) {
         try {
-            const userCredential = await signInWithCustomToken(auth, token);
-            console.log(`[AuthService] Successfully signed in with custom token for user:`, userCredential.user.uid);
-            // onAuthStateChanged will handle the state update and broadcast
+            // Validate the session with the webapp
+            const userProfile = await validateSession(sessionUuid);
+
+            // Handle user sign-in
+            await this.handleUserSignIn(userProfile, sessionUuid);
+
+            console.log(`[AuthService] Successfully signed in with session for user:`, userProfile.uid);
+            this.broadcastUserState();
         } catch (error) {
-            console.error('[AuthService] Error signing in with custom token:', error);
+            console.error('[AuthService] Error signing in with session:', error);
             throw error; // Re-throw to be handled by the caller
         }
     }
 
     async signOut() {
-        const auth = getFirebaseAuth();
         try {
             // End all active sessions for the current user BEFORE signing out.
             await sessionRepository.endAllActiveSessions();
 
-            await signOut(auth);
+            this.handleUserSignOut();
             console.log('[AuthService] User sign-out initiated successfully.');
-            // onAuthStateChanged will handle the state update and broadcast,
-            // which will also re-evaluate the API key status.
+            this.broadcastUserState();
         } catch (error) {
             console.error('[AuthService] Error signing out:', error);
         }
@@ -182,18 +205,17 @@ class AuthService {
     }
 
     getCurrentUser() {
-        const isLoggedIn = !!(this.currentUserMode === 'firebase' && this.currentUser);
+        const isLoggedIn = !!(this.currentUserMode === 'webapp' && this.currentUser);
 
         if (isLoggedIn) {
             return {
                 uid: this.currentUser.uid,
                 email: this.currentUser.email,
                 displayName: this.currentUser.displayName,
-                mode: 'firebase',
+                plan: this.currentUser.plan,
+                mode: 'webapp',
                 isLoggedIn: true,
-                //////// before_modelStateService ////////
-                // hasApiKey: this.hasApiKey // Always true for firebase users, but good practice
-                //////// before_modelStateService ////////
+                sessionUuid: this.sessionUuid,
             };
         }
         return {
@@ -202,10 +224,28 @@ class AuthService {
             displayName: 'Default User',
             mode: 'local',
             isLoggedIn: false,
-            //////// before_modelStateService ////////
-            // hasApiKey: this.hasApiKey
-            //////// before_modelStateService ////////
+            plan: 'free',
         };
+    }
+
+    // Method to refresh user profile data
+    async refreshUserProfile() {
+        if (this.sessionUuid && this.currentUserMode === 'webapp') {
+            try {
+                const userProfile = await validateSession(this.sessionUuid);
+                this.currentUser = userProfile;
+                sessionStore.set('userProfile', userProfile);
+                this.broadcastUserState();
+                return userProfile;
+            } catch (error) {
+                console.error('[AuthService] Failed to refresh user profile:', error);
+                // Session might be expired, sign out
+                this.handleUserSignOut();
+                this.broadcastUserState();
+                throw error;
+            }
+        }
+        return null;
     }
 }
 

@@ -27,7 +27,7 @@ export default function BillingPage() {
         );
     }
 
-    const isFirebaseMode = mode === 'firebase';
+    const isWebappMode = mode === 'webapp';
 
     const tabs = [
         { id: 'profile', name: 'Personal Profile', href: '/settings' },
@@ -62,16 +62,16 @@ export default function BillingPage() {
                 </div>
 
                 <div className="space-y-8">
-                    <div className={`p-4 rounded-lg border ${isFirebaseMode ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
+                    <div className={`p-4 rounded-lg border ${isWebappMode ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
                         <div className="flex items-center gap-2 mb-2">
-                            {isFirebaseMode ? <Cloud className="h-5 w-5 text-blue-600" /> : <HardDrive className="h-5 w-5 text-gray-600" />}
-                            <h3 className={`font-semibold ${isFirebaseMode ? 'text-blue-900' : 'text-gray-900'}`}>
-                                {isFirebaseMode ? 'Firebase Hosting Mode' : 'Local Execution Mode'}
+                            {isWebappMode ? <Cloud className="h-5 w-5 text-blue-600" /> : <HardDrive className="h-5 w-5 text-gray-600" />}
+                            <h3 className={`font-semibold ${isWebappMode ? 'text-blue-900' : 'text-gray-900'}`}>
+                                {isWebappMode ? 'Webapp Authenticated Mode' : 'Local Execution Mode'}
                             </h3>
                         </div>
-                        <p className={`text-sm ${isFirebaseMode ? 'text-blue-700' : 'text-gray-700'}`}>
-                            {isFirebaseMode
-                                ? 'All data is safely stored and synchronized in Firebase Cloud.'
+                        <p className={`text-sm ${isWebappMode ? 'text-blue-700' : 'text-gray-700'}`}>
+                            {isWebappMode
+                                ? 'All data is stored locally with cloud authentication and billing.'
                                 : 'Data is stored in local database and you can use personal API keys.'}
                         </p>
                     </div>
@@ -217,8 +217,8 @@ export default function BillingPage() {
                         <Check className="h-4 w-4" />
                         <AlertDescription>
                             <strong>All features are currently free!</strong>{' '}
-                            {isFirebaseMode
-                                ? 'Enjoy all Pickle Glass features for free in Firebase hosting mode. Pro and Enterprise plans will be released soon with additional premium features.'
+                            {isWebappMode
+                                ? 'Enjoy all Pickle Glass features for free in webapp authenticated mode. Pro and Enterprise plans will be released soon with additional premium features.'
                                 : 'Enjoy all Pickle Glass features for free in local mode. You can use personal API keys or continue using the free system.'}
                         </AlertDescription>
                     </Alert>

@@ -83,7 +83,7 @@ export default function SettingsPage() {
         return null;
     }
 
-    const isFirebaseMode = mode === 'firebase';
+    const isWebappMode = mode === 'webapp';
 
     const tabs = [
         { id: 'profile', name: 'Personal Profile', href: '/settings' },
@@ -121,8 +121,8 @@ export default function SettingsPage() {
     };
 
     const handleDeleteAccount = async () => {
-        const confirmMessage = isFirebaseMode
-            ? 'Are you sure you want to delete your account? This action cannot be undone and all data stored in Firebase will be deleted.'
+        const confirmMessage = isWebappMode
+            ? 'Are you sure you want to delete your account? This action cannot be undone and all local data will be cleared.'
             : 'Are you sure you want to delete your account? This action cannot be undone and all data will be deleted.';
 
         if (window.confirm(confirmMessage)) {
@@ -170,21 +170,21 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="space-y-6">
-                    <div className={`p-4 rounded-lg border ${isFirebaseMode ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
+                    <div className={`p-4 rounded-lg border ${isWebappMode ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                                {isFirebaseMode ? <Cloud className="h-5 w-5 text-blue-600" /> : <HardDrive className="h-5 w-5 text-gray-600" />}
+                                {isWebappMode ? <Cloud className="h-5 w-5 text-blue-600" /> : <HardDrive className="h-5 w-5 text-gray-600" />}
                                 <div>
-                                    <h3 className={`font-semibold ${isFirebaseMode ? 'text-blue-900' : 'text-gray-900'}`}>
-                                        {isFirebaseMode ? 'Firebase Hosting Mode' : 'Local Execution Mode'}
+                                    <h3 className={`font-semibold ${isWebappMode ? 'text-blue-900' : 'text-gray-900'}`}>
+                                        {isWebappMode ? 'Webapp Authenticated Mode' : 'Local Execution Mode'}
                                     </h3>
-                                    <p className={`text-sm ${isFirebaseMode ? 'text-blue-700' : 'text-gray-700'} mb-2`}>
-                                        {isFirebaseMode ? `Logged in with Google account (${userInfo.email})` : 'Running as local user'}
+                                    <p className={`text-sm ${isWebappMode ? 'text-blue-700' : 'text-gray-700'} mb-2`}>
+                                        {isWebappMode ? `Logged in with webapp account (${userInfo.email})` : 'Running as local user'}
                                     </p>
-                                    <Badge variant={isFirebaseMode ? 'default' : 'secondary'}>{isFirebaseMode ? 'Cloud Mode' : 'Local Mode'}</Badge>
+                                    <Badge variant={isWebappMode ? 'default' : 'secondary'}>{isWebappMode ? 'Cloud Auth' : 'Local Mode'}</Badge>
                                 </div>
                             </div>
-                            {isFirebaseMode && (
+                            {isWebappMode && (
                                 <Button onClick={handleLogout} variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700">
                                     Logout
                                 </Button>
@@ -215,7 +215,7 @@ export default function SettingsPage() {
                         </div>
                     </div>
 
-                    {!isFirebaseMode && (
+                    {!isWebappMode && (
                         <div className="bg-white border border-gray-200 rounded-lg p-6">
                             <h3 className="text-lg font-semibold text-gray-900 mb-1">API Key</h3>
                             <p className="text-sm text-gray-600 mb-4">
@@ -250,12 +250,12 @@ export default function SettingsPage() {
                         </div>
                     )}
 
-                    {(isFirebaseMode || (!isFirebaseMode && !hasApiKey)) && (
+                    {(isWebappMode || (!isWebappMode && !hasApiKey)) && (
                         <div className="bg-white border border-red-300 rounded-lg p-6">
                             <h3 className="text-lg font-semibold text-gray-900 mb-1">Delete Account</h3>
                             <p className="text-sm text-gray-600 mb-4">
-                                {isFirebaseMode
-                                    ? 'Permanently remove your Firebase account and all content. This action cannot be undone, so please proceed carefully.'
+                                {isWebappMode
+                                    ? 'Permanently remove your webapp account and all content. This action cannot be undone, so please proceed carefully.'
                                     : 'Permanently remove your personal account and all content from the Pickle Glass platform. This action cannot be undone, so please proceed carefully.'}
                             </p>
                             <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end">

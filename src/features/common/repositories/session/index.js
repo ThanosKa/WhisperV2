@@ -1,5 +1,4 @@
 const sqliteRepository = require('./sqlite.repository');
-const firebaseRepository = require('./firebase.repository');
 
 let authService = null;
 
@@ -13,10 +12,8 @@ function getBaseRepository() {
         // During initial load, it might not be set, so we default to sqlite.
         return sqliteRepository;
     }
-    const user = authService.getCurrentUser();
-    if (user && user.isLoggedIn) {
-        return firebaseRepository;
-    }
+    // Always use SQLite for local-first data strategy
+    // Firebase repository disabled in favor of webapp authentication with local storage
     return sqliteRepository;
 }
 
@@ -35,7 +32,6 @@ const sessionRepositoryAdapter = {
         const uid = authService.getCurrentUserId();
         return getBaseRepository().getAllByUserId(uid);
     },
-
 
     updateTitle: (id, title) => getBaseRepository().updateTitle(id, title),
 

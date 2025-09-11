@@ -112,7 +112,7 @@ export class SettingsView extends LitElement {
         if (this.wasJustDragged) return;
 
         console.log('Requesting Firebase authentication from main process...');
-        window.api.settingsView.startFirebaseAuth();
+        window.api.settingsView.startWebappAuth();
     }
     //////// after_modelStateService ////////
 

@@ -49,7 +49,6 @@ if (!gotTheLock) {
 setupProtocolHandling();
 const { createWindows } = require('./window/windowManager.js');
 const listenService = require('./features/listen/listenService');
-const { initializeFirebase } = require('./features/common/services/firebaseClient');
 const databaseInitializer = require('./features/common/services/databaseInitializer');
 const authService = require('./features/common/services/authService');
 const express = require('express');
@@ -249,7 +248,7 @@ app.whenReady().then(async () => {
     });
 
     // Initialize core services
-    initializeFirebase();
+    // Note: Firebase removed - using webapp authentication
 
     try {
         await databaseInitializer.initialize();
@@ -510,7 +509,7 @@ async function handleCustomUrl(url) {
         switch (action) {
             case 'login':
             case 'auth-success':
-                await handleFirebaseAuthCallback(params);
+                await handleWebappAuthCallback(params);
                 break;
             case 'personalize':
                 handlePersonalizeFromUrl(params);
@@ -532,51 +531,37 @@ async function handleCustomUrl(url) {
     }
 }
 
-async function handleFirebaseAuthCallback(params) {
+async function handleWebappAuthCallback(params) {
     const userRepository = require('./features/common/repositories/user');
-    const { token: idToken } = params;
+    const { sessionUuid, uid, email, displayName } = params;
 
-    if (!idToken) {
-        console.error('[Auth] Firebase auth callback is missing ID token.');
-        // No need to send IPC, the UI won't transition without a successful auth state change.
+    if (!sessionUuid) {
+        console.error('[Auth] Webapp auth callback is missing session UUID.');
         return;
     }
 
-    console.log('[Auth] Received ID token from deep link, exchanging for custom token...');
+    console.log('[Auth] Received session UUID from deep link, validating session...');
 
     try {
-        const functionUrl = 'https://us-west1-pickle-3651a.cloudfunctions.net/pickleGlassAuthCallback';
-        const response = await fetch(functionUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: idToken }),
-        });
+        // Use authService to sign in with session
+        await authService.signInWithSession(sessionUuid, { uid, email, displayName });
 
-        const data = await response.json();
+        console.log('[Auth] Successfully signed in with session UUID:', sessionUuid);
 
-        if (!response.ok || !data.success) {
-            throw new Error(data.error || 'Failed to exchange token.');
+        // Create/update user data in local repository if provided
+        if (uid && email) {
+            const webappUser = {
+                uid: uid,
+                email: email || 'no-email@example.com',
+                displayName: displayName || 'User',
+            };
+
+            // Sync user data to local DB
+            userRepository.findOrCreate(webappUser);
+            console.log('[Auth] User data synced with local DB.');
         }
 
-        const { customToken, user } = data;
-        console.log('[Auth] Successfully received custom token for user:', user.uid);
-
-        const firebaseUser = {
-            uid: user.uid,
-            email: user.email || 'no-email@example.com',
-            displayName: user.name || 'User',
-            photoURL: user.picture,
-        };
-
-        // 1. Sync user data to local DB
-        userRepository.findOrCreate(firebaseUser);
-        console.log('[Auth] User data synced with local DB.');
-
-        // 2. Sign in using the authService in the main process
-        await authService.signInWithCustomToken(customToken);
-        console.log('[Auth] Main process sign-in initiated. Waiting for onAuthStateChanged...');
-
-        // 3. Focus the app window
+        // Focus the app window
         const { windowPool } = require('./window/windowManager.js');
         const header = windowPool.get('header');
         if (header) {
@@ -586,9 +571,8 @@ async function handleFirebaseAuthCallback(params) {
             console.error('[Auth] Header window not found after auth callback.');
         }
     } catch (error) {
-        console.error('[Auth] Error during custom token exchange or sign-in:', error);
+        console.error('[Auth] Error during session validation or sign-in:', error);
         // The UI will not change, and the user can try again.
-        // Optionally, send a generic error event to the renderer.
         const { windowPool } = require('./window/windowManager.js');
         const header = windowPool.get('header');
         if (header) {

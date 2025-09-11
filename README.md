@@ -123,7 +123,7 @@ We have a list of [help wanted](https://github.com/pickle-com/glass/issues?q=is%
 - Jul 6: Full code refactoring has done.
 - Jul 7: Now support Claude, LLM/STT model selection
 - Jul 8: Now support Windows(beta), Improved AEC by Rust(to seperate mic/system audio), shortcut editing(beta)
-- Jul 8: Now support Local LLM & STT, Firebase Data Storage 
+- Jul 8: Now support Local LLM & STT, Webapp Authentication 
 
 
 ## About Pickle

@@ -1,5 +1,4 @@
 const sqliteRepository = require('./sqlite.repository');
-const firebaseRepository = require('./firebase.repository');
 
 let authService = null;
 
@@ -16,9 +15,8 @@ function getBaseRepository() {
         throw new Error('AuthService could not be loaded for the user repository.');
     }
     const user = service.getCurrentUser();
-    if (user && user.isLoggedIn) {
-        return firebaseRepository;
-    }
+    // Always use SQLite for local-first data strategy
+    // Firebase repository disabled in favor of webapp authentication with local storage
     return sqliteRepository;
 }
 

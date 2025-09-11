@@ -15,37 +15,55 @@ router.put('/profile', async (req, res) => {
 router.get('/profile', async (req, res) => {
     try {
         console.log('[API] /profile request - req.uid:', req.uid);
+        console.log('[API] /profile request - Headers:', {
+            'X-User-ID': req.get('X-User-ID'),
+            'User-Agent': req.get('User-Agent'),
+        });
+
         const user = await ipcRequest(req, 'get-user-profile');
         console.log('[API] /profile IPC response:', user);
+
         if (!user) {
-            console.log('[API] /profile - User not found, returning 404');
-            return res.status(404).json({ error: 'User not found' });
+            console.log('[API] /profile - User not found in database');
+            console.log('[API] /profile - This might mean:');
+            console.log('[API] /profile - 1. AuthService is not authenticated');
+            console.log('[API] /profile - 2. User does not exist in SQLite database');
+            console.log('[API] /profile - 3. getCurrentUserId() returned wrong ID');
+            return res.status(404).json({
+                error: 'User not found',
+                details: 'User profile not found in local database. Authentication may be required.',
+            });
         }
+
         console.log('[API] /profile - Returning user data:', user);
         res.json(user);
     } catch (error) {
         console.error('Failed to get profile via IPC:', error);
-        res.status(500).json({ error: 'Failed to get profile', details: error.message });
+        res.status(500).json({
+            error: 'Failed to get profile',
+            details: error.message,
+            ipcError: true,
+        });
     }
 });
 
 router.post('/find-or-create', async (req, res) => {
     try {
         console.log('[API] find-or-create request received:', req.body);
-        
+
         if (!req.body || !req.body.uid) {
             return res.status(400).json({ error: 'User data with uid is required' });
         }
-        
+
         const user = await ipcRequest(req, 'find-or-create-user', req.body);
         console.log('[API] find-or-create response:', user);
         res.status(200).json(user);
     } catch (error) {
         console.error('Failed to find or create user via IPC:', error);
         console.error('Request body:', req.body);
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Failed to find or create user',
-            details: error.message 
+            details: error.message,
         });
     }
 });
@@ -85,7 +103,7 @@ router.get('/batch', async (req, res) => {
     try {
         const result = await ipcRequest(req, 'get-batch-data', req.query.include);
         res.json(result);
-    } catch(error) {
+    } catch (error) {
         console.error('Failed to get batch data via IPC:', error);
         res.status(500).json({ error: 'Failed to get batch data' });
     }

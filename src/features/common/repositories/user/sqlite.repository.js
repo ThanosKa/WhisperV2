@@ -37,7 +37,22 @@ function findOrCreate(user) {
 
 function getById(uid) {
     const db = sqliteClient.getDb();
-    return db.prepare('SELECT * FROM users WHERE uid = ?').get(uid);
+    console.log('[SQLite] getById called with uid:', uid);
+
+    if (!uid || uid === 'undefined' || uid === 'null') {
+        console.log('[SQLite] Invalid uid provided, returning null');
+        return null;
+    }
+
+    const result = db.prepare('SELECT * FROM users WHERE uid = ?').get(uid);
+    console.log('[SQLite] getById result for uid', uid, ':', result);
+
+    if (!result) {
+        console.log('[SQLite] No user found in database with uid:', uid);
+        console.log('[SQLite] This means the user has not been created in the local database yet');
+    }
+
+    return result;
 }
 
 function update({ uid, displayName }) {

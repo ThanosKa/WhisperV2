@@ -44,10 +44,13 @@ export const useAuth = () => {
                 // If in electron mode, prioritize API check
                 if (isElectronMode) {
                     try {
+                        console.log('🔍 Checking API for user profile...');
                         const response = await fetch('/api/user/profile');
+                        console.log('📡 API response status:', response.status, response.statusText);
+
                         if (response.ok) {
                             const apiUser = await response.json();
-                            console.log('🖥️ Electron mode activated from API:', apiUser.uid);
+                            console.log('🖥️ Electron mode activated from API:', apiUser);
                             const profile: UserProfile = {
                                 uid: apiUser.uid,
                                 display_name: apiUser.display_name,
@@ -60,11 +63,16 @@ export const useAuth = () => {
                             setIsLoading(false);
                             return;
                         } else {
-                            console.log('📱 API returned status:', response.status, response.statusText);
+                            const errorText = await response.text();
+                            console.log('📱 API error response:', {
+                                status: response.status,
+                                statusText: response.statusText,
+                                body: errorText,
+                            });
                             setRetryCount(prev => prev + 1);
                         }
                     } catch (apiError) {
-                        console.log('📱 API error:', apiError);
+                        console.log('📱 API network error:', apiError);
                         setRetryCount(prev => prev + 1);
                     }
                 }

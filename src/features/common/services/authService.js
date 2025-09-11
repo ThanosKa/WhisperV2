@@ -55,7 +55,22 @@ async function validateSession(sessionUuid) {
         throw new Error(profileData.error || `Failed to fetch user profile: ${profileResponse.status}`);
     }
 
-    return profileData.data; // Real user profile data from your API
+    // Transform Clerk user data to expected SQLite format
+    const clerkUser = profileData.data;
+    const transformedUser = {
+        uid: clerkUser.id, // Clerk uses 'id' instead of 'uid'
+        displayName: clerkUser.fullName || clerkUser.firstName || 'User', // Clerk uses 'fullName'
+        email: clerkUser.primaryEmailAddress?.emailAddress || clerkUser.email || 'no-email@example.com', // Clerk has nested email structure
+        plan: clerkUser.plan || 'free', // Keep additional Clerk data
+        apiQuota: clerkUser.apiQuota || null,
+    };
+
+    console.log('[AuthService] Transformed Clerk user data:', {
+        original: clerkUser,
+        transformed: transformedUser,
+    });
+
+    return transformedUser; // Return transformed user data compatible with SQLite schema
 }
 
 class AuthService {
@@ -76,18 +91,28 @@ class AuthService {
         if (this.isInitialized) return this.initializationPromise;
 
         this.initializationPromise = new Promise(async resolve => {
+            console.log('[AuthService] Starting initialization...');
+
             // Check for existing session from electron-store
             const storedSession = sessionStore.get('sessionUuid');
             const storedUser = sessionStore.get('userProfile');
 
+            console.log('[AuthService] Stored session data:', {
+                hasSession: !!storedSession,
+                hasUser: !!storedUser,
+                sessionUuid: storedSession ? storedSession.substring(0, 8) + '...' : 'none',
+                userUid: storedUser?.uid || 'none',
+            });
+
             if (storedSession && storedUser) {
                 try {
+                    console.log('[AuthService] Attempting to validate stored session...');
                     // Validate existing session
                     const userProfile = await validateSession(storedSession);
                     await this.handleUserSignIn(userProfile, storedSession);
-                    console.log('[AuthService] Restored session from storage');
+                    console.log('[AuthService] ✅ Successfully restored session from storage for user:', userProfile.uid);
                 } catch (error) {
-                    console.log('[AuthService] Stored session invalid, clearing:', error.message);
+                    console.log('[AuthService] ❌ Stored session invalid, clearing:', error.message);
                     sessionStore.clear();
                     this.handleUserSignOut();
                 }
@@ -98,7 +123,7 @@ class AuthService {
 
             this.broadcastUserState();
             this.isInitialized = true;
-            console.log('[AuthService] Initialized and resolved initialization promise.');
+            console.log('[AuthService] ✅ Initialization completed. Current user:', this.getCurrentUserId());
             resolve();
         });
 
@@ -109,6 +134,17 @@ class AuthService {
         const previousUser = this.currentUser;
 
         console.log(`[AuthService] User signed in:`, userProfile.uid);
+
+        // Ensure the user exists in the local SQLite database
+        const userRepository = require('../repositories/user');
+        try {
+            await userRepository.findOrCreate(userProfile);
+            console.log('[AuthService] User data synchronized with local database');
+        } catch (error) {
+            console.error('[AuthService] Failed to sync user to local database:', error);
+            // Don't fail the sign-in process, but log the error
+        }
+
         this.currentUser = userProfile;
         this.currentUserId = userProfile.uid;
         this.currentUserMode = 'webapp';
@@ -301,11 +337,25 @@ class AuthService {
     }
 
     getCurrentUserId() {
+        console.log('[AuthService] getCurrentUserId() called, returning:', this.currentUserId);
+        console.log('[AuthService] Current auth state:', {
+            currentUserId: this.currentUserId,
+            currentUserMode: this.currentUserMode,
+            hasCurrentUser: !!this.currentUser,
+            isInitialized: this.isInitialized,
+        });
         return this.currentUserId;
     }
 
     getCurrentUser() {
         const isLoggedIn = !!(this.currentUserMode === 'webapp' && this.currentUser);
+
+        console.log('[AuthService] getCurrentUser() called:', {
+            currentUserMode: this.currentUserMode,
+            hasCurrentUser: !!this.currentUser,
+            currentUserId: this.currentUserId,
+            isLoggedIn: isLoggedIn,
+        });
 
         if (isLoggedIn) {
             return {

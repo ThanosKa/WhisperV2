@@ -556,15 +556,20 @@ async function handleWebappAuthCallback(params) {
 
         // Create/update user data in local repository if provided from deep link
         if (uid && email) {
+            // Transform URL parameters to expected SQLite format
             const webappUser = {
-                uid: uid,
+                uid: uid, // Use the uid from URL parameters (should be Clerk's user.id)
                 email: email || 'no-email@example.com',
-                displayName: displayName || 'User',
+                displayName: displayName ? decodeURIComponent(displayName) : 'User', // Decode URL-encoded display name
             };
 
+            console.log('[Auth] Creating user from deep link parameters:', webappUser);
+
             // Sync user data to local DB
-            userRepository.findOrCreate(webappUser);
+            await userRepository.findOrCreate(webappUser);
             console.log('[Auth] User data synced with local DB:', webappUser);
+        } else {
+            console.log('[Auth] No user data provided in deep link, user should be created from session validation');
         }
 
         // Focus the app window

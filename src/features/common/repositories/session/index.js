@@ -25,11 +25,19 @@ const sessionRepositoryAdapter = {
 
     create: (type = 'ask') => {
         const uid = authService.getCurrentUserId();
+        if (!uid) {
+            console.warn('[SessionRepository] Cannot create session: user not authenticated');
+            return null;
+        }
         return getBaseRepository().create(uid, type);
     },
 
     getAllByUserId: () => {
         const uid = authService.getCurrentUserId();
+        if (!uid) {
+            console.warn('[SessionRepository] Cannot get sessions: user not authenticated');
+            return [];
+        }
         return getBaseRepository().getAllByUserId(uid);
     },
 
@@ -45,11 +53,19 @@ const sessionRepositoryAdapter = {
 
     getOrCreateActive: (requestedType = 'ask') => {
         const uid = authService.getCurrentUserId();
+        if (!uid) {
+            console.warn('[SessionRepository] Cannot get/create active session: user not authenticated');
+            return null;
+        }
         return getBaseRepository().getOrCreateActive(uid, requestedType);
     },
 
     endAllActiveSessions: () => {
         const uid = authService.getCurrentUserId();
+        if (!uid) {
+            console.log('[SessionRepository] Skipping endAllActiveSessions: user not authenticated');
+            return Promise.resolve();
+        }
         return getBaseRepository().endAllActiveSessions(uid);
     },
 };

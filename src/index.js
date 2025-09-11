@@ -549,28 +549,21 @@ async function handleWebappAuthCallback(params) {
     console.log('[Auth] Received session UUID from deep link, validating session...');
 
     try {
-        // Use authService to sign in with session (this will fetch real user data)
-        await authService.signInWithSession(sessionUuid);
+        // Prepare user data from deep link parameters if available
+        let userInfo = null;
+        if (uid && email) {
+            userInfo = {
+                uid: uid,
+                email: email,
+                displayName: displayName ? decodeURIComponent(displayName) : 'User',
+            };
+            console.log('[Auth] Using user data from deep link:', userInfo);
+        }
+
+        // Use authService to sign in with session and user data
+        await authService.signInWithSession(sessionUuid, userInfo);
 
         console.log('[Auth] Successfully signed in with session UUID:', sessionUuid);
-
-        // Create/update user data in local repository if provided from deep link
-        if (uid && email) {
-            // Transform URL parameters to expected SQLite format
-            const webappUser = {
-                uid: uid, // Use the uid from URL parameters (should be Clerk's user.id)
-                email: email || 'no-email@example.com',
-                displayName: displayName ? decodeURIComponent(displayName) : 'User', // Decode URL-encoded display name
-            };
-
-            console.log('[Auth] Creating user from deep link parameters:', webappUser);
-
-            // Sync user data to local DB
-            await userRepository.findOrCreate(webappUser);
-            console.log('[Auth] User data synced with local DB:', webappUser);
-        } else {
-            console.log('[Auth] No user data provided in deep link, user should be created from session validation');
-        }
 
         // Focus the app window
         const { windowPool } = require('./window/windowManager.js');

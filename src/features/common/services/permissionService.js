@@ -16,11 +16,32 @@ class PermissionService {
 
         try {
             if (process.platform === 'darwin') {
+                const authService = this._getAuthService();
+                const currentUser = authService.getCurrentUser();
+                const isKeychainRequired = currentUser.mode === 'firebase';
+
+                console.log('[Permissions] User mode:', currentUser.mode, 'Keychain required:', isKeychainRequired);
+
                 permissions.microphone = systemPreferences.getMediaAccessStatus('microphone');
                 permissions.screen = systemPreferences.getMediaAccessStatus('screen');
-                permissions.keychain = (await this.checkKeychainCompleted(this._getAuthService().getCurrentUserId())) ? 'granted' : 'unknown';
-                permissions.needsSetup =
-                    permissions.microphone !== 'granted' || permissions.screen !== 'granted' || permissions.keychain !== 'granted';
+
+                if (isKeychainRequired) {
+                    permissions.keychain = (await this.checkKeychainCompleted(authService.getCurrentUserId())) ? 'granted' : 'unknown';
+                    permissions.needsSetup =
+                        permissions.microphone !== 'granted' || permissions.screen !== 'granted' || permissions.keychain !== 'granted';
+                } else {
+                    // For webapp users, keychain is not required
+                    permissions.keychain = 'granted'; // Mark as granted since it's not needed
+                    permissions.needsSetup = permissions.microphone !== 'granted' || permissions.screen !== 'granted';
+                }
+
+                console.log('[Permissions] Final permissions check:', {
+                    microphone: permissions.microphone,
+                    screen: permissions.screen,
+                    keychain: permissions.keychain,
+                    needsSetup: permissions.needsSetup,
+                    userMode: currentUser.mode,
+                });
             } else {
                 permissions.microphone = 'granted';
                 permissions.screen = 'granted';
@@ -98,8 +119,13 @@ class PermissionService {
 
     async markKeychainCompleted() {
         try {
-            await permissionRepository.markKeychainCompleted(this._getAuthService().getCurrentUserId());
-            console.log('[Permissions] Marked keychain as completed');
+            const userId = this._getAuthService().getCurrentUserId();
+            if (!userId) {
+                console.log('[Permissions] Cannot mark keychain completed: user not authenticated');
+                return { success: false, error: 'User not authenticated' };
+            }
+            await permissionRepository.markKeychainCompleted(userId);
+            console.log('[Permissions] Marked keychain as completed for user:', userId);
             return { success: true };
         } catch (error) {
             console.error('[Permissions] Error marking keychain as completed:', error);
@@ -108,12 +134,14 @@ class PermissionService {
     }
 
     async checkKeychainCompleted(uid) {
-        if (uid === 'default_user') {
+        if (!uid) {
+            // No user authenticated, skip keychain check
+            console.log('[Permissions] No authenticated user, skipping keychain check');
             return true;
         }
         try {
             const completed = permissionRepository.checkKeychainCompleted(uid);
-            console.log('[Permissions] Keychain completed status:', completed);
+            console.log('[Permissions] Keychain completed status for uid', uid + ':', completed);
             return completed;
         } catch (error) {
             console.error('[Permissions] Error checking keychain completed status:', error);

@@ -33,6 +33,10 @@ module.exports = {
         ipcMain.handle('check-keychain-completed', async () => await permissionService.checkKeychainCompleted());
         ipcMain.handle('initialize-encryption-key', async () => {
             const userId = authService.getCurrentUserId();
+            if (!userId) {
+                console.log('[FeatureBridge] Cannot initialize encryption key: user not authenticated');
+                return { success: false, error: 'User not authenticated' };
+            }
             await encryptionService.initializeKey(userId);
             return { success: true };
         });

@@ -28,11 +28,19 @@ const userRepositoryAdapter = {
 
     getById: () => {
         const uid = getAuthService().getCurrentUserId();
+        if (!uid) {
+            console.warn('[UserRepository] Cannot get user: not authenticated');
+            return null;
+        }
         return getBaseRepository().getById(uid);
     },
 
     update: updateData => {
         const uid = getAuthService().getCurrentUserId();
+        if (!uid) {
+            console.warn('[UserRepository] Cannot update user: not authenticated');
+            return null;
+        }
         return getBaseRepository().update({ uid, ...updateData });
     },
 

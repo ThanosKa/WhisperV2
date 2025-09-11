@@ -1,27 +1,22 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { UserProfile, setUserInfo, findOrCreateUser } from './api';
+import { UserProfile, setUserInfo, findOrCreateUser, getUserProfile } from './api';
 // Removed Firebase imports - using webapp authentication
-
-const defaultLocalUser: UserProfile = {
-    uid: 'default_user',
-    display_name: 'Default User',
-    email: 'contact@pickle.com',
-};
 
 export const useAuth = () => {
     const [user, setUser] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [mode, setMode] = useState<'local' | 'webapp' | null>(null);
     const [retryCount, setRetryCount] = useState(0);
+    const [lastSyncTime, setLastSyncTime] = useState(0); // Debounce mechanism
 
     useEffect(() => {
         // Prevent infinite loops
         if (retryCount > 3) {
-            console.log('🛑 Too many retries, falling back to local mode');
-            setMode('local');
-            setUser(defaultLocalUser);
-            setUserInfo(defaultLocalUser);
+            console.log('🛑 Too many retries, staying unauthenticated');
+            setMode(null);
+            setUser(null);
+            setUserInfo(null);
             setIsLoading(false);
             return;
         }
@@ -41,15 +36,32 @@ export const useAuth = () => {
                     console.log('🌐 Detected Web mode');
                 }
 
-                // If in electron mode, prioritize API check
+                // 🔥 Check localStorage FIRST in Electron mode
                 if (isElectronMode) {
-                    try {
-                        console.log('🔍 Checking API for user profile...');
-                        const response = await fetch('/api/user/profile');
-                        console.log('📡 API response status:', response.status, response.statusText);
+                    const storedUserInfo = localStorage.getItem('pickleglass_user');
+                    if (storedUserInfo) {
+                        try {
+                            const profile = JSON.parse(storedUserInfo);
+                            // If localStorage has a valid non-default user, use it immediately
+                            if (profile.uid && profile.uid !== 'default_user') {
+                                console.log('🔄 Using user from localStorage (desktop sync):', profile.uid);
+                                setMode('webapp');
+                                setUser(profile);
+                                setRetryCount(0);
+                                setIsLoading(false);
+                                return;
+                            }
+                        } catch (error) {
+                            console.error('Failed to parse stored user info:', error);
+                            localStorage.removeItem('pickleglass_user');
+                        }
+                    }
 
-                        if (response.ok) {
-                            const apiUser = await response.json();
+                    // Only fall back to API if localStorage is empty or invalid
+                    try {
+                        console.log('🔍 Checking backend API for user profile (localStorage fallback)...');
+                        const apiUser = await getUserProfile();
+                        if (apiUser && apiUser.uid) {
                             console.log('🖥️ Electron mode activated from API:', apiUser);
                             const profile: UserProfile = {
                                 uid: apiUser.uid,
@@ -59,53 +71,42 @@ export const useAuth = () => {
                             setMode('webapp');
                             setUser(profile);
                             setUserInfo(profile, true); // Sync to localStorage
+                            console.log('🔄 User synced to localStorage from API:', profile.uid);
                             setRetryCount(0); // Reset retry count on success
                             setIsLoading(false);
                             return;
-                        } else {
-                            const errorText = await response.text();
-                            console.log('📱 API error response:', {
-                                status: response.status,
-                                statusText: response.statusText,
-                                body: errorText,
-                            });
-                            setRetryCount(prev => prev + 1);
                         }
                     } catch (apiError) {
-                        console.log('📱 API network error:', apiError);
+                        console.log('📱 API error:', apiError);
                         setRetryCount(prev => prev + 1);
                     }
-                }
-
-                // Check localStorage (for web mode or electron fallback)
-                const storedUserInfo = localStorage.getItem('pickleglass_user');
-                if (storedUserInfo) {
-                    const profile = JSON.parse(storedUserInfo);
-                    // Only use localStorage if it's not the default user, or if we're not in electron mode
-                    if (!isElectronMode || profile.uid !== 'default_user') {
-                        console.log('🌐 Webapp mode activated from localStorage:', profile.uid);
-                        setMode('webapp');
-                        setUser(profile);
-                        setRetryCount(0);
-                        setIsLoading(false);
-                        return;
-                    } else {
-                        console.log('🗑️ Clearing default user from localStorage in electron mode');
-                        localStorage.removeItem('pickleglass_user');
+                } else {
+                    // Web mode: Check localStorage for webapp authentication
+                    const storedUserInfo = localStorage.getItem('pickleglass_user');
+                    if (storedUserInfo) {
+                        const profile = JSON.parse(storedUserInfo);
+                        if (profile.uid && profile.uid !== 'default_user') {
+                            console.log('🌐 Webapp mode activated from localStorage:', profile.uid);
+                            setMode('webapp');
+                            setUser(profile);
+                            setRetryCount(0);
+                            setIsLoading(false);
+                            return;
+                        }
                     }
                 }
 
-                // Fallback to local mode
-                console.log('🏠 Local mode activated');
-                setMode('local');
-                setUser(defaultLocalUser);
-                setUserInfo(defaultLocalUser);
+                // Remain unauthenticated; protected routes will redirect
+                console.log('🚫 No authenticated user detected');
+                setMode(null);
+                setUser(null);
+                setUserInfo(null);
                 setRetryCount(0);
             } catch (error) {
                 console.error('Error checking stored auth:', error);
-                setMode('local');
-                setUser(defaultLocalUser);
-                setUserInfo(defaultLocalUser);
+                setMode(null);
+                setUser(null);
+                setUserInfo(null);
                 setRetryCount(0);
             }
             setIsLoading(false);
@@ -116,22 +117,44 @@ export const useAuth = () => {
         // Listen for storage changes (e.g., from authentication in another tab)
         const handleStorageChange = (e: StorageEvent) => {
             if (e.key === 'pickleglass_user') {
+                console.log('🔄 localStorage change detected, rechecking auth...');
                 setRetryCount(0); // Reset retry count on external changes
                 checkStoredAuth();
             }
         };
 
-        window.addEventListener('storage', handleStorageChange);
-        window.addEventListener('userInfoChanged', () => {
+        const handleUserInfoChanged = () => {
+            const now = Date.now();
+            // Debounce: Only trigger if at least 100ms have passed since last sync
+            if (now - lastSyncTime < 100) {
+                console.log('🔄 userInfoChanged debounced (too frequent)');
+                return;
+            }
+            setLastSyncTime(now);
+            console.log('🔄 userInfoChanged event detected, rechecking auth...');
             setRetryCount(0);
             checkStoredAuth();
-        });
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+        window.addEventListener('userInfoChanged', handleUserInfoChanged);
+
+        // 🔥 Additional listener for desktop app sync
+        const handleBeforeUnload = () => {
+            // Final sync check before page unload
+            const storedUser = localStorage.getItem('pickleglass_user');
+            if (storedUser && JSON.parse(storedUser).uid && JSON.parse(storedUser).uid !== 'default_user') {
+                console.log('🔄 Page unload - ensuring user sync is complete');
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
 
         return () => {
             window.removeEventListener('storage', handleStorageChange);
-            window.removeEventListener('userInfoChanged', checkStoredAuth);
+            window.removeEventListener('userInfoChanged', handleUserInfoChanged);
+            window.removeEventListener('beforeunload', handleBeforeUnload);
         };
-    }, [retryCount]);
+    }, [retryCount, lastSyncTime]);
 
     return { user, isLoading, mode };
 };
@@ -141,10 +164,9 @@ export const useRedirectIfNotAuth = () => {
     const router = useRouter();
 
     useEffect(() => {
-        // This hook is now simplified. It doesn't redirect for local mode.
-        // If you want to force login for hosting mode, you'd add logic here.
-        // For example: if (!isLoading && !user) router.push('/login');
-        // But for now, we allow both modes.
+        if (!isLoading && (!user || !user.uid)) {
+            router.push('/login');
+        }
     }, [user, isLoading, router]);
 
     return user;

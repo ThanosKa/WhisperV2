@@ -75,11 +75,12 @@ async function validateSession(sessionUuid) {
 
 class AuthService {
     constructor() {
-        this.currentUserId = 'default_user';
-        this.currentUserMode = 'local'; // 'local' or 'webapp'
+        this.currentUserId = null; // No default user - null means unauthenticated
+        this.currentUserMode = 'unauthenticated'; // 'unauthenticated', 'local', or 'webapp'
         this.currentUser = null;
         this.isInitialized = false;
         this.sessionUuid = null;
+        this.lastBroadcastUserState = null; // Track last broadcast to prevent duplicates
 
         // This ensures the key is ready before any login/logout state change.
         this.initializationPromise = null;
@@ -117,7 +118,7 @@ class AuthService {
                     this.handleUserSignOut();
                 }
             } else {
-                console.log('[AuthService] No stored session found, starting in local mode');
+                console.log('[AuthService] No stored session found, remaining unauthenticated');
                 this.handleUserSignOut();
             }
 
@@ -194,14 +195,14 @@ class AuthService {
         }
 
         this.currentUser = null;
-        this.currentUserId = 'default_user';
-        this.currentUserMode = 'local';
+        this.currentUserId = null; // No default user - null means unauthenticated
+        this.currentUserMode = 'unauthenticated'; // Clear state to unauthenticated
         this.sessionUuid = null;
 
         // Clear stored session data
         sessionStore.clear();
 
-        // End active sessions for the local/default user as well.
+        // End active sessions for the unauthenticated state
         sessionRepository.endAllActiveSessions();
 
         encryptionService.resetSessionKey();
@@ -235,8 +236,8 @@ class AuthService {
             console.log(`[AuthService] Opening session URL: ${sessionUrl}`);
             await shell.openExternal(sessionUrl);
 
-            // 3. Start polling for authentication
-            this.startSessionPolling(sessionUuid);
+            // Note: No polling needed - authentication will complete via deep link callback
+            console.log('[AuthService] Waiting for deep link authentication callback...');
 
             return { success: true, sessionUuid };
         } catch (error) {
@@ -245,62 +246,25 @@ class AuthService {
         }
     }
 
-    startSessionPolling(sessionUuid) {
-        const pollInterval = setInterval(async () => {
-            try {
-                console.log('[AuthService] Polling session status...');
-                const statusResponse = await fetch(`${WEBAPP_CONFIG.sessionStatusUrl}/${sessionUuid}`);
-
-                if (!statusResponse.ok) {
-                    console.error('[AuthService] Session status check failed:', statusResponse.status);
-                    return;
-                }
-
-                const statusData = await statusResponse.json();
-                if (!statusData.success) {
-                    console.error('[AuthService] Session status error:', statusData.error);
-                    return;
-                }
-
-                const status = statusData.data.status;
-                console.log('[AuthService] Session status:', status);
-
-                switch (status) {
-                    case 'authenticated':
-                        clearInterval(pollInterval);
-                        console.log('[AuthService] Session authenticated successfully!');
-                        await this.signInWithSession(sessionUuid);
-                        break;
-
-                    case 'expired':
-                    case 'not_found':
-                        clearInterval(pollInterval);
-                        console.error('[AuthService] Session expired or not found');
-                        // Could trigger error UI or restart flow
-                        break;
-
-                    case 'pending':
-                        // Continue polling
-                        break;
-
-                    default:
-                        console.warn('[AuthService] Unknown session status:', status);
-                }
-            } catch (error) {
-                console.error('[AuthService] Error polling session status:', error);
-            }
-        }, 2000); // Poll every 2 seconds
-
-        // Stop polling after 5 minutes to prevent infinite polling
-        setTimeout(() => {
-            clearInterval(pollInterval);
-            console.log('[AuthService] Session polling timeout - stopped after 5 minutes');
-        }, 300000);
-    }
     async signInWithSession(sessionUuid, userInfo = null) {
         try {
-            // Validate the session with the webapp
-            const userProfile = await validateSession(sessionUuid);
+            let userProfile;
+
+            // If userInfo is provided (from deep link), use it directly
+            if (userInfo && userInfo.uid && userInfo.email) {
+                console.log('[AuthService] Using user data from deep link parameters:', userInfo);
+                userProfile = {
+                    uid: userInfo.uid,
+                    displayName: userInfo.displayName || 'User',
+                    email: userInfo.email,
+                    plan: userInfo.plan || 'free',
+                    apiQuota: userInfo.apiQuota || null,
+                };
+            } else {
+                // Fallback: Validate the session with the webapp
+                console.log('[AuthService] No user data provided, validating session with webapp...');
+                userProfile = await validateSession(sessionUuid);
+            }
 
             // Handle user sign-in
             await this.handleUserSignIn(userProfile, sessionUuid);
@@ -328,23 +292,93 @@ class AuthService {
 
     broadcastUserState() {
         const userState = this.getCurrentUser();
+
+        // Prevent duplicate broadcasts with same user state
+        const userStateKey = `${userState.uid}-${userState.mode}-${userState.isLoggedIn}`;
+        if (this.lastBroadcastUserState === userStateKey) {
+            console.log('[AuthService] Skipping duplicate broadcast for same user state');
+            return;
+        }
+        this.lastBroadcastUserState = userStateKey;
+
         console.log('[AuthService] Broadcasting user state change:', userState);
+
+        // Send user state to all Electron windows
         BrowserWindow.getAllWindows().forEach(win => {
             if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
                 win.webContents.send('user-state-changed', userState);
+
+                // 🔥 CRITICAL FIX: Sync user data to local webapp localStorage
+                if (userState.isLoggedIn && userState.mode === 'webapp') {
+                    // Inject user data into local webapp's localStorage
+                    const userProfile = {
+                        uid: userState.uid,
+                        display_name: userState.displayName,
+                        email: userState.email,
+                    };
+
+                    console.log('[AuthService] 🔄 Syncing user to local webapp localStorage:', userProfile);
+
+                    // Execute JavaScript in the webapp webview to update localStorage
+                    win.webContents
+                        .executeJavaScript(
+                            `
+                        try {
+                            // Update localStorage with user data
+                            localStorage.setItem('pickleglass_user', JSON.stringify(${JSON.stringify(userProfile)}));
+                            
+                            // Trigger userInfoChanged event to notify React components
+                            window.dispatchEvent(new Event('userInfoChanged'));
+                            
+                            console.log('🔄 Local webapp user data synchronized:', ${JSON.stringify(userProfile)});
+                        } catch (error) {
+                            console.error('❌ Failed to sync user to localStorage:', error);
+                        }
+                    `
+                        )
+                        .catch(error => {
+                            console.log('[AuthService] Failed to execute localStorage sync script:', error.message);
+                        });
+                } else if (!userState.isLoggedIn || userState.mode === 'unauthenticated') {
+                    // Clear user data from local webapp localStorage when signed out or unauthenticated
+                    console.log('[AuthService] 🗑️ Clearing user from local webapp localStorage (unauthenticated)');
+
+                    win.webContents
+                        .executeJavaScript(
+                            `
+                        try {
+                            localStorage.removeItem('pickleglass_user');
+                            window.dispatchEvent(new Event('userInfoChanged'));
+                            console.log('🗑️ Local webapp user data cleared (unauthenticated)');
+                        } catch (error) {
+                            console.error('❌ Failed to clear user from localStorage:', error);
+                        }
+                    `
+                        )
+                        .catch(error => {
+                            console.log('[AuthService] Failed to execute localStorage clear script:', error.message);
+                        });
+                }
             }
         });
     }
 
     getCurrentUserId() {
-        console.log('[AuthService] getCurrentUserId() called, returning:', this.currentUserId);
+        // Return null for unauthenticated state to prevent fake user creation
+        // Repositories should handle null gracefully by skipping user-specific operations
+        const result = this.currentUserId || null;
+        console.log('[AuthService] getCurrentUserId() called, returning:', result || 'null (unauthenticated)');
         console.log('[AuthService] Current auth state:', {
             currentUserId: this.currentUserId,
             currentUserMode: this.currentUserMode,
             hasCurrentUser: !!this.currentUser,
             isInitialized: this.isInitialized,
         });
-        return this.currentUserId;
+        return result;
+    }
+
+    isAuthenticated() {
+        return !!(this.currentUserMode === 'webapp' && this.currentUser && this.currentUserId);
     }
 
     getCurrentUser() {
@@ -368,13 +402,15 @@ class AuthService {
                 sessionUuid: this.sessionUuid,
             };
         }
+
+        // Return unauthenticated state - no fake default user
         return {
-            uid: this.currentUserId, // returns 'default_user'
-            email: 'contact@pickle.com',
-            displayName: 'Default User',
-            mode: 'local',
+            uid: null,
+            email: null,
+            displayName: null,
+            mode: 'unauthenticated',
             isLoggedIn: false,
-            plan: 'free',
+            plan: null,
         };
     }
 

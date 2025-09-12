@@ -203,16 +203,34 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
     // Plan tooltip show/hide
     internalBridge.on('window:showPlanWindow', ({ visible }) => {
         const plan = windowPool.get('plan');
-        if (!plan || plan.isDestroyed()) return;
+        if (!plan || plan.isDestroyed()) {
+            console.warn('[WindowManager] Plan window not found or destroyed');
+            return;
+        }
+
         if (visible) {
             const pos = layoutManager.calculatePlanWindowPosition();
-            if (pos) plan.setPosition(pos.x, pos.y);
-            plan.showInactive();
-            plan.moveTop();
-            plan.setAlwaysOnTop(true);
+            if (pos) {
+                console.log(`[WindowManager] Showing plan window at position:`, pos);
+                const currentBounds = plan.getBounds();
+                console.log(`[WindowManager] Plan current bounds:`, currentBounds);
+
+                plan.setPosition(pos.x, pos.y);
+                plan.showInactive();
+                plan.moveTop();
+                plan.setAlwaysOnTop(true);
+
+                // Log bounds after setting
+                const newBounds = plan.getBounds();
+                console.log(`[WindowManager] Plan bounds after positioning:`, newBounds);
+            } else {
+                console.warn('[WindowManager] Could not calculate plan window position.');
+            }
         } else {
+            console.log(`[WindowManager] Hiding plan window`);
             plan.setAlwaysOnTop(false);
             plan.hide();
+            console.log(`[WindowManager] Plan window hidden`);
         }
     });
 }
@@ -407,7 +425,7 @@ const toggleContentProtection = () => {
 };
 
 const openLoginPage = () => {
-    const webUrl = process.env.API_BASE_URL || 'http://localhost:3000';
+    const webUrl = process.env.pickleglass_WEB_URL || 'http://localhost:3000';
     const personalizeUrl = `${webUrl}/personalize?desktop=true`;
     shell.openExternal(personalizeUrl);
     console.log('Opening personalization page:', personalizeUrl);
@@ -560,8 +578,8 @@ function createFeatureWindows(header, namesToCreate) {
             case 'plan': {
                 const plan = new BrowserWindow({
                     ...commonChildOptions,
-                    width: 220,
-                    height: 44,
+                    width: 280,
+                    height: 120,
                 });
                 plan.setContentProtection(isContentProtectionOn);
                 plan.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
@@ -571,6 +589,13 @@ function createFeatureWindows(header, namesToCreate) {
                 const planLoadOptions = { query: { view: 'plan' } };
                 plan.loadFile(path.join(__dirname, '../ui/app/content.html'), planLoadOptions).catch(console.error);
                 windowPool.set('plan', plan);
+
+                if (!app.isPackaged) {
+                    plan.webContents.openDevTools({ mode: 'detach' });
+                }
+
+                // Add logging for plan window creation
+                console.log(`[WindowManager] Plan window created with dimensions: ${plan.getBounds().width}x${plan.getBounds().height}`);
                 break;
             }
         }
@@ -677,7 +702,7 @@ function createWindows() {
     setupWindowController(windowPool, layoutManager, movementManager);
 
     if (currentHeaderState === 'main') {
-        createFeatureWindows(header, ['listen', 'ask', 'settings']);
+        createFeatureWindows(header, ['listen', 'ask', 'settings', 'plan']);
     }
 
     header.setContentProtection(isContentProtectionOn);

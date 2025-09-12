@@ -58,9 +58,9 @@ async function validateSession(sessionUuid) {
     // Transform Clerk user data to expected SQLite format
     const clerkUser = profileData.data;
     const transformedUser = {
-        uid: clerkUser.id, // Clerk uses 'id' instead of 'uid'
-        displayName: clerkUser.fullName || clerkUser.firstName || 'User', // Clerk uses 'fullName'
-        email: clerkUser.primaryEmailAddress?.emailAddress || clerkUser.email || 'no-email@example.com', // Clerk has nested email structure
+        uid: clerkUser.uid || clerkUser.id, // Try uid first, fallback to id for different Clerk versions
+        displayName: clerkUser.displayName || clerkUser.fullName || clerkUser.firstName || 'User', // Try displayName first
+        email: clerkUser.email || clerkUser.primaryEmailAddress?.emailAddress || 'no-email@example.com', // Try email first, fallback to nested structure
         plan: clerkUser.plan || 'free', // Keep additional Clerk data
         apiQuota: clerkUser.apiQuota || null,
     };

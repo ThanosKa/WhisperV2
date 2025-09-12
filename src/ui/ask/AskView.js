@@ -72,7 +72,7 @@ export class AskView extends LitElement {
         this.handleEscKey = this.handleEscKey.bind(this);
         this.handleCloseAskWindow = this.handleCloseAskWindow.bind(this);
         this.handleCloseIfNoContent = this.handleCloseIfNoContent.bind(this);
-        
+
         // Analyze timeout reference
         this.analyzeTimeout = null;
 
@@ -122,7 +122,7 @@ export class AskView extends LitElement {
         };
 
         if (window.api) {
-            window.api.askView.onShowTextInput(() => {
+            this._onShowTextInputFn = () => {
                 console.log('Show text input signal received');
                 if (!this.showTextInput) {
                     this.showTextInput = true;
@@ -130,8 +130,10 @@ export class AskView extends LitElement {
                 } else {
                     this.focusTextInput();
                 }
-            });
-            window.api.askView.onAskStateUpdate((event, newState) => {
+            };
+            window.api.askView.onShowTextInput(this._onShowTextInputFn);
+
+            this._onAskStateUpdateFn = (event, newState) => {
                 const wasLoading = this.isLoading;
                 this.currentResponse = newState.currentResponse;
                 this.currentQuestion = newState.currentQuestion;
@@ -164,7 +166,8 @@ export class AskView extends LitElement {
                         this.appendUserMessage(newState.currentQuestion);
                     }
                 }
-            });
+            };
+            window.api.askView.onAskStateUpdate(this._onAskStateUpdateFn);
             // Fallback UI for AI/stream errors
             this.handleAskStreamError = (event, payload) => {
                 console.warn('AskView: Stream error received', payload?.error);
@@ -212,12 +215,18 @@ export class AskView extends LitElement {
         Object.values(this.lineCopyTimeouts).forEach(timeout => clearTimeout(timeout));
 
         if (window.api) {
-            window.api.askView.removeOnAskStateUpdate(this.handleAskStateUpdate);
-            window.api.askView.removeOnShowTextInput(this.handleShowTextInput);
+            if (this._onAskStateUpdateFn) {
+                window.api.askView.removeOnAskStateUpdate(this._onAskStateUpdateFn);
+                this._onAskStateUpdateFn = null;
+            }
+            if (this._onShowTextInputFn) {
+                window.api.askView.removeOnShowTextInput(this._onShowTextInputFn);
+                this._onShowTextInputFn = null;
+            }
             if (this.handleAskStreamError) {
                 window.api.askView.removeOnAskStreamError(this.handleAskStreamError);
             }
-            console.log('✅ AskView: IPC event listeners removal needed');
+            console.log('✅ AskView: IPC event listeners removed');
         }
 
         // Detach scroll listener
@@ -322,7 +331,7 @@ export class AskView extends LitElement {
         this.wordCount = 0;
         this.interrupted = false;
         this._appendedCurrentQuestion = false;
-        
+
         // Clear analyze timeout
         if (this.analyzeTimeout) {
             clearTimeout(this.analyzeTimeout);
@@ -340,18 +349,18 @@ export class AskView extends LitElement {
 
     startAnalyzeState() {
         this.isAnalyzing = true;
-        
+
         // Clear any existing timeout
         if (this.analyzeTimeout) {
             clearTimeout(this.analyzeTimeout);
         }
-        
+
         // Transition to thinking after 800ms
         this.analyzeTimeout = setTimeout(() => {
             this.isAnalyzing = false;
             this.requestUpdate();
         }, 800);
-        
+
         this.requestUpdate();
     }
 
@@ -441,7 +450,12 @@ export class AskView extends LitElement {
 
         // Set streaming markdown parser
         if (this.currentResponse) {
-            this.renderStreamingMarkdown(responseContainer);
+            // Only initialize or re-render streaming view when actively streaming
+            // or when there is no existing rendered container (e.g., first paint).
+            const containerMissing = !this.smdContainer || !this.smdContainer.isConnected;
+            if (this.isStreaming || containerMissing) {
+                this.renderStreamingMarkdown(responseContainer);
+            }
         }
 
         // After updating content, recalculate window height

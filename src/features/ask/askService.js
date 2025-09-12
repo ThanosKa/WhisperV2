@@ -408,8 +408,16 @@ class AskService {
             }
             console.log(`[AskService] model: provider=${modelInfo.provider}, model=${modelInfo.model}`);
 
-            const screenshotResult = await captureScreenshot({ quality: 'medium' });
-            const screenshotBase64 = screenshotResult.success ? screenshotResult.base64 : null;
+            // Capture screenshot for manual Ask (sendMessageManual) OR when prompt equals 'Assist me'
+            // 'Assist me' is the Ask template's empty-input fallback and should include a screenshot
+            const isAssistMe = (userPrompt || '').trim().toLowerCase() === 'assist me';
+            const shouldCaptureScreenshot = this._forceDefaultProfileOnce === true || isAssistMe;
+            let screenshotBase64 = null;
+            if (shouldCaptureScreenshot) {
+                const screenshotResult = await captureScreenshot({ quality: 'medium' });
+                screenshotBase64 = screenshotResult.success ? screenshotResult.base64 : null;
+            }
+            const screenshotTaken = Boolean(screenshotBase64);
 
             const conversationHistory = this._formatConversationForPrompt(conversationHistoryRaw);
             console.log(
@@ -542,6 +550,7 @@ ${llmMessages}
                 });
 
                 await this._processStream(reader, askWin, sessionId, signal);
+                console.log(`[AskService] ✅ LLM stream finished. screenshotTaken=${screenshotTaken}`);
                 return { success: true };
             } catch (multimodalError) {
                 // 멀티모달 요청이 실패했고 스크린샷이 포함되어 있다면 텍스트만으로 재시도
@@ -573,6 +582,7 @@ ${llmMessages}
                     });
 
                     await this._processStream(fallbackReader, askWin, sessionId, signal);
+                    console.log(`[AskService] ✅ LLM stream finished (fallback). screenshotTaken=${screenshotTaken}`);
                     return { success: true };
                 } else {
                     // 다른 종류의 에러이거나 스크린샷이 없었다면 그대로 throw

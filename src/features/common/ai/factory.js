@@ -79,11 +79,7 @@ function getProviderClass(providerId) {
     // Map provider IDs to their actual exported class names
     const classNameMap = {
         openai: 'OpenAIProvider',
-        anthropic: 'AnthropicProvider',
         gemini: 'GeminiProvider',
-        deepgram: 'DeepgramProvider',
-        ollama: 'OllamaProvider',
-        whisper: 'WhisperProvider',
     };
 
     const className = classNameMap[providerId];

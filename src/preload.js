@@ -176,15 +176,6 @@ contextBridge.exposeInMainWorld('api', {
         removeApiKey: provider => ipcRenderer.invoke('model:remove-api-key', provider),
         setSelectedModel: data => ipcRenderer.invoke('model:set-selected-model', data),
 
-        // Ollama Management
-        getOllamaStatus: () => ipcRenderer.invoke('ollama:get-status'),
-        ensureOllamaReady: () => ipcRenderer.invoke('ollama:ensure-ready'),
-        shutdownOllama: graceful => ipcRenderer.invoke('ollama:shutdown', graceful),
-
-        // Whisper Management
-        getWhisperInstalledModels: () => ipcRenderer.invoke('whisper:get-installed-models'),
-        downloadWhisperModel: modelId => ipcRenderer.invoke('whisper:download-model', modelId),
-
         // Settings Management
         getPresets: () => ipcRenderer.invoke('settings:getPresets'),
         getAutoUpdate: () => ipcRenderer.invoke('settings:get-auto-update'),
@@ -203,9 +194,6 @@ contextBridge.exposeInMainWorld('api', {
         // App Control
         quitApplication: () => ipcRenderer.invoke('quit-application'),
 
-        // Progress Tracking
-        pullOllamaModel: modelName => ipcRenderer.invoke('ollama:pull-model', modelName),
-
         // Listeners
         onUserStateChanged: callback => ipcRenderer.on('user-state-changed', callback),
         removeOnUserStateChanged: callback => ipcRenderer.removeListener('user-state-changed', callback),
@@ -213,11 +201,6 @@ contextBridge.exposeInMainWorld('api', {
         removeOnSettingsUpdated: callback => ipcRenderer.removeListener('settings-updated', callback),
         onPresetsUpdated: callback => ipcRenderer.on('presets-updated', callback),
         removeOnPresetsUpdated: callback => ipcRenderer.removeListener('presets-updated', callback),
-        // 통합 LocalAI 이벤트 사용
-        onLocalAIInstallProgress: callback => ipcRenderer.on('localai:install-progress', callback),
-        removeOnLocalAIInstallProgress: callback => ipcRenderer.removeListener('localai:install-progress', callback),
-        onLocalAIInstallationComplete: callback => ipcRenderer.on('localai:installation-complete', callback),
-        removeOnLocalAIInstallationComplete: callback => ipcRenderer.removeListener('localai:installation-complete', callback),
     },
 
     // src/ui/app/content.html inline scripts

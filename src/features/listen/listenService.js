@@ -338,8 +338,6 @@ class ListenService {
                         model: modelInfo.model,
                         temperature: 0.2,
                         maxTokens: 64,
-                        usePortkey: modelInfo.provider === 'openai-glass',
-                        portkeyVirtualKey: modelInfo.provider === 'openai-glass' ? modelInfo.apiKey : undefined,
                     });
                     const messages = [
                         { role: 'system', content: 'You create concise, descriptive meeting titles. Respond with title only.' },

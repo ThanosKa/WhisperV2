@@ -229,37 +229,6 @@ class SttService {
                     isFinal: false,
                     timestamp: Date.now(),
                 });
-
-                // Deepgram
-            } else if (this.modelInfo.provider === 'deepgram') {
-                const text = message.channel?.alternatives?.[0]?.transcript;
-                if (!text || text.trim().length === 0) return;
-
-                const isFinal = message.is_final;
-                console.log(`[SttService-Me-Deepgram] Received: isFinal=${isFinal}, text="${text}"`);
-
-                if (isFinal) {
-                    // When final result arrives, clear current partial utterance
-                    // and execute debounce with final text.
-                    this.myCurrentUtterance = '';
-                    this.debounceMyCompletion(text);
-                } else {
-                    // For interim results, update screen in real-time.
-                    if (this.myCompletionTimer) clearTimeout(this.myCompletionTimer);
-                    this.myCompletionTimer = null;
-
-                    this.myCurrentUtterance = text;
-
-                    const continuousText = (this.myCompletionBuffer + ' ' + this.myCurrentUtterance).trim();
-
-                    this.sendToRenderer('stt-update', {
-                        speaker: 'Me',
-                        text: continuousText,
-                        isPartial: true,
-                        isFinal: false,
-                        timestamp: Date.now(),
-                    });
-                }
             } else {
                 const type = message.type;
                 const text = message.transcript || message.delta || (message.alternatives && message.alternatives[0]?.transcript) || '';
@@ -372,33 +341,6 @@ class SttService {
                     isFinal: false,
                     timestamp: Date.now(),
                 });
-
-                // Deepgram
-            } else if (this.modelInfo.provider === 'deepgram') {
-                const text = message.channel?.alternatives?.[0]?.transcript;
-                if (!text || text.trim().length === 0) return;
-
-                const isFinal = message.is_final;
-
-                if (isFinal) {
-                    this.theirCurrentUtterance = '';
-                    this.debounceTheirCompletion(text);
-                } else {
-                    if (this.theirCompletionTimer) clearTimeout(this.theirCompletionTimer);
-                    this.theirCompletionTimer = null;
-
-                    this.theirCurrentUtterance = text;
-
-                    const continuousText = (this.theirCompletionBuffer + ' ' + this.theirCurrentUtterance).trim();
-
-                    this.sendToRenderer('stt-update', {
-                        speaker: 'Them',
-                        text: continuousText,
-                        isPartial: true,
-                        isFinal: false,
-                        timestamp: Date.now(),
-                    });
-                }
             } else {
                 const type = message.type;
                 const text = message.transcript || message.delta || (message.alternatives && message.alternatives[0]?.transcript) || '';
@@ -555,8 +497,6 @@ class SttService {
         let payload;
         if (modelInfo.provider === 'gemini') {
             payload = { audio: { data, mimeType: mimeType || 'audio/pcm;rate=24000' } };
-        } else if (modelInfo.provider === 'deepgram') {
-            payload = Buffer.from(data, 'base64');
         } else {
             payload = data;
         }
@@ -580,8 +520,6 @@ class SttService {
         let payload;
         if (modelInfo.provider === 'gemini') {
             payload = { audio: { data, mimeType: mimeType || 'audio/pcm;rate=24000' } };
-        } else if (modelInfo.provider === 'deepgram') {
-            payload = Buffer.from(data, 'base64');
         } else {
             payload = data;
         }
@@ -681,8 +619,6 @@ class SttService {
                         let payload;
                         if (modelInfo.provider === 'gemini') {
                             payload = { audio: { data: base64Data, mimeType: 'audio/pcm;rate=24000' } };
-                        } else if (modelInfo.provider === 'deepgram') {
-                            payload = Buffer.from(base64Data, 'base64');
                         } else {
                             payload = base64Data;
                         }

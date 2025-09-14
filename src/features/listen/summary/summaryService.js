@@ -170,9 +170,10 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
                 await sessionRepository.touch(this.currentSessionId);
             }
 
-            const modelInfo = await modelStateService.getCurrentModelInfo('llm');
-            if (!modelInfo || !modelInfo.apiKey) {
-                throw new Error('AI model or API key is not configured.');
+            let modelInfo = await modelStateService.getCurrentModelInfo('llm');
+            if (!modelInfo) {
+                // Default to server-backed Gemini LLM
+                modelInfo = { provider: 'gemini', model: 'gemini-2.5-flash-lite', apiKey: null };
             }
             // console.log(`🤖 Sending analysis request to ${modelInfo.provider} using model ${modelInfo.model}`);
 

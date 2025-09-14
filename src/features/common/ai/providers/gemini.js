@@ -1,5 +1,6 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { GoogleGenAI } = require('@google/genai');
+const authService = require('../../services/authService');
 
 class GeminiProvider {
     static async validateApiKey(key) {
@@ -66,136 +67,78 @@ async function createSTT({ apiKey, language = 'en-US', callbacks = {}, ...config
 /**
  * Creates a Gemini LLM instance with proper text response handling
  */
-function createLLM({ apiKey, model = 'gemini-2.5-flash', temperature = 0.7, maxTokens = 8192, ...config }) {
-    const client = new GoogleGenerativeAI(apiKey);
+function createLLM({ apiKey, model = 'gemini-2.5-flash-lite', temperature = 0.7, maxTokens = 4096, ...config }) {
+    const baseUrl = (process.env.API_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
+
+    // Preserve multimodal content: pass through messages as-is
+    const passthroughMessages = messages => messages || [];
+
+    const callChat = async messages => {
+        try {
+            const hasImage = JSON.stringify(messages || []).includes('image_url') || JSON.stringify(messages || []).includes('inlineData');
+            const approxBytes = (() => {
+                try {
+                    const img = (messages || [])
+                        .flatMap(m => (Array.isArray(m?.content) ? m.content : []))
+                        .find(p => p?.image_url?.url || p?.inlineData?.data);
+                    const b64 = img?.image_url?.url?.split(',')[1] || img?.inlineData?.data;
+                    return b64 ? b64.length : 0;
+                } catch (_) {
+                    return 0;
+                }
+            })();
+            console.log(`[Gemini][chat] msgs=${messages?.length || 0} hasImage=${hasImage} imageB64Len=${approxBytes}`);
+        } catch (_) {}
+        const sessionUuid = authService?.getCurrentUser()?.sessionUuid || null;
+        const reqId = Math.random().toString(36).slice(2, 8);
+        if (!sessionUuid) {
+            console.warn(`[LLM][${reqId}] Missing session UUID for chat request`);
+            throw new Error('Not authenticated: missing session. Please sign in.');
+        }
+        console.log(`[LLM][${reqId}] POST ${baseUrl}/api/llm/chat`);
+        const res = await fetch(`${baseUrl}/api/llm/chat`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(sessionUuid ? { 'X-Session-UUID': sessionUuid } : {}),
+            },
+            body: JSON.stringify({
+                messages: passthroughMessages(messages),
+                // model omitted — server selects default
+                temperature,
+                maxTokens,
+            }),
+        });
+
+        const text = await res.text();
+        let data = null;
+        try {
+            data = JSON.parse(text);
+        } catch (_) {}
+        if (!res.ok || !data?.success) {
+            console.error(`[LLM][${reqId}] Chat error status=${res.status} body=${text?.slice(0, 300)}`);
+            const err = (data && data.error) || `${res.status} ${res.statusText}`;
+            throw new Error(`LLM chat API error: ${err}`);
+        }
+        console.log(
+            `[LLM][${reqId}] Chat OK contentPreview="${(data.content || '').slice(0, 80)}" tokens=${data.usageMetadata?.totalTokens ?? 'n/a'}`
+        );
+        return { content: data.content, raw: data };
+    };
 
     return {
+        // For compatibility with existing usage
+        chat: async messages => callChat(messages),
         generateContent: async parts => {
-            const geminiModel = client.getGenerativeModel({
-                model: model,
-                generationConfig: {
-                    temperature,
-                    maxOutputTokens: maxTokens,
-                    // Ensure we get text responses, not JSON
-                    responseMimeType: 'text/plain',
-                },
-            });
-
-            const systemPrompt = '';
-            const userContent = [];
-
-            for (const part of parts) {
-                if (typeof part === 'string') {
-                    // Don't automatically assume strings starting with "You are" are system prompts
-                    // Check if it's explicitly marked as a system instruction
-                    userContent.push(part);
-                } else if (part.inlineData) {
-                    userContent.push({
-                        inlineData: {
-                            mimeType: part.inlineData.mimeType,
-                            data: part.inlineData.data,
-                        },
-                    });
-                }
-            }
-
-            try {
-                const result = await geminiModel.generateContent(userContent);
-                const response = await result.response;
-
-                console.log('[Gemini Provider] Non-streaming usage metadata:', response.usageMetadata);
-
-                // Return plain text, not wrapped in JSON structure
-                return {
-                    response: {
-                        text: () => response.text(),
-                    },
-                };
-            } catch (error) {
-                console.error('Gemini API error:', error);
-                throw error;
-            }
-        },
-
-        chat: async messages => {
-            // Filter out any system prompts that might be causing JSON responses
-            let systemInstruction = '';
-            const history = [];
-            let lastMessage;
-
-            messages.forEach((msg, index) => {
-                if (msg.role === 'system') {
-                    // Clean system instruction - avoid JSON formatting requests
-                    systemInstruction = msg.content
-                        .replace(/respond in json/gi, '')
-                        .replace(/format.*json/gi, '')
-                        .replace(/return.*json/gi, '');
-
-                    // Add explicit instruction for natural text
-                    if (!systemInstruction.includes('respond naturally')) {
-                        systemInstruction += '\n\nRespond naturally in plain text, not in JSON or structured format.';
-                    }
-                    return;
-                }
-
-                const role = msg.role === 'user' ? 'user' : 'model';
-
-                if (index === messages.length - 1) {
-                    lastMessage = msg;
-                } else {
-                    history.push({ role, parts: [{ text: msg.content }] });
-                }
-            });
-
-            const geminiModel = client.getGenerativeModel({
-                model: model,
-                systemInstruction:
-                    systemInstruction ||
-                    'Respond naturally in plain text format. Do not use JSON or structured responses unless specifically requested.',
-                generationConfig: {
-                    temperature: temperature,
-                    maxOutputTokens: maxTokens,
-                    // Force plain text responses
-                    responseMimeType: 'text/plain',
-                },
-            });
-
-            const chat = geminiModel.startChat({
-                history: history,
-            });
-
-            let content = lastMessage.content;
-
-            // Handle multimodal content
-            if (Array.isArray(content)) {
-                const geminiContent = [];
-                for (const part of content) {
-                    if (typeof part === 'string') {
-                        geminiContent.push(part);
-                    } else if (part.type === 'text') {
-                        geminiContent.push(part.text);
-                    } else if (part.type === 'image_url' && part.image_url) {
-                        const base64Data = part.image_url.url.split(',')[1];
-                        geminiContent.push({
-                            inlineData: {
-                                mimeType: 'image/png',
-                                data: base64Data,
-                            },
-                        });
-                    }
-                }
-                content = geminiContent;
-            }
-
-            const result = await chat.sendMessage(content);
-            const response = await result.response;
-
-            console.log('[Gemini Provider] Chat usage metadata:', response.usageMetadata);
-
-            // Return plain text content
+            // Convert parts to a single user message
+            const text = (parts || [])
+                .map(p => (typeof p === 'string' ? p : p?.inlineData ? '' : ''))
+                .filter(Boolean)
+                .join('\n');
             return {
-                content: response.text(),
-                raw: result,
+                response: {
+                    text: async () => (await callChat([{ role: 'user', content: text }])).content,
+                },
             };
         },
     };
@@ -204,135 +147,129 @@ function createLLM({ apiKey, model = 'gemini-2.5-flash', temperature = 0.7, maxT
 /**
  * Creates a Gemini streaming LLM instance with text response fix
  */
-function createStreamingLLM({ apiKey, model = 'gemini-2.5-flash', temperature = 0.7, maxTokens = 8192, ...config }) {
-    const client = new GoogleGenerativeAI(apiKey);
+/**
+ * Creates a Gemini streaming LLM instance with FIXED response handling
+ */
+function createStreamingLLM({ apiKey, model = 'gemini-2.5-flash-lite', temperature = 0.7, maxTokens = 4096, ...config }) {
+    const baseUrl = (process.env.API_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
+
+    // Preserve multimodal content for streaming too
+    const passthroughMessages = messages => messages || [];
 
     return {
         streamChat: async (messages, options = {}) => {
-            const signal = options.signal;
-
-            console.log('[Gemini Provider] Starting streaming request');
-
-            let systemInstruction = '';
-            const nonSystemMessages = [];
-
-            for (const msg of messages) {
-                if (msg.role === 'system') {
-                    // Clean and modify system instruction
-                    systemInstruction = msg.content
-                        .replace(/respond in json/gi, '')
-                        .replace(/format.*json/gi, '')
-                        .replace(/return.*json/gi, '');
-
-                    if (!systemInstruction.includes('respond naturally')) {
-                        systemInstruction += '\n\nRespond naturally in plain text, not in JSON or structured format.';
+            try {
+                const hasImage = JSON.stringify(messages || []).includes('image_url') || JSON.stringify(messages || []).includes('inlineData');
+                const approxBytes = (() => {
+                    try {
+                        const img = (messages || [])
+                            .flatMap(m => (Array.isArray(m?.content) ? m.content : []))
+                            .find(p => p?.image_url?.url || p?.inlineData?.data);
+                        const b64 = img?.image_url?.url?.split(',')[1] || img?.inlineData?.data;
+                        return b64 ? b64.length : 0;
+                    } catch (_) {
+                        return 0;
                     }
-                } else {
-                    nonSystemMessages.push(msg);
-                }
+                })();
+                console.log(`[Gemini][stream] msgs=${messages?.length || 0} hasImage=${hasImage} imageB64Len=${approxBytes}`);
+            } catch (_) {}
+            const signal = options.signal;
+            const sessionUuid = authService?.getCurrentUser()?.sessionUuid || null;
+            if (!sessionUuid) {
+                throw new Error('Not authenticated: missing session. Please sign in.');
             }
 
-            const geminiModel = client.getGenerativeModel({
-                model: model,
-                systemInstruction:
-                    systemInstruction ||
-                    'Respond naturally in plain text format. Do not use JSON or structured responses unless specifically requested.',
-                generationConfig: {
-                    temperature,
-                    maxOutputTokens: maxTokens || 8192,
-                    // Force plain text responses
-                    responseMimeType: 'text/plain',
+            const reqId = Math.random().toString(36).slice(2, 8);
+            console.log(`[LLM][${reqId}] STREAM POST ${baseUrl}/api/llm/stream`);
+            try {
+                const nm = passthroughMessages(messages);
+                const hasImageAfterNormalize = JSON.stringify(nm).includes('image_url') || JSON.stringify(nm).includes('inlineData');
+                console.log(`[LLM][${reqId}] passthroughMessages -> msgs=${nm?.length || 0} hasImage=${hasImageAfterNormalize}`);
+            } catch (_) {}
+            const response = await fetch(`${baseUrl}/api/llm/stream`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(sessionUuid ? { 'X-Session-UUID': sessionUuid } : {}),
                 },
+                body: JSON.stringify({
+                    messages: passthroughMessages(messages),
+                    // model omitted — server selects default
+                    temperature,
+                }),
+                signal,
             });
+
+            if (!response.ok) {
+                let errBody = '';
+                try {
+                    errBody = await response.text();
+                } catch (_) {}
+                console.error(`[LLM][${reqId}] Stream error status=${response.status} body=${(errBody || '').slice(0, 300)}`);
+                throw new Error(`LLM stream API error: ${response.status} ${response.statusText}`);
+            }
+
+            // FIXED: Server now sends properly formatted JSON, so just pass it through
+            const reader = response.body?.getReader?.();
+            if (!reader) return response; // Fallback: return as-is
 
             const stream = new ReadableStream({
                 async start(controller) {
+                    const decoder = new TextDecoder();
+                    const encoder = new TextEncoder();
+                    let buffer = '';
+                    let count = 0;
                     try {
-                        const lastMessage = nonSystemMessages[nonSystemMessages.length - 1];
-                        let geminiContent = [];
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
 
-                        if (Array.isArray(lastMessage.content)) {
-                            for (const part of lastMessage.content) {
-                                if (typeof part === 'string') {
-                                    geminiContent.push(part);
-                                } else if (part.type === 'text') {
-                                    geminiContent.push(part.text);
-                                } else if (part.type === 'image_url' && part.image_url) {
-                                    const base64Data = part.image_url.url.split(',')[1];
-                                    geminiContent.push({
-                                        inlineData: {
-                                            mimeType: 'image/png',
-                                            data: base64Data,
-                                        },
-                                    });
+                            buffer += decoder.decode(value, { stream: true });
+                            const lines = buffer.split(/\r?\n/);
+                            buffer = lines.pop() || '';
+
+                            for (const line of lines) {
+                                const trimmed = line.trim();
+                                if (!trimmed.startsWith('data:')) continue;
+                                const data = trimmed.replace(/^data:\s?/, '');
+                                if (!data) continue;
+                                if (data === '[DONE]') {
+                                    console.log(`[LLM][${reqId}] Stream DONE`);
+                                    controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                                    continue;
+                                }
+                                count++;
+
+                                // FIXED: Server now sends JSON, so parse it to extract content for logging
+                                try {
+                                    const parsedData = JSON.parse(data);
+                                    const content = parsedData.choices?.[0]?.delta?.content || '';
+
+                                    if (count <= 3) {
+                                        console.log(`[LLM][${reqId}] server content: "${content.slice(0, 80)}"`);
+                                    } else if (count === 4) {
+                                        console.log(`[LLM][${reqId}] ...(muted further stream logs)`);
+                                    }
+
+                                    // Pass through the already properly formatted JSON from server
+                                    controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+                                } catch (parseError) {
+                                    // Fallback: if server sends raw text (shouldn't happen now)
+                                    console.log(`[LLM][${reqId}] Raw text fallback: "${data.slice(0, 80)}"`);
+                                    const payload = JSON.stringify({ choices: [{ delta: { content: data } }] });
+                                    controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
                                 }
                             }
-                        } else {
-                            geminiContent = [lastMessage.content];
-                        }
-
-                        const contentParts = geminiContent.map(part => {
-                            if (typeof part === 'string') {
-                                return { text: part };
-                            } else if (part.inlineData) {
-                                return { inlineData: part.inlineData };
-                            }
-                            return part;
-                        });
-
-                        const result = await geminiModel.generateContentStream({
-                            contents: [
-                                {
-                                    role: 'user',
-                                    parts: contentParts,
-                                },
-                            ],
-                        });
-
-                        for await (const chunk of result.stream) {
-                            if (signal?.aborted) {
-                                console.log('[Gemini Provider] Stream aborted by signal.');
-                                break;
-                            }
-                            const chunkText = chunk.text() || '';
-
-                            // Format as SSE data - this should now be plain text
-                            const data = JSON.stringify({
-                                choices: [
-                                    {
-                                        delta: {
-                                            content: chunkText,
-                                        },
-                                    },
-                                ],
-                            });
-                            try {
-                                controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
-                            } catch (e) {
-                                if (e.name === 'TypeError') {
-                                    // Stream was probably closed.
-                                    console.log('[Gemini Provider] Stream closed, cannot enqueue.');
-                                    break;
-                                }
-                                throw e;
-                            }
-                        }
-
-                        if (!signal?.aborted) {
-                            try {
-                                const finalResponse = await result.response;
-                                if (finalResponse.usageMetadata) {
-                                    console.log('[Gemini Provider] Streaming usage metadata:', finalResponse.usageMetadata);
-                                }
-                            } catch (e) {
-                                console.error('[Gemini Provider] Error getting usage metadata after stream:', e);
-                            }
-                            controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
-                            controller.close();
                         }
                     } catch (error) {
-                        console.error('[Gemini Provider] Streaming error:', error);
+                        console.error(`[LLM][${reqId}] Stream reader error:`, error?.message || error);
                         controller.error(error);
+                        return;
+                    } finally {
+                        console.log(`[LLM][${reqId}] Stream closed. chunks=${count}`);
+                        try {
+                            controller.close();
+                        } catch (_) {}
                     }
                 },
             });

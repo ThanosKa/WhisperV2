@@ -18,7 +18,8 @@ class ModelStateService extends EventEmitter {
         await this._initializeEncryption();
         await this._runMigrations();
 
-        // Load API keys from .env file
+        // Load API keys from .env file.
+        // LLM via Gemini uses server (no local key), but STT still requires provider keys.
         if (process.env.OPENAI_API_KEY) {
             await this.setApiKey('openai', process.env.OPENAI_API_KEY);
         }
@@ -130,9 +131,9 @@ class ModelStateService extends EventEmitter {
 
             if (currentModelId && !forceReselection) {
                 const provider = this.getProviderForModel(currentModelId, type);
-                // --- MODIFIED: Check process.env for key existence ---
+                // For LLM: Gemini no longer requires a key (server-backed). For STT still require key.
                 const apiKey = provider === 'openai' ? process.env.OPENAI_API_KEY : process.env.GEMINI_API_KEY;
-                if (provider && apiKey) {
+                if (provider && (type === 'llm' ? true : !!apiKey)) {
                     isCurrentModelValid = true;
                 }
             }
@@ -272,17 +273,27 @@ class ModelStateService extends EventEmitter {
     }
 
     async getAvailableModels(type) {
-        const allSettings = await providerSettingsRepository.getAll();
         const available = [];
         const modelListKey = type === 'llm' ? 'llmModels' : 'sttModels';
 
         for (const providerId in PROVIDERS) {
-            // --- MODIFIED: Check process.env for key existence ---
-            const apiKey = providerId === 'openai' ? process.env.OPENAI_API_KEY : process.env.GEMINI_API_KEY;
-            if (apiKey && PROVIDERS[providerId]?.[modelListKey]) {
-                available.push(...PROVIDERS[providerId][modelListKey]);
+            const hasModels = PROVIDERS[providerId]?.[modelListKey]?.length > 0;
+            if (!hasModels) continue;
+
+            if (type === 'llm') {
+                // LLM: Gemini is always available (server-backed). OpenAI requires key.
+                if (providerId === 'gemini') {
+                    available.push(...PROVIDERS[providerId][modelListKey]);
+                } else if (providerId === 'openai' && process.env.OPENAI_API_KEY) {
+                    available.push(...PROVIDERS[providerId][modelListKey]);
+                }
+            } else {
+                // STT: require key for both providers
+                const apiKey = providerId === 'openai' ? process.env.OPENAI_API_KEY : process.env.GEMINI_API_KEY;
+                if (apiKey) available.push(...PROVIDERS[providerId][modelListKey]);
             }
         }
+
         return [...new Map(available.map(item => [item.id, item])).values()];
     }
 
@@ -293,12 +304,13 @@ class ModelStateService extends EventEmitter {
         const model = type === 'llm' ? activeSetting.selected_llm_model : activeSetting.selected_stt_model;
         if (!model) return null;
 
-        // --- MODIFIED: Force read from process.env, never from database ---
+        // Read keys from env.
+        // LLM: Gemini uses server and needs no key; STT: Gemini requires GEMINI_API_KEY.
         let apiKey = null;
         if (activeSetting.provider === 'openai') {
             apiKey = process.env.OPENAI_API_KEY;
         } else if (activeSetting.provider === 'gemini') {
-            apiKey = process.env.GEMINI_API_KEY;
+            apiKey = type === 'stt' ? process.env.GEMINI_API_KEY : null;
         }
         // ---
 
@@ -354,17 +366,13 @@ class ModelStateService extends EventEmitter {
     }
 
     async areProvidersConfigured() {
-        // --- MODIFIED: Configuration is now determined SOLELY by the presence of keys in process.env ---
-        const hasLlmKey =
-            (process.env.OPENAI_API_KEY && PROVIDERS['openai']?.llmModels?.length > 0) ||
-            (process.env.GEMINI_API_KEY && PROVIDERS['gemini']?.llmModels?.length > 0);
+        // LLM is considered configured if either OpenAI key exists or Gemini server mode is available (always on client side).
+        const llmConfigured = !!process.env.OPENAI_API_KEY || true; // Gemini server-backed path
 
-        const hasSttKey =
-            (process.env.OPENAI_API_KEY && PROVIDERS['openai']?.sttModels?.length > 0) ||
-            (process.env.GEMINI_API_KEY && PROVIDERS['gemini']?.sttModels?.length > 0);
+        // STT still requires key presence
+        const sttConfigured = !!process.env.OPENAI_API_KEY || !!process.env.GEMINI_API_KEY;
 
-        return hasLlmKey && hasSttKey;
-        // ---
+        return llmConfigured && sttConfigured;
     }
 }
 

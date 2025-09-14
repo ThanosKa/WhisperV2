@@ -303,7 +303,7 @@ class ListenService {
     }
 
     async _generateAndSaveMeetingTitle(sessionId) {
-        // Prefer summary TL;DR, then fall back to transcript snippet; 
+        // Prefer summary TL;DR, then fall back to transcript snippet;
         // if LLM available, ask for a short title in the transcript language.
         try {
             const summaryRepository = require('./summary/repositories');
@@ -341,7 +341,10 @@ class ListenService {
                     });
                     const messages = [
                         { role: 'system', content: 'You create concise, descriptive meeting titles. Respond with title only.' },
-                        { role: 'user', content: `Create a short (max 8 words) meeting title in the same language as this content.\n\nContent:\n${baseCandidate}` },
+                        {
+                            role: 'user',
+                            content: `Create a short (max 8 words) meeting title in the same language as this content.\n\nContent:\n${baseCandidate}`,
+                        },
                     ];
                     const completion = await llm.chat(messages);
                     title = (completion?.content || '').split('\n')[0].replace(/^"|"$/g, '').trim();
@@ -353,7 +356,12 @@ class ListenService {
             // 3) Heuristic fallback if needed
             if (!title) {
                 const from = baseCandidate.split(/\n+/)[0];
-                title = (from || '').replace(/[\p{Emoji}\p{Extended_Pictographic}]/gu, '').split(/\s+/).slice(0, 10).join(' ').trim();
+                title = (from || '')
+                    .replace(/[\p{Emoji}\p{Extended_Pictographic}]/gu, '')
+                    .split(/\s+/)
+                    .slice(0, 10)
+                    .join(' ')
+                    .trim();
                 if (title) title = title.charAt(0).toUpperCase() + title.slice(1);
             }
 

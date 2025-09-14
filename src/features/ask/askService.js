@@ -402,9 +402,10 @@ class AskService {
             await askRepository.addAiMessage({ sessionId, role: 'user', content: userPrompt.trim() });
             console.log(`[AskService] DB: Saved user prompt to session ${sessionId}`);
 
-            const modelInfo = await modelStateService.getCurrentModelInfo('llm');
-            if (!modelInfo || !modelInfo.apiKey) {
-                throw new Error('AI model or API key not configured.');
+            let modelInfo = await modelStateService.getCurrentModelInfo('llm');
+            if (!modelInfo) {
+                // Default to server-backed Gemini LLM
+                modelInfo = { provider: 'gemini', model: 'gemini-2.5-flash-lite', apiKey: null };
             }
             console.log(`[AskService] model: provider=${modelInfo.provider}, model=${modelInfo.model}`);
 
@@ -474,6 +475,12 @@ class AskService {
             ];
 
             if (screenshotBase64) {
+                try {
+                    console.log('[AskService] screenshot present:', {
+                        b64Len: screenshotBase64.length,
+                        head: screenshotBase64.slice(0, 32),
+                    });
+                } catch (_) {}
                 messages[1].content.push({
                     type: 'image_url',
                     image_url: { url: `data:image/jpeg;base64,${screenshotBase64}` },
@@ -481,7 +488,11 @@ class AskService {
             }
 
             // concise request log
-            console.log('[AskService] sending request to llm');
+            try {
+                const parts = Array.isArray(messages?.[1]?.content) ? messages[1].content.map(c => c.type || 'text') : ['text'];
+                const hasImagePart = parts.includes('image_url');
+                console.log('[AskService] sending request to llm', { parts, hasImagePart });
+            } catch (_) { console.log('[AskService] sending request to llm'); }
 
             // Write LLM input to response.txt
             try {

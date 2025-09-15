@@ -1,7 +1,6 @@
 const llmClient = require('../../common/ai/llmClient');
 const sessionRepository = require('../../common/repositories/session');
 const summaryRepository = require('./repositories');
-const modelStateService = require('../../common/services/modelStateService');
 const config = require('../../common/config/config');
 const { getSystemPrompt } = require('../../common/prompts/promptBuilder');
 
@@ -227,13 +226,14 @@ ${responseText}
 
             if (this.currentSessionId) {
                 try {
-                    summaryRepository.saveSummary({
+                    await summaryRepository.saveSummary({
                         sessionId: this.currentSessionId,
                         text: responseText,
                         tldr: structuredData.summary.join('\n'),
                         bullet_json: JSON.stringify([]), // Empty array for topic bullets
                         action_json: JSON.stringify(structuredData.actions),
-                        model: modelInfo.model,
+                        // Server-side LLM migration: no client modelInfo available
+                        model: 'server',
                     });
                 } catch (err) {
                     console.error('[DB] Failed to save summary:', err);

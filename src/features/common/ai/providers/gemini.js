@@ -68,7 +68,7 @@ async function createSTT({ apiKey, language = 'en-US', callbacks = {}, ...config
  * Creates a Gemini LLM instance with proper text response handling
  */
 function createLLM({ apiKey, model = 'gemini-2.5-flash-lite', temperature = 0.7, maxTokens = 4096, ...config }) {
-    const baseUrl = (process.env.API_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
+    const baseUrl = (process.env.API_BASE_URL || 'https://www.app-whisper.com').replace(/\/$/, '');
 
     // Preserve multimodal content: pass through messages as-is
     const passthroughMessages = messages => messages || [];
@@ -104,9 +104,7 @@ function createLLM({ apiKey, model = 'gemini-2.5-flash-lite', temperature = 0.7,
             },
             body: JSON.stringify({
                 messages: passthroughMessages(messages),
-                // model omitted — server selects default
-                temperature,
-                maxTokens,
+                // model, params omitted — server selects defaults
             }),
         });
 
@@ -151,7 +149,7 @@ function createLLM({ apiKey, model = 'gemini-2.5-flash-lite', temperature = 0.7,
  * Creates a Gemini streaming LLM instance with FIXED response handling
  */
 function createStreamingLLM({ apiKey, model = 'gemini-2.5-flash-lite', temperature = 0.7, maxTokens = 4096, ...config }) {
-    const baseUrl = (process.env.API_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
+    const baseUrl = (process.env.API_BASE_URL || 'https://www.app-whisper.com').replace(/\/$/, '');
 
     // Preserve multimodal content for streaming too
     const passthroughMessages = messages => messages || [];
@@ -194,8 +192,7 @@ function createStreamingLLM({ apiKey, model = 'gemini-2.5-flash-lite', temperatu
                 },
                 body: JSON.stringify({
                     messages: passthroughMessages(messages),
-                    // model omitted — server selects default
-                    temperature,
+                    // model, params omitted — server selects defaults
                 }),
                 signal,
             });

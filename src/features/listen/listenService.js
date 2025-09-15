@@ -331,24 +331,16 @@ class ListenService {
             // 2) Try LLM for best-quality title
             let title = '';
             try {
-                const modelInfo = await modelStateService.getCurrentModelInfo('llm');
-                if (modelInfo && modelInfo.apiKey) {
-                    const llm = createLLM(modelInfo.provider, {
-                        apiKey: modelInfo.apiKey,
-                        model: modelInfo.model,
-                        temperature: 0.2,
-                        maxTokens: 64,
-                    });
-                    const messages = [
-                        { role: 'system', content: 'You create concise, descriptive meeting titles. Respond with title only.' },
-                        {
-                            role: 'user',
-                            content: `Create a short (max 8 words) meeting title in the same language as this content.\n\nContent:\n${baseCandidate}`,
-                        },
-                    ];
-                    const completion = await llm.chat(messages);
-                    title = (completion?.content || '').split('\n')[0].replace(/^"|"$/g, '').trim();
-                }
+                const messages = [
+                    { role: 'system', content: 'You create concise, descriptive meeting titles. Respond with title only.' },
+                    {
+                        role: 'user',
+                        content: `Create a short (max 8 words) meeting title in the same language as this content.\n\nContent:\n${baseCandidate}`,
+                    },
+                ];
+                const { chat } = require('../common/ai/serverLlm');
+                const result = await chat(messages);
+                title = (result?.content || '').split('\n')[0].replace(/^"|"$/g, '').trim();
             } catch (e) {
                 console.warn('[ListenService] LLM title generation failed, using heuristic:', e.message);
             }

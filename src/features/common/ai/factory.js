@@ -18,12 +18,6 @@
  * @type {Object.<string, Provider>}
  */
 const PROVIDERS = {
-    openai: {
-        name: 'OpenAI',
-        handler: () => require('./providers/openai'),
-        llmModels: [{ id: 'gpt-4.1', name: 'GPT-4.1' }],
-        sttModels: [{ id: 'gpt-4o-mini-transcribe', name: 'GPT-4o Mini Transcribe' }],
-    },
     gemini: {
         name: 'Gemini',
         handler: () => require('./providers/gemini'),
@@ -78,7 +72,6 @@ function getProviderClass(providerId) {
 
     // Map provider IDs to their actual exported class names
     const classNameMap = {
-        openai: 'OpenAIProvider',
         gemini: 'GeminiProvider',
     };
 

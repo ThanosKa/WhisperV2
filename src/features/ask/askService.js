@@ -532,15 +532,10 @@ ${llmMessages}
                 console.error('[AskService] Failed to write response.txt:', error);
             }
 
-            const streamingLLM = createStreamingLLM(modelInfo.provider, {
-                apiKey: modelInfo.apiKey,
-                model: modelInfo.model,
-                temperature: 0.7,
-                maxTokens: 2048,
-            });
+            const { stream: serverStream } = require('../common/ai/serverLlm');
 
             try {
-                const response = await streamingLLM.streamChat(messages, { signal });
+                const response = await serverStream(messages, { signal });
 
                 console.log('📡 [AskService] LLM responded - starting to process stream...');
 
@@ -577,7 +572,7 @@ ${llmMessages}
                         },
                     ];
 
-                    const fallbackResponse = await streamingLLM.streamChat(textOnlyMessages, { signal });
+                    const fallbackResponse = await serverStream(textOnlyMessages, { signal });
                     const askWin = getWindowPool()?.get('ask');
 
                     if (!askWin || askWin.isDestroyed()) {

@@ -170,12 +170,7 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
                 await sessionRepository.touch(this.currentSessionId);
             }
 
-            let modelInfo = await modelStateService.getCurrentModelInfo('llm');
-            if (!modelInfo) {
-                // Default to server-backed Gemini LLM
-                modelInfo = { provider: 'gemini', model: 'gemini-2.5-flash-lite', apiKey: null };
-            }
-            // console.log(`🤖 Sending analysis request to ${modelInfo.provider} using model ${modelInfo.model}`);
+            // LLM is server-backed; client will call server API directly
 
             const messages = [
                 {
@@ -189,17 +184,9 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
             ];
 
             console.log('🤖 Sending analysis request to AI...');
-
-            const llm = createLLM(modelInfo.provider, {
-                apiKey: modelInfo.apiKey,
-                model: modelInfo.model,
-                temperature: 0.7,
-                maxTokens: 1024,
-            });
-
-            const completion = await llm.chat(messages);
-
-            const responseText = completion.content;
+            const { chat } = require('../../common/ai/serverLlm');
+            const result = await chat(messages);
+            const responseText = result.content;
 
             // Write LLM input and output to analysis.txt
             try {
@@ -245,7 +232,7 @@ ${responseText}
                         tldr: structuredData.summary.join('\n'),
                         bullet_json: JSON.stringify([]), // Empty array for topic bullets
                         action_json: JSON.stringify(structuredData.actions),
-                        model: modelInfo.model,
+                        model: 'server-default',
                     });
                 } catch (err) {
                     console.error('[DB] Failed to save summary:', err);

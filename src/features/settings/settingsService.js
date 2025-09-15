@@ -292,7 +292,7 @@ async function deletePreset(id) {
     }
 }
 
-async function saveApiKey(apiKey, provider = 'openai') {
+async function saveApiKey(apiKey, provider = 'gemini') {
     try {
         // Use ModelStateService as the single source of truth for API key management
         const modelStateService = global.modelStateService;
@@ -324,8 +324,8 @@ async function removeApiKey() {
             throw new Error('ModelStateService not initialized');
         }
 
-        // Remove all API keys for all providers
-        const providers = ['openai', 'gemini'];
+        // Remove all API keys for all providers (Gemini only)
+        const providers = ['gemini'];
         for (const provider of providers) {
             await modelStateService.removeApiKey(provider);
         }

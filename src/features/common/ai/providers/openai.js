@@ -243,9 +243,5 @@ function createStreamingLLM({ apiKey, model = 'gpt-4.1', temperature = 0.7, maxT
     };
 }
 
-module.exports = {
-    OpenAIProvider,
-    createSTT,
-    createLLM,
-    createStreamingLLM,
-};
+// OpenAI provider is deprecated/disabled in this build. Export nothing.
+module.exports = {};

@@ -70,7 +70,7 @@ router.post('/find-or-create', async (req, res) => {
 
 router.post('/api-key', async (req, res) => {
     try {
-        const { apiKey, provider = 'openai' } = req.body;
+        const { apiKey, provider = 'gemini' } = req.body;
         await ipcRequest(req, 'save-api-key', { apiKey, provider });
         res.json({ message: 'API key saved successfully' });
     } catch (error) {

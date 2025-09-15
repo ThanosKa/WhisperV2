@@ -1,4 +1,4 @@
-const { createLLM } = require('../../common/ai/factory');
+const llmClient = require('../../common/ai/llmClient');
 const sessionRepository = require('../../common/repositories/session');
 const summaryRepository = require('./repositories');
 const modelStateService = require('../../common/services/modelStateService');
@@ -170,12 +170,7 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
                 await sessionRepository.touch(this.currentSessionId);
             }
 
-            let modelInfo = await modelStateService.getCurrentModelInfo('llm');
-            if (!modelInfo) {
-                // Default to server-backed Gemini LLM
-                modelInfo = { provider: 'gemini', model: 'gemini-2.5-flash-lite', apiKey: null };
-            }
-            // console.log(`🤖 Sending analysis request to ${modelInfo.provider} using model ${modelInfo.model}`);
+            // Server-backed LLM only; no client-side provider/model
 
             const messages = [
                 {
@@ -190,14 +185,7 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
 
             console.log('🤖 Sending analysis request to AI...');
 
-            const llm = createLLM(modelInfo.provider, {
-                apiKey: modelInfo.apiKey,
-                model: modelInfo.model,
-                temperature: 0.7,
-                maxTokens: 1024,
-            });
-
-            const completion = await llm.chat(messages);
+            const completion = await llmClient.chat(messages);
 
             const responseText = completion.content;
 

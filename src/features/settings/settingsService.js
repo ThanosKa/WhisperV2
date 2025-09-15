@@ -292,7 +292,7 @@ async function deletePreset(id) {
     }
 }
 
-async function saveApiKey(apiKey, provider = 'openai') {
+async function saveApiKey(apiKey, provider = 'gemini') {
     try {
         // Use ModelStateService as the single source of truth for API key management
         const modelStateService = global.modelStateService;
@@ -324,11 +324,8 @@ async function removeApiKey() {
             throw new Error('ModelStateService not initialized');
         }
 
-        // Remove all API keys for all providers
-        const providers = ['openai', 'gemini'];
-        for (const provider of providers) {
-            await modelStateService.removeApiKey(provider);
-        }
+        // Remove API key for supported provider (Gemini only)
+        await modelStateService.removeApiKey('gemini');
 
         // Notify windows
         BrowserWindow.getAllWindows().forEach(win => {
@@ -337,7 +334,7 @@ async function removeApiKey() {
             }
         });
 
-        console.log('[SettingsService] API key removed for all providers');
+        console.log('[SettingsService] API key removed for Gemini');
         return { success: true };
     } catch (error) {
         console.error('[SettingsService] Error removing API key:', error);

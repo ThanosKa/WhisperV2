@@ -308,8 +308,7 @@ class ListenService {
         try {
             const summaryRepository = require('./summary/repositories');
             const sttRepository = require('./stt/repositories');
-            const modelStateService = require('../common/services/modelStateService');
-            const { createLLM } = require('../common/ai/factory');
+            const llmClient = require('../common/ai/llmClient');
 
             // 1) Gather context
             let tldr = null;
@@ -328,27 +327,18 @@ class ListenService {
             const baseCandidate = (tldr || '').trim() || (transcriptSample || '').trim();
             if (!baseCandidate) return; // nothing to title
 
-            // 2) Try LLM for best-quality title
+            // 2) Try LLM for best-quality title (server-backed)
             let title = '';
             try {
-                const modelInfo = await modelStateService.getCurrentModelInfo('llm');
-                if (modelInfo && modelInfo.apiKey) {
-                    const llm = createLLM(modelInfo.provider, {
-                        apiKey: modelInfo.apiKey,
-                        model: modelInfo.model,
-                        temperature: 0.2,
-                        maxTokens: 64,
-                    });
-                    const messages = [
-                        { role: 'system', content: 'You create concise, descriptive meeting titles. Respond with title only.' },
-                        {
-                            role: 'user',
-                            content: `Create a short (max 8 words) meeting title in the same language as this content.\n\nContent:\n${baseCandidate}`,
-                        },
-                    ];
-                    const completion = await llm.chat(messages);
-                    title = (completion?.content || '').split('\n')[0].replace(/^"|"$/g, '').trim();
-                }
+                const messages = [
+                    { role: 'system', content: 'You create concise, descriptive meeting titles. Respond with title only.' },
+                    {
+                        role: 'user',
+                        content: `Create a short (max 8 words) meeting title in the same language as this content.\n\nContent:\n${baseCandidate}`,
+                    },
+                ];
+                const completion = await llmClient.chat(messages);
+                title = (completion?.content || '').split('\n')[0].replace(/^"|"$/g, '').trim();
             } catch (e) {
                 console.warn('[ListenService] LLM title generation failed, using heuristic:', e.message);
             }

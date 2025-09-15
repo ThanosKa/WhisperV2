@@ -9,7 +9,6 @@ class ModelStateService extends EventEmitter {
     constructor() {
         super();
         this.authService = authService;
-        // electron-store is used exclusively for legacy data migration purposes.
         this.store = new Store({ name: 'pickle-glass-model-state' });
     }
 
@@ -18,11 +17,7 @@ class ModelStateService extends EventEmitter {
         await this._initializeEncryption();
         await this._runMigrations();
 
-        // Load API keys from .env file.
-        // LLM via Gemini uses server (no local key), but STT still requires provider keys.
-        if (process.env.OPENAI_API_KEY) {
-            await this.setApiKey('openai', process.env.OPENAI_API_KEY);
-        }
+        // Load API keys from .env file if they exist
         if (process.env.GEMINI_API_KEY) {
             await this.setApiKey('gemini', process.env.GEMINI_API_KEY);
         }
@@ -84,7 +79,8 @@ class ModelStateService extends EventEmitter {
             if (legacyData && legacyData.apiKeys) {
                 console.log('[ModelStateService] Migrating from electron-store...');
                 for (const [provider, apiKey] of Object.entries(legacyData.apiKeys)) {
-                    if (apiKey && PROVIDERS[provider]) {
+                    // Only migrate Gemini keys
+                    if (apiKey && provider === 'gemini') {
                         await this.setApiKey(provider, apiKey);
                     }
                 }
@@ -105,14 +101,15 @@ class ModelStateService extends EventEmitter {
     async getLiveState() {
         const providerSettings = await providerSettingsRepository.getAll();
         const apiKeys = {};
-        Object.keys(PROVIDERS).forEach(provider => {
-            const setting = providerSettings.find(s => s.provider === provider);
-            apiKeys[provider] = setting?.api_key || null;
-        });
+        // Only include Gemini provider
+        const setting = providerSettings.find(s => s.provider === 'gemini');
+        if (setting) {
+            apiKeys['gemini'] = setting.api_key || null;
+        }
 
         const activeSettings = await providerSettingsRepository.getActiveSettings();
         const selectedModels = {
-            llm: activeSettings.llm?.selected_llm_model || null,
+            llm: null, // LLM selection removed (server-backed)
             stt: activeSettings.stt?.selected_stt_model || null,
         };
 
@@ -122,7 +119,7 @@ class ModelStateService extends EventEmitter {
     async _autoSelectAvailableModels(forceReselectionForTypes = [], isInitialBoot = false) {
         console.log(`[ModelStateService] Running auto-selection. Force re-selection for: [${forceReselectionForTypes.join(', ')}]`);
         const { selectedModels } = await this.getLiveState();
-        const types = ['llm', 'stt'];
+        const types = ['stt']; // LLM removed from client selection
 
         for (const type of types) {
             const currentModelId = selectedModels[type];
@@ -132,8 +129,8 @@ class ModelStateService extends EventEmitter {
             if (currentModelId && !forceReselection) {
                 const provider = this.getProviderForModel(currentModelId, type);
                 // For LLM: Gemini no longer requires a key (server-backed). For STT still require key.
-                const apiKey = provider === 'openai' ? process.env.OPENAI_API_KEY : process.env.GEMINI_API_KEY;
-                if (provider && (type === 'llm' ? true : !!apiKey)) {
+                const apiKey = process.env.GEMINI_API_KEY;
+                if (provider === 'gemini' && !!apiKey) {
                     isCurrentModelValid = true;
                 }
             }
@@ -156,6 +153,11 @@ class ModelStateService extends EventEmitter {
     }
 
     async setApiKey(provider, key) {
+        // Only allow Gemini provider
+        if (provider !== 'gemini') {
+            return { success: false, error: 'Only Gemini provider is supported' };
+        }
+
         console.log(`[ModelStateService] setApiKey for ${provider}`);
         if (!provider) {
             throw new Error('Provider is required');
@@ -167,10 +169,9 @@ class ModelStateService extends EventEmitter {
             return validationResult;
         }
 
-        // --- MODIFIED: Save a placeholder to the DB, NEVER the actual key. ---
+        // Save a placeholder to the DB, NEVER the actual key
         const existingSettings = (await providerSettingsRepository.getByProvider(provider)) || {};
         await providerSettingsRepository.upsert(provider, { ...existingSettings, api_key: 'loaded_from_env' });
-        // ---
 
         // Key has been added/changed, so check if we can auto-select models for this provider
         await this._autoSelectAvailableModels([]);
@@ -183,13 +184,20 @@ class ModelStateService extends EventEmitter {
     async getAllApiKeys() {
         const allSettings = await providerSettingsRepository.getAll();
         const apiKeys = {};
-        allSettings.forEach(s => {
-            apiKeys[s.provider] = s.api_key;
-        });
+        // Only include Gemini
+        const geminiSetting = allSettings.find(s => s.provider === 'gemini');
+        if (geminiSetting) {
+            apiKeys['gemini'] = geminiSetting.api_key;
+        }
         return apiKeys;
     }
 
     async removeApiKey(provider) {
+        // Only allow removing Gemini keys
+        if (provider !== 'gemini') {
+            return false;
+        }
+
         const setting = await providerSettingsRepository.getByProvider(provider);
         if (setting && setting.api_key) {
             await providerSettingsRepository.upsert(provider, { ...setting, api_key: null });
@@ -201,16 +209,10 @@ class ModelStateService extends EventEmitter {
         return false;
     }
 
-    /**
-     * Checks if the user is logged in with Firebase.
-     */
     isLoggedInWithFirebase() {
         return this.authService.getCurrentUser().isLoggedIn;
     }
 
-    /**
-     * Checks if at least one valid API key is configured.
-     */
     async hasValidApiKey() {
         if (this.isLoggedInWithFirebase()) return true;
 
@@ -229,11 +231,11 @@ class ModelStateService extends EventEmitter {
             type = arg2;
         }
         if (!modelId || !type) return null;
-        for (const providerId in PROVIDERS) {
-            const models = type === 'llm' ? PROVIDERS[providerId].llmModels : PROVIDERS[providerId].sttModels;
-            if (models && models.some(m => m.id === modelId)) {
-                return providerId;
-            }
+
+        // Only Gemini STT models supported for client
+        const models = type === 'stt' ? PROVIDERS['gemini'].sttModels : [];
+        if (models && models.some(m => m.id === modelId)) {
+            return 'gemini';
         }
         return null;
     }
@@ -241,14 +243,19 @@ class ModelStateService extends EventEmitter {
     async getSelectedModels() {
         const active = await providerSettingsRepository.getActiveSettings();
         return {
-            llm: active.llm?.selected_llm_model || null,
+            llm: null, // LLM selection removed
             stt: active.stt?.selected_stt_model || null,
         };
     }
 
     async setSelectedModel(type, modelId) {
+        if (type === 'llm') {
+            console.warn('[ModelStateService] LLM selection is not supported on client.');
+            return false;
+        }
         const provider = this.getProviderForModel(modelId, type);
-        if (!provider) {
+        // Only allow Gemini provider
+        if (provider !== 'gemini') {
             console.warn(`[ModelStateService] No provider found for model ${modelId}`);
             return false;
         }
@@ -256,11 +263,7 @@ class ModelStateService extends EventEmitter {
         const existingSettings = (await providerSettingsRepository.getByProvider(provider)) || {};
         const newSettings = { ...existingSettings };
 
-        if (type === 'llm') {
-            newSettings.selected_llm_model = modelId;
-        } else {
-            newSettings.selected_stt_model = modelId;
-        }
+        newSettings.selected_stt_model = modelId;
 
         await providerSettingsRepository.upsert(provider, newSettings);
         await providerSettingsRepository.setActiveProvider(provider, type);
@@ -273,57 +276,33 @@ class ModelStateService extends EventEmitter {
     }
 
     async getAvailableModels(type) {
-        const available = [];
-        const modelListKey = type === 'llm' ? 'llmModels' : 'sttModels';
-
-        for (const providerId in PROVIDERS) {
-            const hasModels = PROVIDERS[providerId]?.[modelListKey]?.length > 0;
-            if (!hasModels) continue;
-
-            if (type === 'llm') {
-                // LLM: Gemini is always available (server-backed). OpenAI requires key.
-                if (providerId === 'gemini') {
-                    available.push(...PROVIDERS[providerId][modelListKey]);
-                } else if (providerId === 'openai' && process.env.OPENAI_API_KEY) {
-                    available.push(...PROVIDERS[providerId][modelListKey]);
-                }
-            } else {
-                // STT: require key for both providers
-                const apiKey = providerId === 'openai' ? process.env.OPENAI_API_KEY : process.env.GEMINI_API_KEY;
-                if (apiKey) available.push(...PROVIDERS[providerId][modelListKey]);
-            }
-        }
-
-        return [...new Map(available.map(item => [item.id, item])).values()];
+        // Client exposes STT models only
+        if (type === 'llm') return [];
+        const models = PROVIDERS['gemini']?.sttModels || [];
+        const apiKey = process.env.GEMINI_API_KEY;
+        return apiKey ? models : [];
     }
 
     async getCurrentModelInfo(type) {
-        const activeSetting = await providerSettingsRepository.getActiveProvider(type);
-        if (!activeSetting) return null;
-
-        const model = type === 'llm' ? activeSetting.selected_llm_model : activeSetting.selected_stt_model;
-        if (!model) return null;
-
-        // Read keys from env.
-        // LLM: Gemini uses server and needs no key; STT: Gemini requires GEMINI_API_KEY.
-        let apiKey = null;
-        if (activeSetting.provider === 'openai') {
-            apiKey = process.env.OPENAI_API_KEY;
-        } else if (activeSetting.provider === 'gemini') {
-            apiKey = type === 'stt' ? process.env.GEMINI_API_KEY : null;
-        }
-        // ---
-
+        if (type !== 'stt') return null;
+        const activeSetting = await providerSettingsRepository.getActiveProvider('stt');
+        if (!activeSetting || !activeSetting.selected_stt_model) return null;
+        const apiKey = activeSetting.provider === 'gemini' ? process.env.GEMINI_API_KEY : null;
         return {
             provider: activeSetting.provider,
-            model: model,
-            apiKey: apiKey, // Use the key from .env
+            model: activeSetting.selected_stt_model,
+            apiKey: apiKey,
         };
     }
 
-    // --- Handler and utility methods ---
+    // Handler and utility methods
 
     async validateApiKey(provider, key) {
+        // Only validate Gemini keys
+        if (provider !== 'gemini') {
+            return { success: false, error: 'Only Gemini provider is supported' };
+        }
+
         if (!key || key.trim() === '') {
             return { success: false, error: 'API key cannot be empty.' };
         }
@@ -339,25 +318,30 @@ class ModelStateService extends EventEmitter {
     }
 
     getProviderConfig() {
-        const config = {};
-        for (const key in PROVIDERS) {
-            const { handler, ...rest } = PROVIDERS[key];
-            config[key] = rest;
-        }
-        return config;
+        // Return Gemini provider config with LLM entries removed
+        const { handler, llmModels, ...rest } = PROVIDERS['gemini'];
+        return { gemini: { ...rest, llmModels: [] } };
     }
 
     async handleRemoveApiKey(provider) {
+        // Only allow removing Gemini keys
+        if (provider !== 'gemini') {
+            return false;
+        }
+
         const success = await this.removeApiKey(provider);
         if (success) {
             const selectedModels = await this.getSelectedModels();
-            // Removed force-show-apikey-header emission (no ApiKey UI)
         }
         return success;
     }
 
-    /*-------------- Compatibility Helpers --------------*/
+    // Compatibility Helpers
     async handleValidateKey(provider, key) {
+        // Only allow validating Gemini keys
+        if (provider !== 'gemini') {
+            return { success: false, error: 'Only Gemini provider is supported' };
+        }
         return await this.setApiKey(provider, key);
     }
 
@@ -366,13 +350,8 @@ class ModelStateService extends EventEmitter {
     }
 
     async areProvidersConfigured() {
-        // LLM is considered configured if either OpenAI key exists or Gemini server mode is available (always on client side).
-        const llmConfigured = !!process.env.OPENAI_API_KEY || true; // Gemini server-backed path
-
-        // STT still requires key presence
-        const sttConfigured = !!process.env.OPENAI_API_KEY || !!process.env.GEMINI_API_KEY;
-
-        return llmConfigured && sttConfigured;
+        // Only STT requires local configuration
+        return !!process.env.GEMINI_API_KEY;
     }
 }
 

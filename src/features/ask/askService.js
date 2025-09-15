@@ -1,5 +1,5 @@
 const { BrowserWindow } = require('electron');
-const { createStreamingLLM } = require('../common/ai/factory');
+const llmClient = require('../common/ai/llmClient');
 // Lazy require helper to avoid circular dependency issues
 const getWindowManager = () => require('../../window/windowManager');
 const internalBridge = require('../../bridge/internalBridge');
@@ -171,7 +171,10 @@ class AskService {
             // Use first sentence or up to ~12 words
             const sentence = raw.split(/(?<=[\.\!\?])\s+/)[0] || raw;
             const words = sentence.split(/\s+/).slice(0, 12).join(' ');
-            const cleaned = words.replace(/[\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+            const cleaned = words
+                .replace(/[\r\n]+/g, ' ')
+                .replace(/\s{2,}/g, ' ')
+                .trim();
             // Capitalize first letter
             return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
         } catch (_) {
@@ -379,7 +382,7 @@ class AskService {
             const listenService = require('../listen/listenService');
             const currentListenSessionId = listenService.getCurrentSessionData()?.sessionId || null;
             const isInMeeting = Boolean(currentListenSessionId);
-            
+
             if (isInMeeting) {
                 // We're in a meeting - use or promote to listen session for context
                 sessionId = await sessionRepository.getOrCreateActive('listen');
@@ -402,12 +405,8 @@ class AskService {
             await askRepository.addAiMessage({ sessionId, role: 'user', content: userPrompt.trim() });
             console.log(`[AskService] DB: Saved user prompt to session ${sessionId}`);
 
-            let modelInfo = await modelStateService.getCurrentModelInfo('llm');
-            if (!modelInfo) {
-                // Default to server-backed Gemini LLM
-                modelInfo = { provider: 'gemini', model: 'gemini-2.5-flash-lite', apiKey: null };
-            }
-            console.log(`[AskService] model: provider=${modelInfo.provider}, model=${modelInfo.model}`);
+            // LLM is server-backed only; no client-side provider/model
+            console.log('[AskService] model: provider=server, model=remote-default');
 
             // Capture screenshot for manual Ask (sendMessageManual) OR when prompt equals 'Assist me'
             // 'Assist me' is the Ask template's empty-input fallback and should include a screenshot
@@ -492,7 +491,9 @@ class AskService {
                 const parts = Array.isArray(messages?.[1]?.content) ? messages[1].content.map(c => c.type || 'text') : ['text'];
                 const hasImagePart = parts.includes('image_url');
                 console.log('[AskService] sending request to llm', { parts, hasImagePart });
-            } catch (_) { console.log('[AskService] sending request to llm'); }
+            } catch (_) {
+                console.log('[AskService] sending request to llm');
+            }
 
             // Write LLM input to response.txt
             try {
@@ -532,15 +533,8 @@ ${llmMessages}
                 console.error('[AskService] Failed to write response.txt:', error);
             }
 
-            const streamingLLM = createStreamingLLM(modelInfo.provider, {
-                apiKey: modelInfo.apiKey,
-                model: modelInfo.model,
-                temperature: 0.7,
-                maxTokens: 2048,
-            });
-
             try {
-                const response = await streamingLLM.streamChat(messages, { signal });
+                const response = await llmClient.stream(messages, { signal });
 
                 console.log('📡 [AskService] LLM responded - starting to process stream...');
 
@@ -577,7 +571,7 @@ ${llmMessages}
                         },
                     ];
 
-                    const fallbackResponse = await streamingLLM.streamChat(textOnlyMessages, { signal });
+                    const fallbackResponse = await llmClient.stream(textOnlyMessages, { signal });
                     const askWin = getWindowPool()?.get('ask');
 
                     if (!askWin || askWin.isDestroyed()) {

@@ -42,8 +42,8 @@ function upsert(provider, settings) {
             api_key = excluded.api_key,
             selected_llm_model = excluded.selected_llm_model,
             selected_stt_model = excluded.selected_stt_model,
-            -- is_active_llm and is_active_stt are NOT updated here
-            -- Use setActiveProvider() to change active status
+            -- is_active_llm is deprecated; client no longer supports LLM selection
+            -- Use setActiveProvider() to change STT active status
             updated_at = excluded.updated_at
     `);
 
@@ -136,9 +136,7 @@ function getActiveSettings() {
         if (result.api_key && encryptionService.looksEncrypted(result.api_key)) {
             result.api_key = encryptionService.decrypt(result.api_key);
         }
-        if (result.is_active_llm) {
-            activeSettings.llm = result;
-        }
+        // llm active is ignored on client
         if (result.is_active_stt) {
             activeSettings.stt = result;
         }

@@ -40,12 +40,10 @@ References:
 - High-level flow in `sendMessage`:
     1. Normalize prompt, ensure Ask window visible, set state to loading.
     2. Decide session context: reuse current meeting session (`listen`) or create `ask` session; persist the user message to DB.
-    3. Resolve current LLM model via `modelStateService.getCurrentModelInfo('llm')` → `{ provider, model, apiKey }`.
-        - Defaults to Gemini server-backed when not selected.
+    3. LLM is server-backed; no client model/provider selection.
     4. Optionally capture a screenshot (Assist Me) and build messages: system prompt + user text (+ optional `image_url`).
-    5. Create provider stream: `createStreamingLLM(provider, { apiKey, model, temperature, maxTokens })`.
-    6. Call `streamChat(messages, { signal })` and process the SSE response with `_processStream`.
-    7. On completion, persist assistant response to DB; on multimodal errors, retry with text-only.
+    5. Call backend stream via `llmClient.stream(messages, { signal })` and process the SSE response with `_processStream`.
+    6. On completion, persist assistant response to DB; on multimodal errors, retry with text-only.
 
 Citations:
 
@@ -56,13 +54,9 @@ Citations:
 ## 4. Model Selection & Provider Resolution
 
 - Service: `src/features/common/services/modelStateService.js`
-    - Loads keys from `.env` on init; stores placeholders in DB (`loaded_from_env`).
-    - `getAvailableModels('llm')` returns models available by provider: Gemini always available (server-backed); OpenAI requires `OPENAI_API_KEY`.
-    - `getSelectedModels()` and `setSelectedModel(type, modelId)` track user selection and active provider.
-    - `getCurrentModelInfo('llm')` returns `{ provider, model, apiKey }`; apiKey is null for Gemini LLM (server-backed), key for OpenAI.
+    - STT only on client; LLM selection removed. STT keys from env.
 - Factory: `src/features/common/ai/factory.js`
-    - `createLLM(provider, opts)` and `createStreamingLLM(provider, opts)` delegate to provider module.
-    - Model id sanitized via `sanitizeModelId()`.
+    - STT only on client; no LLM constructors.
 
 Citations:
 
@@ -76,20 +70,10 @@ Citations:
 
 ## 5. Provider Implementations
 
-### OpenAI (non-stream and stream)
-
-- File: `src/features/common/ai/providers/openai.js`
-- Non-stream: `createLLM` uses OpenAI SDK `chat.completions.create({ model, messages, temperature, max_tokens })` and returns `{ content, raw }`.
-- Stream: `createStreamingLLM` requests streaming completions and exposes a `ReadableStream` of SSE lines: `data: { choices[0].delta.content }`, ending with `data: [DONE]`.
-
-### Gemini (server-backed non-stream and stream)
+### Gemini (client STT only)
 
 - File: `src/features/common/ai/providers/gemini.js`
-- Non-stream: `createLLM` posts to local webapp API `POST ${API_BASE_URL}/api/llm/chat` with headers including `X-Session-UUID` from `authService`.
-    - Body: `{ messages, temperature, maxTokens }`. Response expected `{ success, content, usageMetadata }`.
-- Stream: `createStreamingLLM` posts to `POST ${API_BASE_URL}/api/llm/stream` and returns an SSE `Response`.
-    - Provider forwards server JSON lines as-is: `data: {"choices":[{"delta":{"content":"..."}}]}`; emits `data: [DONE]` at end.
-    - If server ever sends raw text, it adapts into the unified JSON shape.
+    - LLM calls are via `src/features/common/ai/llmClient.js` directly to backend.
 
 Citations:
 
@@ -151,10 +135,8 @@ Citations:
 
 ## 9. Non-Streaming LLM Usages
 
-- Meeting summaries pipeline calls non-stream `llm.chat(messages)`.
-    - `src/features/listen/summary/summaryService.js` (LLM selection via `modelStateService.getCurrentModelInfo('llm')`).
-- Meeting title generation uses non-stream `llm.chat(messages)`.
-    - `src/features/listen/listenService.js:332–342`.
+- Meeting summaries pipeline calls non-stream `llmClient.chat(messages)`.
+- Meeting title generation uses non-stream `llmClient.chat(messages)`.
 
 ## 10. Files That Touch LLM (single source of truth list)
 
@@ -163,7 +145,7 @@ Citations:
 - `src/features/ask/askService.js`
 - `src/features/common/ai/factory.js`
 - `src/features/common/ai/providers/gemini.js`
-- `src/features/common/ai/providers/openai.js`
+- (removed) `src/features/common/ai/providers/openai.js`
 - `src/features/common/services/modelStateService.js`
 - `src/ui/ask/AskView.js`
 - `src/features/listen/summary/summaryService.js`

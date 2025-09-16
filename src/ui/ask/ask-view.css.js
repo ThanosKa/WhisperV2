@@ -380,6 +380,33 @@ export const styles = css`
         }
     }
 
+    /* CSS Styles */
+.thinking-single {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 8px;
+}
+
+.thinking-single-dot {
+    width: 8px;
+    height: 8px;
+    background: rgb(255, 255, 255);
+    border-radius: 50%;
+    animation: thinkingSinglePulse 1.5s ease-in-out infinite;
+}
+
+@keyframes thinkingSinglePulse {
+    0%, 100% {
+        opacity: 0.3;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.4);
+    }
+}
+
     .header-right {
         display: flex;
         align-items: center;

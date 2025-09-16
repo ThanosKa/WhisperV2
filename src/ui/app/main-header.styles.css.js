@@ -97,6 +97,25 @@ export const mainHeaderStyles = css`
         border: none;
         cursor: pointer;
         position: relative;
+        overflow: hidden; /* For overlay containment */
+    }
+
+    .listen-button.icon-only {
+        width: auto;
+        padding: 0 10px;
+        gap: 4px;
+    }
+
+    .listen-button.icon-only .listen-icon {
+        gap: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .listen-button.icon-only .listen-icon svg {
+        width: 16px;
+        height: 16px;
     }
 
     .listen-button:disabled {
@@ -104,30 +123,32 @@ export const mainHeaderStyles = css`
         opacity: 0.8;
     }
 
-    .listen-button.active::before {
-        background: rgba(215, 0, 0, 0.5);
+    .listen-button.active::before,
+    .listen-button.active:hover::before {
+        background: transparent;
     }
 
-    .listen-button.active:hover::before {
-        background: rgba(255, 20, 20, 0.6);
+    .listen-button.paused::before,
+    .listen-button.paused:hover::before {
+        background: transparent;
     }
 
     .listen-button.done {
-        background-color: rgba(255, 255, 255, 0.6);
-        transition: background-color 0.15s ease;
+        background-color: transparent;
+        transition: none;
     }
 
     .listen-button.done .action-text-content {
-        color: black;
+        color: white;
     }
 
     .listen-button.done .listen-icon svg rect,
     .listen-button.done .listen-icon svg path {
-        fill: black;
+        fill: white;
     }
 
     .listen-button.done:hover {
-        background-color: #f0f0f0;
+        background-color: transparent;
     }
 
     .listen-button:hover::before {
@@ -169,34 +190,77 @@ export const mainHeaderStyles = css`
         display: none;
     }
 
-    .loading-dots {
+    /* Overlay container */
+    .listen-loader-overlay {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
         display: flex;
         align-items: center;
-        gap: 5px;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.1); /* Optional: slight overlay background */
+        border-radius: inherit; /* Match button border radius */
+        pointer-events: none; /* Allow button clicks to pass through */
     }
 
-    .loading-dots span {
-        width: 6px;
-        height: 6px;
-        background-color: white;
+    /* Ring loader container */
+    .ring-loader {
+        position: relative;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Pulsing rings - water drop effect */
+    .ring-loader-circle {
+        position: relative;
+        width: 30px;
+        height: 30px;
+    }
+
+    .ring-loader-circle::before,
+    .ring-loader-circle::after {
+        content: '';
+        position: absolute;
+        border: 2px solid rgba(255, 255, 255, 0.8);
         border-radius: 50%;
-        animation: pulse 1.4s infinite ease-in-out both;
+        opacity: 1;
+        animation: pulse-ring 2s ease-out infinite;
     }
-    .loading-dots span:nth-of-type(1) {
-        animation-delay: -0.32s;
+
+    .ring-loader-circle::after {
+        animation-delay: -1s;
     }
-    .loading-dots span:nth-of-type(2) {
-        animation-delay: -0.16s;
-    }
-    @keyframes pulse {
-        0%,
-        80%,
-        100% {
-            opacity: 0.2;
-        }
-        40% {
+
+    @keyframes pulse-ring {
+        0% {
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            margin-top: 0;
+            margin-left: 0;
             opacity: 1;
         }
+        100% {
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            margin-top: 0;
+            margin-left: 0;
+            opacity: 0;
+        }
+    }
+
+    /* Optional: Dim the button content when loading */
+    .listen-button.loading .action-text,
+    .listen-button.loading .listen-icon {
+        opacity: 0.6;
     }
 
     /* Text-only variant for auth header login button */
@@ -352,6 +416,49 @@ export const mainHeaderStyles = css`
         width: 16px;
         height: 16px;
     }
+
+    @keyframes audio-wave {
+        0% {
+            transform: scaleY(0.4);
+        }
+        25% {
+            transform: scaleY(1);
+        }
+        50% {
+            transform: scaleY(0.6);
+        }
+        75% {
+            transform: scaleY(0.8);
+        }
+        100% {
+            transform: scaleY(0.4);
+        }
+    }
+
+    .wavy-animation path {
+        animation: audio-wave 1.2s ease-in-out infinite;
+        transform-origin: center;
+    }
+
+    .wavy-animation path:nth-child(1) {
+        animation-delay: -0.2s;
+    }
+    .wavy-animation path:nth-child(2) {
+        animation-delay: -0.4s;
+    }
+    .wavy-animation path:nth-child(3) {
+        animation-delay: -0.6s;
+    }
+    .wavy-animation path:nth-child(4) {
+        animation-delay: -0.8s;
+    }
+    .wavy-animation path:nth-child(5) {
+        animation-delay: -1s;
+    }
+    .wavy-animation path:nth-child(6) {
+        animation-delay: -1.2s;
+    }
+
     /* ────────────────[ GLASS BYPASS ]─────────────── */
     :host-context(body.has-glass) .header,
     :host-context(body.has-glass) .listen-button,

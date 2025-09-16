@@ -59,6 +59,7 @@ class ListenService {
         const header = windowPool.get('header');
 
         try {
+            let nextStatus = null;
             switch (listenButtonText) {
                 case 'Listen':
                     console.log('[ListenService] changeSession to "Listen"');
@@ -76,31 +77,43 @@ class ListenService {
                         await this.initializeSession();
                     }
                     if (listenWindow && !listenWindow.isDestroyed()) {
-                        listenWindow.webContents.send('session-state-changed', { isActive: true });
+                        listenWindow.webContents.send('session-state-changed', { isActive: true, mode: 'start' });
                     }
+                    nextStatus = 'inSession';
                     break;
 
                 case 'Stop':
                     console.log('[ListenService] changeSession to "Stop"');
                     await this.pauseSession();
                     if (listenWindow && !listenWindow.isDestroyed()) {
-                        listenWindow.webContents.send('session-state-changed', { isActive: false });
+                        listenWindow.webContents.send('session-state-changed', { isActive: false, mode: 'pause' });
                     }
+                    nextStatus = 'paused';
+                    break;
+
+                case 'Resume':
+                    console.log('[ListenService] changeSession to "Resume"');
+                    await this.resumeSession();
+                    if (listenWindow && !listenWindow.isDestroyed()) {
+                        listenWindow.webContents.send('session-state-changed', { isActive: true, mode: 'resume' });
+                    }
+                    nextStatus = 'inSession';
                     break;
 
                 case 'Done':
                     console.log('[ListenService] changeSession to "Done"');
                     await this.closeSession();
                     internalBridge.emit('window:requestVisibility', { name: 'listen', visible: false });
-                    listenWindow.webContents.send('session-state-changed', { isActive: false });
+                    listenWindow.webContents.send('session-state-changed', { isActive: false, mode: 'end' });
                     this.summaryService.resetConversationHistory();
+                    nextStatus = 'beforeSession';
                     break;
 
                 default:
                     throw new Error(`[ListenService] unknown listenButtonText: ${listenButtonText}`);
             }
 
-            header.webContents.send('listen:changeSessionResult', { success: true });
+            header.webContents.send('listen:changeSessionResult', { success: true, nextStatus });
         } catch (error) {
             console.error('[ListenService] error in handleListenRequest:', error);
             header.webContents.send('listen:changeSessionResult', { success: false });
@@ -276,8 +289,7 @@ class ListenService {
     async pauseSession() {
         try {
             this.sendToRenderer('change-listen-capture-state', { status: 'stop' });
-            // Close STT sessions and stop macOS capture
-            await this.sttService.closeSessions();
+            // Do not close STT sessions on pause; keep websockets alive for fast resume
             await this.stopMacOSAudioCapture();
 
             // Do NOT end database session; keep currentSessionId so Ask can attach.
@@ -285,6 +297,18 @@ class ListenService {
             return { success: true };
         } catch (error) {
             console.error('Error pausing listen service session:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async resumeSession() {
+        try {
+            // Resume local capture; STT sockets remain active from pause
+            this.sendToRenderer('change-listen-capture-state', { status: 'start' });
+            this.sendToRenderer('update-status', 'Resumed listening.');
+            return { success: true };
+        } catch (error) {
+            console.error('Error resuming listen service session:', error);
             return { success: false, error: error.message };
         }
     }

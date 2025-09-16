@@ -53,20 +53,22 @@ export class ListenView extends LitElement {
         });
 
         if (window.api) {
-            window.api.listenView.onSessionStateChanged((_, { isActive }) => {
+            window.api.listenView.onSessionStateChanged((_, { isActive, mode }) => {
                 const wasActive = this.isSessionActive;
                 this.isSessionActive = isActive;
 
                 if (!wasActive && isActive) {
                     this.hasCompletedRecording = false;
                     this.startTimer();
-                    // Reset child components
-                    this.updateComplete.then(() => {
-                        const sttView = this.shadowRoot.querySelector('stt-view');
-                        const summaryView = this.shadowRoot.querySelector('summary-view');
-                        if (sttView) sttView.resetTranscript();
-                        if (summaryView) summaryView.resetAnalysis();
-                    });
+                    // Only reset on true start, not on resume
+                    if (mode === 'start') {
+                        this.updateComplete.then(() => {
+                            const sttView = this.shadowRoot.querySelector('stt-view');
+                            const summaryView = this.shadowRoot.querySelector('summary-view');
+                            if (sttView) sttView.resetTranscript();
+                            if (summaryView) summaryView.resetAnalysis();
+                        });
+                    }
                     this.requestUpdate();
                 }
                 if (wasActive && !isActive) {

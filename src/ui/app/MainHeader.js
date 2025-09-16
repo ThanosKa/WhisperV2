@@ -46,6 +46,8 @@ export class MainHeader extends LitElement {
                 return 'Listen';
             case 'inSession':
                 return 'Stop';
+            case 'paused':
+                return 'Resume';
             case 'afterSession':
                 return 'Done';
             default:
@@ -162,14 +164,9 @@ export class MainHeader extends LitElement {
                 })
                 .catch(() => {});
 
-            this._sessionStateTextListener = (event, { success }) => {
+            this._sessionStateTextListener = (event, { success, nextStatus }) => {
                 if (success) {
-                    this.listenSessionStatus =
-                        {
-                            beforeSession: 'inSession',
-                            inSession: 'afterSession',
-                            afterSession: 'beforeSession',
-                        }[this.listenSessionStatus] || 'beforeSession';
+                    this.listenSessionStatus = nextStatus || 'beforeSession';
                 } else {
                     this.listenSessionStatus = 'beforeSession';
                 }
@@ -255,6 +252,20 @@ export class MainHeader extends LitElement {
             }
         } catch (error) {
             console.error('IPC invoke for ask button failed:', error);
+        }
+    }
+
+    async _handleDoneClick() {
+        if (this.wasJustDragged) return;
+        if (this.isTogglingSession) return;
+        this.isTogglingSession = true;
+        try {
+            if (window.api) {
+                await window.api.mainHeader.sendListenButtonClick('Done');
+            }
+        } catch (error) {
+            console.error('IPC invoke for Done failed:', error);
+            this.isTogglingSession = false;
         }
     }
 
@@ -349,11 +360,16 @@ export class MainHeader extends LitElement {
     render() {
         const listenButtonText = this._getListenButtonText(this.listenSessionStatus);
 
+        const isInSession = this.listenSessionStatus === 'inSession';
+        const isPaused = this.listenSessionStatus === 'paused';
+        const isAfterSession = this.listenSessionStatus === 'afterSession';
+
         const buttonClasses = {
-            active: listenButtonText === 'Stop',
-            done: listenButtonText === 'Done',
+            active: isInSession,
+            done: isAfterSession,
+            'icon-only': isInSession || isPaused,
+            paused: isPaused,
         };
-        const showStopIcon = listenButtonText === 'Stop' || listenButtonText === 'Done';
 
         return html`
             <div class="header" @mousedown=${this.handleMouseDown}>
@@ -369,47 +385,126 @@ export class MainHeader extends LitElement {
                 <button
                     class="listen-button ${Object.keys(buttonClasses)
                         .filter(k => buttonClasses[k])
-                        .join(' ')}"
+                        .join(' ')} ${this.isTogglingSession ? 'loading' : ''}"
                     @click=${this._handleListenClick}
                     ?disabled=${this.isTogglingSession}
                 >
-                    ${this.isTogglingSession
-                        ? html` <div class="loading-dots"><span></span><span></span><span></span></div> `
+                    <!-- Normal button content -->
+                    ${isInSession || isPaused
+                        ? ''
                         : html`
                               <div class="action-text">
                                   <div class="action-text-content">${listenButtonText}</div>
                               </div>
-                              <div class="listen-icon">
-                                  ${showStopIcon
-                                      ? html`
-                                            <svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                <rect width="9" height="9" rx="1" fill="white" />
-                                            </svg>
-                                        `
-                                      : html`
-                                            <svg
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                width="12"
-                                                height="11"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="white"
-                                                stroke-width="2"
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                                class="lucide lucide-audio-lines-icon lucide-audio-lines"
-                                            >
-                                                <path d="M2 10v3" />
-                                                <path d="M6 6v11" />
-                                                <path d="M10 3v18" />
-                                                <path d="M14 8v7" />
-                                                <path d="M18 5v13" />
-                                                <path d="M22 10v3" />
-                                            </svg>
-                                        `}
-                              </div>
                           `}
+                    <div class="listen-icon">
+                        ${isInSession
+                            ? html`
+                                  <svg
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width="16"
+                                      height="16"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="white"
+                                      stroke-width="2"
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                  >
+                                      <rect x="14" y="3" width="5" height="18" rx="1" />
+                                      <rect x="5" y="3" width="5" height="18" rx="1" />
+                                  </svg>
+                                  <svg
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width="12"
+                                      height="11"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="white"
+                                      stroke-width="2"
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      class="lucide lucide-audio-lines-icon lucide-audio-lines wavy-animation"
+                                  >
+                                      <path d="M2 10v3" />
+                                      <path d="M6 6v11" />
+                                      <path d="M10 3v18" />
+                                      <path d="M14 8v7" />
+                                      <path d="M18 5v13" />
+                                      <path d="M22 10v3" />
+                                  </svg>
+                              `
+                            : isPaused
+                              ? html`
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        width="16"
+                                        height="16"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="white"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    >
+                                        <path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z" />
+                                    </svg>
+                                `
+                              : isAfterSession
+                                ? html`
+                                      <svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                          <rect width="9" height="9" rx="1" fill="white" />
+                                      </svg>
+                                  `
+                                : html`
+                                      <svg
+                                          xmlns="http://www.w3.org/2000/svg"
+                                          width="12"
+                                          height="11"
+                                          viewBox="0 0 24 24"
+                                          fill="none"
+                                          stroke="white"
+                                          stroke-width="2"
+                                          stroke-linecap="round"
+                                          stroke-linejoin="round"
+                                          class="lucide lucide-audio-lines-icon lucide-audio-lines"
+                                      >
+                                          <path d="M2 10v3" />
+                                          <path d="M6 6v11" />
+                                          <path d="M10 3v18" />
+                                          <path d="M14 8v7" />
+                                          <path d="M18 5v13" />
+                                          <path d="M22 10v3" />
+                                      </svg>
+                                  `}
+                    </div>
+
+                    <!-- Loader overlay - only visible when loading -->
+                    ${this.isTogglingSession
+                        ? html`
+                              <div class="listen-loader-overlay">
+                                  <div class="ring-loader">
+                                      <div class="ring-loader-circle"></div>
+                                  </div>
+                              </div>
+                          `
+                        : ''}
                 </button>
+
+                ${this.listenSessionStatus === 'paused'
+                    ? html`
+                          <button class="listen-button done" @click=${this._handleDoneClick} ?disabled=${this.isTogglingSession}>
+                              <div class="action-text">
+                                  <div class="action-text-content">Done</div>
+                              </div>
+                              <div class="listen-icon">
+                                  <svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                      <rect width="9" height="9" rx="1" fill="white" />
+                                  </svg>
+                              </div>
+                          </button>
+                      `
+                    : ''}
 
                 <div class="header-actions" @click=${() => this._handleToggleAllWindowsVisibility()}>
                     <div class="action-text">

@@ -585,11 +585,9 @@ export class AskView extends LitElement {
         inner.className = 'msg-content loading-indicator';
         inner.id = 'loadingContainer';
         inner.innerHTML = `
-            <div class="thinking-dots">
-                <div class="thinking-dot"></div>
-                <div class="thinking-dot"></div>
-                <div class="thinking-dot"></div>
-            </div>
+    <div class="thinking-single">
+        <div class="thinking-single-dot"></div>
+    </div>
         `;
 
         // Add copy button for loading messages (hidden initially)

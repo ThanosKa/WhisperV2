@@ -190,77 +190,37 @@ export const mainHeaderStyles = css`
         display: none;
     }
 
-    /* Overlay container */
-    .listen-loader-overlay {
-        position: absolute;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        left: 0;
+    .loading-dots {
         display: flex;
         align-items: center;
-        justify-content: center;
-        background: rgba(0, 0, 0, 0.1); /* Optional: slight overlay background */
-        border-radius: inherit; /* Match button border radius */
-        pointer-events: none; /* Allow button clicks to pass through */
+        gap: 5px;
     }
 
-    /* Ring loader container */
-    .ring-loader {
-        position: relative;
-        width: 30px;
-        height: 30px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    /* Pulsing rings - water drop effect */
-    .ring-loader-circle {
-        position: relative;
-        width: 30px;
-        height: 30px;
-    }
-
-    .ring-loader-circle::before,
-    .ring-loader-circle::after {
-        content: '';
-        position: absolute;
-        border: 2px solid rgba(255, 255, 255, 0.8);
+    .loading-dots span {
+        width: 6px;
+        height: 6px;
+        background-color: white;
         border-radius: 50%;
-        opacity: 1;
-        animation: pulse-ring 2s ease-out infinite;
+        animation: pulse 1.4s infinite ease-in-out both;
     }
 
-    .ring-loader-circle::after {
-        animation-delay: -1s;
+    .loading-dots span:nth-of-type(1) {
+        animation-delay: -0.32s;
     }
 
-    @keyframes pulse-ring {
-        0% {
-            top: 50%;
-            left: 50%;
-            width: 0;
-            height: 0;
-            margin-top: 0;
-            margin-left: 0;
+    .loading-dots span:nth-of-type(2) {
+        animation-delay: -0.16s;
+    }
+
+    @keyframes pulse {
+        0%,
+        80%,
+        100% {
+            opacity: 0.2;
+        }
+        40% {
             opacity: 1;
         }
-        100% {
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            margin-top: 0;
-            margin-left: 0;
-            opacity: 0;
-        }
-    }
-
-    /* Optional: Dim the button content when loading */
-    .listen-button.loading .action-text,
-    .listen-button.loading .listen-icon {
-        opacity: 0.6;
     }
 
     /* Text-only variant for auth header login button */

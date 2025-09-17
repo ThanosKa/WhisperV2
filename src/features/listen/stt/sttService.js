@@ -1,25 +1,12 @@
-const { BrowserWindow } = require('electron');
 const { spawn } = require('child_process');
-const { createSTT } = require('../../common/ai/factory');
+const { randomUUID } = require('crypto');
+const WebSocket = require('ws');
+const authService = require('../../common/services/authService');
 const modelStateService = require('../../common/services/modelStateService');
 const config = require('../../common/config/config');
 
 const COMPLETION_DEBOUNCE_MS = config.get('utteranceSilenceMs') || 1200;
-
-// ── New heartbeat / renewal constants ────────────────────────────────────────────
-// Interval to send low-cost keep-alive messages so the remote service does not
-// treat the connection as idle. One minute is safely below the typical 2-5 min
-// idle timeout window seen on provider websockets.
-const KEEP_ALIVE_INTERVAL_MS = 30 * 1000; // 30 seconds
-
-// Interval after which we pro-actively tear down and recreate the STT sessions
-// to dodge the 5-minute hard timeout enforced by some providers. 4 minutes
-// gives a 1-minute safety buffer.
-const SESSION_RENEW_INTERVAL_MS = 4 * 60 * 1000; // 4 minutes
-
-// Duration to allow the old and new sockets to run in parallel so we don't
-// miss any packets at the exact swap moment.
-const SOCKET_OVERLAP_MS = 1 * 1000; // 1 second
+const DEFAULT_RELAY_URL = process.env.STT_RELAY_URL || config.get('sttRelayUrl') || 'ws://localhost:8080';
 
 class SttService {
     constructor() {
@@ -37,15 +24,16 @@ class SttService {
         // System audio capture
         this.systemAudioProc = null;
 
-        // Keep-alive / renewal timers
-        this.keepAliveInterval = null;
-        this.sessionRenewTimeout = null;
-
         // Callbacks
         this.onTranscriptionComplete = null;
         this.onStatusUpdate = null;
 
         this.modelInfo = null;
+
+        // Relay connection state
+        this.relaySocket = null;
+        this.relaySessionId = null;
+        this.relayReady = false;
     }
 
     setCallbacks({ onTranscriptionComplete, onStatusUpdate }) {
@@ -153,12 +141,12 @@ class SttService {
     async initializeSttSessions(language = 'en') {
         const effectiveLanguage = process.env.OPENAI_TRANSCRIBE_LANG || language || 'en';
 
-        const modelInfo = await modelStateService.getCurrentModelInfo('stt');
-        if (!modelInfo || !modelInfo.apiKey) {
-            throw new Error('AI model or API key is not configured.');
-        }
-        this.modelInfo = modelInfo;
-        console.log(`[SttService] Initializing STT for ${modelInfo.provider} using model ${modelInfo.model}`);
+        const modelInfo = (await modelStateService.getCurrentModelInfo('stt')) || {};
+        this.modelInfo = {
+            provider: modelInfo.provider || 'gemini',
+            model: modelInfo.model || 'gemini-live-2.5-flash-preview',
+        };
+        console.log(`[SttService] Initializing STT relay for ${this.modelInfo.provider}`);
 
         const handleMyMessage = message => {
             if (!this.modelInfo) {
@@ -372,115 +360,22 @@ class SttService {
             }
         };
 
-        const mySttConfig = {
+        await this._openRelayConnection({
             language: effectiveLanguage,
-            callbacks: {
-                onmessage: handleMyMessage,
-                onerror: error => console.error('My STT session error:', error),
-                onclose: event => console.log('My STT session closed:', event.reason),
-            },
-        };
+            handleMyMessage,
+            handleTheirMessage,
+        });
 
-        const theirSttConfig = {
-            language: effectiveLanguage,
-            callbacks: {
-                onmessage: handleTheirMessage,
-                onerror: error => console.error('Their STT session error:', error),
-                onclose: event => console.log('Their STT session closed:', event.reason),
-            },
-        };
-
-        const sttOptions = {
-            apiKey: this.modelInfo.apiKey,
-            language: effectiveLanguage,
-        };
-
-        // Add sessionType for Whisper to distinguish between My and Their sessions
-        const myOptions = { ...sttOptions, callbacks: mySttConfig.callbacks, sessionType: 'my' };
-        const theirOptions = { ...sttOptions, callbacks: theirSttConfig.callbacks, sessionType: 'their' };
-
-        [this.mySttSession, this.theirSttSession] = await Promise.all([
-            createSTT(this.modelInfo.provider, myOptions),
-            createSTT(this.modelInfo.provider, theirOptions),
-        ]);
-
-        console.log('✅ Both STT sessions initialized successfully.');
-
-        // ── Setup keep-alive heart-beats ────────────────────────────────────────
-        if (this.keepAliveInterval) clearInterval(this.keepAliveInterval);
-        this.keepAliveInterval = setInterval(() => {
-            this._sendKeepAlive();
-        }, KEEP_ALIVE_INTERVAL_MS);
-
-        // ── Schedule session auto-renewal ───────────────────────────────────────
-        if (this.sessionRenewTimeout) clearTimeout(this.sessionRenewTimeout);
-        this.sessionRenewTimeout = setTimeout(async () => {
-            try {
-                console.log('[SttService] Auto-renewing STT sessions…');
-                await this.renewSessions(language);
-            } catch (err) {
-                console.error('[SttService] Failed to renew STT sessions:', err);
-            }
-        }, SESSION_RENEW_INTERVAL_MS);
+        console.log('✅ STT relay connected successfully.');
 
         return true;
     }
 
-    /**
-     * Send a lightweight keep-alive to prevent idle disconnects.
-     * Currently only implemented for OpenAI provider because Gemini's SDK
-     * already performs its own heart-beats.
-     */
-    _sendKeepAlive() {
-        if (!this.isSessionActive()) return;
-
-        if (this.modelInfo?.provider === 'openai') {
-            try {
-                this.mySttSession?.keepAlive?.();
-                this.theirSttSession?.keepAlive?.();
-            } catch (err) {
-                console.error('[SttService] keepAlive error:', err.message);
-            }
-        }
-    }
-
-    /**
-     * Gracefully tears down then recreates the STT sessions. Should be invoked
-     * on a timer to avoid provider-side hard timeouts.
-     */
-    async renewSessions(language = 'en') {
-        if (!this.isSessionActive()) {
-            console.warn('[SttService] renewSessions called but no active session.');
-            return;
-        }
-
-        const oldMySession = this.mySttSession;
-        const oldTheirSession = this.theirSttSession;
-
-        console.log('[SttService] Spawning fresh STT sessions in the background…');
-
-        // We reuse initializeSttSessions to create fresh sessions with the same
-        // language and handlers. The method will update the session pointers
-        // and timers, but crucially it does NOT touch the system audio capture
-        // pipeline, so audio continues flowing uninterrupted.
-        await this.initializeSttSessions(language);
-
-        // Close the old sessions after a short overlap window.
-        setTimeout(() => {
-            try {
-                oldMySession?.close?.();
-                oldTheirSession?.close?.();
-                console.log('[SttService] Old STT sessions closed after hand-off.');
-            } catch (err) {
-                console.error('[SttService] Error closing old STT sessions:', err.message);
-            }
-        }, SOCKET_OVERLAP_MS);
+    async renewSessions() {
+        console.log('[SttService] renewSessions skipped - relay handles upstream renewal.');
     }
 
     async sendMicAudioContent(data, mimeType) {
-        // const provider = await this.getAiProvider();
-        // const isGemini = provider === 'gemini';
-
         if (!this.mySttSession) {
             throw new Error('User STT session not active');
         }
@@ -494,12 +389,7 @@ class SttService {
             throw new Error('STT model info could not be retrieved.');
         }
 
-        let payload;
-        if (modelInfo.provider === 'gemini') {
-            payload = { audio: { data, mimeType: mimeType || 'audio/pcm;rate=24000' } };
-        } else {
-            payload = data;
-        }
+        const payload = { audio: { data, mimeType: mimeType || 'audio/pcm;rate=24000' } };
         await this.mySttSession.sendRealtimeInput(payload);
     }
 
@@ -517,15 +407,241 @@ class SttService {
             throw new Error('STT model info could not be retrieved.');
         }
 
-        let payload;
-        if (modelInfo.provider === 'gemini') {
-            payload = { audio: { data, mimeType: mimeType || 'audio/pcm;rate=24000' } };
-        } else {
-            payload = data;
-        }
+        const payload = { audio: { data, mimeType: mimeType || 'audio/pcm;rate=24000' } };
 
         await this.theirSttSession.sendRealtimeInput(payload);
         return { success: true };
+    }
+
+    async _openRelayConnection({ language, handleMyMessage, handleTheirMessage }) {
+        if (!DEFAULT_RELAY_URL) {
+            throw new Error('STT relay URL is not configured.');
+        }
+
+        if (this.relaySocket) {
+            // Ensure we start from a clean state when reconnecting
+            await this._closeRelayConnection(false);
+        }
+
+        this.relayReady = false;
+
+        return new Promise((resolve, reject) => {
+            const relayUrl = DEFAULT_RELAY_URL;
+            let settled = false;
+
+            console.log(`[SttService] Connecting to STT relay at ${relayUrl}`);
+
+            const settleResolve = () => {
+                if (!settled) {
+                    settled = true;
+                    resolve(true);
+                }
+            };
+
+            const settleReject = error => {
+                if (!settled) {
+                    settled = true;
+                    reject(error);
+                }
+            };
+
+            const sessionUuid = authService?.getCurrentUser()?.sessionUuid;
+            if (!sessionUuid) {
+                const error = new Error('STT relay connection blocked: missing authenticated session');
+                console.error('[SttService]', error.message);
+                settleReject(error);
+                return;
+            }
+
+            const socket = new WebSocket(relayUrl, {
+                headers: {
+                    'X-Session-UUID': sessionUuid,
+                },
+            });
+            this.relaySocket = socket;
+
+            socket.on('open', () => {
+                this.relaySessionId = randomUUID();
+                const openPayload = {
+                    type: 'OPEN',
+                    sessionId: this.relaySessionId,
+                    language,
+                    streams: ['my', 'their'],
+                };
+
+                try {
+                    socket.send(JSON.stringify(openPayload));
+                } catch (err) {
+                    console.error('[SttService] Failed to send OPEN payload to relay:', err.message || err);
+                    settleReject(err);
+                }
+            });
+
+            socket.on('message', raw => {
+                let message;
+                try {
+                    message = JSON.parse(raw.toString());
+                } catch (err) {
+                    console.warn('[SttService] Failed to parse relay payload:', err.message || err);
+                    return;
+                }
+
+                const streamId = (message.stream || message.speaker || '').toLowerCase();
+                const dispatch = streamId === 'their' ? handleTheirMessage : handleMyMessage;
+
+                switch (message.type) {
+                    case 'CONNECTED':
+                        this._installRelaySessions();
+                        this.relayReady = true;
+                        settleResolve();
+                        if (this.onStatusUpdate) {
+                            this.onStatusUpdate('Listening...');
+                        }
+                        break;
+
+                    case 'PARTIAL':
+                        if (typeof dispatch === 'function' && message.text && message.text !== '<noise>') {
+                            dispatch({
+                                serverContent: {
+                                    inputTranscription: { text: message.text },
+                                },
+                            });
+                        }
+                        break;
+
+                    case 'TURN_COMPLETE':
+                        if (typeof dispatch === 'function') {
+                            dispatch({ serverContent: { turnComplete: true } });
+                        }
+                        break;
+
+                    case 'USAGE':
+                        if (typeof dispatch === 'function') {
+                            dispatch({
+                                serverContent: {
+                                    usageMetadata: {
+                                        promptTokenCount: message.promptTokens,
+                                        candidatesTokenCount: message.candidateTokens,
+                                    },
+                                },
+                            });
+                        }
+                        break;
+
+                    case 'ERROR':
+                        console.error('[SttService] Relay error:', message.message || message.code || message);
+                        if (!this.relayReady) {
+                            settleReject(new Error(message.message || 'Relay error'));
+                        }
+                        if (this.onStatusUpdate) {
+                            this.onStatusUpdate('Relay error');
+                        }
+                        break;
+
+                    case 'CLOSED':
+                        console.log('[SttService] Relay closed stream:', streamId || 'all');
+                        break;
+
+                    case 'ACK':
+                        // No-op acknowledgements
+                        break;
+
+                    default:
+                        console.log('[SttService] Relay event:', message.type);
+                }
+            });
+
+            socket.on('error', err => {
+                console.error('[SttService] Relay socket error:', err.message || err);
+                if (!this.relayReady) {
+                    settleReject(err);
+                } else if (this.onStatusUpdate) {
+                    this.onStatusUpdate('Relay error');
+                }
+            });
+
+            socket.on('close', () => {
+                console.log('[SttService] Relay socket closed');
+                const wasReady = this.relayReady;
+                this._teardownRelayState();
+                if (!wasReady) {
+                    settleReject(new Error('Relay connection closed before ready'));
+                } else if (this.onStatusUpdate) {
+                    this.onStatusUpdate('Relay disconnected');
+                }
+            });
+        });
+    }
+
+    _installRelaySessions() {
+        const closeRelay = () => this._closeRelayConnection();
+
+        this.mySttSession = {
+            sendRealtimeInput: payload => this._sendRelayAudio('my', payload),
+            close: closeRelay,
+        };
+
+        this.theirSttSession = {
+            sendRealtimeInput: payload => this._sendRelayAudio('their', payload),
+            close: closeRelay,
+        };
+    }
+
+    _sendRelayAudio(stream, payload) {
+        if (!this.relaySocket || this.relaySocket.readyState !== WebSocket.OPEN) {
+            throw new Error('Relay connection not ready');
+        }
+
+        const audioPayload = payload?.audio || {};
+        const data = audioPayload.data || payload?.data || payload;
+        if (!data || typeof data !== 'string') {
+            throw new Error('Invalid audio payload');
+        }
+
+        const message = {
+            type: 'AUDIO',
+            sessionId: this.relaySessionId,
+            stream,
+            mimeType: audioPayload.mimeType || payload?.mimeType || 'audio/pcm;rate=24000',
+            data,
+        };
+
+        try {
+            this.relaySocket.send(JSON.stringify(message));
+        } catch (err) {
+            console.error('[SttService] Failed to send audio to relay:', err.message || err);
+            throw err;
+        }
+    }
+
+    async _closeRelayConnection(sendClose = true) {
+        if (!this.relaySocket) return;
+
+        const socket = this.relaySocket;
+
+        if (sendClose && socket.readyState === WebSocket.OPEN) {
+            try {
+                socket.send(JSON.stringify({ type: 'CLOSE', sessionId: this.relaySessionId }));
+            } catch (err) {
+                console.warn('[SttService] Failed to notify relay about close:', err.message || err);
+            }
+        }
+
+        try {
+            socket.close();
+        } catch (err) {
+            console.warn('[SttService] Error while closing relay socket:', err.message || err);
+        }
+
+        this._teardownRelayState();
+    }
+
+    _teardownRelayState() {
+        this.relaySocket = null;
+        this.relaySessionId = null;
+        this.relayReady = false;
+        this.mySttSession = null;
+        this.theirSttSession = null;
     }
 
     killExistingSystemAudioDump() {
@@ -695,17 +811,7 @@ class SttService {
             this.theirCompletionTimer = null;
         }
 
-        const closePromises = [];
-        if (this.mySttSession) {
-            closePromises.push(this.mySttSession.close());
-            this.mySttSession = null;
-        }
-        if (this.theirSttSession) {
-            closePromises.push(this.theirSttSession.close());
-            this.theirSttSession = null;
-        }
-
-        await Promise.all(closePromises);
+        await this._closeRelayConnection();
         console.log('All STT sessions closed.');
 
         // Reset state

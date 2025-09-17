@@ -12,6 +12,8 @@ class Config {
 
             webUrl: process.env.pickleglass_WEB_URL || 'http://localhost:3000',
 
+            sttRelayUrl: process.env.STT_RELAY_URL || 'ws://localhost:8080',
+
             enableJWT: false,
             fallbackToHeaderAuth: false,
 
@@ -58,6 +60,11 @@ class Config {
         if (process.env.pickleglass_WEB_URL) {
             this.config.webUrl = process.env.pickleglass_WEB_URL;
             console.log(`[Config] Web URL from env: ${this.config.webUrl}`);
+        }
+
+        if (process.env.STT_RELAY_URL) {
+            this.config.sttRelayUrl = process.env.STT_RELAY_URL;
+            console.log(`[Config] STT relay URL from env: ${this.config.sttRelayUrl}`);
         }
 
         if (process.env.pickleglass_API_TIMEOUT) {

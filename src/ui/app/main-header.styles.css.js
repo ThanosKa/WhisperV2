@@ -223,31 +223,6 @@ export const mainHeaderStyles = css`
         }
     }
 
-    /* Text-only variant for auth header login button */
-    .listen-button.text-link {
-        width: auto;
-        padding: 0 6px;
-        background: transparent;
-        border-radius: 25px;
-        transition: background 0.15s ease;
-    }
-
-    .listen-button.text-link::before,
-    .listen-button.text-link::after {
-        display: none;
-    }
-
-    .listen-button.text-link .action-text-content {
-        color: #fff;
-        text-decoration: none;
-    }
-
-    /* Match Show/Hide hover background */
-    .listen-button.text-link:hover {
-        background: rgba(128, 128, 128, 0.4);
-        border-radius: 25px;
-    }
-
     .header-actions {
         -webkit-app-region: no-drag;
         height: 26px;

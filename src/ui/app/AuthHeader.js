@@ -1,12 +1,12 @@
 import { html, LitElement } from '../assets/lit-core-2.7.4.min.js';
-import { mainHeaderStyles } from './main-header.styles.css.js';
+import { authHeaderStyles } from './auth-header.styles.css.js';
 
 export class AuthHeader extends LitElement {
     static properties = {
         isLoggingIn: { type: Boolean, state: true },
     };
 
-    static styles = mainHeaderStyles;
+    static styles = authHeaderStyles;
 
     constructor() {
         super();

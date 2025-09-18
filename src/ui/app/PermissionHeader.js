@@ -911,11 +911,12 @@ export class PermissionHeader extends LitElement {
         const allGranted = this.microphoneGranted === 'granted' && this.screenGranted === 'granted' && keychainOk;
 
         if (!this.isLoggedIn) {
-            try {
-                await window.api.common.startWebappAuth();
-            } catch (e) {
-                console.error('[PermissionHeader] Failed to start auth flow:', e);
-            }
+            this.dispatchEvent(
+                new CustomEvent('request-auth', {
+                    bubbles: true,
+                    composed: true,
+                })
+            );
             return;
         }
 

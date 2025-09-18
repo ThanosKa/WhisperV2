@@ -20,17 +20,24 @@ export class AuthHeader extends LitElement {
         this.classList.add('sliding-in');
     }
 
-    async _handleLoginClick() {
-        if (this.wasJustDragged || this.isLoggingIn) return;
+    async startLogin({ ignoreDrag = false } = {}) {
+        if ((!ignoreDrag && this.wasJustDragged) || this.isLoggingIn) return;
         this.isLoggingIn = true;
         try {
             if (window.api?.common) {
                 await window.api.common.startWebappAuth();
+            } else {
+                console.warn('[AuthHeader] startLogin called without window.api.common');
+                this.isLoggingIn = false;
             }
         } catch (e) {
             console.error('[AuthHeader] Failed to start auth:', e);
             this.isLoggingIn = false;
         }
+    }
+
+    async _handleLoginClick() {
+        await this.startLogin();
     }
 
     connectedCallback() {

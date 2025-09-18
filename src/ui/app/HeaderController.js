@@ -5,7 +5,7 @@ import './PermissionHeader.js';
 
 // DEV: Set to 'auth' | 'permission' | 'main' to force a header.
 // Leave as null to use normal app logic based on login and permissions.
-const DEV_HEADER_OVERRIDE = 'permission';
+const DEV_HEADER_OVERRIDE = null;
 
 // App content dimensions for Permission header
 const APP_CONTENT_WIDTH = 950;
@@ -19,6 +19,11 @@ class HeaderTransitionManager {
         // this.welcomeHeader = null;
         this.mainHeader = null;
         this.permissionHeader = null;
+        this.handlePermissionLoginRequest = () => {
+            console.log('[HeaderController] Permission header requested auth flow');
+            this.disableDevOverride();
+            this.transitionToAuthHeader({ startLogin: true });
+        };
 
         /**
          * only one header window is allowed
@@ -49,6 +54,7 @@ class HeaderTransitionManager {
                 this.permissionHeader.addEventListener('request-resize', e => {
                     this._resizeForPermissionHeader(e.detail.height);
                 });
+                this.permissionHeader.addEventListener('request-auth', this.handlePermissionLoginRequest);
                 this.permissionHeader.continueCallback = async () => {
                     if (window.api && window.api.headerController) {
                         console.log('[HeaderController] Re-initializing model state after permission grant...');
@@ -91,8 +97,8 @@ class HeaderTransitionManager {
         if (window.api) {
             window.api.headerController.onUserStateChanged((event, userState) => {
                 console.log('[HeaderController] Received user state change:', userState);
-                // Ignore state changes if a dev override is active
-                if (this.devOverride) return;
+                // Ignore state changes if a dev override is active while logged in
+                if (this.devOverride && userState?.isLoggedIn) return;
                 this.handleStateUpdate(userState);
             });
 
@@ -160,8 +166,7 @@ class HeaderTransitionManager {
     async handleStateUpdate(userState) {
         const isLoggedIn = !!(userState && userState.isLoggedIn);
         if (!isLoggedIn) {
-            await this._resizeForAuth();
-            this.ensureHeader('auth');
+            await this.transitionToAuthHeader();
             return;
         }
 
@@ -213,6 +218,30 @@ class HeaderTransitionManager {
         this.ensureHeader('permission');
     }
 
+    async transitionToAuthHeader({ startLogin = false } = {}) {
+        this.disableDevOverride();
+        await this._resizeForAuth();
+
+        if (this.currentHeaderType !== 'auth') {
+            this.ensureHeader('auth');
+        }
+
+        if (!this.authHeader) {
+            this.authHeader = this.headerContainer.querySelector('auth-header');
+        }
+
+        if (startLogin && this.authHeader?.startLogin) {
+            try {
+                if (this.authHeader.updateComplete) {
+                    await this.authHeader.updateComplete;
+                }
+            } catch (error) {
+                console.warn('[HeaderController] Auth header updateComplete rejected:', error);
+            }
+            this.authHeader.startLogin({ ignoreDrag: true });
+        }
+    }
+
     async transitionToMainHeader(animate = true) {
         // Guard: never go to main unless logged in
         if (window.api) {
@@ -241,18 +270,6 @@ class HeaderTransitionManager {
         if (!window.api) return;
         console.log('[HeaderController] _resizeForMain: Resizing window to 520x50');
         return window.api.headerController.resizeHeaderWindow({ width: 550, height: 50 }).catch(() => {});
-    }
-
-    async _resizeForAuth(height = 50) {
-        if (!window.api) return;
-        console.log(`[HeaderController] _resizeForAuth: Resizing window to 520x${height}`);
-        return window.api.headerController.resizeHeaderWindow({ width: 520, height }).catch(() => {});
-    }
-
-    async _resizeForAuth(height = 50) {
-        if (!window.api) return;
-        console.log(`[HeaderController] _resizeForAuth: Resizing window to 520x${height}`);
-        return window.api.headerController.resizeHeaderWindow({ width: 520, height }).catch(() => {});
     }
 
     async _resizeForAuth(height = 50) {
@@ -297,6 +314,13 @@ class HeaderTransitionManager {
                 success: false,
                 error: 'Failed to check permissions',
             };
+        }
+    }
+
+    disableDevOverride() {
+        if (this.devOverride) {
+            console.log('[HeaderController] Disabling dev header override at runtime');
+            this.devOverride = null;
         }
     }
 }

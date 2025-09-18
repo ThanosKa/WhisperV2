@@ -1,40 +1,58 @@
 const { profilePrompts } = require('./promptTemplates.js');
 
 function buildSystemPrompt(promptParts, context = {}, googleSearchEnabled = true) {
-    let finalFormatRequirements = promptParts.formatRequirements;
+    // New simplified path: if a template provides a single `system` string (markdown), use it as-is
+    if (promptParts && typeof promptParts.system === 'string' && promptParts.system.trim().length > 0) {
+        const systemText = promptParts.system.trim();
+        const ctxString = typeof context === 'string' ? context : context && typeof context.context === 'string' ? context.context : '';
+        if (ctxString && ctxString.trim()) {
+            return `${systemText}\n\nContext\n---\n${ctxString.trim()}\n`;
+        }
+        return systemText;
+    }
 
-    if (context.existing_definitions) {
+    // Legacy path: support existing split sections (intro/formatRequirements/content/...)
+    let finalFormatRequirements = promptParts && typeof promptParts.formatRequirements === 'string' ? promptParts.formatRequirements : '';
+
+    if (finalFormatRequirements && context && context.existing_definitions) {
         finalFormatRequirements = finalFormatRequirements.replace('{existing_definitions}', context.existing_definitions);
     }
 
-    const sections = [promptParts.intro, '\n\n', finalFormatRequirements];
+    const sections = [];
 
-    if (googleSearchEnabled && promptParts.searchUsage) {
-        sections.push('\n\n', promptParts.searchUsage);
+    if (promptParts && typeof promptParts.intro === 'string' && promptParts.intro.trim()) {
+        sections.push(promptParts.intro.trim());
     }
 
-    // Add content section if it exists
-    if (promptParts.content && promptParts.content.trim()) {
-        sections.push('\n\n', promptParts.content);
+    if (finalFormatRequirements && finalFormatRequirements.trim()) {
+        sections.push('\n\n', finalFormatRequirements.trim());
+    }
 
-        // Only add context section if we have meaningful conversation context
-        if (context.context && context.context.trim()) {
-            sections.push('\n\nConversation context\n-----\n', context.context, '\n-----\n\n');
+    if (googleSearchEnabled && promptParts && typeof promptParts.searchUsage === 'string' && promptParts.searchUsage.trim()) {
+        sections.push('\n\n', promptParts.searchUsage.trim());
+    }
+
+    if (promptParts && typeof promptParts.content === 'string' && promptParts.content.trim()) {
+        sections.push('\n\n', promptParts.content.trim());
+        const ctx = typeof context === 'string' ? context : context && typeof context.context === 'string' ? context.context : '';
+        if (ctx && ctx.trim()) {
+            sections.push('\n\nConversation context\n-----\n', ctx.trim(), '\n-----\n\n');
         } else {
             sections.push('\n\n');
         }
     } else {
-        // For prompts without content (like define), skip context section entirely
         sections.push('\n\n');
     }
 
-    sections.push(promptParts.outputInstructions);
+    if (promptParts && typeof promptParts.outputInstructions === 'string' && promptParts.outputInstructions.trim()) {
+        sections.push(promptParts.outputInstructions.trim());
+    }
 
     return sections.join('');
 }
 
 function getSystemPrompt(profile, context, googleSearchEnabled = true) {
-    const promptParts = profilePrompts[profile] || profilePrompts.interview;
+    const promptParts = profilePrompts[profile] || profilePrompts.whisper;
     const promptContext = typeof context === 'string' ? { context } : context || {};
     return buildSystemPrompt(promptParts, promptContext, googleSearchEnabled);
 }

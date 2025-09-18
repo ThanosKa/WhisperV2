@@ -377,6 +377,11 @@ class AuthService {
         return result;
     }
 
+    // Internal utility to allow temporary scoping by uid during IPC requests
+    setCurrentUserId(uid) {
+        this.currentUserId = uid || null;
+    }
+
     isAuthenticated() {
         return !!(this.currentUserMode === 'webapp' && this.currentUser && this.currentUserId);
     }

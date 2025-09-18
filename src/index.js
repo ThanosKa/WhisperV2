@@ -354,44 +354,68 @@ function setupWebDataHandlers() {
     const presetRepository = require('./features/common/repositories/preset');
 
     const handleRequest = async (channel, responseChannel, payload) => {
+        // Normalize envelope from web backend: { __uid, data }
+        const effectiveUid = payload && typeof payload === 'object' && payload.__uid ? payload.__uid : null;
+        const effectivePayload =
+            payload && typeof payload === 'object' && Object.prototype.hasOwnProperty.call(payload, 'data') ? payload.data : payload;
+        // Apply per-request user scoping if provided
+        let previousUid = null;
+        if (effectiveUid && authService && typeof authService.getCurrentUserId === 'function' && typeof authService.setCurrentUserId === 'function') {
+            try {
+                previousUid = authService.getCurrentUserId();
+                authService.setCurrentUserId(effectiveUid);
+            } catch (_) {
+                // ignore
+            }
+        }
         let result;
         // const currentUserId = authService.getCurrentUserId(); // No longer needed here
         try {
             switch (channel) {
                 // SESSION
                 case 'get-sessions':
-                    // Adapter injects UID
-                    result = await sessionRepository.getAllByUserId();
+                    // If a uid was supplied via envelope, temporarily scope repositories to that user
+                    if (effectiveUid && authService && typeof authService.setCurrentUserId === 'function') {
+                        const prev = authService.getCurrentUserId();
+                        try {
+                            authService.setCurrentUserId(effectiveUid);
+                            result = await sessionRepository.getAllByUserId();
+                        } finally {
+                            authService.setCurrentUserId(prev);
+                        }
+                    } else {
+                        result = await sessionRepository.getAllByUserId();
+                    }
                     break;
                 case 'get-session-details':
-                    const session = await sessionRepository.getById(payload);
+                    const session = await sessionRepository.getById(effectivePayload);
                     if (!session) {
                         result = null;
                         break;
                     }
                     const [transcripts, ai_messages, summary] = await Promise.all([
-                        sttRepository.getAllTranscriptsBySessionId(payload),
-                        askRepository.getAllAiMessagesBySessionId(payload),
-                        summaryRepository.getSummaryBySessionId(payload),
+                        sttRepository.getAllTranscriptsBySessionId(effectivePayload),
+                        askRepository.getAllAiMessagesBySessionId(effectivePayload),
+                        summaryRepository.getSummaryBySessionId(effectivePayload),
                     ]);
                     result = { session, transcripts, ai_messages, summary };
                     break;
                 case 'delete-session':
-                    result = await sessionRepository.deleteWithRelatedData(payload);
+                    result = await sessionRepository.deleteWithRelatedData(effectivePayload);
                     break;
                 case 'create-session':
                     // Adapter injects UID
                     const id = await sessionRepository.create('ask');
-                    if (payload && payload.title) {
-                        await sessionRepository.updateTitle(id, payload.title);
+                    if (effectivePayload && effectivePayload.title) {
+                        await sessionRepository.updateTitle(id, effectivePayload.title);
                     }
                     result = { id };
                     break;
                 case 'update-session-title':
-                    if (!payload || !payload.id || !payload.title) {
+                    if (!effectivePayload || !effectivePayload.id || !effectivePayload.title) {
                         throw new Error('id and title are required');
                     }
-                    result = await sessionRepository.updateTitle(payload.id, payload.title);
+                    result = await sessionRepository.updateTitle(effectivePayload.id, effectivePayload.title);
                     break;
 
                 // USER
@@ -400,19 +424,29 @@ function setupWebDataHandlers() {
                     console.log('[WebData] get-user-profile request - current auth state:');
                     console.log('[WebData] - authService.getCurrentUserId():', authService.getCurrentUserId());
                     console.log('[WebData] - authService.getCurrentUser():', authService.getCurrentUser());
-                    result = await userRepository.getById();
+                    if (effectiveUid && authService && typeof authService.setCurrentUserId === 'function') {
+                        const prev = authService.getCurrentUserId();
+                        try {
+                            authService.setCurrentUserId(effectiveUid);
+                            result = await userRepository.getById();
+                        } finally {
+                            authService.setCurrentUserId(prev);
+                        }
+                    } else {
+                        result = await userRepository.getById();
+                    }
                     console.log('[WebData] - userRepository.getById() result:', result);
                     break;
                 case 'update-user-profile':
                     // Adapter injects UID
-                    result = await userRepository.update(payload);
+                    result = await userRepository.update(effectivePayload);
                     break;
                 case 'find-or-create-user':
-                    result = await userRepository.findOrCreate(payload);
+                    result = await userRepository.findOrCreate(effectivePayload);
                     break;
                 case 'save-api-key':
                     // Use ModelStateService as the single source of truth for API key management
-                    result = await modelStateService.setApiKey(payload.provider, payload.apiKey);
+                    result = await modelStateService.setApiKey(effectivePayload.provider, effectivePayload.apiKey);
                     break;
                 case 'check-api-key-status':
                     // Use ModelStateService to check API key status
@@ -431,23 +465,23 @@ function setupWebDataHandlers() {
                     break;
                 case 'create-preset':
                     // Adapter injects UID
-                    result = await presetRepository.create(payload);
-                    settingsService.notifyPresetUpdate('created', result.id, payload.title);
+                    result = await presetRepository.create(effectivePayload);
+                    settingsService.notifyPresetUpdate('created', result.id, effectivePayload.title);
                     break;
                 case 'update-preset':
                     // Adapter injects UID
-                    result = await presetRepository.update(payload.id, payload.data);
-                    settingsService.notifyPresetUpdate('updated', payload.id, payload.data.title);
+                    result = await presetRepository.update(effectivePayload.id, effectivePayload.data);
+                    settingsService.notifyPresetUpdate('updated', effectivePayload.id, effectivePayload.data.title);
                     break;
                 case 'delete-preset':
                     // Adapter injects UID
-                    result = await presetRepository.delete(payload);
-                    settingsService.notifyPresetUpdate('deleted', payload);
+                    result = await presetRepository.delete(effectivePayload);
+                    settingsService.notifyPresetUpdate('deleted', effectivePayload);
                     break;
 
                 // BATCH
                 case 'get-batch-data':
-                    const includes = payload ? payload.split(',').map(item => item.trim()) : ['profile', 'presets', 'sessions'];
+                    const includes = effectivePayload ? effectivePayload.split(',').map(item => item.trim()) : ['profile', 'presets', 'sessions'];
                     const promises = {};
 
                     if (includes.includes('profile')) {
@@ -479,6 +513,15 @@ function setupWebDataHandlers() {
         } catch (error) {
             console.error(`Error handling web data request for ${channel}:`, error);
             eventBridge.emit(responseChannel, { success: false, error: error.message });
+        } finally {
+            // Restore previous auth user scope if we changed it
+            if (previousUid !== null && typeof authService.setCurrentUserId === 'function') {
+                try {
+                    authService.setCurrentUserId(previousUid);
+                } catch (_) {
+                    // ignore
+                }
+            }
         }
     };
 

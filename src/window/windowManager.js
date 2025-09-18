@@ -910,6 +910,20 @@ const handleHeaderStateChanged = state => {
     internalBridge.emit('reregister-shortcuts');
 };
 
+function forceShowPermissionOnboarding() {
+    try {
+        const header = windowPool.get('header');
+        if (!header || header.isDestroyed()) {
+            return { success: false, error: 'Header window not available' };
+        }
+        header.webContents.send('header:force-show-permission');
+        return { success: true };
+    } catch (e) {
+        console.error('[WindowManager] Failed to force show permission onboarding:', e);
+        return { success: false, error: e?.message || 'unknown' };
+    }
+}
+
 module.exports = {
     createWindows,
     windowPool,
@@ -929,4 +943,5 @@ module.exports = {
     adjustWindowHeight,
     listDisplays,
     moveToDisplay,
+    forceShowPermissionOnboarding,
 };

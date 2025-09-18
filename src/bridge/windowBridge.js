@@ -32,6 +32,9 @@ module.exports = {
         // Display management
         ipcMain.handle('get-displays', () => windowManager.listDisplays());
         ipcMain.handle('move-to-display', (event, displayId) => windowManager.moveToDisplay(displayId));
+
+        // Force show permission onboarding
+        ipcMain.handle('header:force-show-permission', () => windowManager.forceShowPermissionOnboarding());
     },
 
     notifyFocusChange(win, isFocused) {

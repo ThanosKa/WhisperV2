@@ -362,6 +362,15 @@ export class SettingsView extends LitElement {
         window.api.settingsView.firebaseLogout();
     }
 
+    handleViewOnboarding = async () => {
+        try {
+            console.log('[SettingsView] View Onboarding clicked');
+            await window.api.settingsView.showPermissionOnboarding();
+        } catch (e) {
+            console.error('[SettingsView] Failed to show onboarding:', e);
+        }
+    };
+
     render() {
         if (this.isLoading) {
             return html`
@@ -533,6 +542,12 @@ export class SettingsView extends LitElement {
                               `}
                         <button class="settings-button half-width" @click=${this.handleQuit}>
                             <span>Quit</span>
+                        </button>
+                    </div>
+
+                    <div class="move-buttons">
+                        <button class="settings-button full-width" @click=${this.handleViewOnboarding}>
+                            <span>View Onboarding</span>
                         </button>
                     </div>
                 </div>

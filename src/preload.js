@@ -52,6 +52,10 @@ contextBridge.exposeInMainWorld('api', {
         onAuthFailed: callback => ipcRenderer.on('auth-failed', callback),
         removeOnAuthFailed: callback => ipcRenderer.removeListener('auth-failed', callback),
         // Removed ApiKey header force-show in SaaS mode
+
+        // Force show onboarding (permission header) commands from main
+        onForceShowPermission: callback => ipcRenderer.on('header:force-show-permission', callback),
+        removeOnForceShowPermission: callback => ipcRenderer.removeListener('header:force-show-permission', callback),
     },
 
     // src/ui/app/MainHeader.js
@@ -193,6 +197,9 @@ contextBridge.exposeInMainWorld('api', {
 
         // App Control
         quitApplication: () => ipcRenderer.invoke('quit-application'),
+
+        // Onboarding
+        showPermissionOnboarding: () => ipcRenderer.invoke('header:force-show-permission'),
 
         // Listeners
         onUserStateChanged: callback => ipcRenderer.on('user-state-changed', callback),

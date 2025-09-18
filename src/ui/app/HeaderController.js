@@ -88,6 +88,12 @@ class HeaderTransitionManager {
             window.api.headerController.onAuthFailed((event, { message }) => {
                 console.error('[HeaderController] Received auth failure from main process:', message);
             });
+
+            // Allow main process to force-show the permission onboarding
+            window.api.headerController.onForceShowPermission(() => {
+                console.log('[HeaderController] Received force-show-permission command');
+                this.forceShowPermissionHeader();
+            });
         }
     }
 
@@ -188,6 +194,12 @@ class HeaderTransitionManager {
         this.ensureHeader('permission');
     }
 
+    async forceShowPermissionHeader() {
+        const initialHeight = APP_CONTENT_HEIGHT;
+        await this._resizeForPermissionHeader(initialHeight);
+        this.ensureHeader('permission');
+    }
+
     async transitionToMainHeader(animate = true) {
         if (this.currentHeaderType === 'main') {
             return this._resizeForMain();
@@ -200,7 +212,7 @@ class HeaderTransitionManager {
     async _resizeForMain() {
         if (!window.api) return;
         console.log('[HeaderController] _resizeForMain: Resizing window to 520x50');
-        return window.api.headerController.resizeHeaderWindow({ width: 520, height: 50 }).catch(() => {});
+        return window.api.headerController.resizeHeaderWindow({ width: 550, height: 50 }).catch(() => {});
     }
 
     async _resizeForPermissionHeader(height) {

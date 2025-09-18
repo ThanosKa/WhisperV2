@@ -63,8 +63,8 @@ class ListenService {
             switch (listenButtonText) {
                 case 'Listen':
                     console.log('[ListenService] changeSession to "Listen"');
-                    internalBridge.emit('window:requestVisibility', { name: 'listen', visible: true });
                     if (this.isSessionActive()) {
+                        internalBridge.emit('window:requestVisibility', { name: 'listen', visible: true });
                         setTimeout(() => {
                             try {
                                 const history = this.getConversationHistory();
@@ -73,13 +73,26 @@ class ListenService {
                                 console.warn('[ListenService] failed to sync conversation history:', e.message);
                             }
                         }, 100);
+                        if (listenWindow && !listenWindow.isDestroyed()) {
+                            listenWindow.webContents.send('session-state-changed', { isActive: true, mode: 'start' });
+                        }
+                        nextStatus = 'inSession';
                     } else {
-                        await this.initializeSession();
+                        const initOk = await this.initializeSession();
+                        if (initOk) {
+                            internalBridge.emit('window:requestVisibility', { name: 'listen', visible: true });
+                            if (listenWindow && !listenWindow.isDestroyed()) {
+                                listenWindow.webContents.send('session-state-changed', { isActive: true, mode: 'start' });
+                            }
+                            nextStatus = 'inSession';
+                        } else {
+                            // Initialization failed: do not flip UI to inSession, keep as beforeSession
+                            nextStatus = 'beforeSession';
+                            // Notify header about failure immediately and exit success path
+                            header.webContents.send('listen:changeSessionResult', { success: false, nextStatus });
+                            return;
+                        }
                     }
-                    if (listenWindow && !listenWindow.isDestroyed()) {
-                        listenWindow.webContents.send('session-state-changed', { isActive: true, mode: 'start' });
-                    }
-                    nextStatus = 'inSession';
                     break;
 
                 case 'Stop':
@@ -219,6 +232,7 @@ class ListenService {
             console.log('✅ Listen service initialized successfully.');
 
             this.sendToRenderer('update-status', 'Connected. Ready to listen.');
+            this.sendToRenderer('change-listen-capture-state', { status: 'start' });
 
             return true;
         } catch (error) {
@@ -228,7 +242,6 @@ class ListenService {
         } finally {
             this.isInitializingSession = false;
             this.sendToRenderer('session-initializing', false);
-            this.sendToRenderer('change-listen-capture-state', { status: 'start' });
         }
     }
 

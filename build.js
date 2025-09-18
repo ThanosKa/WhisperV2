@@ -15,7 +15,6 @@ const baseConfig = {
 
 const entryPoints = [
     { in: 'src/ui/app/HeaderController.js', out: 'public/build/header' },
-    { in: 'src/ui/app/AuthWindowController.js', out: 'public/build/auth' },
     { in: 'src/ui/app/PickleGlassApp.js', out: 'public/build/content' },
 ];
 

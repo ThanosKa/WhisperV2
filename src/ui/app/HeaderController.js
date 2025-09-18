@@ -1,4 +1,5 @@
 import './MainHeader.js';
+import './AuthHeader.js';
 import './PermissionHeader.js';
 // import './WelcomeHeader.js';
 
@@ -35,16 +36,15 @@ class HeaderTransitionManager {
             // this.welcomeHeader = null;
             this.mainHeader = null;
             this.permissionHeader = null;
+            this.authHeader = null;
 
             // Create new header element
             if (type === 'auth') {
-                this.headerContainer.style.display = 'none';
-                this.currentHeaderType = type;
-                this.notifyHeaderState(type);
+                this.authHeader = document.createElement('auth-header');
+                this.headerContainer.appendChild(this.authHeader);
+                this.authHeader.startSlideInAnimation?.();
                 console.log('[HeaderController] ensureHeader: Header of type:', type, 'created.');
-                return;
             } else if (type === 'permission') {
-                this.headerContainer.style.display = '';
                 this.permissionHeader = document.createElement('permission-setup');
                 this.permissionHeader.addEventListener('request-resize', e => {
                     this._resizeForPermissionHeader(e.detail.height);
@@ -70,7 +70,6 @@ class HeaderTransitionManager {
                 };
                 this.headerContainer.appendChild(this.permissionHeader);
             } else {
-                this.headerContainer.style.display = '';
                 this.mainHeader = document.createElement('main-header');
                 this.headerContainer.appendChild(this.mainHeader);
                 this.mainHeader.startSlideInAnimation?.();
@@ -113,6 +112,7 @@ class HeaderTransitionManager {
         const type = String(this.devOverride).toLowerCase();
         switch (type) {
             case 'auth':
+                await this._resizeForAuth();
                 this.ensureHeader('auth');
                 break;
             case 'permission':
@@ -160,6 +160,7 @@ class HeaderTransitionManager {
     async handleStateUpdate(userState) {
         const isLoggedIn = !!(userState && userState.isLoggedIn);
         if (!isLoggedIn) {
+            await this._resizeForAuth();
             this.ensureHeader('auth');
             return;
         }
@@ -240,6 +241,12 @@ class HeaderTransitionManager {
         if (!window.api) return;
         console.log('[HeaderController] _resizeForMain: Resizing window to 520x50');
         return window.api.headerController.resizeHeaderWindow({ width: 550, height: 50 }).catch(() => {});
+    }
+
+    async _resizeForAuth(height = 50) {
+        if (!window.api) return;
+        console.log(`[HeaderController] _resizeForAuth: Resizing window to 520x${height}`);
+        return window.api.headerController.resizeHeaderWindow({ width: 520, height }).catch(() => {});
     }
 
     async _resizeForPermissionHeader(height) {

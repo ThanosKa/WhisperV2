@@ -7,11 +7,6 @@ const shortcutsService = require('../features/shortcuts/shortcutsService');
 const internalBridge = require('../bridge/internalBridge');
 const permissionRepository = require('../features/common/repositories/permission');
 
-const HEADER_HEIGHT = 47;
-const DEFAULT_WINDOW_WIDTH = 353;
-const AUTH_WINDOW_WIDTH = 220; // half-ish width compared to the main header target
-const AUTH_WINDOW_HEIGHT = HEADER_HEIGHT;
-
 /* ────────────────[ UNIFIED CROSS-PLATFORM DESIGN ]─────────────── */
 // Liquid glass disabled for consistent cross-platform performance
 // and smoother user experience across all operating systems
@@ -21,7 +16,7 @@ let shouldUseLiquidGlass = false;
 let isContentProtectionOn = true;
 let lastVisibleWindows = new Set(['header']);
 
-let currentHeaderState = 'auth';
+let currentHeaderState = 'apikey';
 const windowPool = new Map();
 
 let settingsHideTimer = null;
@@ -93,69 +88,6 @@ const adjustWindowHeight = (winName, targetHeight) => {
     internalBridge.emit('window:adjustWindowHeight', { winName, targetHeight });
 };
 
-function getAuthWindow() {
-    const auth = windowPool.get('auth');
-    if (!auth || auth.isDestroyed()) return null;
-    return auth;
-}
-
-function positionAuthWindow() {
-    const auth = getAuthWindow();
-    if (!auth) return;
-
-    const header = windowPool.get('header');
-    const headerBounds = header && !header.isDestroyed() ? header.getBounds() : null;
-
-    if (headerBounds) {
-        const centeredX = Math.round(headerBounds.x + (headerBounds.width - AUTH_WINDOW_WIDTH) / 2);
-        const targetBounds = {
-            x: centeredX,
-            y: headerBounds.y,
-            width: AUTH_WINDOW_WIDTH,
-            height: headerBounds.height || AUTH_WINDOW_HEIGHT,
-        };
-        auth.setBounds(targetBounds);
-        return;
-    }
-
-    const primaryDisplay = screen.getPrimaryDisplay();
-    const { width: screenWidth, y: workAreaY } = primaryDisplay.workArea;
-    const fallbackX = Math.round((screenWidth - AUTH_WINDOW_WIDTH) / 2);
-    const fallbackY = workAreaY + 21;
-    auth.setBounds({ x: fallbackX, y: fallbackY, width: AUTH_WINDOW_WIDTH, height: AUTH_WINDOW_HEIGHT });
-}
-
-function showAuthWindow() {
-    const auth = getAuthWindow();
-    if (!auth) return;
-
-    positionAuthWindow();
-    auth.setAlwaysOnTop(true);
-    auth.show();
-    auth.moveTop();
-    auth.focus();
-}
-
-function hideAuthWindow() {
-    const auth = getAuthWindow();
-    if (!auth) return;
-    auth.hide();
-}
-
-function syncHeaderWithAuthPosition() {
-    const auth = getAuthWindow();
-    const header = windowPool.get('header');
-    if (!auth || !header || auth.isDestroyed() || header.isDestroyed() || !auth.isVisible()) return;
-
-    const authBounds = auth.getBounds();
-    const headerBounds = header.getBounds();
-    const centeredX = Math.round(authBounds.x + (authBounds.width - headerBounds.width) / 2);
-    const target = layoutManager
-        ? layoutManager.calculateClampedPosition(header, { x: centeredX, y: authBounds.y })
-        : { x: centeredX, y: authBounds.y };
-    header.setPosition(target.x, target.y);
-}
-
 function setupWindowController(windowPool, layoutManager, movementManager) {
     internalBridge.on('window:requestVisibility', ({ name, visible }) => {
         handleWindowVisibilityRequest(windowPool, layoutManager, movementManager, name, visible);
@@ -170,13 +102,7 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
             const newPosition = layoutManager.calculateNewPositionForDisplay(header, displayId);
             if (newPosition) {
                 movementManager.animateWindowPosition(header, newPosition, {
-                    onComplete: () => {
-                        updateChildWindowLayouts(true);
-                        const auth = getAuthWindow();
-                        if (auth && auth.isVisible()) {
-                            positionAuthWindow();
-                        }
-                    },
+                    onComplete: () => updateChildWindowLayouts(true),
                 });
             }
         }
@@ -713,6 +639,9 @@ function getCurrentDisplay(window) {
 }
 
 function createWindows() {
+    const HEADER_HEIGHT = 47;
+    const DEFAULT_WINDOW_WIDTH = 353;
+
     const primaryDisplay = screen.getPrimaryDisplay();
     const { y: workAreaY, width: screenWidth } = primaryDisplay.workArea;
 
@@ -754,44 +683,6 @@ function createWindows() {
     // Load content consistently across all platforms
     header.loadFile(path.join(__dirname, '../ui/app/header.html'));
     windowPool.set('header', header);
-
-    const authInitialX = Math.round(initialX + (DEFAULT_WINDOW_WIDTH - AUTH_WINDOW_WIDTH) / 2);
-    const auth = new BrowserWindow({
-        width: AUTH_WINDOW_WIDTH,
-        height: AUTH_WINDOW_HEIGHT,
-        x: authInitialX,
-        y: initialY,
-        frame: false,
-        transparent: true,
-        vibrancy: false,
-        hasShadow: false,
-        alwaysOnTop: true,
-        skipTaskbar: true,
-        hiddenInMissionControl: true,
-        resizable: false,
-        focusable: true,
-        acceptFirstMouse: true,
-        show: false,
-        webPreferences: {
-            nodeIntegration: false,
-            contextIsolation: true,
-            preload: path.join(__dirname, '../preload.js'),
-            backgroundThrottling: false,
-            webSecurity: false,
-            enableRemoteModule: false,
-            experimentalFeatures: false,
-        },
-        useContentSize: true,
-        disableAutoHideCursor: true,
-    });
-    if (process.platform === 'darwin') {
-        auth.setWindowButtonVisibility(false);
-    }
-    auth.loadFile(path.join(__dirname, '../ui/app/auth.html')).catch(console.error);
-    auth.setContentProtection(isContentProtectionOn);
-    auth.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-    windowPool.set('auth', auth);
-
     layoutManager = new WindowLayoutManager(windowPool);
     movementManager = new SmoothMovementManager(windowPool);
 
@@ -874,37 +765,10 @@ const handleHeaderStateChanged = state => {
     console.log(`[WindowManager] Header state changed to: ${state}`);
     currentHeaderState = state;
 
-    const header = windowPool.get('header');
-
-    if (state === 'auth') {
-        destroyFeatureWindows();
-        if (header && !header.isDestroyed()) {
-            header.hide();
-        }
-        lastVisibleWindows.clear();
-        lastVisibleWindows.add('auth');
-        showAuthWindow();
-        internalBridge.emit('reregister-shortcuts');
-        return;
-    }
-
-    syncHeaderWithAuthPosition();
-    hideAuthWindow();
-
-    if (header && !header.isDestroyed()) {
-        if (!header.isVisible()) {
-            header.show();
-        }
-        header.moveTop?.();
-    }
-
-    lastVisibleWindows.delete('auth');
-    lastVisibleWindows.add('header');
-
     if (state === 'main') {
         createFeatureWindows(windowPool.get('header'));
     } else {
-        // 'permission'
+        // 'apikey' | 'permission'
         destroyFeatureWindows();
     }
     internalBridge.emit('reregister-shortcuts');

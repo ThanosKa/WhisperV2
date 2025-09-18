@@ -621,6 +621,7 @@ export class PermissionHeader extends LitElement {
         userMode: { type: String }, // 'local' or 'firebase'
         currentStep: { type: Number },
         isTransitioning: { type: Boolean },
+        isLoggedIn: { type: Boolean },
     };
 
     constructor() {
@@ -633,6 +634,7 @@ export class PermissionHeader extends LitElement {
         this.userMode = 'local'; // Default to local
         this.currentStep = 0; // 0: Permissions, 1: Commands
         this.isTransitioning = false;
+        this.isLoggedIn = false;
 
         // Command data matching Whisper's onboarding
         this.commands = [
@@ -681,9 +683,11 @@ export class PermissionHeader extends LitElement {
             try {
                 const userState = await window.api.common.getCurrentUser();
                 this.userMode = userState.mode;
+                this.isLoggedIn = !!(userState && userState.isLoggedIn);
             } catch (e) {
                 console.error('[PermissionHeader] Failed to get user state', e);
                 this.userMode = 'local'; // Fallback to local
+                this.isLoggedIn = false;
             }
         }
 
@@ -695,8 +699,10 @@ export class PermissionHeader extends LitElement {
                 try {
                     const userState = await window.api.common.getCurrentUser();
                     this.userMode = userState.mode;
+                    this.isLoggedIn = !!(userState && userState.isLoggedIn);
                 } catch (e) {
                     this.userMode = 'local';
+                    this.isLoggedIn = false;
                 }
             }
             this.checkPermissions();
@@ -899,6 +905,30 @@ export class PermissionHeader extends LitElement {
         }
     }
 
+    async handleCommandsPrimaryAction() {
+        const isKeychainRequired = this.userMode === 'firebase';
+        const keychainOk = !isKeychainRequired || this.keychainGranted === 'granted';
+        const allGranted = this.microphoneGranted === 'granted' && this.screenGranted === 'granted' && keychainOk;
+
+        if (!this.isLoggedIn) {
+            try {
+                await window.api.common.startWebappAuth();
+            } catch (e) {
+                console.error('[PermissionHeader] Failed to start auth flow:', e);
+            }
+            return;
+        }
+
+        // Logged in -> continue if possible
+        if (allGranted) {
+            this.handleContinue();
+        } else {
+            // If permissions not ready, guide back to step 0
+            this.currentStep = 0;
+            this.requestUpdate();
+        }
+    }
+
     handleClose() {
         console.log('Close button clicked');
         if (window.api) {
@@ -1056,6 +1086,116 @@ export class PermissionHeader extends LitElement {
                       </div>
                       <h1 class="title">Ready to Go</h1>
                       <div class="subtitle">All permissions have been granted successfully.</div>
+
+                      <div class="rows">
+                          <div class="perm-row">
+                              <div class="perm-left">
+                                  <svg
+                                      class="permission-icon"
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width="24"
+                                      height="24"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="white"
+                                      stroke-width="2"
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                  >
+                                      <path d="M12 19v3" />
+                                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                                      <rect x="9" y="2" width="6" height="13" rx="3" />
+                                  </svg>
+                                  <div class="perm-text">
+                                      <div class="perm-title">Microphone</div>
+                                      <div class="perm-desc">Access granted</div>
+                                  </div>
+                              </div>
+                              <div class="perm-right">
+                                  <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                      <path
+                                          fill-rule="evenodd"
+                                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                          clip-rule="evenodd"
+                                      />
+                                  </svg>
+                                  <button class="cta-btn" disabled>Granted</button>
+                              </div>
+                          </div>
+
+                          <div class="perm-row">
+                              <div class="perm-left">
+                                  <svg
+                                      class="permission-icon"
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      width="24"
+                                      height="24"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="white"
+                                      stroke-width="2"
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                  >
+                                      <rect width="18" height="12" x="3" y="4" rx="2" ry="2" />
+                                      <line x1="2" x2="22" y1="20" y2="20" />
+                                  </svg>
+                                  <div class="perm-text">
+                                      <div class="perm-title">Screen Recording</div>
+                                      <div class="perm-desc">Access granted</div>
+                                  </div>
+                              </div>
+                              <div class="perm-right">
+                                  <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                      <path
+                                          fill-rule="evenodd"
+                                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                          clip-rule="evenodd"
+                                      />
+                                  </svg>
+                                  <button class="cta-btn" disabled>Granted</button>
+                              </div>
+                          </div>
+
+                          ${isKeychainRequired
+                              ? html`
+                                    <div class="perm-row">
+                                        <div class="perm-left">
+                                            <svg
+                                                class="permission-icon"
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                width="24"
+                                                height="24"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="white"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                            >
+                                                <ellipse cx="12" cy="5" rx="9" ry="3" />
+                                                <path d="M3 5V19A9 3 0 0 0 21 19V5" />
+                                                <path d="M3 12A9 3 0 0 0 21 12" />
+                                            </svg>
+                                            <div class="perm-text">
+                                                <div class="perm-title">Data Encryption</div>
+                                                <div class="perm-desc">Enabled</div>
+                                            </div>
+                                        </div>
+                                        <div class="perm-right">
+                                            <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                                <path
+                                                    fill-rule="evenodd"
+                                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                                    clip-rule="evenodd"
+                                                />
+                                            </svg>
+                                            <button class="cta-btn" disabled>Enabled</button>
+                                        </div>
+                                    </div>
+                                `
+                              : ''}
+                      </div>
                   `}
         `;
     }
@@ -1088,6 +1228,9 @@ export class PermissionHeader extends LitElement {
         const keychainOk = !isKeychainRequired || this.keychainGranted === 'granted';
         const allGranted = this.microphoneGranted === 'granted' && this.screenGranted === 'granted' && keychainOk;
 
+        const rightButtonLabel = this.currentStep === 1 ? (this.isLoggedIn ? 'Continue' : 'Login') : 'Next';
+        const rightButtonDisabled = this.currentStep === 1 ? (this.isLoggedIn ? !allGranted : false) : false;
+
         return html`
             <div class="container">
                 <button class="close-button" @click=${this.handleClose} title="Close application">
@@ -1107,7 +1250,9 @@ export class PermissionHeader extends LitElement {
                         : html`<div class="nav-spacer"></div>`}
                     ${this.currentStep === 0
                         ? html`<button class="nav-button next-button" @click=${this.handleNext}>Next</button>`
-                        : html`<div class="nav-spacer"></div>`}
+                        : html`<button class="nav-button next-button" @click=${this.handleCommandsPrimaryAction} ?disabled=${rightButtonDisabled}>
+                              ${rightButtonLabel}
+                          </button>`}
                 </div>
             </div>
         `;

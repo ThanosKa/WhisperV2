@@ -4,7 +4,7 @@ import './PermissionHeader.js';
 
 // DEV: Set to 'auth' | 'permission' | 'main' to force a header.
 // Leave as null to use normal app logic based on login and permissions.
-const DEV_HEADER_OVERRIDE = null;
+const DEV_HEADER_OVERRIDE = 'permission';
 
 // App content dimensions for Permission header
 const APP_CONTENT_WIDTH = 950;
@@ -53,6 +53,18 @@ class HeaderTransitionManager {
                     if (window.api && window.api.headerController) {
                         console.log('[HeaderController] Re-initializing model state after permission grant...');
                         await window.api.headerController.reInitializeModelState();
+                    }
+                    // Only transition to main if logged in
+                    try {
+                        const userState = await window.api?.common.getCurrentUser();
+                        const isLoggedIn = !!(userState && userState.isLoggedIn);
+                        if (!isLoggedIn) {
+                            console.warn('[HeaderController] Continue blocked: user not logged in');
+                            return;
+                        }
+                    } catch (e) {
+                        console.warn('[HeaderController] Continue blocked due to failed user check');
+                        return;
                     }
                     this.transitionToMainHeader();
                 };
@@ -201,6 +213,21 @@ class HeaderTransitionManager {
     }
 
     async transitionToMainHeader(animate = true) {
+        // Guard: never go to main unless logged in
+        if (window.api) {
+            try {
+                const userState = await window.api.common.getCurrentUser();
+                const isLoggedIn = !!(userState && userState.isLoggedIn);
+                if (!isLoggedIn) {
+                    console.warn('[HeaderController] Blocked transition to main: user not logged in');
+                    return;
+                }
+            } catch (e) {
+                console.warn('[HeaderController] Blocked transition to main: user check failed');
+                return;
+            }
+        }
+
         if (this.currentHeaderType === 'main') {
             return this._resizeForMain();
         }

@@ -12,6 +12,8 @@ class SummaryService {
         this.currentSessionId = null;
         this.definedTerms = new Set(); // Track previously defined terms
         this.lastAnalyzedIndex = 0; // Track how many utterances we've already analyzed
+        this.detectedQuestions = new Set(); // Track previously detected questions
+        this.analysisProfile = 'meeting_analysis'; // default profile id (personal)
 
         // Callbacks
         this.onAnalysisComplete = null;
@@ -87,6 +89,13 @@ class SummaryService {
         this.currentSessionId = sessionId;
     }
 
+    setAnalysisProfile(profileId) {
+        // Minimal guard; future: validate against known profiles
+        if (typeof profileId === 'string' && profileId.trim()) {
+            this.analysisProfile = profileId.trim();
+        }
+    }
+
     sendToRenderer(channel, data) {
         const { windowPool } = require('../../../window/windowManager');
         const listenWindow = windowPool?.get('listen');
@@ -116,6 +125,7 @@ class SummaryService {
         this.previousAnalysisResult = null;
         this.analysisHistory = [];
         this.definedTerms.clear(); // Clear defined terms for new conversation
+        this.detectedQuestions.clear(); // Clear detected questions for new conversation
         this.lastAnalyzedIndex = 0; // Reset analysis tracking
         console.log('🔄 Conversation history and analysis state reset');
     }
@@ -141,11 +151,14 @@ class SummaryService {
 
         const recentConversation = this.formatConversationForPrompt(conversationTexts, maxTurns);
 
+        // Build previous items for de-duplication guidance
+        const prevDefines = Array.from(this.definedTerms);
+        const prevQuestions = Array.from(this.detectedQuestions);
+
         // Only include previous context if we have meaningful insights (not just default actions)
         let contextualPrompt = '';
         if (this.previousAnalysisResult && this.previousAnalysisResult.summary.length > 0) {
             const meaningfulSummary = this.previousAnalysisResult.summary.filter(s => s && !s.includes('No progress') && !s.includes('No specific'));
-
             if (meaningfulSummary.length > 0) {
                 contextualPrompt = `
 Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
@@ -155,13 +168,13 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
         // Combine contextual prompt with recent conversation for the template
         // Make sections explicit so LLM analyzes only the transcript
         const fullContext = contextualPrompt
-            ? `Previous Context (metadata):\n${contextualPrompt.trim()}\n\nTranscript:\n${recentConversation}`
-            : `Transcript:\n${recentConversation}`;
+            ? `${contextualPrompt.trim()}\n\nPreviously Defined Terms:\n${(prevDefines || []).join(', ') || '(none)'}\n\nPreviously Detected Questions:\n${(prevQuestions || []).join(' | ') || '(none)'}\n\nTranscript:\n${recentConversation}`
+            : `Previously Defined Terms:\n${(prevDefines || []).join(', ') || '(none)'}\n\nPreviously Detected Questions:\n${(prevQuestions || []).join(' | ') || '(none)'}\n\nTranscript:\n${recentConversation}`;
 
-        // Use meeting analysis prompt template
-        const systemPrompt = getSystemPrompt('meeting_analysis', {
+        // Use selected analysis prompt template (defaults to personal)
+        const systemPrompt = getSystemPrompt(this.analysisProfile || 'meeting_analysis', {
             context: fullContext,
-            existing_definitions: Array.from(this.definedTerms).join(', ') || '---',
+            // Simplified: rely on client-side de-duplication of defines
         });
 
         try {
@@ -285,27 +298,14 @@ ${responseText}
                     // console.log(`🔍 Processing line: "${trimmedLine}" | Section: ${currentSection}`);
                 }
 
-                // Section header detection - Updated to match the new prompt format
-                if (
-                    trimmedLine.startsWith('**Meeting Insights**') ||
-                    trimmedLine.includes('Meeting Insights') ||
-                    trimmedLine.startsWith('**Meeting Recap**') ||
-                    trimmedLine.includes('Meeting Recap')
-                ) {
+                // Exact heading detection to reduce ambiguity
+                if (trimmedLine === '### Meeting Insights') {
                     currentSection = 'meeting-insights';
                     continue;
-                } else if (
-                    trimmedLine.startsWith('**Questions Detected**') ||
-                    trimmedLine.includes('Questions Detected') ||
-                    trimmedLine.startsWith('**Detected Questions')
-                ) {
+                } else if (trimmedLine === '### Questions Detected') {
                     currentSection = 'detected-questions';
                     continue;
-                } else if (
-                    trimmedLine.startsWith('**Terms to Define**') ||
-                    trimmedLine.includes('Terms to Define') ||
-                    trimmedLine.startsWith('**Define Candidates')
-                ) {
+                } else if (trimmedLine === '### Terms to Define') {
                     currentSection = 'define-candidates';
                     continue;
                 }
@@ -320,15 +320,26 @@ ${responseText}
                             structuredData.summary.pop();
                         }
                     }
-                } else if (trimmedLine.match(/^\d+\./) && currentSection === 'detected-questions') {
+                } else if (/^\d+\./.test(trimmedLine) && currentSection === 'detected-questions') {
                     const question = trimmedLine.replace(/^\d+\.\s*/, '').trim();
-                    if (question) {
+                    // Filter obvious placeholders
+                    const isPlaceholder = !question || /no\s+questions\s+detected/i.test(question);
+                    if (!isPlaceholder) {
                         structuredData.actions.push(`❓ ${question}`);
+                        // Track question (case-insensitive dedupe)
+                        const exists = Array.from(this.detectedQuestions).some(q => q.toLowerCase() === question.toLowerCase());
+                        if (!exists) {
+                            this.detectedQuestions.add(question);
+                        }
                     }
                 } else if (trimmedLine.startsWith('-') && currentSection === 'define-candidates') {
                     const term = trimmedLine.substring(1).trim().replace(/^"|"$/g, '');
-                    if (term && !this.definedTerms.has(term.toLowerCase())) {
-                        const defineItem = `📘 Define "${term}"`;
+                    // Filter invalid define terms: empty, sentences, placeholders
+                    const looksLikeSentence = /\w[\w\s,'"-]{12,}\.$/i.test(term) || /\s{2,}/.test(term) || /\./.test(term);
+                    const isPlaceholder = /too\s+short\s+to\s+detect/i.test(term) || /no\s+terms/i.test(term);
+                    const isInvalid = !term || looksLikeSentence || isPlaceholder;
+                    if (!isInvalid && !this.definedTerms.has(term.toLowerCase())) {
+                        const defineItem = `📘 Define ${term}`;
                         if (!structuredData.actions.some(x => (x || '').toLowerCase() === defineItem.toLowerCase())) {
                             structuredData.actions.push(defineItem);
                             this.definedTerms.add(term.toLowerCase()); // Track this term as defined
@@ -337,17 +348,7 @@ ${responseText}
                 }
             }
 
-            // Add default actions - Using simple emojis to avoid encoding issues
-            const defaultActions = ['✨ What should I say next?', '💬 Suggest follow-up questions'];
-            defaultActions.forEach(action => {
-                if (
-                    !structuredData.actions.some(
-                        existingAction => existingAction.includes('What should I say next') || existingAction.includes('Suggest follow-up questions')
-                    )
-                ) {
-                    structuredData.actions.push(action);
-                }
-            });
+            // Default actions are injected by UI; avoid duplication here
 
             // Limit action count
             structuredData.actions = structuredData.actions.slice(0, 10);
@@ -366,17 +367,6 @@ ${responseText}
                     followUps: ['✉️ Draft a follow-up email', '✅ Generate action items', '📝 Show summary'],
                 }
             );
-        }
-
-        // console.log('📊 Final structured data:', JSON.stringify(structuredData, null, 2));
-        // console.log('📊 Summary count:', structuredData.summary.length);
-        // console.log('📊 Actions count:', structuredData.actions.length);
-
-        // Debug: Show what we actually parsed
-        if (structuredData.summary.length > 0) {
-            // console.log('✅ Successfully parsed summary items:', structuredData.summary);
-        } else {
-            // console.log('⚠️ No summary items were parsed - check section headers');
         }
 
         return structuredData;

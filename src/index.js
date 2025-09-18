@@ -640,7 +640,7 @@ async function startWebStack() {
         pickleglass_WEB_URL: process.env.pickleglass_WEB_URL,
     });
 
-    const createBackendApp = require('../pickleglass_web/backend_node');
+    const createBackendApp = require('../pickleglass_web/backend_node/dist');
     const nodeApi = createBackendApp(eventBridge);
 
     const staticDir = app.isPackaged ? path.join(process.resourcesPath, 'out') : path.join(__dirname, '..', 'pickleglass_web', 'out');

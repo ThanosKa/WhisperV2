@@ -1,8 +1,9 @@
-const express = require('express');
-const router = express.Router();
-const { ipcRequest } = require('../ipcBridge');
+import express, { Request, Response } from 'express';
+import { ipcRequest } from '../ipcBridge';
 
-router.get('/', async (req, res) => {
+const router = express.Router();
+
+router.get('/', async (req: Request, res: Response) => {
     try {
         const presets = await ipcRequest(req, 'get-presets');
         res.json(presets);
@@ -12,17 +13,17 @@ router.get('/', async (req, res) => {
     }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', async (req: Request, res: Response) => {
     try {
         const result = await ipcRequest(req, 'create-preset', req.body);
-        res.status(201).json({ ...result, message: 'Preset created successfully' });
+        res.status(201).json({ ...(result as object), message: 'Preset created successfully' });
     } catch (error) {
         console.error('Failed to create preset via IPC:', error);
         res.status(500).json({ error: 'Failed to create preset' });
     }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req: Request, res: Response) => {
     try {
         await ipcRequest(req, 'update-preset', { id: req.params.id, data: req.body });
         res.json({ message: 'Preset updated successfully' });
@@ -32,7 +33,7 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: Request, res: Response) => {
     try {
         await ipcRequest(req, 'delete-preset', req.params.id);
         res.json({ message: 'Preset deleted successfully' });
@@ -42,4 +43,4 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
-module.exports = router; 
+module.exports = router;

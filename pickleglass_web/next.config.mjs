@@ -8,9 +8,7 @@ const nextConfig = {
 
     images: { unoptimized: true },
 
-    // Fix for Windows path issues
-    webpack: (config, { dev, isServer }) => {
-        // Handle Windows file system issues
+    webpack: config => {
         if (process.platform === 'win32') {
             config.watchOptions = {
                 ...config.watchOptions,
@@ -20,11 +18,6 @@ const nextConfig = {
         }
         return config;
     },
-
-    // Disable file system cache on Windows to avoid symlink issues
-    experimental: {
-        // Remove invalid option
-    },
 };
 
-module.exports = nextConfig;
+export default nextConfig;

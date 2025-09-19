@@ -13,7 +13,11 @@ class SummaryService {
         this.definedTerms = new Set(); // Track previously defined terms
         this.lastAnalyzedIndex = 0; // Track how many utterances we've already analyzed
         this.detectedQuestions = new Set(); // Track previously detected questions
-        this.analysisProfile = 'meeting_analysis'; // default profile id (personal)
+        this.analysisProfile = 'meeting_analysis'; // base template id
+
+        // Phase 1: Analysis preset selection state
+        this.selectedPresetId = null;
+        this.selectedRoleText = '';
 
         // Callbacks
         this.onAnalysisComplete = null;
@@ -96,6 +100,56 @@ class SummaryService {
         }
     }
 
+    /**
+     * Set the active analysis preset and cache its role text (trimmed to ~100 words).
+     * Accepts null/empty to clear and fall back to base template without role.
+     */
+    async setAnalysisPreset(presetId) {
+        try {
+            this.selectedPresetId = presetId || null;
+
+            if (!presetId) presetId = 'personal';
+
+            const settingsService = require('../../settings/settingsService');
+            const presets = await settingsService.getPresets();
+            const preset = Array.isArray(presets) ? presets.find(p => p && p.id === presetId) : null;
+
+            if (!preset) {
+                console.warn('[SummaryService] setAnalysisPreset: preset not found, clearing role');
+                this.selectedRoleText = '';
+                return { success: false, error: 'preset_not_found' };
+            }
+
+            const roleText = this._extractRoleFromPrompt(preset.prompt);
+            this.selectedRoleText = this._trimToWordLimit(roleText, 100);
+            return { success: true };
+        } catch (err) {
+            console.warn('[SummaryService] setAnalysisPreset error:', err.message);
+            this.selectedRoleText = '';
+            return { success: false, error: err.message };
+        }
+    }
+
+    _extractRoleFromPrompt(prompt) {
+        if (!prompt || typeof prompt !== 'string') return '';
+        try {
+            const parsed = JSON.parse(prompt);
+            if (parsed && parsed.kind === 'analysis_role' && typeof parsed.role === 'string') {
+                return parsed.role || '';
+            }
+        } catch (_) {
+            // not JSON, treat as raw text
+        }
+        return prompt;
+    }
+
+    _trimToWordLimit(text, maxWords) {
+        if (!text || typeof text !== 'string') return '';
+        const words = text.trim().split(/\s+/);
+        if (words.length <= maxWords) return text.trim();
+        return words.slice(0, maxWords).join(' ');
+    }
+
     sendToRenderer(channel, data) {
         const { windowPool } = require('../../../window/windowManager');
         const listenWindow = windowPool?.get('listen');
@@ -171,11 +225,13 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
             ? `${contextualPrompt.trim()}\n\nPreviously Defined Terms:\n${(prevDefines || []).join(', ') || '(none)'}\n\nPreviously Detected Questions:\n${(prevQuestions || []).join(' | ') || '(none)'}\n\nTranscript:\n${recentConversation}`
             : `Previously Defined Terms:\n${(prevDefines || []).join(', ') || '(none)'}\n\nPreviously Detected Questions:\n${(prevQuestions || []).join(' | ') || '(none)'}\n\nTranscript:\n${recentConversation}`;
 
-        // Use selected analysis prompt template (defaults to personal)
-        const systemPrompt = getSystemPrompt(this.analysisProfile || 'meeting_analysis', {
+        // Build base system prompt and inject role for ALL presets (role-only editing)
+        const baseSystem = getSystemPrompt('meeting_analysis', {
             context: fullContext,
             // Simplified: rely on client-side de-duplication of defines
         });
+        const rolePrefix = this.selectedRoleText && this.selectedRoleText.trim() ? `<role>${this.selectedRoleText.trim()}</role>\n\n` : '';
+        const systemPrompt = `${rolePrefix}${baseSystem}`;
 
         try {
             if (this.currentSessionId) {

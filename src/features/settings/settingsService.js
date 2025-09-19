@@ -16,7 +16,7 @@ const store = new Store({
 
 // Configuration constants
 const NOTIFICATION_CONFIG = {
-    RELEVANT_WINDOW_TYPES: ['settings', 'main'],
+    RELEVANT_WINDOW_TYPES: ['settings', 'main', 'listen'],
     DEBOUNCE_DELAY: 300, // prevent spam during bulk operations (ms)
     MAX_RETRY_ATTEMPTS: 3,
     RETRY_BASE_DELAY: 1000, // exponential backoff base (ms)
@@ -178,6 +178,7 @@ function getDefaultSettings() {
         backgroundTransparency: 0.5,
         fontSize: 14,
         contentProtection: true,
+        analysisPresetId: 'personal',
     };
 }
 

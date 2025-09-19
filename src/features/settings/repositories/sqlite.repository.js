@@ -2,14 +2,14 @@ const sqliteClient = require('../../common/services/sqliteClient');
 
 function getPresets(uid) {
     const db = sqliteClient.getDb();
+    // Return all presets (defaults + all user-created), independent of UID, for local desktop usage
     const query = `
         SELECT * FROM prompt_presets 
-        WHERE uid = ? OR is_default = 1 
         ORDER BY is_default DESC, title ASC
     `;
 
     try {
-        return db.prepare(query).all(uid) || [];
+        return db.prepare(query).all() || [];
     } catch (err) {
         console.error('SQLite: Failed to get presets:', err);
         throw err;
@@ -53,10 +53,11 @@ function createPreset({ uid, title, prompt }) {
 function updatePreset(id, { title, prompt }, uid) {
     const db = sqliteClient.getDb();
     const now = Math.floor(Date.now() / 1000);
+    // Allow updating default presets too; block only deletion for defaults
     const query = `
         UPDATE prompt_presets 
         SET title = ?, prompt = ?, sync_state = 'dirty', updated_at = ?
-        WHERE id = ? AND uid = ? AND is_default = 0
+        WHERE id = ? AND (uid = ? OR is_default = 1)
     `;
 
     try {

@@ -13,6 +13,15 @@ const presetRepositoryAdapter = {
         return getBaseRepository().getPresets(uid);
     },
 
+    getById: id => {
+        return getBaseRepository().getById(id);
+    },
+
+    findUserPresetByTitle: title => {
+        const uid = authService.getCurrentUserId();
+        return getBaseRepository().findUserPresetByTitle(title, uid);
+    },
+
     getPresetTemplates: () => {
         return getBaseRepository().getPresetTemplates();
     },

@@ -131,16 +131,18 @@ contextBridge.exposeInMainWorld('api', {
         // Window Management
         adjustWindowHeight: (winName, height) => ipcRenderer.invoke('adjust-window-height', { winName, height }),
 
-        // Profile Management
-        setPromptProfile: profile => ipcRenderer.invoke('listen:setPromptProfile', profile),
-        getPromptProfile: () => ipcRenderer.invoke('listen:getPromptProfile'),
-        getAvailableProfiles: () => ipcRenderer.invoke('listen:getAvailableProfiles'),
+        // Analysis Preset Management (Phase 1)
+        listAnalysisPresets: () => ipcRenderer.invoke('listen:listAnalysisPresets'),
+        getAnalysisPreset: () => ipcRenderer.invoke('listen:getAnalysisPreset'),
+        setAnalysisPreset: payload => ipcRenderer.invoke('listen:setAnalysisPreset', payload),
 
         // Listeners
         onSessionStateChanged: callback => ipcRenderer.on('session-state-changed', callback),
         removeOnSessionStateChanged: callback => ipcRenderer.removeListener('session-state-changed', callback),
         onSyncConversationHistory: callback => ipcRenderer.on('listen:sync-conversation-history', callback),
         removeOnSyncConversationHistory: callback => ipcRenderer.removeListener('listen:sync-conversation-history', callback),
+        onPresetsUpdated: callback => ipcRenderer.on('presets-updated', callback),
+        removeOnPresetsUpdated: callback => ipcRenderer.removeListener('presets-updated', callback),
     },
 
     // src/ui/listen/stt/SttView.js

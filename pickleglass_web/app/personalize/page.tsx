@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { ChevronDown, Plus, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { getPresets, updatePreset, createPreset, PromptPreset } from '@/utils/api';
+import { getPresets, updatePreset, createPreset, deletePreset, PromptPreset } from '@/utils/api';
 
 export default function PersonalizePage() {
     const [allPresets, setAllPresets] = useState<PromptPreset[]>([]);
@@ -22,9 +22,9 @@ export default function PersonalizePage() {
                 setAllPresets(presetsData);
 
                 if (presetsData.length > 0) {
-                    const firstUserPreset = presetsData.find(p => p.is_default === 0) || presetsData[0];
-                    setSelectedPreset(firstUserPreset);
-                    setEditorContent(firstUserPreset.prompt);
+                    const firstPreset = presetsData.find(p => p.title === 'Personal') || presetsData[0];
+                    setSelectedPreset(firstPreset);
+                    setEditorContent(firstPreset.prompt);
                 }
             } catch (error) {
                 console.error('Failed to fetch presets:', error);
@@ -53,11 +53,6 @@ export default function PersonalizePage() {
     const handleSave = async () => {
         if (!selectedPreset || saving || !isDirty) return;
 
-        if (selectedPreset.is_default === 1) {
-            alert('Default presets cannot be modified.');
-            return;
-        }
-
         try {
             setSaving(true);
             await updatePreset(selectedPreset.id, {
@@ -83,14 +78,14 @@ export default function PersonalizePage() {
             setSaving(true);
             const { id } = await createPreset({
                 title,
-                prompt: 'Enter your custom prompt here...',
+                prompt: '',
             });
 
             const newPreset: PromptPreset = {
                 id,
                 uid: 'current_user',
                 title,
-                prompt: 'Enter your custom prompt here...',
+                prompt: '',
                 is_default: 0,
                 created_at: Date.now(),
                 sync_state: 'clean',
@@ -142,6 +137,27 @@ export default function PersonalizePage() {
         }
     };
 
+    const handleDeletePreset = async () => {
+        if (!selectedPreset || selectedPreset.is_default === 1 || saving) return;
+        const confirmed = window.confirm(`Delete preset "${selectedPreset.title}"? This cannot be undone.`);
+        if (!confirmed) return;
+        try {
+            setSaving(true);
+            await deletePreset(selectedPreset.id);
+            setAllPresets(prev => prev.filter(p => p.id !== selectedPreset.id));
+            const remaining = allPresets.filter(p => p.id !== selectedPreset.id);
+            const next = remaining.find(p => p.title === 'Personal') || remaining[0] || null;
+            setSelectedPreset(next);
+            setEditorContent(next ? next.prompt : '');
+            setIsDirty(false);
+        } catch (error) {
+            console.error('Failed to delete preset:', error);
+            alert('Failed to delete preset. See console for details.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-full">
@@ -165,16 +181,24 @@ export default function PersonalizePage() {
                                 {saving ? 'Creating...' : 'New Preset'}
                             </Button>
                             {selectedPreset && (
-                                <Button onClick={handleDuplicatePreset} disabled={saving} variant="secondary" className="flex items-center gap-2">
-                                    <Copy className="h-4 w-4" />
-                                    {saving ? 'Duplicating...' : 'Duplicate'}
-                                </Button>
+                                <>
+                                    <Button onClick={handleDuplicatePreset} disabled={saving} variant="secondary" className="flex items-center gap-2">
+                                        <Copy className="h-4 w-4" />
+                                        {saving ? 'Duplicating...' : 'Duplicate'}
+                                    </Button>
+                                    {selectedPreset.is_default === 0 && (
+                                        <Button
+                                            onClick={handleDeletePreset}
+                                            disabled={saving}
+                                            variant="destructive"
+                                            className="flex items-center gap-2"
+                                        >
+                                            Delete
+                                        </Button>
+                                    )}
+                                </>
                             )}
-                            <Button
-                                onClick={handleSave}
-                                disabled={saving || !isDirty || selectedPreset?.is_default === 1}
-                                variant={!isDirty && !saving ? 'secondary' : 'default'}
-                            >
+                            <Button onClick={handleSave} disabled={saving || !isDirty} variant={!isDirty && !saving ? 'secondary' : 'default'}>
                                 {!isDirty && !saving ? 'Saved' : saving ? 'Saving...' : 'Save'}
                             </Button>
                         </div>
@@ -225,25 +249,17 @@ export default function PersonalizePage() {
             </div>
 
             <div className="flex-1 bg-white">
-                <div className="h-full px-8 py-6 flex flex-col">
-                    {selectedPreset?.is_default === 1 && (
-                        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                            <div className="flex items-center gap-2">
-                                <div className="w-4 h-4 bg-yellow-400 rounded-full"></div>
-                                <p className="text-sm text-yellow-800">
-                                    <strong>This is a default preset and cannot be edited.</strong>
-                                    Use the "Duplicate" button above to create an editable copy, or create a new preset.
-                                </p>
-                            </div>
-                        </div>
-                    )}
-                    <textarea
-                        value={editorContent}
-                        onChange={handleEditorChange}
-                        className="w-full flex-1 text-sm text-gray-900 border-0 resize-none focus:outline-none bg-transparent font-mono leading-relaxed"
-                        placeholder="Select a preset or type directly..."
-                        readOnly={selectedPreset?.is_default === 1}
-                    />
+                <div className="h-full px-8 py-6">
+                    <div className="mb-2 text-sm text-gray-600">Role</div>
+                    <div className="h-[calc(100%-2rem)] rounded-lg border border-gray-200 bg-white shadow-sm">
+                        <textarea
+                            value={editorContent}
+                            onChange={handleEditorChange}
+                            className="w-full h-full p-4 text-sm text-gray-900 border-0 resize-none focus:outline-none bg-white font-mono leading-relaxed"
+                            placeholder="Describe the assistant's role for this analysis preset (e.g., 'You are a ...')"
+                            readOnly={false}
+                        />
+                    </div>
                 </div>
             </div>
         </div>

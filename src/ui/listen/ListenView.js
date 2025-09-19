@@ -15,6 +15,8 @@ export class ListenView extends LitElement {
         captureStartTime: { type: Number },
         isSessionActive: { type: Boolean },
         hasCompletedRecording: { type: Boolean },
+        presets: { type: Array },
+        selectedPresetId: { type: String },
     };
 
     constructor() {
@@ -33,6 +35,10 @@ export class ListenView extends LitElement {
         this.copyTimeout = null;
 
         this.adjustWindowHeight = this.adjustWindowHeight.bind(this);
+
+        // Analysis presets state
+        this.presets = [];
+        this.selectedPresetId = null;
     }
 
     async connectedCallback() {
@@ -78,6 +84,29 @@ export class ListenView extends LitElement {
                     this.adjustWindowHeight();
                 }
             });
+
+            // Initialize presets selection on attach
+            try {
+                const [{ presetId }, presets] = await Promise.all([
+                    window.api.listenView.getAnalysisPreset(),
+                    window.api.listenView.listAnalysisPresets(),
+                ]);
+                this.presets = Array.isArray(presets) ? presets : [];
+                this.selectedPresetId = presetId || null;
+            } catch (e) {
+                console.warn('[ListenView] Failed to load analysis presets:', e.message);
+            }
+
+            // Subscribe to preset updates to refresh the dropdown live
+            this._onPresetsUpdated = async () => {
+                try {
+                    const presets = await window.api.listenView.listAnalysisPresets();
+                    this.presets = Array.isArray(presets) ? presets : [];
+                } catch (e) {
+                    console.warn('[ListenView] Failed to refresh presets on update:', e.message);
+                }
+            };
+            window.api.listenView.onPresetsUpdated(this._onPresetsUpdated);
         }
     }
 
@@ -93,6 +122,11 @@ export class ListenView extends LitElement {
         }
         if (this.copyTimeout) {
             clearTimeout(this.copyTimeout);
+        }
+
+        if (window.api && this._onPresetsUpdated) {
+            window.api.listenView.removeOnPresetsUpdated(this._onPresetsUpdated);
+            this._onPresetsUpdated = null;
         }
     }
 
@@ -148,6 +182,17 @@ export class ListenView extends LitElement {
     toggleViewMode() {
         this.viewMode = this.viewMode === 'insights' ? 'transcript' : 'insights';
         this.requestUpdate();
+    }
+
+    async handlePresetChange(event) {
+        const presetId = event?.target?.value || null;
+        try {
+            await window.api.listenView.setAnalysisPreset({ presetId });
+            this.selectedPresetId = presetId;
+            // optional: refresh list in case of external updates
+        } catch (e) {
+            console.error('[ListenView] Failed to set analysis preset:', e.message);
+        }
     }
 
     handleCopyHover(isHovering) {
@@ -228,12 +273,18 @@ export class ListenView extends LitElement {
     }
 
     render() {
+        const selectedPresetName = (() => {
+            if (!this.selectedPresetId) return 'Personal (Default)';
+            const found = (this.presets || []).find(p => p && p.id === this.selectedPresetId);
+            return found?.title || 'Personal';
+        })();
+
         const displayText = this.isHovering
             ? this.viewMode === 'transcript'
                 ? 'Copy Transcript'
                 : 'Copy Analysis'
             : this.viewMode === 'insights'
-              ? `Live insights`
+              ? `Live insights — ${selectedPresetName}`
               : `Listening ${this.elapsedTime}`;
 
         // Show bouncing dots when actively listening and in transcript mode
@@ -246,6 +297,11 @@ export class ListenView extends LitElement {
                         <span class="bar-left-text-content ${this.isAnimating ? 'slide-in' : ''}"> ${displayText} </span>
                     </div>
                     <div class="bar-controls">
+                        <select class="preset-select" @change=${this.handlePresetChange} @click=${this._refreshPresetsOnOpen?.bind(this)}>
+                            ${(this.presets || []).map(
+                                p => html`<option value="${p.id}" ?selected=${(this.selectedPresetId || '') === (p.id || '')}>${p.title}</option>`
+                            )}
+                        </select>
                         <button class="toggle-button" @click=${this.toggleViewMode}>
                             ${this.viewMode === 'insights'
                                 ? html`

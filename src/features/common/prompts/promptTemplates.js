@@ -137,9 +137,7 @@ Always your answer must be in the language of the transcribed conversation if ex
 
     // Advanced meeting analysis for insights (Personal default)
     meeting_analysis: {
-        system: `You are an AI meeting analyst for personal, always-on assistance (calls, videos). Be concise and practical.
-
-Rules:
+        system: `Rules:
 - Use the conversation language.
 - Base outputs only on the Transcript in Context.
 - Do NOT repeat items listed under "Previously Defined Terms" or "Previously Detected Questions" in Context.

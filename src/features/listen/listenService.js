@@ -183,6 +183,15 @@ class ListenService {
             // Reset conversation history
             this.summaryService.resetConversationHistory();
 
+            // Apply persisted analysis preset selection (Phase 1)
+            try {
+                const settingsService = require('../settings/settingsService');
+                const currentSettings = await settingsService.getSettings();
+                await this.summaryService.setAnalysisPreset(currentSettings?.analysisPresetId || 'personal');
+            } catch (e) {
+                console.warn('[ListenService] Failed to apply saved analysis preset:', e.message);
+            }
+
             console.log('New conversation session started:', this.currentSessionId);
             return true;
         } catch (error) {

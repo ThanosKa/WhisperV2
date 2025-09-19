@@ -105,7 +105,26 @@ module.exports = {
                 return { success: false, error: error.message };
             }
         });
-        // Profile management removed - simplified to single meeting copilot mode
+        // Analysis presets for Listen (Phase 1)
+        ipcMain.handle('listen:listAnalysisPresets', async () => {
+            return await settingsService.getPresets();
+        });
+        ipcMain.handle('listen:getAnalysisPreset', async () => {
+            const current = await settingsService.getSettings();
+            return { presetId: current?.analysisPresetId || null };
+        });
+        ipcMain.handle('listen:setAnalysisPreset', async (event, { presetId }) => {
+            try {
+                // Persist selection
+                await settingsService.saveSettings({ analysisPresetId: presetId || null });
+                // Apply to summary service via listenService
+                await listenService.summaryService.setAnalysisPreset(presetId || null);
+                return { success: true };
+            } catch (err) {
+                console.error('[FeatureBridge] listen:setAnalysisPreset failed:', err.message);
+                return { success: false, error: err.message };
+            }
+        });
 
         // ModelStateService
         ipcMain.handle('model:validate-key', async (e, { provider, key }) => await modelStateService.handleValidateKey(provider, key));

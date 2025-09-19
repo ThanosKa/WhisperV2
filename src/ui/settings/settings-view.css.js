@@ -347,7 +347,7 @@ export const settingsViewStyles = css`
         overflow-y: auto;
     }
 
-    .preset-item {
+    .monitor-item {
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -360,18 +360,42 @@ export const settingsViewStyles = css`
         border: 1px solid transparent;
     }
 
-    .preset-item:hover {
+    .monitor-item:hover {
         background: rgba(255, 255, 255, 0.1);
         border-color: rgba(255, 255, 255, 0.1);
     }
 
-    .preset-item.selected {
+    .monitor-item.selected {
         background: rgba(0, 122, 255, 0.25);
         border-color: rgba(0, 122, 255, 0.6);
         box-shadow: 0 0 0 1px rgba(0, 122, 255, 0.3);
     }
 
-    .preset-name {
+    .preset-item-plain {
+        background: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        cursor: default !important;
+        transition: none !important;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 4px 0;
+        color: white;
+        font-size: 12px;
+    }
+
+    .preset-item-plain:hover {
+        background: transparent !important;
+        border-color: transparent !important;
+    }
+
+    .preset-item-plain .preset-name {
+        font-weight: 300;
+        flex: 1;
+    }
+
+    .monitor-name {
         color: white;
         flex: 1;
         text-overflow: ellipsis;
@@ -380,11 +404,11 @@ export const settingsViewStyles = css`
         font-weight: 300;
     }
 
-    .preset-item.selected .preset-name {
+    .monitor-item.selected .monitor-name {
         font-weight: 500;
     }
 
-    .preset-status {
+    .monitor-status {
         font-size: 9px;
         color: rgba(0, 122, 255, 0.8);
         font-weight: 500;

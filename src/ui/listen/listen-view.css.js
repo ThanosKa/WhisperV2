@@ -304,6 +304,53 @@ export const listenViewStyles = css`
         transform: translate(-50%, -50%) scale(1);
     }
 
+    .preset-select {
+        background: rgba(11, 11, 11, 0.8);
+        color: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 5px;
+        padding: 4px 8px;
+        font-size: 11px;
+        font-weight: 500;
+        font-family: 'Helvetica Neue', sans-serif;
+        cursor: pointer;
+        outline: none;
+        min-width: 120px;
+        height: 24px;
+        transition: all 0.15s ease;
+        appearance: none;
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.6)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+        background-repeat: no-repeat;
+        background-position: right 6px center;
+        background-size: 12px;
+        padding-right: 24px;
+    }
+
+    .preset-select:hover {
+        background: rgba(11, 11, 11, 0.9);
+        border-color: rgba(255, 255, 255, 0.3);
+        color: rgba(255, 255, 255, 1);
+    }
+
+    .preset-select:focus {
+        border-color: rgba(255, 255, 255, 0.4);
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+    }
+
+    .preset-select option {
+        background: rgba(11, 11, 11, 0.95);
+        color: rgba(255, 255, 255, 0.9);
+        padding: 8px;
+        font-size: 11px;
+        font-family: 'Helvetica Neue', sans-serif;
+    }
+
+    .preset-select option:hover,
+    .preset-select option:focus {
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 1);
+    }
+
     .timer {
         font-family: 'Monaco', 'Menlo', monospace;
         font-size: 10px;
@@ -359,6 +406,7 @@ export const listenViewStyles = css`
     :host-context(body.has-glass) .top-bar,
     :host-context(body.has-glass) .toggle-button,
     :host-context(body.has-glass) .copy-button,
+    :host-context(body.has-glass) .preset-select,
     :host-context(body.has-glass) .transcription-container,
     :host-context(body.has-glass) .insights-container,
     :host-context(body.has-glass) .stt-message,
@@ -383,6 +431,7 @@ export const listenViewStyles = css`
 
     :host-context(body.has-glass) .toggle-button:hover,
     :host-context(body.has-glass) .copy-button:hover,
+    :host-context(body.has-glass) .preset-select:hover,
     :host-context(body.has-glass) .outline-item:hover,
     :host-context(body.has-glass) .request-item.clickable:hover,
     :host-context(body.has-glass) .markdown-content:hover {
@@ -414,7 +463,8 @@ export const listenViewStyles = css`
     :host-context(body.has-glass) .assistant-container,
     :host-context(body.has-glass) .stt-message,
     :host-context(body.has-glass) .toggle-button,
-    :host-context(body.has-glass) .copy-button {
+    :host-context(body.has-glass) .copy-button,
+    :host-context(body.has-glass) .preset-select {
         border-radius: 0 !important;
     }
 

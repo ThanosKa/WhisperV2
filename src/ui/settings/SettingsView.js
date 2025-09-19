@@ -13,7 +13,6 @@ export class SettingsView extends LitElement {
         isLoading: { type: Boolean, state: true },
         isContentProtectionOn: { type: Boolean, state: true },
         presets: { type: Array, state: true },
-        selectedPreset: { type: Object, state: true },
         showPresets: { type: Boolean, state: true },
         autoUpdateEnabled: { type: Boolean, state: true },
         autoUpdateLoading: { type: Boolean, state: true },
@@ -31,7 +30,6 @@ export class SettingsView extends LitElement {
         this.isLoading = true;
         this.isContentProtectionOn = true;
         this.presets = [];
-        this.selectedPreset = null;
         this.showPresets = false;
         this.handleUsePicklesKey = this.handleUsePicklesKey.bind(this);
         this.autoUpdateEnabled = true;
@@ -95,10 +93,6 @@ export class SettingsView extends LitElement {
             this.presets = presets || [];
             this.isContentProtectionOn = contentProtection;
             this.shortcuts = shortcuts || {};
-            if (this.presets.length > 0) {
-                const firstUserPreset = this.presets.find(p => p.is_default === 0);
-                if (firstUserPreset) this.selectedPreset = firstUserPreset;
-            }
             await this.loadDisplays();
         } catch (error) {
             console.error('Error loading initial settings data:', error);
@@ -177,13 +171,6 @@ export class SettingsView extends LitElement {
             try {
                 const presets = await window.api.settingsView.getPresets();
                 this.presets = presets || [];
-
-                // Check if currently selected preset was deleted (only consider user presets)
-                const userPresets = this.presets.filter(p => p.is_default === 0);
-                if (this.selectedPreset && !userPresets.find(p => p.id === this.selectedPreset.id)) {
-                    this.selectedPreset = userPresets.length > 0 ? userPresets[0] : null;
-                }
-
                 this.requestUpdate();
             } catch (error) {
                 console.error('[SettingsView] Failed to refresh presets:', error);
@@ -319,12 +306,6 @@ export class SettingsView extends LitElement {
         }
     }
 
-    async handlePresetSelect(preset) {
-        this.selectedPreset = preset;
-        // Here you could implement preset application logic
-        console.log('Selected preset:', preset);
-    }
-
     handleMoveLeft() {
         console.log('Move Left clicked');
         window.api.settingsView.moveWindowStep('left');
@@ -433,11 +414,11 @@ export class SettingsView extends LitElement {
                                   ${this.displays.map(
                                       d => html`
                                           <div
-                                              class="preset-item ${this.currentDisplayId === d.id ? 'selected' : ''}"
+                                              class="monitor-item ${this.currentDisplayId === d.id ? 'selected' : ''}"
                                               @click=${() => this.handleSelectDisplay(d)}
                                           >
-                                              <span class="preset-name">${d.name}</span>
-                                              ${this.currentDisplayId === d.id ? html`<span class="preset-status">Current</span>` : ''}
+                                              <span class="monitor-name">${d.name}</span>
+                                              ${this.currentDisplayId === d.id ? html`<span class="monitor-status">Current</span>` : ''}
                                           </div>
                                       `
                                   )}
@@ -467,12 +448,8 @@ export class SettingsView extends LitElement {
                                   .filter(p => p.is_default === 0)
                                   .map(
                                       preset => html`
-                                          <div
-                                              class="preset-item ${this.selectedPreset?.id === preset.id ? 'selected' : ''}"
-                                              @click=${() => this.handlePresetSelect(preset)}
-                                          >
+                                          <div class="preset-item preset-item-plain">
                                               <span class="preset-name">${preset.title}</span>
-                                              ${this.selectedPreset?.id === preset.id ? html`<span class="preset-status">Selected</span>` : ''}
                                           </div>
                                       `
                                   )}

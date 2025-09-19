@@ -284,7 +284,7 @@ export class ListenView extends LitElement {
                 ? 'Copy Transcript'
                 : 'Copy Analysis'
             : this.viewMode === 'insights'
-              ? `Live insights — ${selectedPresetName}`
+              ? `Live insights`
               : `Listening ${this.elapsedTime}`;
 
         // Show bouncing dots when actively listening and in transcript mode

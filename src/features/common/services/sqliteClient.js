@@ -222,7 +222,12 @@ class SQLiteClient {
         this.db.prepare(initUserQuery).run(this.defaultUserId, 'Default User', 'contact@pickle.com', now);
 
         const defaultPresets = [
-            ['personal', 'Personal', '', 1],
+            [
+                'personal',
+                'Personal',
+                'You are a meeting analyst for personal use, always-on assistance (calls, videos). Be concise and practical.',
+                1,
+            ],
             [
                 'school',
                 'School',

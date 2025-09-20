@@ -26,8 +26,7 @@ export function ipcRequest<T = any>(req: Request, channel: string, payload?: unk
         req.bridge!.once(responseChannel, onResponse);
 
         try {
-            const envelope = { __uid: req.uid, data: payload };
-            req.bridge!.emit('web-data-request', channel, responseChannel, envelope);
+            req.bridge!.emit('web-data-request', channel, responseChannel, payload);
         } catch (error: any) {
             req.bridge!.removeAllListeners(responseChannel);
             reject(new Error(`Failed to emit IPC request: ${error.message}`));

@@ -1,5 +1,16 @@
 // Removed Firebase imports - using webapp authentication now
 // Firebase functionality disabled in favor of local-first approach
+import {
+    isDevMockEnabled,
+    ensureMockData,
+    getMockUser,
+    getPresetsMock,
+    setPresetsMock,
+    getSessionsMock,
+    setSessionsMock,
+    getSessionDetailsMock,
+    setSessionDetailsMock,
+} from './devMock';
 
 export interface UserProfile {
     uid: string;
@@ -82,6 +93,8 @@ const isFirebaseMode = (): boolean => {
 let API_ORIGIN = process.env.NODE_ENV === 'development' ? 'http://localhost:9001' : '';
 
 const loadRuntimeConfig = async (): Promise<string | null> => {
+    // In dev mock mode, do not attempt to load electron runtime config
+    if (isDevMockEnabled()) return null;
     try {
         const response = await fetch('/runtime-config.json');
         if (response.ok) {
@@ -116,6 +129,17 @@ const initializeApiUrl = async () => {
 if (typeof window !== 'undefined') {
     initializationPromise = initializeApiUrl();
 }
+
+// Dev init helper
+let devInitialized = false;
+const initDevIfNeeded = () => {
+    if (typeof window === 'undefined') return;
+    if (!isDevMockEnabled()) return;
+    if (!devInitialized) {
+        ensureMockData();
+        devInitialized = true;
+    }
+};
 
 const userInfoListeners: Array<(userInfo: UserProfile | null) => void> = [];
 
@@ -175,6 +199,11 @@ export const getApiHeaders = (): HeadersInit => {
 };
 
 export const apiCall = async (path: string, options: RequestInit = {}) => {
+    // In dev-mock, do not call network at all
+    if (isDevMockEnabled()) {
+        throw new Error('apiCall not available in dev mock mode');
+    }
+
     if (!apiUrlInitialized && initializationPromise) {
         await initializationPromise;
     }
@@ -208,7 +237,11 @@ export const searchConversations = async (query: string): Promise<Session[]> => 
         return [];
     }
 
-    if (isFirebaseMode()) {
+    if (isDevMockEnabled()) {
+        initDevIfNeeded();
+        const sessions = getSessionsMock();
+        return sessions.filter(s => (s.title || '').toLowerCase().includes(query.toLowerCase()));
+    } else if (isFirebaseMode()) {
         const sessions = await getSessions();
         return sessions.filter(session => session.title.toLowerCase().includes(query.toLowerCase()));
     } else {
@@ -223,12 +256,20 @@ export const searchConversations = async (query: string): Promise<Session[]> => 
 };
 
 export const getSessions = async (): Promise<Session[]> => {
+    if (isDevMockEnabled()) {
+        initDevIfNeeded();
+        return getSessionsMock();
+    }
     const response = await apiCall(`/api/conversations`, { method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch sessions');
     return response.json();
 };
 
 export const getMeetings = async (): Promise<Session[]> => {
+    if (isDevMockEnabled()) {
+        initDevIfNeeded();
+        return getSessionsMock().filter(s => s.session_type === 'listen');
+    }
     const response = await apiCall(`/api/conversations/meetings`, { method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch meetings');
     const data = await response.json();
@@ -237,6 +278,10 @@ export const getMeetings = async (): Promise<Session[]> => {
 };
 
 export const getQuestions = async (): Promise<Session[]> => {
+    if (isDevMockEnabled()) {
+        initDevIfNeeded();
+        return getSessionsMock().filter(s => s.session_type === 'ask');
+    }
     const response = await apiCall(`/api/conversations/questions`, { method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch questions');
     const data = await response.json();
@@ -250,12 +295,26 @@ export interface PagedResult<T> {
 }
 
 export const getMeetingsPage = async (offset = 0, limit = 10): Promise<PagedResult<Session>> => {
+    if (isDevMockEnabled()) {
+        initDevIfNeeded();
+        const all = getSessionsMock().filter(s => s.session_type === 'listen');
+        const items = all.slice(offset, offset + limit);
+        const nextOffset = offset + items.length < all.length ? offset + items.length : null;
+        return { items, nextOffset, total: all.length };
+    }
     const response = await apiCall(`/api/conversations/meetings?offset=${offset}&limit=${limit}`, { method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch meetings page');
     return response.json();
 };
 
 export const getQuestionsPage = async (offset = 0, limit = 10): Promise<PagedResult<Session>> => {
+    if (isDevMockEnabled()) {
+        initDevIfNeeded();
+        const all = getSessionsMock().filter(s => s.session_type === 'ask');
+        const items = all.slice(offset, offset + limit);
+        const nextOffset = offset + items.length < all.length ? offset + items.length : null;
+        return { items, nextOffset, total: all.length };
+    }
     const response = await apiCall(`/api/conversations/questions?offset=${offset}&limit=${limit}`, { method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch questions page');
     return response.json();
@@ -267,18 +326,61 @@ export interface ConversationStats {
 }
 
 export const getConversationStats = async (): Promise<ConversationStats> => {
+    if (isDevMockEnabled()) {
+        initDevIfNeeded();
+        const sessions = getSessionsMock();
+        const meetings = sessions.filter(s => s.session_type === 'listen');
+        const nowSec = Math.floor(Date.now() / 1000);
+        const totalMeetingSeconds = meetings.reduce((sum, s) => {
+            const end = s.ended_at || nowSec;
+            const dur = Math.max(0, end - s.started_at);
+            return sum + dur;
+        }, 0);
+        let totalQuestions = 0;
+        sessions.forEach(s => {
+            const details = getSessionDetailsMock(s.id);
+            if (details && Array.isArray(details.ai_messages)) {
+                totalQuestions += details.ai_messages.filter(m => m.role === 'user').length;
+            }
+        });
+        return { totalMeetingSeconds, totalQuestions };
+    }
     const response = await apiCall(`/api/conversations/stats`, { method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch conversation stats');
     return response.json();
 };
 
 export const getSessionDetails = async (sessionId: string): Promise<SessionDetails> => {
+    if (isDevMockEnabled()) {
+        initDevIfNeeded();
+        const details = getSessionDetailsMock(sessionId);
+        if (!details) throw new Error('Session not found');
+        // Type cast from dev interfaces to app interfaces (same shape)
+        return details as unknown as SessionDetails;
+    }
     const response = await apiCall(`/api/conversations/${sessionId}`, { method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch session details');
     return response.json();
 };
 
 export const updateSessionTitle = async (sessionId: string, title: string): Promise<void> => {
+    if (isDevMockEnabled()) {
+        initDevIfNeeded();
+        const list = getSessionsMock();
+        const idx = list.findIndex(s => s.id === sessionId);
+        if (idx >= 0) {
+            list[idx] = { ...list[idx], title, updated_at: Math.floor(Date.now() / 1000) };
+            setSessionsMock(list);
+        }
+        const details = getSessionDetailsMock(sessionId);
+        if (details) {
+            details.session.title = title;
+            setSessionDetailsMock(sessionId, details as any);
+        }
+        // announce update for listeners
+        if (typeof window !== 'undefined') window.dispatchEvent(new Event('sessionUpdated'));
+        return;
+    }
     const response = await apiCall(`/api/conversations/${sessionId}`, {
         method: 'PUT',
         body: JSON.stringify({ title }),
@@ -290,6 +392,27 @@ export const updateSessionTitle = async (sessionId: string, title: string): Prom
 };
 
 export const createSession = async (title?: string): Promise<{ id: string }> => {
+    if (isDevMockEnabled()) {
+        initDevIfNeeded();
+        const id = `sess-${Math.random().toString(36).slice(2, 8)}`;
+        const now = Math.floor(Date.now() / 1000);
+        const s: Session = {
+            id,
+            uid: 'dev_user',
+            title: title || `Session @ ${new Date().toLocaleTimeString()}`,
+            session_type: 'ask',
+            started_at: now,
+            sync_state: 'clean',
+            updated_at: now,
+        };
+        const list = (getSessionsMock() as unknown as Session[]);
+        (list as any).unshift(s as any);
+        setSessionsMock(list as any);
+        const details: SessionDetails = { session: s, transcripts: [], ai_messages: [], summary: null };
+        setSessionDetailsMock(id, details as any);
+        if (typeof window !== 'undefined') window.dispatchEvent(new Event('sessionUpdated'));
+        return { id };
+    }
     const response = await apiCall(`/api/conversations`, {
         method: 'POST',
         body: JSON.stringify({ title }),
@@ -299,17 +422,35 @@ export const createSession = async (title?: string): Promise<{ id: string }> => 
 };
 
 export const deleteSession = async (sessionId: string): Promise<void> => {
+    if (isDevMockEnabled()) {
+        initDevIfNeeded();
+        const list = getSessionsMock().filter(s => s.id !== sessionId);
+        setSessionsMock(list);
+        try {
+            if (typeof window !== 'undefined') localStorage.removeItem('dev_mock_session_details_' + sessionId);
+        } catch {}
+        if (typeof window !== 'undefined') window.dispatchEvent(new Event('sessionUpdated'));
+        return;
+    }
     const response = await apiCall(`/api/conversations/${sessionId}`, { method: 'DELETE' });
     if (!response.ok) throw new Error('Failed to delete session');
 };
 
 export const getUserProfile = async (): Promise<UserProfile> => {
+    if (isDevMockEnabled()) {
+        initDevIfNeeded();
+        return getMockUser() as UserProfile;
+    }
     const response = await apiCall(`/api/user/profile`, { method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch user profile');
     return response.json();
 };
 
 export const updateUserProfile = async (data: { displayName: string }): Promise<void> => {
+    if (isDevMockEnabled()) {
+        // no-op in dev
+        return;
+    }
     const response = await apiCall(`/api/user/profile`, {
         method: 'PUT',
         body: JSON.stringify(data),
@@ -318,6 +459,9 @@ export const updateUserProfile = async (data: { displayName: string }): Promise<
 };
 
 export const findOrCreateUser = async (user: UserProfile): Promise<UserProfile> => {
+    if (isDevMockEnabled()) {
+        return user;
+    }
     const response = await apiCall(`/api/user/find-or-create`, {
         method: 'POST',
         body: JSON.stringify(user),
@@ -327,6 +471,10 @@ export const findOrCreateUser = async (user: UserProfile): Promise<UserProfile> 
 };
 
 export const saveApiKey = async (apiKey: string): Promise<void> => {
+    if (isDevMockEnabled()) {
+        if (typeof window !== 'undefined') localStorage.setItem('dev_mock_api_key', apiKey);
+        return;
+    }
     const response = await apiCall(`/api/user/api-key`, {
         method: 'POST',
         body: JSON.stringify({ apiKey }),
@@ -335,6 +483,11 @@ export const saveApiKey = async (apiKey: string): Promise<void> => {
 };
 
 export const checkApiKeyStatus = async (): Promise<{ hasApiKey: boolean }> => {
+    if (isDevMockEnabled()) {
+        if (typeof window === 'undefined') return { hasApiKey: true };
+        const hasKey = !!localStorage.getItem('dev_mock_api_key');
+        return { hasApiKey: hasKey };
+    }
     const response = await apiCall(`/api/user/api-key-status`, { method: 'GET' });
     if (!response.ok) throw new Error('Failed to check API key status');
     return response.json();
@@ -346,12 +499,26 @@ export const deleteAccount = async (): Promise<void> => {
 };
 
 export const getPresets = async (): Promise<PromptPreset[]> => {
+    if (isDevMockEnabled()) {
+        initDevIfNeeded();
+        return getPresetsMock() as unknown as PromptPreset[];
+    }
     const response = await apiCall(`/api/presets`, { method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch presets');
     return response.json();
 };
 
 export const createPreset = async (data: { title: string; prompt: string }): Promise<{ id: string }> => {
+    if (isDevMockEnabled()) {
+        initDevIfNeeded();
+        const now = Math.floor(Date.now() / 1000);
+        const presets = getPresetsMock();
+        const id = `preset-${Math.random().toString(36).slice(2, 8)}`;
+        presets.push({ id, uid: 'dev_user', title: data.title, prompt: data.prompt, is_default: 0, created_at: now, sync_state: 'clean' } as any);
+        setPresetsMock(presets as any);
+        if (typeof window !== 'undefined') window.dispatchEvent(new Event('presetUpdated'));
+        return { id };
+    }
     const response = await apiCall(`/api/presets`, {
         method: 'POST',
         body: JSON.stringify(data),
@@ -361,6 +528,17 @@ export const createPreset = async (data: { title: string; prompt: string }): Pro
 };
 
 export const updatePreset = async (id: string, data: { title: string; prompt: string }): Promise<void> => {
+    if (isDevMockEnabled()) {
+        initDevIfNeeded();
+        const presets = getPresetsMock();
+        const idx = presets.findIndex(p => p.id === id);
+        if (idx >= 0) {
+            (presets as any)[idx] = { ...(presets as any)[idx], title: data.title, prompt: data.prompt };
+            setPresetsMock(presets as any);
+        }
+        if (typeof window !== 'undefined') window.dispatchEvent(new Event('presetUpdated'));
+        return;
+    }
     const response = await apiCall(`/api/presets/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
@@ -372,6 +550,13 @@ export const updatePreset = async (id: string, data: { title: string; prompt: st
 };
 
 export const deletePreset = async (id: string): Promise<void> => {
+    if (isDevMockEnabled()) {
+        initDevIfNeeded();
+        const presets = getPresetsMock().filter(p => p.id !== id);
+        setPresetsMock(presets as any);
+        if (typeof window !== 'undefined') window.dispatchEvent(new Event('presetUpdated'));
+        return;
+    }
     const response = await apiCall(`/api/presets/${id}`, { method: 'DELETE' });
     if (!response.ok) throw new Error('Failed to delete preset');
 };
@@ -383,6 +568,14 @@ export interface BatchData {
 }
 
 export const getBatchData = async (includes: ('profile' | 'presets' | 'sessions')[]): Promise<BatchData> => {
+    if (isDevMockEnabled()) {
+        initDevIfNeeded();
+        const out: BatchData = {};
+        if (includes.includes('profile')) out.profile = getMockUser() as any;
+        if (includes.includes('presets')) out.presets = (getPresetsMock() as any) as PromptPreset[];
+        if (includes.includes('sessions')) out.sessions = (getSessionsMock() as any) as Session[];
+        return out;
+    }
     const response = await apiCall(`/api/user/batch?include=${includes.join(',')}`, { method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch batch data');
     return response.json();

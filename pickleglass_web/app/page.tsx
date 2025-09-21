@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/utils/auth';
+import { isDevMockEnabled } from '@/utils/devMock';
 
 export default function Home() {
     const router = useRouter();
@@ -13,6 +14,12 @@ export default function Home() {
         if (isLoading || hasChecked) return;
 
         const checkAuthAndRedirect = async () => {
+            // Dev mock: go straight to personalize
+            if (isDevMockEnabled()) {
+                router.push('/personalize');
+                setHasChecked(true);
+                return;
+            }
             // Check if we're in Electron mode
             let isElectronMode = false;
             try {

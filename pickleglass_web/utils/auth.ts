@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserProfile, setUserInfo, findOrCreateUser, getUserProfile } from './api';
+import { isDevMockEnabled, getMockUser, ensureMockData } from './devMock';
 // Removed Firebase imports - using webapp authentication
 
 export const useAuth = () => {
@@ -11,6 +12,22 @@ export const useAuth = () => {
     const [lastSyncTime, setLastSyncTime] = useState(0); // Debounce mechanism
 
     useEffect(() => {
+        // Dev mock mode: short-circuit auth and return a fake user
+        if (isDevMockEnabled()) {
+            try {
+                ensureMockData();
+                const profile = getMockUser();
+                setUserInfo(profile, true);
+                setMode('webapp');
+                setUser(profile);
+                setRetryCount(0);
+                setIsLoading(false);
+                return;
+            } catch (e) {
+                console.log('⚠️ Dev mock mode initialization error:', e);
+            }
+        }
+
         // Prevent infinite loops
         if (retryCount > 3) {
             console.log('🛑 Too many retries, staying unauthenticated');

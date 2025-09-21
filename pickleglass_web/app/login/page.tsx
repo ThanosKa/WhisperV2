@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { getUserProfile } from '@/utils/api';
 import { RefreshCw, User, Check } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { isDevMockEnabled } from '@/utils/devMock';
 
 export default function SyncPage() {
     const router = useRouter();
@@ -15,6 +16,11 @@ export default function SyncPage() {
 
     useEffect(() => {
         const checkElectronMode = async () => {
+            // In dev mock mode, do not attempt Electron sync or runtime-config fetch
+            if (isDevMockEnabled()) {
+                setIsElectronMode(false);
+                return;
+            }
             try {
                 const response = await fetch('/runtime-config.json');
                 if (response.ok) {

@@ -7,6 +7,8 @@ import { useState, createElement, useEffect, useMemo, useCallback, memo } from '
 import { Search, Activity, HelpCircle, Download, ChevronDown, User, Shield, Database, CreditCard, LogOut, LucideIcon } from 'lucide-react';
 import { UserProfile, checkApiKeyStatus } from '@/utils/api';
 import { useAuth } from '@/utils/auth';
+import { normalizePathname } from '@/utils/path';
+import { MatchStrategy, SETTINGS_TABS } from '@/components/settings/SettingsTabs';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
@@ -50,6 +52,7 @@ interface SubmenuItem {
     icon: LucideIcon | string;
     isLucide: boolean;
     ariaLabel?: string;
+    matchStrategy?: MatchStrategy;
 }
 
 interface SidebarProps {
@@ -149,6 +152,7 @@ IconComponent.displayName = 'IconComponent';
 
 const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps) => {
     const pathname = usePathname();
+    const normalizedPath = normalizePathname(pathname);
     const router = useRouter();
     const [isSettingsExpanded, setIsSettingsExpanded] = useState(pathname.startsWith('/settings'));
     const { user: userInfo, isLoading: authLoading } = useAuth();
@@ -207,14 +211,28 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
         [onSearchClick]
     );
 
-    const settingsSubmenu = useMemo<SubmenuItem[]>(
-        () => [
-            { name: 'Personal Profile', href: '/settings', icon: '/user.svg', isLucide: false, ariaLabel: 'Personal profile settings' },
-            { name: 'Data & privacy', href: '/settings/privacy', icon: '/privacy.svg', isLucide: false, ariaLabel: 'Data and privacy settings' },
-            { name: 'Billing', href: '/settings/billing', icon: '/credit-card.svg', isLucide: false, ariaLabel: 'Billing settings' },
-        ],
-        []
-    );
+    const settingsSubmenu = useMemo<SubmenuItem[]>(() => {
+        const iconById: Record<string, string> = {
+            profile: '/user.svg',
+            privacy: '/privacy.svg',
+            billing: '/credit-card.svg',
+        };
+
+        const ariaById: Record<string, string> = {
+            profile: 'Personal profile settings',
+            privacy: 'Data and privacy settings',
+            billing: 'Billing settings',
+        };
+
+        return SETTINGS_TABS.map(tab => ({
+            name: tab.name,
+            href: tab.href,
+            icon: iconById[tab.id] ?? '/user.svg',
+            isLucide: false,
+            ariaLabel: ariaById[tab.id],
+            matchStrategy: tab.matchStrategy,
+        }));
+    }, []);
 
     const bottomItems = useMemo(
         () => [
@@ -252,7 +270,7 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
 
     const renderNavigationItem = useCallback(
         (item: NavigationItem, index: number) => {
-            const isActive = item.href ? pathname.startsWith(item.href) : false;
+            const isActive = item.href ? normalizedPath === item.href || normalizedPath.startsWith(`${item.href}/`) : false;
             const animationDelay = 0;
 
             const baseButtonClasses = `
@@ -332,48 +350,51 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
                             aria-labelledby="settings-button"
                         >
                             <ul className="mt-[4px] space-y-0 pl-[22px]" role="menu">
-                                {settingsSubmenu.map((subItem, subIndex) => (
-                                    <li key={subItem.name} role="none">
-                                        <Link
-                                            href={subItem.href}
-                                            className={`
+                                {settingsSubmenu.map((subItem, subIndex) => {
+                                    const normalizedHref = normalizePathname(subItem.href);
+                                    const shouldMatch = subItem.matchStrategy === 'exact';
+                                    const matchesExact = normalizedPath === normalizedHref;
+                                    const matchesNested = !shouldMatch && normalizedPath.startsWith(`${normalizedHref}/`);
+                                    const isSubItemActive = matchesExact || matchesNested;
+
+                                    return (
+                                        <li key={subItem.name} role="none">
+                                            <Link
+                                                href={subItem.href}
+                                                className={`
                                   group flex items-center rounded-lg px-[12px] py-[8px] text-[13px] gap-x-[9px]
                       focus:outline-none
-                                  ${
-                                      pathname === subItem.href
-                                          ? 'bg-subtle-active-bg text-[#282828]'
-                                          : 'text-[#282828] hover:text-[#282828] hover:bg-[#f7f7f7]'
-                                  }
+                                  ${isSubItemActive ? 'bg-[#f2f2f2] text-[#282828]' : 'text-[#282828] hover:text-[#282828] hover:bg-[#f7f7f7]'}
                       transition-colors duration-${ANIMATION_DURATION.COLOR_TRANSITION} ease-out
                                 `}
-                                            style={{
-                                                willChange: 'background-color, color',
-                                            }}
-                                            role="menuitem"
-                                            aria-label={subItem.ariaLabel || subItem.name}
-                                        >
-                                            <IconComponent
-                                                icon={subItem.icon}
-                                                isLucide={subItem.isLucide}
-                                                alt={`${subItem.name} icon`}
-                                                className="h-4 w-4 shrink-0"
-                                            />
-                                            <span className="whitespace-nowrap">{subItem.name}</span>
-                                        </Link>
-                                    </li>
-                                ))}
-                                <li role="none">
-                                    {isAuthenticatedUser ? (
-                                        <></>
-                                    ) : (
+                                                style={{
+                                                    willChange: 'background-color, color',
+                                                }}
+                                                role="menuitem"
+                                                aria-label={subItem.ariaLabel || subItem.name}
+                                                aria-current={isSubItemActive ? 'page' : undefined}
+                                            >
+                                                <IconComponent
+                                                    icon={subItem.icon}
+                                                    isLucide={subItem.isLucide}
+                                                    alt={`${subItem.name} icon`}
+                                                    className="h-4 w-4 shrink-0"
+                                                />
+                                                <span className="whitespace-nowrap">{subItem.name}</span>
+                                            </Link>
+                                        </li>
+                                    );
+                                })}
+                                {!isAuthenticatedUser && (
+                                    <li role="none">
                                         <Link
                                             href="/login"
                                             className={`
-                                    group flex items-center rounded-lg px-[12px] py-[8px] text-[13px] gap-x-[9px] 
-                                    text-[#282828] hover:text-[#282828] hover:bg-[#f7f7f7] w-full 
-                                    transition-colors duration-${ANIMATION_DURATION.COLOR_TRANSITION} ease-out
-                                    focus:outline-none
-                                  `}
+                                                group flex items-center rounded-lg px-[12px] py-[8px] text-[13px] gap-x-[9px]
+                                                text-[#282828] hover:text-[#282828] hover:bg-[#f7f7f7] w-full
+                                                transition-colors duration-${ANIMATION_DURATION.COLOR_TRANSITION} ease-out
+                                                focus:outline-none
+                                            `}
                                             style={{ willChange: 'background-color, color' }}
                                             role="menuitem"
                                             aria-label="Login"
@@ -381,8 +402,8 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
                                             <LogOut className="h-3.5 w-3.5 shrink-0 transform -scale-x-100" aria-hidden="true" />
                                             <span className="whitespace-nowrap">Login</span>
                                         </Link>
-                                    )}
-                                </li>
+                                    </li>
+                                )}
                             </ul>
                         </div>
                     </li>
@@ -418,7 +439,7 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
             );
         },
         [
-            pathname,
+            normalizedPath,
             isCollapsed,
             isSettingsExpanded,
             toggleSettings,
@@ -581,7 +602,7 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
                             }
                         }}
                     >
-                        <AvatarFallback className="text-xs">{getUserInitial()}</AvatarFallback>
+                        <AvatarFallback className="text-xs text-white">{getUserInitial()}</AvatarFallback>
                     </Avatar>
 
                     <div className="ml-[0px] overflow-hidden" style={getTextContainerStyle()}>

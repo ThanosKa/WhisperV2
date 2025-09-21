@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/utils/auth';
+import { isDevMockEnabled } from '@/utils/devMock';
 
 interface AuthGuardProps {
     children: React.ReactNode;
@@ -13,6 +14,11 @@ interface AuthGuardProps {
 export default function AuthGuard({ children, requireAuth = false, redirectTo = '/login' }: AuthGuardProps) {
     const { user, isLoading, mode } = useAuth();
     const router = useRouter();
+
+    // In dev mock mode, always allow rendering without checks
+    if (isDevMockEnabled()) {
+        return <>{children}</>;
+    }
 
     useEffect(() => {
         if (isLoading) return;

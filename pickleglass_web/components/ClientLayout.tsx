@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import SearchPopup from '@/components/SearchPopup';
 import AuthGuard from '@/components/AuthGuard';
+import { Toaster } from '@/components/ui/toaster';
 import { usePathname } from 'next/navigation';
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -38,6 +39,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             </main>
 
             <SearchPopup isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+            <Toaster />
         </div>
     );
 }

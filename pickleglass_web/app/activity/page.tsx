@@ -4,8 +4,10 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRedirectIfNotAuth } from '@/utils/auth';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { UserProfile, Session, deleteSession, getConversationStats, updateSessionTitle, getMeetingsPage, getQuestionsPage } from '@/utils/api';
+import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 
 export default function ActivityPage() {
@@ -25,9 +27,11 @@ export default function ActivityPage() {
     const questionsSentinelRef = useRef<HTMLDivElement | null>(null);
 
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
     const [totalMeetingSeconds, setTotalMeetingSeconds] = useState<number>(0);
     const [totalQuestions, setTotalQuestions] = useState<number>(0);
     const [isStatsLoading, setIsStatsLoading] = useState(true);
+    const { toast } = useToast();
 
     const PAGE_SIZE = 10;
 
@@ -167,7 +171,6 @@ export default function ActivityPage() {
     };
 
     const handleDelete = async (sessionId: string) => {
-        if (!window.confirm('Are you sure you want to delete this activity? This cannot be undone.')) return;
         setDeletingId(sessionId);
         try {
             await deleteSession(sessionId);
@@ -178,11 +181,19 @@ export default function ActivityPage() {
 
             // Refresh stats after deletion
             await fetchSessions();
+
+            toast({
+                title: 'Activity deleted',
+            });
         } catch (error) {
-            alert('Failed to delete activity.');
+            toast({
+                title: 'Error',
+                variant: 'destructive',
+            });
             console.error(error);
         } finally {
             setDeletingId(null);
+            setDeleteConfirmId(null);
         }
     };
 
@@ -253,9 +264,10 @@ export default function ActivityPage() {
                                             <SessionCard
                                                 key={session.id}
                                                 session={session}
-                                                onDelete={handleDelete}
+                                                onDelete={id => setDeleteConfirmId(id)}
                                                 deletingId={deletingId}
                                                 onTitleUpdate={fetchSessions}
+                                                toast={toast}
                                             />
                                         ))}
                                         {isLoadingMoreMeetings && (
@@ -278,9 +290,10 @@ export default function ActivityPage() {
                                         <SessionCard
                                             key={session.id}
                                             session={session}
-                                            onDelete={handleDelete}
+                                            onDelete={id => setDeleteConfirmId(id)}
                                             deletingId={deletingId}
                                             onTitleUpdate={fetchSessions}
+                                            toast={toast}
                                         />
                                     ))}
                                     {isLoadingMoreQuestions && (
@@ -301,6 +314,20 @@ export default function ActivityPage() {
                     )}
                 </div>
             </div>
+
+            <ConfirmDialog
+                open={!!deleteConfirmId}
+                onOpenChange={open => setDeleteConfirmId(open ? deleteConfirmId : null)}
+                title="Delete Activity"
+                description="Are you sure you want to delete this activity? This cannot be undone."
+                confirmLabel={deletingId && deleteConfirmId === deletingId ? 'Deleting...' : 'Delete'}
+                cancelLabel="Cancel"
+                variant="destructive"
+                loading={!!deletingId && deleteConfirmId === deletingId}
+                onConfirm={() => {
+                    if (deleteConfirmId) void handleDelete(deleteConfirmId);
+                }}
+            />
         </div>
     );
 }
@@ -311,11 +338,13 @@ function SessionCard({
     onDelete,
     deletingId,
     onTitleUpdate,
+    toast,
 }: {
     session: Session;
     onDelete: (id: string) => void;
     deletingId: string | null;
     onTitleUpdate?: () => void;
+    toast: any;
 }) {
     const typeLabel = session.session_type === 'listen' ? 'Meeting' : 'Question';
     const typeColor = session.session_type === 'listen' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800';
@@ -338,10 +367,17 @@ function SessionCard({
             setIsEditing(false);
             // Trigger parent refresh
             if (onTitleUpdate) onTitleUpdate();
+
+            toast({
+                title: 'Title updated',
+            });
         } catch (e) {
             // Revert optimistic update on error
             setOptimisticTitle(previousTitle);
-            alert('Failed to save');
+            toast({
+                title: 'Error',
+                variant: 'destructive',
+            });
             console.error(e);
         } finally {
             setSaving(false);
@@ -370,50 +406,53 @@ function SessionCard({
         <div className="block bg-white rounded-lg p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
             <div className="flex justify-between items-start mb-3">
                 <div className="min-w-0 flex-1">
-                    <div className="relative">
-                        {isEditing ? (
-                            <Input
-                                ref={inputRef}
-                                className="w-full bg-transparent border border-transparent p-0 h-auto text-lg font-medium focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none"
-                                value={title}
-                                onChange={e => setTitle(e.target.value)}
-                                placeholder="Enter title..."
-                                onKeyDown={e => {
-                                    if (e.key === 'Enter') save();
-                                    if (e.key === 'Escape') cancelEdit();
-                                }}
-                            />
-                        ) : (
-                            <Link
-                                href={`/activity/details?sessionId=${session.id}`}
-                                className="text-lg font-medium text-gray-900 hover:underline truncate block"
-                            >
-                                {optimisticTitle || `${typeLabel} - ${new Date(session.started_at * 1000).toLocaleDateString()}`}
-                            </Link>
-                        )}
-                        {isEditing && (
-                            <div className="absolute right-0 top-0 flex items-center gap-2">
-                                <Button onClick={save} size="sm" disabled={saving || !title.trim()}>
-                                    {saving ? 'Saving...' : 'Save'}
-                                </Button>
-                                <Button onClick={cancelEdit} variant="outline" size="sm" disabled={saving}>
-                                    Cancel
-                                </Button>
-                            </div>
-                        )}
+                    <div className="flex justify-between items-start">
+                        <div className="flex-1 min-w-0">
+                            {isEditing ? (
+                                <Input
+                                    ref={inputRef}
+                                    className="w-full bg-transparent border border-transparent p-0 h-auto text-lg font-medium text-gray-900 hover:underline truncate block focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none md:text-lg"
+                                    value={title}
+                                    onChange={e => setTitle(e.target.value)}
+                                    placeholder="Enter title..."
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') save();
+                                        if (e.key === 'Escape') cancelEdit();
+                                    }}
+                                />
+                            ) : (
+                                <Link
+                                    href={`/activity/details?sessionId=${session.id}`}
+                                    className="text-lg font-medium text-gray-900 hover:underline truncate block"
+                                >
+                                    {optimisticTitle || `${typeLabel} - ${new Date(session.started_at * 1000).toLocaleDateString()}`}
+                                </Link>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2 ml-4 shrink-0">
+                            {isEditing ? (
+                                <>
+                                    <Button onClick={save} size="sm" disabled={saving || !title.trim()}>
+                                        {saving ? 'Saving...' : 'Save'}
+                                    </Button>
+                                    <Button onClick={cancelEdit} variant="outline" size="sm" disabled={saving}>
+                                        Cancel
+                                    </Button>
+                                </>
+                            ) : (
+                                <>
+                                    <Button onClick={() => setIsEditing(true)} variant="outline" size="sm" disabled={saving}>
+                                        Edit
+                                    </Button>
+                                    <Button onClick={() => onDelete(session.id)} variant="destructive" size="sm" disabled={deletingId === session.id}>
+                                        {deletingId === session.id ? 'Deleting...' : 'Delete'}
+                                    </Button>
+                                </>
+                            )}
+                        </div>
                     </div>
                     <div className="text-sm text-gray-500">{new Date(session.started_at * 1000).toLocaleString()}</div>
                 </div>
-                {!isEditing && (
-                    <div className="flex items-center gap-2 ml-4 shrink-0">
-                        <Button onClick={() => setIsEditing(true)} variant="outline" size="sm" disabled={saving}>
-                            Edit
-                        </Button>
-                        <Button onClick={() => onDelete(session.id)} variant="destructive" size="sm" disabled={deletingId === session.id}>
-                            {deletingId === session.id ? 'Deleting...' : 'Delete'}
-                        </Button>
-                    </div>
-                )}
             </div>
             <span className={`capitalize inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${typeColor}`}>{typeLabel}</span>
         </div>
@@ -426,18 +465,15 @@ function EmptyState({ type }: { type: 'meetings' | 'questions' }) {
             ? {
                   title: 'No meetings yet',
                   description: 'Start a meeting in the desktop app using the Listen feature to see your meeting transcripts and summaries here.',
-                  tip: '💡 Tip: Click the Listen button in the desktop app during a meeting to automatically capture and summarize conversations.',
               }
             : {
                   title: 'No questions yet',
                   description: 'Ask questions in the desktop app to see your Q&A history here.',
-                  tip: '💡 Tip: Use the Ask feature in the desktop app to get AI-powered answers to your questions.',
               };
 
     return (
         <div className="text-center bg-white rounded-lg p-12">
             <p className="text-gray-500 mb-4">{content.description}</p>
-            <div className="text-sm text-gray-400">{content.tip}</div>
         </div>
     );
 }

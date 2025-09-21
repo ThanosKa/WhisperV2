@@ -24,7 +24,7 @@ export const useAuth = () => {
         // Check both localStorage and API for user info
         const checkStoredAuth = async () => {
             try {
-                // First check if we're in electron mode by checking for runtime config
+                // Detect electron mode via runtime config
                 let isElectronMode = false;
                 try {
                     const response = await fetch('/runtime-config.json');
@@ -36,49 +36,34 @@ export const useAuth = () => {
                     console.log('🌐 Detected Web mode');
                 }
 
-                // 🔥 Check localStorage FIRST in Electron mode
                 if (isElectronMode) {
-                    const storedUserInfo = localStorage.getItem('pickleglass_user');
-                    if (storedUserInfo) {
-                        try {
-                            const profile = JSON.parse(storedUserInfo);
-                            // If localStorage has a valid non-default user, use it immediately
-                            if (profile.uid && profile.uid !== 'default_user') {
-                                console.log('🔄 Using user from localStorage (desktop sync):', profile.uid);
-                                setMode('webapp');
-                                setUser(profile);
-                                setRetryCount(0);
-                                setIsLoading(false);
-                                return;
-                            }
-                        } catch (error) {
-                            console.error('Failed to parse stored user info:', error);
-                            localStorage.removeItem('pickleglass_user');
-                        }
-                    }
-
-                    // Only fall back to API if localStorage is empty or invalid
+                    // In Electron mode, SERVER IS AUTHORITATIVE
                     try {
-                        console.log('🔍 Checking backend API for user profile (localStorage fallback)...');
+                        console.log('🔍 Fetching server-authoritative user profile...');
                         const apiUser = await getUserProfile();
                         if (apiUser && apiUser.uid) {
-                            console.log('🖥️ Electron mode activated from API:', apiUser);
                             const profile: UserProfile = {
                                 uid: apiUser.uid,
                                 display_name: apiUser.display_name,
                                 email: apiUser.email,
                             };
+                            // Overwrite localStorage to ensure headers match server user
+                            setUserInfo(profile, true);
                             setMode('webapp');
                             setUser(profile);
-                            setUserInfo(profile, true); // Sync to localStorage
-                            console.log('🔄 User synced to localStorage from API:', profile.uid);
-                            setRetryCount(0); // Reset retry count on success
+                            setRetryCount(0);
                             setIsLoading(false);
                             return;
                         }
                     } catch (apiError) {
-                        console.log('📱 API error:', apiError);
-                        setRetryCount(prev => prev + 1);
+                        console.log('📱 API error (server-authoritative):', apiError);
+                        // Treat as logged out in Electron mode
+                        setMode(null);
+                        setUser(null);
+                        setUserInfo(null);
+                        setRetryCount(0);
+                        setIsLoading(false);
+                        return;
                     }
                 } else {
                     // Web mode: Check localStorage for webapp authentication

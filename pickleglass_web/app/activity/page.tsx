@@ -78,6 +78,23 @@ export default function ActivityPage() {
         };
     }, []);
 
+    // Re-fetch when the logged-in user changes to prevent cross-user mixing
+    useEffect(() => {
+        if (!userInfo?.uid) return;
+        // Reset state before refetching for the new user
+        setIsLoading(true);
+        setMeetings([]);
+        setQuestions([]);
+        setSessions([]);
+        setMeetingsOffset(0);
+        setQuestionsOffset(0);
+        setHasMoreMeetings(true);
+        setHasMoreQuestions(true);
+        fetchSessions();
+        fetchStats();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userInfo?.uid]);
+
     const loadMoreMeetings = useCallback(async () => {
         if (isLoadingMoreMeetings || !hasMoreMeetings) return;
         setIsLoadingMoreMeetings(true);

@@ -339,6 +339,12 @@ class AuthService {
                         .catch(error => {
                             console.log('[AuthService] Failed to execute localStorage sync script:', error.message);
                         });
+                    // Gentle reload to ensure dashboard fetches data for the new user
+                    try {
+                        win.webContents.reloadIgnoringCache();
+                    } catch (e) {
+                        console.warn('[AuthService] Failed to reload window after login:', e?.message || e);
+                    }
                 } else if (!userState.isLoggedIn || userState.mode === 'unauthenticated') {
                     // Clear user data from local webapp localStorage when signed out or unauthenticated
                     console.log('[AuthService] 🗑️ Clearing user from local webapp localStorage (unauthenticated)');
@@ -358,6 +364,12 @@ class AuthService {
                         .catch(error => {
                             console.log('[AuthService] Failed to execute localStorage clear script:', error.message);
                         });
+                    // Redirect/reload to a neutral state
+                    try {
+                        win.webContents.reloadIgnoringCache();
+                    } catch (e) {
+                        console.warn('[AuthService] Failed to reload window after logout:', e?.message || e);
+                    }
                 }
             }
         });

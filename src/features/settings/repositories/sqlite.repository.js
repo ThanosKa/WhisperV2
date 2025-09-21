@@ -2,14 +2,22 @@ const sqliteClient = require('../../common/services/sqliteClient');
 
 function getPresets(uid) {
     const db = sqliteClient.getDb();
-    // Return all presets (defaults + all user-created), independent of UID, for local desktop usage
-    const query = `
+    // In SettingsView, show defaults + current user's presets only
+    const hasUser = !!uid && uid !== 'undefined' && uid !== 'null';
+    const query = hasUser
+        ? `
         SELECT * FROM prompt_presets 
+        WHERE is_default = 1 OR uid = ?
         ORDER BY is_default DESC, title ASC
+    `
+        : `
+        SELECT * FROM prompt_presets 
+        WHERE is_default = 1
+        ORDER BY title ASC
     `;
 
     try {
-        return db.prepare(query).all() || [];
+        return hasUser ? db.prepare(query).all(uid) : db.prepare(query).all();
     } catch (err) {
         console.error('SQLite: Failed to get presets:', err);
         throw err;

@@ -369,6 +369,23 @@ function setupWebDataHandlers() {
                         result = null;
                         break;
                     }
+                    // Ownership check: ensure the requested session belongs to the current authenticated user
+                    try {
+                        const currentUid = authService.getCurrentUserId();
+                        if (!currentUid || session.uid !== currentUid) {
+                            console.warn('[WebData] Unauthorized access to session details blocked:', {
+                                requestedSessionId: payload,
+                                sessionOwner: session.uid,
+                                currentUid,
+                            });
+                            result = null;
+                            break;
+                        }
+                    } catch (e) {
+                        console.warn('[WebData] Failed to validate session ownership:', e?.message || e);
+                        result = null;
+                        break;
+                    }
                     const [transcripts, ai_messages, summary] = await Promise.all([
                         sttRepository.getAllTranscriptsBySessionId(payload),
                         askRepository.getAllAiMessagesBySessionId(payload),
@@ -377,6 +394,24 @@ function setupWebDataHandlers() {
                     result = { session, transcripts, ai_messages, summary };
                     break;
                 case 'delete-session':
+                    // Ensure the session belongs to the current user before deletion
+                    try {
+                        const currentUidForDelete = authService.getCurrentUserId();
+                        const sessionForDelete = await sessionRepository.getById(payload);
+                        if (!sessionForDelete || !currentUidForDelete || sessionForDelete.uid !== currentUidForDelete) {
+                            console.warn('[WebData] Unauthorized delete-session blocked:', {
+                                requestedSessionId: payload,
+                                sessionOwner: sessionForDelete?.uid,
+                                currentUidForDelete,
+                            });
+                            result = { success: false, error: 'Unauthorized' };
+                            break;
+                        }
+                    } catch (e) {
+                        console.warn('[WebData] Failed to validate session ownership for delete:', e?.message || e);
+                        result = { success: false, error: 'Unauthorized' };
+                        break;
+                    }
                     result = await sessionRepository.deleteWithRelatedData(payload);
                     break;
                 case 'create-session':
@@ -390,6 +425,24 @@ function setupWebDataHandlers() {
                 case 'update-session-title':
                     if (!payload || !payload.id || !payload.title) {
                         throw new Error('id and title are required');
+                    }
+                    // Ownership check for update
+                    try {
+                        const currentUidForUpdate = authService.getCurrentUserId();
+                        const sessionForUpdate = await sessionRepository.getById(payload.id);
+                        if (!sessionForUpdate || !currentUidForUpdate || sessionForUpdate.uid !== currentUidForUpdate) {
+                            console.warn('[WebData] Unauthorized update-session-title blocked:', {
+                                requestedSessionId: payload.id,
+                                sessionOwner: sessionForUpdate?.uid,
+                                currentUidForUpdate,
+                            });
+                            result = { success: false, error: 'Unauthorized' };
+                            break;
+                        }
+                    } catch (e) {
+                        console.warn('[WebData] Failed to validate session ownership for update:', e?.message || e);
+                        result = { success: false, error: 'Unauthorized' };
+                        break;
                     }
                     result = await sessionRepository.updateTitle(payload.id, payload.title);
                     break;

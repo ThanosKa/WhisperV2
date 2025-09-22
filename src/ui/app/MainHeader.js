@@ -406,7 +406,12 @@ export class MainHeader extends LitElement {
                     ?disabled=${this.isTogglingSession}
                 >
                     ${this.isTogglingSession
-                        ? html`<div class="loading-dots"><span></span><span></span><span></span></div>`
+                        ? html`<div class="water-drop-ripple">
+                              <div class="ripple-ring"></div>
+                              <div class="ripple-ring"></div>
+                              <div class="ripple-ring"></div>
+                              <div class="ripple-ring"></div>
+                          </div>`
                         : html`
                               ${isInSession || isPaused
                                   ? ''

@@ -190,39 +190,6 @@ export const mainHeaderStyles = css`
         display: none;
     }
 
-    .loading-dots {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-    }
-
-    .loading-dots span {
-        width: 6px;
-        height: 6px;
-        background-color: white;
-        border-radius: 50%;
-        animation: pulse 1.4s infinite ease-in-out both;
-    }
-
-    .loading-dots span:nth-of-type(1) {
-        animation-delay: -0.32s;
-    }
-
-    .loading-dots span:nth-of-type(2) {
-        animation-delay: -0.16s;
-    }
-
-    @keyframes pulse {
-        0%,
-        80%,
-        100% {
-            opacity: 0.2;
-        }
-        40% {
-            opacity: 1;
-        }
-    }
-
     /* Text-only variant for auth header login button */
     .listen-button.text-link {
         width: auto;
@@ -417,6 +384,57 @@ export const mainHeaderStyles = css`
     }
     .wavy-animation path:nth-child(6) {
         animation-delay: -1.2s;
+    }
+
+    /* Water Drop Ripple - Replace the loading-dots styles */
+    .water-drop-ripple {
+        width: 30px;
+        height: 30px;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .ripple-ring {
+        position: absolute;
+        border: 1.5px solid rgba(255, 255, 255, 0.8);
+        border-radius: 50%;
+        animation: water-ripple-pulse 3s infinite ease-out;
+    }
+
+    .ripple-ring:nth-child(1) {
+        animation-delay: 0s;
+    }
+    .ripple-ring:nth-child(2) {
+        animation-delay: 0.8s;
+    }
+    .ripple-ring:nth-child(3) {
+        animation-delay: 1.6s;
+    }
+    .ripple-ring:nth-child(4) {
+        animation-delay: 2.4s;
+    }
+
+    @keyframes water-ripple-pulse {
+        0% {
+            width: 4px;
+            height: 4px;
+            opacity: 1;
+            border-width: 2px;
+        }
+        70% {
+            width: 28px;
+            height: 28px;
+            opacity: 0.6;
+            border-width: 1px;
+        }
+        100% {
+            width: 40px;
+            height: 40px;
+            opacity: 0;
+            border-width: 0.5px;
+        }
     }
 
     /* ────────────────[ GLASS BYPASS ]─────────────── */

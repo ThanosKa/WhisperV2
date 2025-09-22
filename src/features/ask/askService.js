@@ -635,8 +635,14 @@ ${llmMessages}
 
             const askWin = getWindowPool()?.get('ask');
             if (askWin && !askWin.isDestroyed()) {
-                const streamError = error.message || 'Unknown error occurred';
-                askWin.webContents.send('ask-response-stream-error', { error: streamError });
+                // Detect quota exceeded via status text to keep logic simple
+                const msg = (error?.message || '').toLowerCase();
+                if (msg.includes('429') || msg.includes('too many requests')) {
+                    askWin.webContents.send('ask-response-stream-error', { error: 'quota_exceeded' });
+                } else {
+                    const streamError = error.message || 'Unknown error occurred';
+                    askWin.webContents.send('ask-response-stream-error', { error: streamError });
+                }
             }
 
             return { success: false, error: error.message };

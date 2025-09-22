@@ -175,7 +175,15 @@ export class AskView extends LitElement {
                 this.isStreaming = true;
                 this.interrupted = false;
                 this.showTextInput = false;
-                this.currentResponse = 'Something went wrong.';
+
+                const isQuota = payload && (payload.error === 'quota_exceeded' || /429|too many requests/i.test(String(payload.error || '')));
+                if (isQuota) {
+                    const baseUrl = (window.api?.env?.API_BASE_URL || 'https://www.app-whisper.com').replace(/\/$/, '');
+                    const pricingUrl = `${baseUrl}/pricing`;
+                    this.currentResponse = `**Daily limit reached**\n\nYou've used all your free responses for today.\n\n[Upgrade to Pro](${pricingUrl}) for unlimited responses.`;
+                } else {
+                    this.currentResponse = 'Something went wrong.';
+                }
                 this.renderContent();
                 this.adjustWindowHeightThrottled();
             };

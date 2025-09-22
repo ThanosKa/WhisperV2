@@ -8,6 +8,7 @@ export class MainHeader extends LitElement {
         listenSessionStatus: { type: String, state: true },
         userPlan: { type: String, state: true },
         apiQuota: { type: Object, state: true },
+        isLoadingPlan: { type: Boolean, state: true },
     };
 
     static styles = mainHeaderStyles;
@@ -31,6 +32,7 @@ export class MainHeader extends LitElement {
         // Plan / quota state
         this.userPlan = 'free';
         this.apiQuota = null; // { daily, used, remaining }
+        this.isLoadingPlan = false;
     }
 
     async loadShortcuts() {
@@ -158,6 +160,7 @@ export class MainHeader extends LitElement {
                     if (user) {
                         this.userPlan = user.plan || 'free';
                         if (user.sessionUuid) {
+                            this.isLoadingPlan = true;
                             this._fetchUserProfile(user.sessionUuid);
                         }
                     }
@@ -179,10 +182,14 @@ export class MainHeader extends LitElement {
                 if (userState) {
                     this.userPlan = userState.plan || 'free';
                     if (userState.sessionUuid) {
+                        this.isLoadingPlan = true;
                         this._fetchUserProfile(userState.sessionUuid);
                     } else {
                         this.apiQuota = null;
+                        this.isLoadingPlan = false;
                     }
+                } else {
+                    this.isLoadingPlan = false;
                 }
             };
             window.api.headerController.onUserStateChanged(this._userStateListener);
@@ -328,14 +335,22 @@ export class MainHeader extends LitElement {
             }
         } catch (e) {
             // ignore network errors
+        } finally {
+            this.isLoadingPlan = false;
         }
     }
 
     _getPlanLabel() {
+        if (this.isLoadingPlan) {
+            return 'Loading...';
+        }
         return (this.userPlan || 'free') === 'pro' ? 'Pro plan' : 'Upgrade to Pro';
     }
 
     _getPlanTooltip() {
+        if (this.isLoadingPlan) {
+            return 'Loading plan information...';
+        }
         const isPro = (this.userPlan || 'free') !== 'free';
         if (isPro) return 'You have unlimited responses.';
         const remaining = this.apiQuota?.remaining;
@@ -346,6 +361,7 @@ export class MainHeader extends LitElement {
     }
 
     _handlePlanClick() {
+        if (this.isLoadingPlan) return; // Don't allow clicks while loading
         const isFree = (this.userPlan || 'free') === 'free';
         if (!isFree) return;
         const baseUrl = (window.api?.env?.API_BASE_URL || 'https://www.app-whisper.com').replace(/\/$/, '');

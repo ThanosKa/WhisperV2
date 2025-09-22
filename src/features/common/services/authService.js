@@ -250,20 +250,20 @@ class AuthService {
         try {
             let userProfile;
 
-            // If userInfo is provided (from deep link), use it directly
+            // Always validate the session with the webapp to get complete user profile including plan
+            // This prevents jarring UI transitions in the header when deep links don't include plan info
+            console.log('[AuthService] Validating session with webapp to get complete user profile...');
+            userProfile = await validateSession(sessionUuid);
+
+            // If userInfo is provided (from deep link), merge it with validated profile
+            // but prioritize the validated profile data (especially plan information)
             if (userInfo && userInfo.uid && userInfo.email) {
-                console.log('[AuthService] Using user data from deep link parameters:', userInfo);
+                console.log('[AuthService] Merging deep link user data with validated profile:', userInfo);
                 userProfile = {
-                    uid: userInfo.uid,
-                    displayName: userInfo.displayName || 'User',
-                    email: userInfo.email,
-                    plan: userInfo.plan || 'free',
-                    apiQuota: userInfo.apiQuota || null,
+                    ...userProfile,
+                    // Keep validated profile data, but use displayName from deep link if it's more complete
+                    displayName: userInfo.displayName || userProfile.displayName || 'User',
                 };
-            } else {
-                // Fallback: Validate the session with the webapp
-                console.log('[AuthService] No user data provided, validating session with webapp...');
-                userProfile = await validateSession(sessionUuid);
             }
 
             // Handle user sign-in

@@ -130,6 +130,95 @@ router.get('/search', async (req: Request, res: Response) => {
     }
 });
 
+// Paginated, scoped search: supports searching by title (default) or summaries when scope=summary
+router.get('/search/page', async (req: Request, res: Response) => {
+    try {
+        const scope = ((req.query.scope as string) || 'title').toString().trim().toLowerCase() as 'title' | 'summary' | 'all';
+        const q = ((req.query.q as string) || '').toString().trim().toLowerCase();
+        const limit = Math.max(1, Math.min(parseInt((req.query.limit as string) || '10', 10), 50));
+        const offset = Math.max(0, parseInt((req.query.offset as string) || '0', 10));
+
+        const sessions = await ipcRequest<any[]>(req, 'get-sessions');
+        const ordered = sessions || []; // already ordered DESC by started_at from repository
+
+        let filtered: any[] = [];
+
+        if (scope === 'all') {
+            if (!q) {
+                const page = ordered.slice(offset, offset + limit);
+                return res.json({
+                    items: page,
+                    nextOffset: offset + page.length < ordered.length ? offset + page.length : null,
+                    total: ordered.length,
+                });
+            }
+            // Filter by title for all sessions and by summary for meetings; keep original order
+            const titleMatches = new Set(ordered.filter(s => ((s.title || '') as string).toLowerCase().includes(q)).map(s => s.id as string));
+            const listenSessions = ordered.filter(s => s.session_type === 'listen');
+            const detailPromises = listenSessions.map(s => ipcRequest<any>(req, 'get-session-details', s.id).catch(() => null));
+            const details = await Promise.all(detailPromises);
+            const summaryMatches = new Set<string>();
+            details.forEach((d, idx) => {
+                if (!d || !d.summary) return;
+                const tldr = ((d.summary.tldr || '') as string).toLowerCase();
+                const text = ((d.summary.text || '') as string).toLowerCase();
+                if (tldr.includes(q) || text.includes(q)) {
+                    summaryMatches.add(listenSessions[idx].id as string);
+                }
+            });
+            filtered = ordered.filter(s => titleMatches.has(s.id as string) || summaryMatches.has(s.id as string));
+            const page = filtered.slice(offset, offset + limit);
+            return res.json({
+                items: page,
+                nextOffset: offset + page.length < filtered.length ? offset + page.length : null,
+                total: filtered.length,
+            });
+        }
+
+        if (scope === 'summary') {
+            // If query empty, just list meetings (listen) paginated
+            const listenSessions = ordered.filter(s => s.session_type === 'listen');
+            if (!q) {
+                const page = listenSessions.slice(offset, offset + limit);
+                return res.json({
+                    items: page,
+                    nextOffset: offset + page.length < listenSessions.length ? offset + page.length : null,
+                    total: listenSessions.length,
+                });
+            }
+
+            // With query, fetch details to access summary and filter
+            const detailPromises = listenSessions.map(s => ipcRequest<any>(req, 'get-session-details', s.id).catch(() => null));
+            const details = await Promise.all(detailPromises);
+            const needle = q;
+            filtered = listenSessions.filter((s, idx) => {
+                const d = details[idx];
+                if (!d || !d.summary) return false;
+                const tldr = (d.summary.tldr || '').toLowerCase();
+                const text = (d.summary.text || '').toLowerCase();
+                return tldr.includes(needle) || text.includes(needle);
+            });
+        } else {
+            // Default: title search
+            if (!q) {
+                return res.json({ items: [], nextOffset: null, total: 0 });
+            }
+            const needle = q;
+            filtered = ordered.filter(s => (s.title || '').toLowerCase().includes(needle));
+        }
+
+        const page = filtered.slice(offset, offset + limit);
+        res.json({
+            items: page,
+            nextOffset: offset + page.length < filtered.length ? offset + page.length : null,
+            total: filtered.length,
+        });
+    } catch (error) {
+        console.error('Failed to perform paginated search via IPC:', error);
+        res.status(500).json({ error: 'Failed to search conversations (paged)' });
+    }
+});
+
 router.get('/:session_id', async (req: Request, res: Response) => {
     try {
         const details = await ipcRequest<any>(req, 'get-session-details', req.params.session_id);

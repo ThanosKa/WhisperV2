@@ -255,6 +255,88 @@ export const searchConversations = async (query: string): Promise<Session[]> => 
     }
 };
 
+export const searchConversationsPage = async (params: {
+    query: string;
+    scope?: 'title' | 'summary' | 'all';
+    offset?: number;
+    limit?: number;
+}): Promise<PagedResult<Session>> => {
+    const { query, scope = 'title', offset = 0, limit = 10 } = params;
+
+    if (isDevMockEnabled()) {
+        initDevIfNeeded();
+        const all = getSessionsMock() as unknown as Session[];
+        // Default ordering already roughly newest-first in mock initializer
+        if (scope === 'all') {
+            const items = all.slice(offset, offset + limit);
+            const nextOffset = offset + items.length < all.length ? offset + items.length : null;
+            return { items, nextOffset, total: all.length };
+        }
+        if (scope === 'summary') {
+            const listen = all.filter(s => s.session_type === 'listen');
+            const trimmed = (query || '').trim().toLowerCase();
+            if (!trimmed) {
+                const items = listen.slice(offset, offset + limit);
+                const nextOffset = offset + items.length < listen.length ? offset + items.length : null;
+                return { items, nextOffset, total: listen.length };
+            }
+            const filtered = listen.filter(s => {
+                const d = getSessionDetailsMock(s.id) as unknown as SessionDetails | null;
+                if (!d || !d.summary) return false;
+                const tldr = (d.summary.tldr || '').toLowerCase();
+                const text = (d.summary.text || '').toLowerCase();
+                return tldr.includes(trimmed) || text.includes(trimmed);
+            });
+            const items = filtered.slice(offset, offset + limit);
+            const nextOffset = offset + items.length < filtered.length ? offset + items.length : null;
+            return { items, nextOffset, total: filtered.length };
+        }
+        const trimmed = (query || '').trim().toLowerCase();
+        if (!trimmed) {
+            return { items: [], nextOffset: null, total: 0 };
+        }
+        const filtered = all.filter(s => (s.title || '').toLowerCase().includes(trimmed));
+        const items = filtered.slice(offset, offset + limit);
+        const nextOffset = offset + items.length < filtered.length ? offset + items.length : null;
+        return { items, nextOffset, total: filtered.length };
+    }
+
+    if (isFirebaseMode()) {
+        // Firebase mode disabled; fall back to local getSessions and filter
+        const sessions = await getSessions();
+        const trimmed = (query || '').trim().toLowerCase();
+        if (scope === 'summary') {
+            const listen = sessions.filter(s => s.session_type === 'listen');
+            if (!trimmed) {
+                const items = listen.slice(offset, offset + limit);
+                const nextOffset = offset + items.length < listen.length ? offset + items.length : null;
+                return { items, nextOffset, total: listen.length };
+            }
+            // Without a summary index in Firebase mode, return empty
+            return { items: [], nextOffset: null, total: 0 };
+        }
+        if (!trimmed) {
+            return { items: [], nextOffset: null, total: 0 };
+        }
+        const filtered = sessions.filter(s => (s.title || '').toLowerCase().includes(trimmed));
+        const items = filtered.slice(offset, offset + limit);
+        const nextOffset = offset + items.length < filtered.length ? offset + items.length : null;
+        return { items, nextOffset, total: filtered.length };
+    }
+
+    const qs = new URLSearchParams({
+        q: query || '',
+        scope: (params.scope || 'title') as string,
+        offset: String(offset),
+        limit: String(limit),
+    });
+    const response = await apiCall(`/api/conversations/search/page?${qs.toString()}`, { method: 'GET' });
+    if (!response.ok) {
+        throw new Error('Failed to search conversations (page)');
+    }
+    return response.json();
+};
+
 export const getSessions = async (): Promise<Session[]> => {
     if (isDevMockEnabled()) {
         initDevIfNeeded();
@@ -405,7 +487,7 @@ export const createSession = async (title?: string): Promise<{ id: string }> => 
             sync_state: 'clean',
             updated_at: now,
         };
-        const list = (getSessionsMock() as unknown as Session[]);
+        const list = getSessionsMock() as unknown as Session[];
         (list as any).unshift(s as any);
         setSessionsMock(list as any);
         const details: SessionDetails = { session: s, transcripts: [], ai_messages: [], summary: null };
@@ -572,8 +654,8 @@ export const getBatchData = async (includes: ('profile' | 'presets' | 'sessions'
         initDevIfNeeded();
         const out: BatchData = {};
         if (includes.includes('profile')) out.profile = getMockUser() as any;
-        if (includes.includes('presets')) out.presets = (getPresetsMock() as any) as PromptPreset[];
-        if (includes.includes('sessions')) out.sessions = (getSessionsMock() as any) as Session[];
+        if (includes.includes('presets')) out.presets = getPresetsMock() as any as PromptPreset[];
+        if (includes.includes('sessions')) out.sessions = getSessionsMock() as any as Session[];
         return out;
     }
     const response = await apiCall(`/api/user/batch?include=${includes.join(',')}`, { method: 'GET' });

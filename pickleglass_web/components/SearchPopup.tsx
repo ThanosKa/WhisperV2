@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, X, MessageSquare, HelpCircle } from 'lucide-react';
-import { searchConversations, Session } from '@/utils/api';
+import { searchConversations, searchConversationsPage, Session, PagedResult } from '@/utils/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,10 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<Session[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const [hasMore, setHasMore] = useState<boolean>(false);
+    const [nextOffset, setNextOffset] = useState<number | null>(0);
+    const sentinelRef = useRef<HTMLDivElement | null>(null);
     const [activeShortcut, setActiveShortcut] = useState<'#' | '?' | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const router = useRouter();
@@ -45,18 +49,34 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
         return () => document.removeEventListener('keydown', handleEscape);
     }, [isOpen, onClose]);
 
-    // Handle shortcut key highlighting
+    // Handle shortcut key highlighting (only when first character is '#' or '?')
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (!isOpen) return;
-
-            setActiveShortcut(prev => {
-                if (e.key === '#' || e.key === '?') {
-                    return e.key as '#' | '?';
+            // Only activate when input is focused and caret is at position 0 and key is '#' or '?'
+            if (!inputRef.current) return;
+            const isAtStart = inputRef.current.selectionStart === 0 && inputRef.current.selectionEnd === 0;
+            if ((e.key === '#' || e.key === '?') && isAtStart) {
+                setActiveShortcut(e.key as '#' | '?');
+            } else if (e.key.length === 1) {
+                // Any character input that changes the first char should reset highlight unless it remains '#' or '?'
+                const nextFirstChar = e.key;
+                if (nextFirstChar !== '#' && nextFirstChar !== '?') {
+                    setActiveShortcut(null);
                 }
-
-                return prev === null ? prev : null;
-            });
+            } else if (e.key === 'Backspace' || e.key === 'Delete') {
+                // Recompute from current value after deletion on next tick
+                setTimeout(() => {
+                    const val = inputRef.current?.value || '';
+                    const first = val.charAt(0);
+                    setActiveShortcut(first === '#' || first === '?' ? (first as '#' | '?') : null);
+                }, 0);
+            } else if (e.key === 'Escape') {
+                // Keep existing escape close behavior via separate effect
+                return;
+            } else {
+                // For navigation keys etc., do nothing
+            }
         };
 
         document.addEventListener('keydown', handleKeyDown);
@@ -64,20 +84,64 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
     }, [isOpen]);
 
     const handleSearch = async (query: string) => {
-        if (!query.trim()) {
+        const raw = query || '';
+        const trimmed = raw.trim();
+        const isSummaryScope = trimmed.startsWith('#');
+        const q = isSummaryScope ? trimmed.slice(1).trim() : trimmed;
+
+        if (!trimmed) {
+            setIsLoading(false);
             setSearchResults([]);
+            setHasMore(false);
+            setNextOffset(0);
             return;
         }
 
         setIsLoading(true);
         try {
-            const results = await searchConversations(query);
-            setSearchResults(results);
+            // Use paged API for both title and summary scopes to support infinite scroll
+            const page: PagedResult<Session> = await searchConversationsPage({
+                query: q,
+                scope: isSummaryScope ? 'all' : 'title',
+                offset: 0,
+                limit: 10,
+            });
+            setSearchResults(page.items);
+            setHasMore(page.nextOffset !== null);
+            setNextOffset(page.nextOffset);
         } catch (error) {
             console.error('Search failed:', error);
             setSearchResults([]);
+            setHasMore(false);
+            setNextOffset(0);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const loadMore = async () => {
+        if (isLoadingMore || !hasMore || nextOffset === null) return;
+        const raw = searchQuery || '';
+        const trimmed = raw.trim();
+        const isSummaryScope = trimmed.startsWith('#');
+        const q = isSummaryScope ? trimmed.slice(1).trim() : trimmed;
+        if (!trimmed) return;
+
+        setIsLoadingMore(true);
+        try {
+            const page = await searchConversationsPage({
+                query: q,
+                scope: isSummaryScope ? 'all' : 'title',
+                offset: nextOffset || 0,
+                limit: 10,
+            });
+            setSearchResults(prev => [...prev, ...page.items]);
+            setHasMore(page.nextOffset !== null);
+            setNextOffset(page.nextOffset);
+        } catch (e) {
+            console.error('Failed to load more search results', e);
+        } finally {
+            setIsLoadingMore(false);
         }
     };
 
@@ -93,12 +157,16 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
         if (!trimmedQuery) {
             setIsLoading(false);
             setSearchResults([]);
+            setHasMore(false);
+            setNextOffset(0);
             return;
         }
 
         if (trimmedQuery === '?') {
             setIsLoading(false);
             setSearchResults([]);
+            setHasMore(false);
+            setNextOffset(0);
             return;
         }
 
@@ -108,6 +176,30 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
 
         return () => clearTimeout(id);
     }, [searchQuery]);
+
+    // Reset pagination state when query changes
+    useEffect(() => {
+        setHasMore(false);
+        setNextOffset(0);
+    }, [searchQuery]);
+
+    // Intersection Observer for infinite scroll inside the dialog content
+    useEffect(() => {
+        const sentinel = sentinelRef.current;
+        if (!sentinel) return;
+        const observer = new IntersectionObserver(
+            entries => {
+                const first = entries[0];
+                if (first.isIntersecting) {
+                    loadMore();
+                }
+            },
+            { root: null, rootMargin: '200px', threshold: 0 }
+        );
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sentinelRef.current, hasMore, nextOffset, isLoadingMore, searchQuery]);
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -160,6 +252,8 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
                             <div className="divide-y">
                                 {searchResults.map(result => {
                                     const timestamp = new Date(result.started_at * 1000).toLocaleString();
+                                    const typeLabel = result.session_type === 'listen' ? 'Meeting' : 'Question';
+                                    const typeColor = result.session_type === 'listen' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800';
 
                                     return (
                                         <div
@@ -173,7 +267,14 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
                                             <div className="flex items-start gap-3">
                                                 <MessageSquare className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
                                                 <div className="flex-1 min-w-0">
-                                                    <h3 className="text-sm font-medium mb-1 truncate">{result.title || 'Untitled Conversation'}</h3>
+                                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                                        <h3 className="text-sm font-medium truncate">{result.title || 'Untitled Conversation'}</h3>
+                                                        <span
+                                                            className={`capitalize inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${typeColor}`}
+                                                        >
+                                                            {typeLabel}
+                                                        </span>
+                                                    </div>
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-xs text-muted-foreground">{timestamp}</span>
                                                     </div>
@@ -182,6 +283,13 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
                                         </div>
                                     );
                                 })}
+                                {isLoadingMore && (
+                                    <div className="p-4 text-center">
+                                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary mx-auto mb-2"></div>
+                                        <p className="text-muted-foreground text-xs">Loading more...</p>
+                                    </div>
+                                )}
+                                {hasMore ? <div ref={sentinelRef} /> : <div className="text-center py-4 text-muted-foreground text-xs">End.</div>}
                             </div>
                         ) : (
                             <div className="p-6 text-center">

@@ -25,6 +25,49 @@ export class PlanView extends LitElement {
         super.connectedCallback();
         console.log('[PlanView] Component connected');
         this._loadUserData();
+
+        // Subscribe to real-time quota updates from main (headers on stream start)
+        try {
+            if (window.api?.quota?.onUpdate) {
+                this._onQuotaUpdate = (_event, payload) => {
+                    const limit = typeof payload?.limit === 'number' ? payload.limit : undefined;
+                    const used = typeof payload?.used === 'number' ? payload.used : undefined;
+                    const remaining = typeof payload?.remaining === 'number' ? payload.remaining : undefined;
+
+                    if (typeof limit === 'undefined' && typeof used === 'undefined' && typeof remaining === 'undefined') return;
+
+                    // If we don't yet know plan, assume free when limit is finite
+                    const plan = limit && limit >= 1000 ? 'pro' : 'free';
+
+                    const next = {
+                        plan: plan,
+                        limit: typeof limit === 'number' ? limit : (this.usage?.limit ?? 10),
+                        used: typeof used === 'number' ? used : (this.usage?.used ?? 0),
+                        remaining:
+                            typeof remaining === 'number'
+                                ? remaining
+                                : typeof limit === 'number' && typeof used === 'number'
+                                  ? Math.max(0, limit - used)
+                                  : (this.usage?.remaining ?? 0),
+                    };
+
+                    this.usage = next;
+                    this.isLoading = false;
+                };
+                window.api.quota.onUpdate(this._onQuotaUpdate);
+            }
+        } catch (e) {
+            console.warn('[PlanView] Failed to subscribe to quota updates:', e?.message || e);
+        }
+    }
+
+    disconnectedCallback() {
+        try {
+            if (this._onQuotaUpdate && window.api?.quota?.removeOnUpdate) {
+                window.api.quota.removeOnUpdate(this._onQuotaUpdate);
+            }
+        } catch (_) {}
+        super.disconnectedCallback();
     }
 
     async _loadUserData() {

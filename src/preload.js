@@ -85,6 +85,13 @@ contextBridge.exposeInMainWorld('api', {
         showPlanWindow: visible => ipcRenderer.send('window:showPlanWindow', { visible }),
     },
 
+    // Quota/usage updates broadcast from main process
+    quota: {
+        onUpdate: callback => ipcRenderer.on('quota:update', callback),
+        removeOnUpdate: callback => ipcRenderer.removeListener('quota:update', callback),
+        removeAll: () => ipcRenderer.removeAllListeners('quota:update'),
+    },
+
     // src/ui/app/PermissionHeader.js
     permissionHeader: {
         // Permission Management

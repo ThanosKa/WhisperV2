@@ -36,6 +36,30 @@ try {
 }
 let lastScreenshot = null;
 
+function broadcastQuotaUpdateFromResponse(response) {
+    try {
+        const headers = response?.headers;
+        if (!headers) return;
+        const limitHeader = headers.get('x-ratelimit-limit') || headers.get('X-RateLimit-Limit');
+        const usedHeader = headers.get('x-ratelimit-used') || headers.get('X-RateLimit-Used');
+        const remainingHeader = headers.get('x-ratelimit-remaining') || headers.get('X-RateLimit-Remaining');
+
+        const limit = Number.isFinite(Number(limitHeader)) ? Number(limitHeader) : undefined;
+        const used = Number.isFinite(Number(usedHeader)) ? Number(usedHeader) : undefined;
+        const remaining = Number.isFinite(Number(remainingHeader)) ? Number(remainingHeader) : undefined;
+
+        if (typeof limit === 'undefined' && typeof used === 'undefined' && typeof remaining === 'undefined') return;
+
+        BrowserWindow.getAllWindows().forEach(win => {
+            if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
+                win.webContents.send('quota:update', { limit, used, remaining });
+            }
+        });
+    } catch (e) {
+        console.warn('[AskService] Failed to broadcast quota headers:', e?.message || e);
+    }
+}
+
 async function captureScreenshot(options = {}) {
     if (process.platform === 'darwin') {
         try {
@@ -536,6 +560,9 @@ ${llmMessages}
             try {
                 const response = await llmClient.stream(messages, { signal });
 
+                // Broadcast quota headers immediately on stream start
+                broadcastQuotaUpdateFromResponse(response);
+
                 console.log('📡 [AskService] LLM responded - starting to process stream...');
 
                 const askWin = getWindowPool()?.get('ask');
@@ -572,6 +599,8 @@ ${llmMessages}
                     ];
 
                     const fallbackResponse = await llmClient.stream(textOnlyMessages, { signal });
+                    // Broadcast quota headers for fallback as well
+                    broadcastQuotaUpdateFromResponse(fallbackResponse);
                     const askWin = getWindowPool()?.get('ask');
 
                     if (!askWin || askWin.isDestroyed()) {

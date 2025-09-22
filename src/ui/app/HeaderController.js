@@ -274,8 +274,8 @@ class HeaderTransitionManager {
 
     async _resizeForAuth(height = 50) {
         if (!window.api) return;
-        console.log(`[HeaderController] _resizeForAuth: Resizing window to 200x${height}`);
-        return window.api.headerController.resizeHeaderWindow({ width: 200, height }).catch(() => {});
+        console.log(`[HeaderController] _resizeForAuth: Resizing window to 220x${height}`);
+        return window.api.headerController.resizeHeaderWindow({ width: 220, height }).catch(() => {});
     }
 
     async _resizeForPermissionHeader(height) {

@@ -83,6 +83,10 @@ contextBridge.exposeInMainWorld('api', {
 
         // Plan tooltip window
         showPlanWindow: visible => ipcRenderer.send('window:showPlanWindow', { visible }),
+
+        // Listen window visibility
+        setListenWindowVisibility: visible => ipcRenderer.invoke('window:set-visibility', { name: 'listen', visible }),
+        isListenWindowVisible: () => ipcRenderer.invoke('window:is-visible', 'listen'),
     },
 
     // Quota/usage updates broadcast from main process

@@ -221,9 +221,10 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
 
         // Combine contextual prompt with recent conversation for the template
         // Make sections explicit so LLM analyzes only the transcript
-        const fullContext = contextualPrompt
-            ? `${contextualPrompt.trim()}\n\nPreviously Defined Terms:\n${(prevDefines || []).join(', ') || '(none)'}\n\nPreviously Detected Questions:\n${(prevQuestions || []).join(' | ') || '(none)'}\n\nTranscript:\n${recentConversation}`
-            : `Previously Defined Terms:\n${(prevDefines || []).join(', ') || '(none)'}\n\nPreviously Detected Questions:\n${(prevQuestions || []).join(' | ') || '(none)'}\n\nTranscript:\n${recentConversation}`;
+        // const fullContext = contextualPrompt
+        //     ? `${contextualPrompt.trim()}\n\nPreviously Defined Terms:\n${(prevDefines || []).join(', ') || '(none)'}\n\nPreviously Detected Questions:\n${(prevQuestions || []).join(' | ') || '(none)'}\n\nTranscript:\n${recentConversation}`
+        //     : `Previously Defined Terms:\n${(prevDefines || []).join(', ') || '(none)'}\n\nPreviously Detected Questions:\n${(prevQuestions || []).join(' | ') || '(none)'}\n\nTranscript:\n${recentConversation}`;
+        const fullContext = `Previously Defined Terms:\n${(prevDefines || []).join(', ') || '(none)'}\n\nPreviously Detected Questions:\n${(prevQuestions || []).join(' | ') || '(none)'}\n\nTranscript:\n${recentConversation}`;
 
         // Build base system prompt and inject role for ALL presets (role-only editing)
         const baseSystem = getSystemPrompt('meeting_analysis', {
@@ -247,7 +248,8 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
                 },
                 {
                     role: 'user',
-                    content: 'Analyze the conversation provided in the Transcript context above.',
+                    content:
+                        'Analyze **ONLY** the conversation provided in the Transcript context above IN THE **LANGUAGE OF THE TRANSCRIPT**. If nothing is detected then DO NOT RETURN ANYTHING.',
                 },
             ];
 

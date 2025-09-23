@@ -9,6 +9,7 @@ export class MainHeader extends LitElement {
         userPlan: { type: String, state: true },
         apiQuota: { type: Object, state: true },
         isLoadingPlan: { type: Boolean, state: true },
+        isListenWindowVisible: { type: Boolean, state: true },
     };
 
     static styles = mainHeaderStyles;
@@ -28,6 +29,7 @@ export class MainHeader extends LitElement {
         this.handleMouseUp = this.handleMouseUp.bind(this);
         this.dragState = null;
         this.wasJustDragged = false;
+        this.isListenWindowVisible = false;
 
         // Plan / quota state
         this.userPlan = 'free';
@@ -193,6 +195,16 @@ export class MainHeader extends LitElement {
                 }
             };
             window.api.headerController.onUserStateChanged(this._userStateListener);
+
+            // Initialize listen window visibility state (non-blocking)
+            try {
+                window.api.mainHeader
+                    .isListenWindowVisible()
+                    .then(v => {
+                        this.isListenWindowVisible = !!v;
+                    })
+                    .catch(() => {});
+            } catch (_) {}
         }
     }
 
@@ -259,6 +271,24 @@ export class MainHeader extends LitElement {
             }
         } catch (error) {
             console.error('IPC invoke for ask button failed:', error);
+        }
+    }
+
+    async _toggleListenWindowVisibility(e) {
+        if (this.wasJustDragged) return;
+        if (e) e.stopPropagation?.();
+
+        const isSessionLike = this.listenSessionStatus === 'inSession' || this.listenSessionStatus === 'paused';
+        if (!isSessionLike) return;
+
+        try {
+            if (!window.api?.mainHeader?.isListenWindowVisible || !window.api?.mainHeader?.setListenWindowVisibility) return;
+            const currentlyVisible = await window.api.mainHeader.isListenWindowVisible();
+            const target = !currentlyVisible;
+            await window.api.mainHeader.setListenWindowVisibility(target);
+            this.isListenWindowVisible = target;
+        } catch (error) {
+            console.error('Failed to toggle listen window visibility:', error);
         }
     }
 
@@ -504,6 +534,49 @@ export class MainHeader extends LitElement {
                     </div>
                 </button>
 
+                ${isInSession || isPaused
+                    ? html`
+                          <div
+                              class="listen-toggle-button"
+                              @click=${e => this._toggleListenWindowVisibility(e)}
+                              title=${this.isListenWindowVisible ? 'Hide listen window' : 'Show listen window'}
+                          >
+                              ${this.isListenWindowVisible
+                                  ? html`
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            width="14"
+                                            height="14"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="white"
+                                            stroke-width="2"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            class="lucide lucide-chevron-up-icon lucide-chevron-up"
+                                        >
+                                            <path d="m18 15-6-6-6 6" />
+                                        </svg>
+                                    `
+                                  : html`
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            width="14"
+                                            height="14"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="white"
+                                            stroke-width="2"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            class="lucide lucide-chevron-down-icon lucide-chevron-down"
+                                        >
+                                            <path d="m6 9 6 6 6-6" />
+                                        </svg>
+                                    `}
+                          </div>
+                      `
+                    : ''}
                 ${this.listenSessionStatus === 'paused'
                     ? html`
                           <button class="listen-button done" @click=${this._handleDoneClick} ?disabled=${this.isTogglingSession}>

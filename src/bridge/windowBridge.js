@@ -29,6 +29,10 @@ module.exports = {
         ipcMain.handle('move-header-to', (event, newX, newY) => windowManager.moveHeaderTo(newX, newY));
         ipcMain.handle('adjust-window-height', (event, { winName, height }) => windowManager.adjustWindowHeight(winName, height));
 
+        // Window visibility controls
+        ipcMain.handle('window:set-visibility', (event, { name, visible }) => windowManager.setWindowVisibility(name, visible));
+        ipcMain.handle('window:is-visible', (event, name) => windowManager.isWindowVisible(name));
+
         // Display management
         ipcMain.handle('get-displays', () => windowManager.listDisplays());
         ipcMain.handle('move-to-display', (event, displayId) => windowManager.moveToDisplay(displayId));

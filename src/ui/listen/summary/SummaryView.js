@@ -11,6 +11,7 @@ export class SummaryView extends LitElement {
         insightHistory: { type: Array },
         allActions: { type: Array },
         allFollowUps: { type: Array },
+        allSummary: { type: Array },
     };
 
     constructor() {
@@ -25,6 +26,7 @@ export class SummaryView extends LitElement {
         this.insightHistory = []; // Array of all analysis results
         this.allActions = []; // Flattened, persistent actions
         this.allFollowUps = []; // Flattened, persistent follow-ups
+        this.allSummary = []; // Flattened, persistent summary bullets
         this.hasReceivedFirstText = false; // Track if any text has been received
 
         // 마크다운 라이브러리 초기화
@@ -83,8 +85,9 @@ export class SummaryView extends LitElement {
     buildFlattenedLists() {
         const actions = new Set();
         const followUps = new Set();
+        const summaryBullets = new Set();
 
-        // Collect all actions and followUps from insight history
+        // Collect all actions, followUps, and summary bullets from insight history
         this.insightHistory.forEach(insight => {
             if (Array.isArray(insight.actions)) {
                 insight.actions.forEach(action => actions.add(action));
@@ -92,11 +95,15 @@ export class SummaryView extends LitElement {
             if (Array.isArray(insight.followUps)) {
                 insight.followUps.forEach(followUp => followUps.add(followUp));
             }
+            if (Array.isArray(insight.summary)) {
+                insight.summary.forEach(bullet => summaryBullets.add(bullet));
+            }
         });
 
-        // Convert to arrays while preserving order (most recent first)
-        this.allActions = Array.from(actions);
-        this.allFollowUps = Array.from(followUps);
+        // Convert to arrays and reverse order (newest first)
+        this.allActions = Array.from(actions).reverse();
+        this.allFollowUps = Array.from(followUps).reverse();
+        this.allSummary = Array.from(summaryBullets).reverse();
     }
 
     disconnectedCallback() {
@@ -357,7 +364,7 @@ export class SummaryView extends LitElement {
             actions: [],
         };
 
-        const hasAnyContent = data.summary.length > 0 || data.actions.length > 0;
+        const hasAnyContent = this.allSummary.length > 0 || data.actions.length > 0;
 
         // Separate actions into fixed buttons and scrollable questions/defines
         const fixedActions = this.allActions.filter(
@@ -371,19 +378,17 @@ export class SummaryView extends LitElement {
                     ? html`<div class="empty-state">Insights will appear here</div>`
                     : html`
                           <!-- Dynamic Section Title -->
-                          <insights-title>${data.summary.length > 0 ? 'Meeting Introduction' : 'Summary Insights'}</insights-title>
-                          ${data.summary.length > 0
+                          <insights-title>${this.allSummary.length > 0 ? 'Meeting Introduction' : 'Summary Insights'}</insights-title>
+                          ${this.allSummary.length > 0
                               ? html`
                                     <div class="meeting-intro-container">
-                                        ${data.summary
-                                            .slice(0, 4)
-                                            .map(
-                                                (bullet, index) => html`
-                                                    <div class="meeting-intro-item" data-markdown-id="intro-${index}" data-original-text="${bullet}">
-                                                        • ${bullet}
-                                                    </div>
-                                                `
-                                            )}
+                                        ${this.allSummary.map(
+                                            (bullet, index) => html`
+                                                <div class="meeting-intro-item" data-markdown-id="intro-${index}" data-original-text="${bullet}">
+                                                    • ${bullet}
+                                                </div>
+                                            `
+                                        )}
                                     </div>
                                 `
                               : this.hasReceivedFirstText

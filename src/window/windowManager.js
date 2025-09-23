@@ -88,6 +88,26 @@ const adjustWindowHeight = (winName, targetHeight) => {
     internalBridge.emit('window:adjustWindowHeight', { winName, targetHeight });
 };
 
+// Expose visibility controls for specific windows (e.g., 'listen')
+function setWindowVisibility(name, visible) {
+    try {
+        internalBridge.emit('window:requestVisibility', { name, visible });
+        return { success: true };
+    } catch (e) {
+        console.error('[WindowManager] Failed to set window visibility:', name, e);
+        return { success: false, error: e?.message || 'unknown' };
+    }
+}
+
+function isWindowVisible(name) {
+    try {
+        const win = windowPool.get(name);
+        return !!(win && !win.isDestroyed() && win.isVisible());
+    } catch (e) {
+        return false;
+    }
+}
+
 function setupWindowController(windowPool, layoutManager, movementManager) {
     internalBridge.on('window:requestVisibility', ({ name, visible }) => {
         handleWindowVisibilityRequest(windowPool, layoutManager, movementManager, name, visible);
@@ -808,4 +828,6 @@ module.exports = {
     listDisplays,
     moveToDisplay,
     forceShowPermissionOnboarding,
+    setWindowVisibility,
+    isWindowVisible,
 };

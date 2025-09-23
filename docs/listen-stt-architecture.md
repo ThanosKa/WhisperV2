@@ -14,7 +14,7 @@ This is the single source of truth for the Listen speech‑to‑text (STT) pipel
 ## 2) User Trigger → IPC
 
 - UI component: `src/ui/app/MainHeader.js` (Listen/Stop/Resume/Done button)
-  - On click, calls `window.api.mainHeader.sendListenButtonClick(listenButtonText)` → `listen:changeSession`.
+    - On click, calls `window.api.mainHeader.sendListenButtonClick(listenButtonText)` → `listen:changeSession`.
 - Preload exposes helpers to the renderer: `src/preload.js` (e.g., `window.api.listenCapture.*`).
 
 Renderer → Main IPC channels (bridge): `src/bridge/featureBridge.js`
@@ -37,10 +37,10 @@ Main → Renderer events
 
 - Entry/IPC: `src/bridge/featureBridge.js`
 - Orchestrator: `src/features/listen/listenService.js`
-  - `Listen` → ensures DB session, connects STT relay, then signals renderer to start capture.
-  - `Stop` → stops local capture, keeps relay connection alive for quick resume.
-  - `Resume` → restarts local capture; relay still connected.
-  - `Done` → stops capture, closes relay socket, ends DB session, triggers meeting title generation.
+    - `Listen` → ensures DB session, connects STT relay, then signals renderer to start capture.
+    - `Stop` → stops local capture, keeps relay connection alive for quick resume.
+    - `Resume` → restarts local capture; relay still connected.
+    - `Done` → stops capture, closes relay socket, ends DB session, triggers meeting title generation.
 - Persists utterances and forwards to summary service.
 
 ## 4) STT Relay Connection (Server‑Side STT)
@@ -53,21 +53,21 @@ Main → Renderer events
 Relay protocol (client‑facing)
 
 - Client → Relay
-  - `OPEN` → `{ type: 'OPEN', sessionId, language, streams: ['my','their'] }`.
-  - `AUDIO` → `{ type: 'AUDIO', sessionId, stream: 'my'|'their', mimeType, data }` (Base64 PCM).
-  - `CLOSE` → `{ type: 'CLOSE', sessionId }`.
+- `OPEN` → `{ type: 'OPEN', sessionId, language, streams: ['me','them'] }`.
+- `AUDIO` → `{ type: 'AUDIO', sessionId, stream: 'me'|'them', mimeType, data }` (Base64 PCM).
+    - `CLOSE` → `{ type: 'CLOSE', sessionId }`.
 - Relay → Client
-  - `CONNECTED` → indicates upstream sessions ready; client marks relay ready.
-  - `PARTIAL` → `{ type: 'PARTIAL', stream, text }` → mapped to partial `stt-update`.
-  - `TURN_COMPLETE` → `{ type: 'TURN_COMPLETE', stream }` → flushes final text.
-  - `USAGE` → provider token usage for logging/telemetry.
-  - `ERROR` / `CLOSED` / `ACK` → lifecycle and errors.
+    - `CONNECTED` → indicates upstream sessions ready; client marks relay ready.
+    - `PARTIAL` → `{ type: 'PARTIAL', stream, text }` → mapped to partial `stt-update`.
+    - `TURN_COMPLETE` → `{ type: 'TURN_COMPLETE', stream }` → flushes final text.
+    - `USAGE` → provider token usage for logging/telemetry.
+    - `ERROR` / `CLOSED` / `ACK` → lifecycle and errors.
 
 Client session wrappers
 
 - `sttService` installs lightweight session objects once relay is `CONNECTED`:
-  - `mySttSession.sendRealtimeInput(payload)` → wraps to `AUDIO` with `stream: 'my'`.
-  - `theirSttSession.sendRealtimeInput(payload)` → wraps to `AUDIO` with `stream: 'their'`.
+    - `meSttSession.sendRealtimeInput(payload)` → wraps to `AUDIO` with `stream: 'me'`.
+    - `themSttSession.sendRealtimeInput(payload)` → wraps to `AUDIO` with `stream: 'them'`.
 - Renewal/keep‑alive: handled upstream by relay; local timers are no‑ops now.
 
 ## 5) Audio Capture & Streaming
@@ -75,29 +75,29 @@ Client session wrappers
 Renderer capture: `src/ui/listen/audioCore/listenCapture.js`
 
 - Microphone
-  - Web Audio API at 24 kHz; chunks of 0.1 s (2400 samples).
-  - Optional AEC using the latest `system-audio-data` snapshot from main.
-  - Sends Base64 PCM via `listen:sendMicAudio`.
+    - Web Audio API at 24 kHz; chunks of 0.1 s (2400 samples).
+    - Optional AEC using the latest `system-audio-data` snapshot from main.
+    - Sends Base64 PCM via `listen:sendMicAudio`.
 - System audio
-  - Windows/Linux: `getDisplayMedia` loopback in renderer → `listen:sendSystemAudio`.
-  - macOS: native helper `SystemAudioDump` spawned by main → chunks forwarded to relay and mirrored to renderer for AEC.
+    - Windows/Linux: `getDisplayMedia` loopback in renderer → `listen:sendSystemAudio`.
+    - macOS: native helper `SystemAudioDump` spawned by main → chunks forwarded to relay and mirrored to renderer for AEC.
 
 Payload shape (both streams)
 
 ```json
 {
-  "audio": {
-    "data": "<base64-encoded PCM>",
-    "mimeType": "audio/pcm;rate=24000"
-  }
+    "audio": {
+        "data": "<base64-encoded PCM>",
+        "mimeType": "audio/pcm;rate=24000"
+    }
 }
 ```
 
 ## 6) Relay → Renderer Messaging
 
 - `sttService` maps relay events to internal handlers and emits UI updates:
-  - Partial: `stt-update { speaker: 'Me'|'Them', text, isPartial: true }`.
-  - Turn complete: flushes buffers and emits finals `isFinal: true`.
+    - Partial: `stt-update { speaker: 'Me'|'Them', text, isPartial: true }`.
+    - Turn complete: flushes buffers and emits finals `isFinal: true`.
 - The renderer subscribes in `src/ui/listen/stt/SttView.js` and renders live transcript.
 
 ## 7) Error & State Propagation
@@ -133,10 +133,8 @@ Payload shape (both streams)
 Client no longer opens provider SDK sessions directly. Consider removing or refactoring these now‑stale client artifacts:
 
 - STT provider shim (unused by runtime): `src/features/common/ai/providers/gemini.js`
-  - Its `createSTT` and `GeminiProvider` exports are not referenced by `sttService` anymore. Keep only if used by other features/tests.
+    - Its `createSTT` and `GeminiProvider` exports are not referenced by `sttService` anymore. Keep only if used by other features/tests.
 - STT factory STT bits: `src/features/common/ai/factory.js`
-  - `createSTT()` appears unused after relay migration. `getProviderClass()` may be kept if model validation UIs depend on it; otherwise prune STT‑specific codepaths.
+    - `createSTT()` appears unused after relay migration. `getProviderClass()` may be kept if model validation UIs depend on it; otherwise prune STT‑specific codepaths.
 - Any direct Gemini Live client usage within main/renderer (search `live.connect`, `sendRealtimeInput` in `src/`).
 - Docs superseded by this file (already removed in this change).
-
- 

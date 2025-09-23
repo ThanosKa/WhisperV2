@@ -10,16 +10,16 @@ const DEFAULT_RELAY_URL = process.env.STT_RELAY_URL || config.get('sttRelayUrl')
 
 class SttService {
     constructor() {
-        this.mySttSession = null;
-        this.theirSttSession = null;
-        this.myCurrentUtterance = '';
-        this.theirCurrentUtterance = '';
+        this.meSttSession = null;
+        this.themSttSession = null;
+        this.meCurrentUtterance = '';
+        this.themCurrentUtterance = '';
 
         // Turn-completion debouncing
-        this.myCompletionBuffer = '';
-        this.theirCompletionBuffer = '';
-        this.myCompletionTimer = null;
-        this.theirCompletionTimer = null;
+        this.meCompletionBuffer = '';
+        this.themCompletionBuffer = '';
+        this.meCompletionTimer = null;
+        this.themCompletionTimer = null;
 
         // System audio capture
         this.systemAudioProc = null;
@@ -62,8 +62,8 @@ class SttService {
         }
     }
 
-    flushMyCompletion() {
-        const finalText = (this.myCompletionBuffer + this.myCurrentUtterance).trim();
+    flushMeCompletion() {
+        const finalText = (this.meCompletionBuffer + this.meCurrentUtterance).trim();
         if (!this.modelInfo || !finalText) return;
 
         // Notify completion callback
@@ -80,17 +80,17 @@ class SttService {
             timestamp: Date.now(),
         });
 
-        this.myCompletionBuffer = '';
-        this.myCompletionTimer = null;
-        this.myCurrentUtterance = '';
+        this.meCompletionBuffer = '';
+        this.meCompletionTimer = null;
+        this.meCurrentUtterance = '';
 
         if (this.onStatusUpdate) {
             this.onStatusUpdate('Listening...');
         }
     }
 
-    flushTheirCompletion() {
-        const finalText = (this.theirCompletionBuffer + this.theirCurrentUtterance).trim();
+    flushThemCompletion() {
+        const finalText = (this.themCompletionBuffer + this.themCurrentUtterance).trim();
         if (!this.modelInfo || !finalText) return;
 
         // Notify completion callback
@@ -107,35 +107,35 @@ class SttService {
             timestamp: Date.now(),
         });
 
-        this.theirCompletionBuffer = '';
-        this.theirCompletionTimer = null;
-        this.theirCurrentUtterance = '';
+        this.themCompletionBuffer = '';
+        this.themCompletionTimer = null;
+        this.themCurrentUtterance = '';
 
         if (this.onStatusUpdate) {
             this.onStatusUpdate('Listening...');
         }
     }
 
-    debounceMyCompletion(text) {
+    debounceMeCompletion(text) {
         if (this.modelInfo?.provider === 'gemini') {
-            this.myCompletionBuffer += text;
+            this.meCompletionBuffer += text;
         } else {
-            this.myCompletionBuffer += (this.myCompletionBuffer ? ' ' : '') + text;
+            this.meCompletionBuffer += (this.meCompletionBuffer ? ' ' : '') + text;
         }
 
-        if (this.myCompletionTimer) clearTimeout(this.myCompletionTimer);
-        this.myCompletionTimer = setTimeout(() => this.flushMyCompletion(), COMPLETION_DEBOUNCE_MS);
+        if (this.meCompletionTimer) clearTimeout(this.meCompletionTimer);
+        this.meCompletionTimer = setTimeout(() => this.flushMeCompletion(), COMPLETION_DEBOUNCE_MS);
     }
 
-    debounceTheirCompletion(text) {
+    debounceThemCompletion(text) {
         if (this.modelInfo?.provider === 'gemini') {
-            this.theirCompletionBuffer += text;
+            this.themCompletionBuffer += text;
         } else {
-            this.theirCompletionBuffer += (this.theirCompletionBuffer ? ' ' : '') + text;
+            this.themCompletionBuffer += (this.themCompletionBuffer ? ' ' : '') + text;
         }
 
-        if (this.theirCompletionTimer) clearTimeout(this.theirCompletionTimer);
-        this.theirCompletionTimer = setTimeout(() => this.flushTheirCompletion(), COMPLETION_DEBOUNCE_MS);
+        if (this.themCompletionTimer) clearTimeout(this.themCompletionTimer);
+        this.themCompletionTimer = setTimeout(() => this.flushThemCompletion(), COMPLETION_DEBOUNCE_MS);
     }
 
     async initializeSttSessions(language = 'en') {
@@ -148,12 +148,12 @@ class SttService {
         };
         console.log(`[SttService] Initializing STT relay for ${this.modelInfo.provider}`);
 
-        const handleMyMessage = message => {
+        const handleMeMessage = message => {
             if (!this.modelInfo) {
                 console.log('[SttService] Ignoring message - session already closed');
                 return;
             }
-            // console.log('[SttService] handleMyMessage', message);
+            // console.log('[SttService] handleMeMessage', message);
 
             if (this.modelInfo.provider === 'whisper') {
                 // Whisper STT emits 'transcription' events with different structure
@@ -197,9 +197,9 @@ class SttService {
                 const turnComplete = !!message.serverContent?.turnComplete;
 
                 if (message.serverContent?.turnComplete) {
-                    if (this.myCompletionTimer) {
-                        clearTimeout(this.myCompletionTimer);
-                        this.flushMyCompletion();
+                    if (this.meCompletionTimer) {
+                        clearTimeout(this.meCompletionTimer);
+                        this.flushMeCompletion();
                     }
                     return;
                 }
@@ -208,11 +208,11 @@ class SttService {
                     return; // Ignore empty or noise-only chunks
                 }
 
-                this.debounceMyCompletion(textChunk);
+                this.debounceMeCompletion(textChunk);
 
                 this.sendToRenderer('stt-update', {
                     speaker: 'Me',
-                    text: this.myCompletionBuffer,
+                    text: this.meCompletionBuffer,
                     isPartial: true,
                     isFinal: false,
                     timestamp: Date.now(),
@@ -222,10 +222,10 @@ class SttService {
                 const text = message.transcript || message.delta || (message.alternatives && message.alternatives[0]?.transcript) || '';
 
                 if (type === 'conversation.item.input_audio_transcription.delta') {
-                    if (this.myCompletionTimer) clearTimeout(this.myCompletionTimer);
-                    this.myCompletionTimer = null;
-                    this.myCurrentUtterance += text;
-                    const continuousText = this.myCompletionBuffer + (this.myCompletionBuffer ? ' ' : '') + this.myCurrentUtterance;
+                    if (this.meCompletionTimer) clearTimeout(this.meCompletionTimer);
+                    this.meCompletionTimer = null;
+                    this.meCurrentUtterance += text;
+                    const continuousText = this.meCompletionBuffer + (this.meCompletionBuffer ? ' ' : '') + this.meCurrentUtterance;
                     if (text && !text.includes('vq_lbr_audio_')) {
                         this.sendToRenderer('stt-update', {
                             speaker: 'Me',
@@ -238,8 +238,8 @@ class SttService {
                 } else if (type === 'conversation.item.input_audio_transcription.completed') {
                     if (text && text.trim()) {
                         const finalUtteranceText = text.trim();
-                        this.myCurrentUtterance = '';
-                        this.debounceMyCompletion(finalUtteranceText);
+                        this.meCurrentUtterance = '';
+                        this.debounceMeCompletion(finalUtteranceText);
                     }
                 }
             }
@@ -249,7 +249,7 @@ class SttService {
             }
         };
 
-        const handleTheirMessage = message => {
+        const handleThemMessage = message => {
             if (!message || typeof message !== 'object') return;
 
             if (!this.modelInfo) {
@@ -295,7 +295,7 @@ class SttService {
                 }
                 return;
             } else if (this.modelInfo.provider === 'gemini') {
-                // Guard inside handleTheirMessage (and the same in handleMyMessage)
+                // Guard inside handleThemMessage (and the same in handleMeMessage)
                 if (message?.serverContent?.usageMetadata) {
                     console.log('[Gemini STT - Them] Tokens In:', message.serverContent.usageMetadata.promptTokenCount);
                     console.log('[Gemini STT - Them] Tokens Out:', message.serverContent.usageMetadata.candidatesTokenCount);
@@ -309,9 +309,9 @@ class SttService {
                 }
 
                 if (message.serverContent?.turnComplete) {
-                    if (this.theirCompletionTimer) {
-                        clearTimeout(this.theirCompletionTimer);
-                        this.flushTheirCompletion();
+                    if (this.themCompletionTimer) {
+                        clearTimeout(this.themCompletionTimer);
+                        this.flushThemCompletion();
                     }
                     return;
                 }
@@ -320,11 +320,11 @@ class SttService {
                     return; // Ignore empty or noise-only chunks
                 }
 
-                this.debounceTheirCompletion(textChunk);
+                this.debounceThemCompletion(textChunk);
 
                 this.sendToRenderer('stt-update', {
                     speaker: 'Them',
-                    text: this.theirCompletionBuffer,
+                    text: this.themCompletionBuffer,
                     isPartial: true,
                     isFinal: false,
                     timestamp: Date.now(),
@@ -333,10 +333,10 @@ class SttService {
                 const type = message.type;
                 const text = message.transcript || message.delta || (message.alternatives && message.alternatives[0]?.transcript) || '';
                 if (type === 'conversation.item.input_audio_transcription.delta') {
-                    if (this.theirCompletionTimer) clearTimeout(this.theirCompletionTimer);
-                    this.theirCompletionTimer = null;
-                    this.theirCurrentUtterance += text;
-                    const continuousText = this.theirCompletionBuffer + (this.theirCompletionBuffer ? ' ' : '') + this.theirCurrentUtterance;
+                    if (this.themCompletionTimer) clearTimeout(this.themCompletionTimer);
+                    this.themCompletionTimer = null;
+                    this.themCurrentUtterance += text;
+                    const continuousText = this.themCompletionBuffer + (this.themCompletionBuffer ? ' ' : '') + this.themCurrentUtterance;
                     if (text && !text.includes('vq_lbr_audio_')) {
                         this.sendToRenderer('stt-update', {
                             speaker: 'Them',
@@ -349,8 +349,8 @@ class SttService {
                 } else if (type === 'conversation.item.input_audio_transcription.completed') {
                     if (text && text.trim()) {
                         const finalUtteranceText = text.trim();
-                        this.theirCurrentUtterance = '';
-                        this.debounceTheirCompletion(finalUtteranceText);
+                        this.themCurrentUtterance = '';
+                        this.debounceThemCompletion(finalUtteranceText);
                     }
                 }
             }
@@ -362,8 +362,8 @@ class SttService {
 
         await this._openRelayConnection({
             language: effectiveLanguage,
-            handleMyMessage,
-            handleTheirMessage,
+            handleMeMessage: handleMeMessage,
+            handleThemMessage: handleThemMessage,
         });
 
         console.log('✅ STT relay connected successfully.');
@@ -376,7 +376,7 @@ class SttService {
     }
 
     async sendMicAudioContent(data, mimeType) {
-        if (!this.mySttSession) {
+        if (!this.meSttSession) {
             throw new Error('User STT session not active');
         }
 
@@ -390,12 +390,12 @@ class SttService {
         }
 
         const payload = { audio: { data, mimeType: mimeType || 'audio/pcm;rate=24000' } };
-        await this.mySttSession.sendRealtimeInput(payload);
+        await this.meSttSession.sendRealtimeInput(payload);
     }
 
     async sendSystemAudioContent(data, mimeType) {
-        if (!this.theirSttSession) {
-            throw new Error('Their STT session not active');
+        if (!this.themSttSession) {
+            throw new Error('Them STT session not active');
         }
 
         let modelInfo = this.modelInfo;
@@ -409,11 +409,11 @@ class SttService {
 
         const payload = { audio: { data, mimeType: mimeType || 'audio/pcm;rate=24000' } };
 
-        await this.theirSttSession.sendRealtimeInput(payload);
+        await this.themSttSession.sendRealtimeInput(payload);
         return { success: true };
     }
 
-    async _openRelayConnection({ language, handleMyMessage, handleTheirMessage }) {
+    async _openRelayConnection({ language, handleMeMessage, handleThemMessage }) {
         if (!DEFAULT_RELAY_URL) {
             throw new Error('STT relay URL is not configured.');
         }
@@ -466,7 +466,7 @@ class SttService {
                     type: 'OPEN',
                     sessionId: this.relaySessionId,
                     language,
-                    streams: ['my', 'their'],
+                    streams: ['me', 'them'],
                 };
 
                 try {
@@ -487,7 +487,7 @@ class SttService {
                 }
 
                 const streamId = (message.stream || message.speaker || '').toLowerCase();
-                const dispatch = streamId === 'their' ? handleTheirMessage : handleMyMessage;
+                const dispatch = streamId === 'them' ? handleThemMessage : handleMeMessage;
 
                 switch (message.type) {
                     case 'CONNECTED':
@@ -576,13 +576,13 @@ class SttService {
     _installRelaySessions() {
         const closeRelay = () => this._closeRelayConnection();
 
-        this.mySttSession = {
-            sendRealtimeInput: payload => this._sendRelayAudio('my', payload),
+        this.meSttSession = {
+            sendRealtimeInput: payload => this._sendRelayAudio('me', payload),
             close: closeRelay,
         };
 
-        this.theirSttSession = {
-            sendRealtimeInput: payload => this._sendRelayAudio('their', payload),
+        this.themSttSession = {
+            sendRealtimeInput: payload => this._sendRelayAudio('them', payload),
             close: closeRelay,
         };
     }
@@ -640,8 +640,8 @@ class SttService {
         this.relaySocket = null;
         this.relaySessionId = null;
         this.relayReady = false;
-        this.mySttSession = null;
-        this.theirSttSession = null;
+        this.meSttSession = null;
+        this.themSttSession = null;
     }
 
     killExistingSystemAudioDump() {
@@ -674,7 +674,7 @@ class SttService {
     }
 
     async startMacOSAudioCapture() {
-        if (process.platform !== 'darwin' || !this.theirSttSession) return false;
+        if (process.platform !== 'darwin' || !this.themSttSession) return false;
 
         await this.killExistingSystemAudioDump();
         console.log('Starting macOS audio capture for "Them"...');
@@ -730,7 +730,7 @@ class SttService {
 
                 this.sendToRenderer('system-audio-data', { data: base64Data });
 
-                if (this.theirSttSession) {
+                if (this.themSttSession) {
                     try {
                         let payload;
                         if (modelInfo.provider === 'gemini') {
@@ -739,7 +739,7 @@ class SttService {
                             payload = base64Data;
                         }
 
-                        await this.theirSttSession.sendRealtimeInput(payload);
+                        await this.themSttSession.sendRealtimeInput(payload);
                     } catch (err) {
                         console.error('Error sending system audio:', err.message);
                     }
@@ -785,7 +785,7 @@ class SttService {
     }
 
     isSessionActive() {
-        return !!this.mySttSession && !!this.theirSttSession;
+        return !!this.meSttSession && !!this.themSttSession;
     }
 
     async closeSessions() {
@@ -802,23 +802,23 @@ class SttService {
         }
 
         // Clear timers
-        if (this.myCompletionTimer) {
-            clearTimeout(this.myCompletionTimer);
-            this.myCompletionTimer = null;
+        if (this.meCompletionTimer) {
+            clearTimeout(this.meCompletionTimer);
+            this.meCompletionTimer = null;
         }
-        if (this.theirCompletionTimer) {
-            clearTimeout(this.theirCompletionTimer);
-            this.theirCompletionTimer = null;
+        if (this.themCompletionTimer) {
+            clearTimeout(this.themCompletionTimer);
+            this.themCompletionTimer = null;
         }
 
         await this._closeRelayConnection();
         console.log('All STT sessions closed.');
 
         // Reset state
-        this.myCurrentUtterance = '';
-        this.theirCurrentUtterance = '';
-        this.myCompletionBuffer = '';
-        this.theirCompletionBuffer = '';
+        this.meCurrentUtterance = '';
+        this.themCurrentUtterance = '';
+        this.meCompletionBuffer = '';
+        this.themCompletionBuffer = '';
         this.modelInfo = null;
     }
 }

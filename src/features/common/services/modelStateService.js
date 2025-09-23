@@ -1,9 +1,16 @@
 const { EventEmitter } = require('events');
 const Store = require('electron-store');
-const { PROVIDERS, getProviderClass } = require('../ai/factory');
 const encryptionService = require('./encryptionService');
 const providerSettingsRepository = require('../repositories/providerSettings');
 const authService = require('./authService');
+
+// Local provider configuration (client-side) — STT is server-backed via relay
+const LOCAL_PROVIDERS = {
+    gemini: {
+        name: 'Gemini',
+        sttModels: [{ id: 'gemini-live-2.5-flash-preview', name: 'Gemini Live 2.5 Flash' }],
+    },
+};
 
 class ModelStateService extends EventEmitter {
     constructor() {
@@ -233,7 +240,7 @@ class ModelStateService extends EventEmitter {
         if (!modelId || !type) return null;
 
         // Only Gemini STT models supported for client
-        const models = type === 'stt' ? PROVIDERS['gemini'].sttModels : [];
+        const models = type === 'stt' ? LOCAL_PROVIDERS['gemini'].sttModels : [];
         if (models && models.some(m => m.id === modelId)) {
             return 'gemini';
         }
@@ -278,7 +285,7 @@ class ModelStateService extends EventEmitter {
     async getAvailableModels(type) {
         // Client exposes STT models only
         if (type === 'llm') return [];
-        const models = PROVIDERS['gemini']?.sttModels || [];
+        const models = LOCAL_PROVIDERS['gemini']?.sttModels || [];
         const apiKey = process.env.GEMINI_API_KEY;
         return apiKey ? models : [];
     }
@@ -306,21 +313,14 @@ class ModelStateService extends EventEmitter {
         if (!key || key.trim() === '') {
             return { success: false, error: 'API key cannot be empty.' };
         }
-        const ProviderClass = getProviderClass(provider);
-        if (!ProviderClass || typeof ProviderClass.validateApiKey !== 'function') {
-            return { success: true };
-        }
-        try {
-            return await ProviderClass.validateApiKey(key);
-        } catch (error) {
-            return { success: false, error: 'An unexpected error occurred during validation.' };
-        }
+        // Validation moved server-side; accept non-empty key here.
+        return { success: true };
     }
 
     getProviderConfig() {
         // Return Gemini provider config with LLM entries removed
-        const { handler, llmModels, ...rest } = PROVIDERS['gemini'];
-        return { gemini: { ...rest, llmModels: [] } };
+        const { sttModels, name } = LOCAL_PROVIDERS['gemini'];
+        return { gemini: { name, sttModels, llmModels: [] } };
     }
 
     async handleRemoveApiKey(provider) {

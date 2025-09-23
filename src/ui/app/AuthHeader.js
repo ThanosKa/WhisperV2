@@ -1,12 +1,14 @@
 import { html, LitElement } from '../assets/lit-core-2.7.4.min.js';
-import { mainHeaderStyles } from './main-header.styles.css.js';
+import { authHeaderStyles } from './auth-header.styles.css.js';
 
 export class AuthHeader extends LitElement {
     static properties = {
         isLoggingIn: { type: Boolean, state: true },
     };
 
-    static styles = mainHeaderStyles;
+    static get styles() {
+        return authHeaderStyles;
+    }
 
     constructor() {
         super();
@@ -70,10 +72,10 @@ export class AuthHeader extends LitElement {
 
     render() {
         return html`
-            <div class="header">
-                <button class="listen-button text-link" @click=${this._handleLoginClick} ?disabled=${this.isLoggingIn}>
-                    <div class="action-text">
-                        <div class="action-text-content">Open broswer to login</div>
+            <div class="auth-header">
+                <button class="auth-login-button text-link" @click=${this._handleLoginClick} ?disabled=${this.isLoggingIn}>
+                    <div class="auth-button-content">
+                        <div class="auth-button-text">Open browser to login</div>
                         ${this.isLoggingIn ? html`<div class="loading-dots"><span></span><span></span><span></span></div>` : ''}
                     </div>
                 </button>

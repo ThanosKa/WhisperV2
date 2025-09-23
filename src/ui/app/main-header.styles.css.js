@@ -388,19 +388,21 @@ export const mainHeaderStyles = css`
 
     /* Water Drop Ripple - Replace the loading-dots styles */
     .water-drop-ripple {
-        width: 30px;
-        height: 30px;
+        width: 12px;
+        height: 11px;
         position: relative;
+        top: 1px;
         display: flex;
         align-items: center;
         justify-content: center;
+        overflow: visible;
     }
 
     .ripple-ring {
         position: absolute;
-        border: 1.5px solid rgba(255, 255, 255, 0.8);
+        border: 2px solid rgba(255, 255, 255, 0.9);
         border-radius: 50%;
-        animation: water-ripple-pulse 3s infinite ease-out;
+        animation: water-ripple-pulse 2.5s infinite ease-out;
     }
 
     .ripple-ring:nth-child(1) {
@@ -421,17 +423,17 @@ export const mainHeaderStyles = css`
             width: 4px;
             height: 4px;
             opacity: 1;
-            border-width: 2px;
+            border-width: 1.5px;
         }
         70% {
-            width: 28px;
-            height: 28px;
+            width: 24px;
+            height: 24px;
             opacity: 0.6;
             border-width: 1px;
         }
         100% {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             opacity: 0;
             border-width: 0.5px;
         }

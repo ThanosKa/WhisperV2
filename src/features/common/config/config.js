@@ -35,14 +35,14 @@ class Config {
 
             // Listen feature settings
             analysisStep: 1, // Trigger analysis every N utterances - more responsive for real-time
-            utteranceSilenceMs: 1200, // Silence debounce time for utterance completion (ms)
+            utteranceSilenceMs: 800, // Silence debounce time for utterance completion (ms)
             recapStep: 15, // Show recap button after N utterances
             // Smart-trigger for meeting analysis (optional)
             smartTrigger: {
-                enabled: false, // Set true to enable smart gating over simple step logic
+                enabled: true, // Set true to enable smart gating over simple step logic
                 minTokenCount: 12, // ~8-10 words using rough tokenizer
-                minCharCount: 50, // safety for very short tokens
-                maxWaitUtterances: 5, // ensure analysis at least every N turns
+                minCharCount: 80, // safety for very short tokens
+                maxWaitUtterances: 6, // ensure analysis at least every N turns
             },
         };
 

@@ -70,6 +70,29 @@ Key details:
     - Smart gating (if `config.smartTrigger.enabled`): analyze when enough new content has accumulated or max wait reached
 - When analysis triggers, only NEW utterances since the previous analysis are sent.
 
+#### Optimized Triggering for Enterprise Responsiveness
+
+To reduce spammy per-utterance LLM calls (common in chit-chat), the trigger now batches 3-5 finalized utterances before analysis, gating on substance while maintaining real-time UI updates (partials stream instantly).
+
+**Flow**:
+
+1. On utterance final (from STT, ~800ms silence): Pre-filter in `ListenService` skips <3 chars (e.g., "uh"). In `SummaryService`, skip adding <5 chars to batch history.
+2. Stack meaningful utterances in `conversationHistory` (deltas tracked via `lastAnalyzedIndex`).
+3. In `triggerAnalysisIfNeeded()`: If batch <3 utterances, wait. Else:
+    - Content gate: Trigger if batch >=80 chars OR ~12 tokens total (skips fluff like "Yeah, cool.").
+    - Max wait: Force at 6 utterances (prevents backlog).
+    - Time fallback: 120s timer starts on first utterance—forces if quiet (clears on activity).
+4. If triggered: Send only new batch to LLM (with priors for dedup: prev terms/questions). UI emits on insights only.
+
+**Config Knobs** (`config.js`):
+
+- `smartTrigger.enabled: true` (on for batching; fallback to `analysisStep:5` if off).
+- `minCharCount:80`, `minTokenCount:12` (substance thresholds).
+- `maxWaitUtterances:6` (batch limit).
+- `utteranceSilenceMs:800` (faster STT finals).
+
+This cuts LLM calls 50-70% (e.g., 3-4 in 2-min chit-chat), focusing on "moments" like enterprise tools (Otter.ai/Gong.io). All utterances persist to DB/transcript—no discards.
+
 Flow inside `makeOutlineAndRequests(newUtterances)`:
 
 1. Formats recent transcript lines and prepares context:

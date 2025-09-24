@@ -22,6 +22,7 @@ class SummaryService {
         // Callbacks
         this.onAnalysisComplete = null;
         this.onStatusUpdate = null;
+        this.batchTimer = null; // For time fallback
     }
 
     /**
@@ -160,10 +161,23 @@ class SummaryService {
     }
 
     addConversationTurn(speaker, text) {
-        const conversationText = `${speaker.toLowerCase()}: ${text.trim()}`;
+        const trimmedText = text.trim();
+        if (trimmedText.length < 5) {
+            console.log(`[SummaryTrigger] Skipping short utterance for batching (${trimmedText.length} chars): ${speaker}: "${trimmedText}"`);
+            return; // Skip very short utterances to reduce spam
+        }
+
+        const conversationText = `${speaker.toLowerCase()}: ${trimmedText}`;
         this.conversationHistory.push(conversationText);
-        // console.log(`💬 Added conversation text: ${conversationText}`);
-        // console.log(`📈 Total conversation history: ${this.conversationHistory.length} texts`);
+        console.log(`[SummaryTrigger] Added to batch (${this.conversationHistory.length} total in history): ${speaker}: "${trimmedText}"`);
+
+        // Start time fallback timer if first utterance
+        if (this.conversationHistory.length === 1 && !this.batchTimer) {
+            this.batchTimer = setTimeout(() => {
+                console.log('[SummaryTrigger] Time fallback: Forcing analysis after 120s quiet');
+                this.triggerAnalysisIfNeeded(true); // Force flag
+            }, 120000); // 2 min
+        }
 
         // Trigger analysis if needed
         this.triggerAnalysisIfNeeded();
@@ -181,6 +195,10 @@ class SummaryService {
         this.definedTerms.clear(); // Clear defined terms for new conversation
         this.detectedQuestions.clear(); // Clear detected questions for new conversation
         this.lastAnalyzedIndex = 0; // Reset analysis tracking
+        if (this.batchTimer) {
+            clearTimeout(this.batchTimer);
+            this.batchTimer = null;
+        }
         console.log('🔄 Conversation history and analysis state reset');
     }
 
@@ -378,8 +396,8 @@ ${responseText}
                             structuredData.summary.pop();
                         }
                     }
-                } else if (/^\d+\./.test(trimmedLine) && currentSection === 'detected-questions') {
-                    const question = trimmedLine.replace(/^\d+\.\s*/, '').trim();
+                } else if (trimmedLine.startsWith('-') && currentSection === 'detected-questions') {
+                    const question = trimmedLine.substring(1).trim();
                     // Filter obvious placeholders
                     const isPlaceholder = !question || /no\s+questions\s+detected/i.test(question);
                     if (!isPlaceholder) {
@@ -436,11 +454,21 @@ ${responseText}
      * enough (by rough token/char thresholds) or a max wait count is reached.
      * Falls back to the original step-based rule when disabled.
      */
-    async triggerAnalysisIfNeeded() {
+    async triggerAnalysisIfNeeded(force = false) {
+        // Clear timer on activity
+        if (this.batchTimer) {
+            clearTimeout(this.batchTimer);
+            this.batchTimer = null;
+            console.log('[SummaryTrigger] Timer cleared - activity detected');
+        }
+
         const recapStep = config.get('recapStep') || 15;
         const smartCfg = config.get('smartTrigger') || {};
 
-        if (!this.conversationHistory.length) return;
+        if (!this.conversationHistory.length) {
+            console.log(`[SummaryTrigger] No history yet - skipping trigger`);
+            return;
+        }
 
         // Determine if we should analyze now
         let shouldAnalyze = false;
@@ -453,19 +481,45 @@ ${responseText}
             const charCount = textSince.length;
             const utteranceCount = sinceLast.length;
 
+            console.log(
+                `[SummaryTrigger] Batch check: ${utteranceCount} new utterances, ${charCount} chars, ~${tokenCount} tokens (last analyzed: ${this.lastAnalyzedIndex})`
+            );
+
+            // Min batch size: Only consider if at least 3 utterances for meaningful batch
+            if (utteranceCount < 3) {
+                console.log(`[SummaryTrigger] Batch too small (<3 utterances) - waiting`);
+                return; // Too small batch, wait for more
+            }
+
             const enoughContent = tokenCount >= (smartCfg.minTokenCount ?? 12) || charCount >= (smartCfg.minCharCount ?? 50);
             const maxWaitHit = utteranceCount >= (smartCfg.maxWaitUtterances ?? 5);
+
+            console.log(
+                `[SummaryTrigger] Content check: enough=${enoughContent} (thresholds: ${charCount}>=${smartCfg.minCharCount}, ${tokenCount}>=${smartCfg.minTokenCount}), maxWait=${maxWaitHit} (${utteranceCount}>=${smartCfg.maxWaitUtterances})`
+            );
 
             shouldAnalyze = (enoughContent || maxWaitHit) && utteranceCount > 0;
         } else {
             // Original behavior: analyze every N utterances
             const analysisStep = config.get('analysisStep') || 5;
             shouldAnalyze = this.conversationHistory.length >= analysisStep && this.conversationHistory.length % analysisStep === 0;
+            console.log(
+                `[SummaryTrigger] Fallback step: shouldAnalyze=${shouldAnalyze} (total: ${this.conversationHistory.length}, step: ${analysisStep})`
+            );
         }
 
-        if (!shouldAnalyze) return;
+        if (!shouldAnalyze && !force) {
+            console.log(`[SummaryTrigger] Not triggering - batch not ready`);
+            return;
+        }
 
-        console.log(`Triggering analysis - total texts: ${this.conversationHistory.length}`);
+        if (force) {
+            console.log('[SummaryTrigger] Force trigger from time fallback');
+        }
+
+        console.log(
+            `[SummaryTrigger] TRIGGERING LLM ANALYSIS! Total history: ${this.conversationHistory.length}, new batch: ${this.conversationHistory.slice(this.lastAnalyzedIndex).length} utterances`
+        );
 
         // Only send NEW utterances since last analysis
         const newUtterances = this.conversationHistory.slice(this.lastAnalyzedIndex);

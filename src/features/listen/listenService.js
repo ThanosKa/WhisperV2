@@ -135,13 +135,21 @@ class ListenService {
     }
 
     async handleTranscriptionComplete(speaker, text) {
+        const trimmedText = text.trim();
+        if (trimmedText.length < 3) {
+            console.log(`[ListenService] Skipping very short transcription (${trimmedText.length} chars): "${trimmedText}"`);
+            return; // Pre-filter short noise before DB or analysis
+        }
+
+        console.log(`[ListenService] Forwarding meaningful utterance (${trimmedText.length} chars): ${speaker}: "${trimmedText}"`);
+
         // console.log(`[ListenService] Transcription complete: ${speaker} - ${text}`);
 
         // Save to database
-        await this.saveConversationTurn(speaker, text);
+        await this.saveConversationTurn(speaker, trimmedText);
 
         // Add to summary service for analysis
-        this.summaryService.addConversationTurn(speaker, text);
+        this.summaryService.addConversationTurn(speaker, trimmedText);
     }
 
     async saveConversationTurn(speaker, transcription) {

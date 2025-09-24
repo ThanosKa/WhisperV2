@@ -123,6 +123,7 @@ export class SummaryView extends LitElement {
         this.insightHistory = [];
         this.allActions = [];
         this.allFollowUps = [];
+        this.allSummary = [];
         this.hasReceivedFirstText = false; // Reset first text flag
         this.requestUpdate();
     }

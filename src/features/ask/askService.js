@@ -537,10 +537,10 @@ class AskService {
                         profileToUse = 'recruiting_question';
                         useConversationContext = true;
                     } else if (expansion.mode === 'gaps') {
-                        profileToUse = 'recruiting_actions';
+                        profileToUse = 'recruiting_gap';
                         useConversationContext = true;
                     } else if (expansion.mode === 'suggested_questions') {
-                        profileToUse = 'recruiting_followup';
+                        profileToUse = 'recruiting_suggested_question';
                         useConversationContext = true;
                     } else if (expansion.mode === 'email') {
                         profileToUse = 'recruiting_email';
@@ -549,7 +549,7 @@ class AskService {
                         profileToUse = 'recruiting_actions';
                         useConversationContext = true;
                     } else if (expansion.mode === 'next') {
-                        profileToUse = 'recruiting_next';
+                        profileToUse = 'recruiting_should_say_next';
                         useConversationContext = true;
                     } else if (expansion.mode === 'followup') {
                         profileToUse = 'recruiting_followup';

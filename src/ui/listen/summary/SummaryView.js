@@ -356,24 +356,13 @@ export class SummaryView extends LitElement {
             }
         }, 50);
 
-        // Compute split actions
-        this.scrollableActions = this.allActions.filter(
-            a =>
-                a.startsWith('❓') ||
-                a.startsWith('📘') ||
-                a.startsWith('🔄') ||
-                a.startsWith('🔍') ||
-                a.startsWith('🔎') ||
-                a.startsWith('🛠️') ||
-                a.includes('Clarify:') ||
-                a.startsWith('📚') ||
-                a.startsWith('💡') ||
-                a.includes('Follow-up:') ||
-                a.includes('Suggested Question:')
+        // Compute split actions (fixed defaults stay pinned, everything else scrolls)
+        const fixedActionSet = new Set(
+            this.allActions.filter(a => a.includes('What should I say next') || a.includes('Suggest follow-up') || a.includes('Recap meeting'))
         );
-        this.fixedActions = this.allActions.filter(
-            a => a.includes('What should I say next') || a.includes('Suggest follow-up') || a.includes('Recap meeting')
-        );
+
+        this.fixedActions = Array.from(fixedActionSet);
+        this.scrollableActions = this.allActions.filter(a => !fixedActionSet.has(a));
     }
 
     render() {

@@ -14,6 +14,9 @@ class SummaryService {
         this.lastAnalyzedIndex = 0; // Track how many utterances we've already analyzed
         this.detectedQuestions = new Set(); // Track previously detected questions
         this.analysisProfile = 'meeting_analysis'; // base template id
+        this.mockMode = true; // New: Mock STT mode flag (enabled for testing)
+        console.log('[SummaryService] Mock STT mode enabled by default for testing');
+        this.mockDataMap = null; // Will load mock convo data
 
         // Phase 1: Analysis preset selection state
         this.selectedPresetId = null;
@@ -23,6 +26,30 @@ class SummaryService {
         this.onAnalysisComplete = null;
         this.onStatusUpdate = null;
         this.batchTimer = null; // For time fallback
+
+        // Load mock convo data if needed (for mock STT)
+        this.loadMockData();
+    }
+
+    loadMockData() {
+        try {
+            // Import mock convo data - assume new file exists
+            const mockAnalysisData = require('../../common/mocks/mockAnalysisData');
+            this.mockDataMap = mockAnalysisData.presetsToMock;
+            console.log('[SummaryService] Mock STT convo data loaded:', Object.keys(this.mockDataMap));
+        } catch (err) {
+            console.warn('[SummaryService] Failed to load mock STT data:', err.message);
+            this.mockDataMap = {};
+        }
+    }
+
+    setMockMode(enabled) {
+        this.mockMode = !!enabled;
+        console.log(`[SummaryService] Mock STT mode ${enabled ? 'enabled' : 'disabled'}`);
+        if (enabled && this.selectedPresetId) {
+            // If preset already set, simulate now
+            this.simulateMockAnalysis();
+        }
     }
 
     _mapPresetToProfile(presetId) {
@@ -38,6 +65,19 @@ class SummaryService {
             default:
                 return 'meeting_analysis';
         }
+    }
+
+    _getPreviousContext(profile) {
+        const prevDefines = Array.from(this.definedTerms).join(', ') || '(none)';
+        const prevQuestions = Array.from(this.detectedQuestions).join(' | ') || '(none)';
+        const mapping = {
+            sales_analysis: `Previous Objections: ${prevQuestions}\nPrevious Opportunities: ${prevDefines}`,
+            recruiting_analysis: `Previous Gaps: ${prevDefines}\nPrevious Strengths: ${prevQuestions}`,
+            support_analysis: `Previous Root Causes: ${prevDefines}\nPrevious Steps: ${prevQuestions}`,
+            school_analysis: `Previous Unclear Points: ${prevDefines}\nPrevious Concepts: ${prevQuestions}`,
+            meeting_analysis: `Previously Defined Terms: ${prevDefines}\nPreviously Detected Questions: ${prevQuestions}`,
+        };
+        return mapping[profile] || `Previous Terms: ${prevDefines}\nPrevious Questions: ${prevQuestions}`;
     }
 
     /**
@@ -139,12 +179,57 @@ class SummaryService {
             const roleText = this._extractRoleFromPrompt(preset.prompt);
             this.selectedRoleText = this._trimToWordLimit(roleText, 100);
             this.analysisProfile = this._mapPresetToProfile(presetId);
+            console.log(`[SummaryService] Set preset: ${presetId} -> profile: ${this.analysisProfile}`);
+
+            if (this.mockMode) {
+                console.log('[SummaryService] Mock STT mode active - simulating convo for preset:', presetId);
+                this.simulateMockAnalysis();
+            }
+
             return { success: true };
         } catch (err) {
             console.warn('[SummaryService] setAnalysisPreset error:', err.message);
             this.selectedRoleText = '';
             return { success: false, error: err.message };
         }
+    }
+
+    simulateMockAnalysis() {
+        if (!this.selectedPresetId || !this.mockDataMap) {
+            console.warn('[SummaryService] Cannot simulate Mock STT: no preset or mock data');
+            return;
+        }
+
+        const mockKey = this.selectedPresetId === 'personal' ? 'meeting' : this.selectedPresetId;
+        const mockData = this.mockDataMap[mockKey];
+        if (!mockData || !mockData.conversation) {
+            console.warn(`[SummaryService] No mock convo data for preset: ${mockKey}`);
+            return;
+        }
+
+        console.log(`[SummaryService] Mock STT: Simulating conversation for ${mockKey}`);
+
+        // Clear previous history for clean simulation
+        this.conversationHistory = [];
+
+        // Add all fake turns WITHOUT triggering (to avoid spam)
+        const numTurns = mockData.conversation.length;
+        for (let i = 0; i < numTurns; i++) {
+            const speaker = i % 2 === 0 ? 'me' : 'them';
+            const text = mockData.conversation[i];
+            this.addConversationTurn(speaker, text); // Now skips trigger in mock
+        }
+
+        // Clear any timer to prevent fallback
+        if (this.batchTimer) {
+            clearTimeout(this.batchTimer);
+            this.batchTimer = null;
+        }
+
+        console.log(`[SummaryService] Mock STT: Added ${numTurns} fake turns - now triggering SINGLE real analysis`);
+
+        // Single trigger with full history
+        this.triggerAnalysisIfNeeded(true);
     }
 
     _extractRoleFromPrompt(prompt) {
@@ -185,7 +270,13 @@ class SummaryService {
 
         const conversationText = `${speaker.toLowerCase()}: ${trimmedText}`;
         this.conversationHistory.push(conversationText);
-        console.log(`[SummaryTrigger] Added to batch (${this.conversationHistory.length} total in history): ${speaker}: "${trimmedText}"`);
+        if (this.mockMode) {
+            console.log(`[SummaryTrigger] Mock STT: Added to batch (${this.conversationHistory.length} total): ${speaker}: "${trimmedText}"`);
+            // In mock STT mode, skip auto-trigger to avoid spamming - trigger once after full injection
+            return;
+        } else {
+            console.log(`[SummaryTrigger] Added to batch (${this.conversationHistory.length} total in history): ${speaker}: "${trimmedText}"`);
+        }
 
         // Start time fallback timer if first utterance
         if (this.conversationHistory.length === 1 && !this.batchTimer) {
@@ -195,7 +286,7 @@ class SummaryService {
             }, 120000); // 2 min
         }
 
-        // Trigger analysis if needed
+        // Trigger analysis if needed (skipped in mock)
         this.triggerAnalysisIfNeeded();
     }
 
@@ -237,13 +328,18 @@ class SummaryService {
             return null;
         }
 
+        if (this.mockMode) {
+            console.log('[SummaryService] Mock STT mode: Full fake convo injected - running single real LLM analysis');
+            // Proceed to real flow
+        }
+
+        // Original real logic (always used now, even in mock STT)
         const recentConversation = this.formatConversationForPrompt(conversationTexts, maxTurns);
 
         // Build previous items for de-duplication guidance
         const prevDefines = Array.from(this.definedTerms);
         const prevQuestions = Array.from(this.detectedQuestions);
 
-        // Only include previous context if we have meaningful insights (not just default actions)
         let contextualPrompt = '';
         if (this.previousAnalysisResult && this.previousAnalysisResult.summary.length > 0) {
             const meaningfulSummary = this.previousAnalysisResult.summary.filter(s => s && !s.includes('No progress') && !s.includes('No specific'));
@@ -253,17 +349,10 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
             }
         }
 
-        // Combine contextual prompt with recent conversation for the template
-        // Make sections explicit so LLM analyzes only the transcript
-        // const fullContext = contextualPrompt
-        //     ? `${contextualPrompt.trim()}\n\nPreviously Defined Terms:\n${(prevDefines || []).join(', ') || '(none)'}\n\nPreviously Detected Questions:\n${(prevQuestions || []).join(' | ') || '(none)'}\n\nTranscript:\n${recentConversation}`
-        //     : `Previously Defined Terms:\n${(prevDefines || []).join(', ') || '(none)'}\n\nPreviously Detected Questions:\n${(prevQuestions || []).join(' | ') || '(none)'}\n\nTranscript:\n${recentConversation}`;
-        const fullContext = `Previously Defined Terms:\n${(prevDefines || []).join(', ') || '(none)'}\n\nPreviously Detected Questions:\n${(prevQuestions || []).join(' | ') || '(none)'}\n\nTranscript:\n${recentConversation}`;
+        const fullContext = this._getPreviousContext(this.analysisProfile) + `\n\nTranscript:\n${recentConversation}`;
 
-        // Build base system prompt and inject role for ALL presets (role-only editing)
         const baseSystem = getSystemPrompt(this.analysisProfile || 'meeting_analysis', {
             context: fullContext,
-            // Simplified: rely on client-side de-duplication of defines
         });
         const rolePrefix = this.selectedRoleText && this.selectedRoleText.trim() ? `<role>${this.selectedRoleText.trim()}</role>\n\n` : '';
         const systemPrompt = `${rolePrefix}${baseSystem}`;
@@ -272,8 +361,6 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
             if (this.currentSessionId) {
                 await sessionRepository.touch(this.currentSessionId);
             }
-
-            // Server-backed LLM only; no client-side provider/model
 
             const messages = [
                 {
@@ -294,7 +381,7 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
             const responseText = completion.content.trim();
             console.log('[SummaryService] Response starts with JSON?:', responseText.startsWith('{') ? 'Yes' : 'No (likely markdown)');
 
-            // Write LLM input and output to analysis.txt
+            // Write LLM input and output to analysis.txt (real output for testing prompts)
             try {
                 const fs = require('fs');
                 const path = require('path');
@@ -310,7 +397,8 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
 
                 const responseEntry = `[${timestamp}]
 User prompt: (Analysis Request)
-Mode: Meeting Copilot
+Mode: Mock STT + Real LLM
+Profile: ${this.analysisProfile}
 
 What LLM got:
 ${llmMessages}
@@ -323,10 +411,6 @@ ${responseText}
             } catch (error) {
                 console.error('[SummaryService] Failed to write analysis.txt:', error);
             }
-            // console.log(`✅ Analysis response received: ${responseText}`);
-
-            // Debug: Log the raw response for troubleshooting
-            // console.log('🔍 Raw LLM response for parsing:', JSON.stringify(responseText));
 
             const structuredData = this.parseResponseText(responseText, this.previousAnalysisResult);
 
@@ -338,7 +422,6 @@ ${responseText}
                         tldr: structuredData.summary.join('\n'),
                         bullet_json: JSON.stringify([]), // Empty array for topic bullets
                         action_json: JSON.stringify(structuredData.actions),
-                        // Server-side LLM migration: no client modelInfo available
                         model: 'server',
                     });
                 } catch (err) {
@@ -505,7 +588,7 @@ ${responseText}
                                 .replace(/^"|"$/g, '')
                                 .replace(/"([^"]+)"/g, '$1');
                             if (gap && !structuredData.actions.some(x => x.includes(gap))) {
-                                const prefixed = `🔍 Gap: ${gap}`;
+                                const prefixed = `⚠️ Gap: ${gap}`;
                                 structuredData.actions.push(prefixed);
                             }
                         });
@@ -517,7 +600,7 @@ ${responseText}
                                 .replace(/^"|"$/g, '')
                                 .replace(/"([^"]+)"/g, '$1');
                             if (question) {
-                                const prefixed = `💡 Suggested Question: ${question}`;
+                                const prefixed = `👆 Suggested Question: ${question}`;
                                 structuredData.actions.push(prefixed);
                             }
                         });
@@ -553,7 +636,7 @@ ${responseText}
                                 .replace(/^"|"$/g, '')
                                 .replace(/"([^"]+)"/g, '$1');
                             if (step) {
-                                const prefixed = `🛠️ Troubleshooting Step: ${step}`;
+                                const prefixed = `🔍 Troubleshooting Step: ${step}`;
                                 structuredData.actions.push(prefixed);
                             }
                         });
@@ -718,7 +801,7 @@ ${responseText}
                     }
                 } else if (trimmedLine.startsWith('-') && currentSection === 'objections') {
                     const objection = trimmedLine.substring(1).trim().replace(/^"|"$/g, '');
-                    const prefixed = `🔄 Address Objection: ${objection}`;
+                    const prefixed = `❗❗ Address Objection: ${objection}`;
                     if (!structuredData.actions.some(x => x.toLowerCase() === prefixed.toLowerCase())) {
                         structuredData.actions.push(prefixed);
                     }
@@ -744,7 +827,7 @@ ${responseText}
                         .trim()
                         .replace(/^"|"$/g, '')
                         .replace(/"([^"]+)"/g, '$1');
-                    const prefixed = `🔍 Gap: ${gap}`;
+                    const prefixed = `⚠️ Gap: ${gap}`;
                     if (!structuredData.actions.some(x => x.toLowerCase() === prefixed.toLowerCase())) {
                         structuredData.actions.push(prefixed);
                     }
@@ -754,7 +837,7 @@ ${responseText}
                         .trim()
                         .replace(/^"|"$/g, '')
                         .replace(/"([^"]+)"/g, '$1');
-                    const prefixed = `💡 Suggested Question: ${question}`;
+                    const prefixed = `👆 Suggested Question: ${question}`;
                     structuredData.actions.push(prefixed);
                 } else if (trimmedLine.startsWith('-') && currentSection === 'issue_summary') {
                     const summaryPoint = trimmedLine
@@ -782,7 +865,7 @@ ${responseText}
                         .trim()
                         .replace(/^"|"$/g, '')
                         .replace(/"([^"]+)"/g, '$1');
-                    const prefixed = `🛠️ Troubleshooting Step: ${step}`;
+                    const prefixed = `🔍 Troubleshooting Step: ${step}`;
                     structuredData.actions.push(prefixed);
                 } else if (trimmedLine.startsWith('-') && currentSection === 'key_concepts') {
                     const concept = trimmedLine
@@ -850,7 +933,11 @@ ${responseText}
         if (this.batchTimer) {
             clearTimeout(this.batchTimer);
             this.batchTimer = null;
-            console.log('[SummaryTrigger] Timer cleared - activity detected');
+            if (this.mockMode) {
+                console.log('[SummaryTrigger] Mock STT: Cleared fallback timer');
+            } else {
+                console.log('[SummaryTrigger] Timer cleared - activity detected');
+            }
         }
 
         const recapStep = config.get('recapStep') || 15;
@@ -861,10 +948,12 @@ ${responseText}
             return;
         }
 
-        // Determine if we should analyze now
+        // In mock STT + force, always analyze full history once
         let shouldAnalyze = false;
-
-        if (smartCfg.enabled) {
+        if (this.mockMode && force) {
+            shouldAnalyze = true;
+            console.log('[SummaryTrigger] Mock STT force: Analyzing full fake history once');
+        } else if (smartCfg.enabled) {
             const sinceLast = this.conversationHistory.slice(this.lastAnalyzedIndex);
             const textSince = sinceLast.join(' ');
 
@@ -904,19 +993,26 @@ ${responseText}
             return;
         }
 
-        if (force) {
+        if (force && !this.mockMode) {
             console.log('[SummaryTrigger] Force trigger from time fallback');
         }
 
         console.log(
-            `[SummaryTrigger] TRIGGERING LLM ANALYSIS! Total history: ${this.conversationHistory.length}, new batch: ${this.conversationHistory.slice(this.lastAnalyzedIndex).length} utterances`
+            `[SummaryTrigger] TRIGGERING ANALYSIS! Total history: ${this.conversationHistory.length}, new batch: ${this.conversationHistory.slice(this.lastAnalyzedIndex).length} utterances`
         );
 
-        // Only send NEW utterances since last analysis
-        const newUtterances = this.conversationHistory.slice(this.lastAnalyzedIndex);
-        console.log(`📝 Analyzing ${newUtterances.length} new utterances (from index ${this.lastAnalyzedIndex})`);
+        // For mock STT, use FULL history for single comprehensive analysis
+        let textsToAnalyze;
+        if (this.mockMode) {
+            textsToAnalyze = this.conversationHistory.slice(0); // Full fake convo
+            console.log(`[SummaryTrigger] Mock STT: Analyzing full ${textsToAnalyze.length} turns with real LLM`);
+        } else {
+            // Original: Only new since last
+            textsToAnalyze = this.conversationHistory.slice(this.lastAnalyzedIndex);
+            console.log(`📝 Analyzing ${textsToAnalyze.length} new utterances (from index ${this.lastAnalyzedIndex})`);
+        }
 
-        const data = await this.makeOutlineAndRequests(newUtterances);
+        const data = await this.makeOutlineAndRequests(textsToAnalyze);
         if (data) {
             data.actions = Array.isArray(data.actions) ? data.actions : [];
 
@@ -931,7 +1027,7 @@ ${responseText}
             console.log('Sending structured data to renderer');
             this.sendToRenderer('summary-update', { ...data, presetId: this.selectedPresetId });
 
-            // Update tracking - we've now analyzed up to the current conversation length
+            // Update tracking
             this.lastAnalyzedIndex = this.conversationHistory.length;
 
             if (this.onAnalysisComplete) {

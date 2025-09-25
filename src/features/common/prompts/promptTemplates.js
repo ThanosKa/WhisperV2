@@ -200,32 +200,44 @@ Always your answer must be in the language of the transcribed conversation if ex
     // Advanced meeting analysis for insights (Personal default)
     meeting_analysis: {
         system: `Rules:
-        - Use the conversation language.
-        - Base outputs only on the Transcript in Context.
-        - Do NOT repeat items listed under "Previously Defined Terms" or "Previously Detected Questions" in Context.
-        - If a section has no content, omit the section entirely.
-        - Never output placeholder or meta lines like "No questions detected" or "The transcript is too short...".
-        - Terms to Define must be short terms or noun phrases that actually appear in the transcript; do not include full sentences.
-        - Speaker tags: lines begin with "me:" (the user you assist) and "them:" (other speakers). Prioritize insights that help "me".
-        
-        ## Response Language
-        - Detect the primary language used in the Transcript.
-        - Write every bullet, sentence, and term entirely in that language. Do not translate into any other language.
-        - Keep the required section headings exactly as written in English, but the bullet text must remain in the transcript language.
-        - if something is gibberish, ignore the entire section.
-        
-        Return ONLY these sections with exact headings, in order:
+- You are analyzing real-time Speech-to-Text (STT) transcripts, which often contain errors like misheard words, fragments, accents, or noise from any language. Always assume the input is imperfect but meaningful—your job is to infer and reconstruct intent intelligently, adapting to the transcript's language automatically.
+- Base ALL outputs ONLY on the Transcript. Do NOT repeat items from "Previously Defined Terms" or "Previously Detected Questions."
+- If a section has no meaningful content after inference, use an empty array for items. Never add placeholders like "No questions detected."
+- Terms to Define: Extract ONLY short, meaningful noun phrases or acronyms that appear (or can be reasonably inferred from fragments) and seem relevant to the conversation (e.g., business/tech terms in the transcript's language). Ignore pure noise or common words without context.
+- Speaker tags: "me:" is the user you assist; "them:" are others. Prioritize insights helpful to "me."
 
-### Meeting Insights
-- Key points, decisions, progress, or next steps (bullets)
+## Step-by-Step Analysis Process (Think Before Responding)
+1. **Detect Language Dynamically**: Scan the entire Transcript to identify the dominant language automatically (based on word patterns, scripts, and frequency). If mixed, prioritize the most frequent or coherent one. If unclear or heavily garbled, infer from the longest readable phrases.
+2. **Handle STT Errors Intelligently**: Examine the Transcript for typical STT artifacts (e.g., merged words, phonetic misspellings, or fragments). Infer corrections based on linguistic patterns in the detected language and surrounding context—do NOT ignore; always attempt to reconstruct sensible meaning without assuming any specific language.
+3. **Extract Content Adaptively**:
+   - Insights: Summarize key points, decisions, or progress from the reconstructed transcript. Even if partially garbled, infer overarching themes or intents from recurring patterns (e.g., words related to problems or companies).
+   - Questions: Identify implied, direct, or garbled questions by reconstructing fragments into logical queries in the detected language. Include only if a reasonable intent emerges.
+   - Defines: Extract 1-3 terms after correction if they appear contextually relevant (e.g., acronyms or phrases that could benefit from explanation). Skip isolated fragments unless they clearly form a meaningful concept in the transcript's language.
+4. **Output Language Enforcement**: Write EVERY item (bullets, terms, questions) entirely in the detected Transcript language—imitate its natural tone, vocabulary, and structure. Section titles remain in English. For multilingual or noisy transcripts, use the dominant inferred language consistently.
+5. **Validate for Quality**: Ensure all outputs are accurate, non-repetitive, and helpful. Base confidence on how well patterns align—if inference seems unreliable (<50% coherent), empty the section to avoid speculation.
 
-### Questions Detected
-- Exact question from the transcript
-- Another question if present
+## STRICT OUTPUT FORMAT
+Respond with ONLY valid JSON matching this exact schema—no markdown, explanations, extra text, or wrappers. Always include all three sections in order, even if items are empty arrays. Items must start with '-' for bullets and be in the detected transcript language.
 
-### Terms to Define
-- Technical/business term that may need explanation (from transcript)
-- Another term if present`,
+{
+  "sections": [
+    {
+      "type": "insights",
+      "title": "Meeting Insights",
+      "items": ["- Key points, decisions, progress, or next steps (in transcript language)"]
+    },
+    {
+      "type": "questions",
+      "title": "Questions Detected",
+      "items": ["- Reconstructed exact question from transcript (in detected language)", "- Another if present"]
+    },
+    {
+      "type": "defines",
+      "title": "Terms to Define",
+      "items": ["- Meaningful term/phrase from transcript (corrected, in detected language)", "- Another if present"]
+    }
+  ]
+}`,
     },
 };
 

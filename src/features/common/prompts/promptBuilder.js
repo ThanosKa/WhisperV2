@@ -48,13 +48,20 @@ function buildSystemPrompt(promptParts, context = {}, googleSearchEnabled = true
         sections.push(promptParts.outputInstructions.trim());
     }
 
+    // Future: If template has json_schema, append strict JSON instruction
+    if (promptParts && promptParts.json_schema) {
+        sections.push(`\n\nRespond ONLY with valid JSON matching the schema—no other text.`);
+    }
+
     return sections.join('');
 }
 
 function getSystemPrompt(profile, context, googleSearchEnabled = true) {
     const promptParts = profilePrompts[profile] || profilePrompts.whisper;
     const promptContext = typeof context === 'string' ? { context } : context || {};
-    return buildSystemPrompt(promptParts, promptContext, googleSearchEnabled);
+    const builtPrompt = buildSystemPrompt(promptParts, promptContext, googleSearchEnabled);
+    console.log(`[PromptBuilder] Built prompt for profile '${profile}': ${builtPrompt.substring(0, 200)}...`); // Debug log (truncate for brevity)
+    return builtPrompt;
 }
 
 module.exports = {

@@ -275,7 +275,8 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
 
             const completion = await llmClient.chat(messages);
 
-            const responseText = completion.content;
+            const responseText = completion.content.trim();
+            console.log('[SummaryService] Response starts with JSON?:', responseText.startsWith('{') ? 'Yes' : 'No (likely markdown)');
 
             // Write LLM input and output to analysis.txt
             try {
@@ -360,11 +361,109 @@ ${responseText}
             structuredData.summary = [...previousResult.summary];
         }
 
+        if (!responseText || typeof responseText !== 'string') {
+            console.log('[SummaryService] No response text to parse');
+            return structuredData;
+        }
+
+        const trimmedResponse = responseText.trim();
+
+        // First, try JSON parsing (handle code block wrappers)
+        let jsonData = null;
+        let jsonString = trimmedResponse;
+
+        // Extract JSON from common markdown code block wrappers
+        const jsonMatch = trimmedResponse.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i);
+        if (jsonMatch) {
+            jsonString = jsonMatch[1].trim();
+            console.log('[SummaryService] Extracted JSON from code block');
+        } else if (trimmedResponse.startsWith('```') && trimmedResponse.endsWith('```')) {
+            // Fallback: strip outer ```
+            jsonString = trimmedResponse.slice(3, -3).trim();
+            console.log('[SummaryService] Stripped ``` wrappers for JSON');
+        }
+
         try {
-            const lines = responseText.split('\n');
+            jsonData = JSON.parse(jsonString);
+            if (jsonData && jsonData.sections && Array.isArray(jsonData.sections)) {
+                console.log('[SummaryService] JSON parsed successfully, sections:', jsonData.sections.length);
+
+                // Map JSON sections to structuredData (rest unchanged)
+                jsonData.sections.forEach(section => {
+                    if (section.type === 'insights' && Array.isArray(section.items)) {
+                        section.items.forEach(item => {
+                            const summaryPoint = item
+                                .trim()
+                                .replace(/^-?\s*/, '')
+                                .replace(/^"|"$/g, '')
+                                .replace(/"([^"]+)"/g, '$1'); // Strip quotes
+                            if (summaryPoint && !structuredData.summary.includes(summaryPoint)) {
+                                structuredData.summary.unshift(summaryPoint);
+                                if (structuredData.summary.length > 5) {
+                                    structuredData.summary.pop();
+                                }
+                            }
+                        });
+                    } else if (section.type === 'questions' && Array.isArray(section.items)) {
+                        section.items.forEach(item => {
+                            const question = item
+                                .trim()
+                                .replace(/^-?\s*/, '')
+                                .replace(/^"|"$/g, '')
+                                .replace(/"([^"]+)"/g, '$1'); // Strip quotes
+                            const isPlaceholder = !question || /no\s+questions\s+detected/i.test(question);
+                            if (!isPlaceholder) {
+                                const prefixed = `❓ ${question}`;
+                                if (!structuredData.actions.includes(prefixed)) {
+                                    structuredData.actions.push(prefixed);
+                                    // Track for dedupe (case-insensitive)
+                                    const exists = Array.from(this.detectedQuestions).some(q => q.toLowerCase() === question.toLowerCase());
+                                    if (!exists) {
+                                        this.detectedQuestions.add(question);
+                                    }
+                                }
+                            }
+                        });
+                    } else if (section.type === 'defines' && Array.isArray(section.items)) {
+                        section.items.forEach(item => {
+                            const term = item
+                                .trim()
+                                .replace(/^-?\s*/, '')
+                                .replace(/^"|"$/g, '');
+                            const looksLikeSentence = /\w[\w\s,'"-]{12,}\.$/i.test(term) || /\s{2,}/.test(term) || /\./.test(term);
+                            const isPlaceholder = /too\s+short\s+to\s+detect/i.test(term) || /no\s+terms/i.test(term);
+                            const isInvalid = !term || looksLikeSentence || isPlaceholder;
+                            if (!isInvalid && !this.definedTerms.has(term.toLowerCase())) {
+                                const prefixed = `📘 Define ${term}`;
+                                if (!structuredData.actions.some(x => x.toLowerCase() === prefixed.toLowerCase())) {
+                                    structuredData.actions.push(prefixed);
+                                    this.definedTerms.add(term.toLowerCase());
+                                }
+                            }
+                        });
+                    }
+                });
+
+                // Limit actions
+                structuredData.actions = structuredData.actions.slice(0, 10);
+
+                // Merge with previous if needed
+                if (structuredData.summary.length === 0 && previousResult) {
+                    structuredData.summary = previousResult.summary;
+                }
+
+                return structuredData;
+            }
+        } catch (jsonError) {
+            console.log('[SummaryService] JSON parsing failed after extraction, falling back to markdown:', jsonError.message);
+        }
+
+        // Fallback: Original markdown parsing (unchanged)
+        try {
+            const lines = trimmedResponse.split('\n');
             let currentSection = '';
 
-            console.log('🔍 Parsing response lines:', lines.length);
+            console.log('🔍 Parsing response lines (markdown fallback):', lines.length);
 
             for (const line of lines) {
                 const trimmedLine = line.trim();
@@ -388,7 +487,11 @@ ${responseText}
 
                 // Content parsing
                 if (trimmedLine.startsWith('-') && currentSection === 'meeting-insights') {
-                    const summaryPoint = trimmedLine.substring(1).trim();
+                    const summaryPoint = trimmedLine
+                        .substring(1)
+                        .trim()
+                        .replace(/^"|"$/g, '')
+                        .replace(/"([^"]+)"/g, '$1'); // Strip quotes
                     if (summaryPoint && !structuredData.summary.includes(summaryPoint)) {
                         // Update existing summary (maintain maximum 5 items)
                         structuredData.summary.unshift(summaryPoint);
@@ -397,7 +500,11 @@ ${responseText}
                         }
                     }
                 } else if (trimmedLine.startsWith('-') && currentSection === 'detected-questions') {
-                    const question = trimmedLine.substring(1).trim();
+                    const question = trimmedLine
+                        .substring(1)
+                        .trim()
+                        .replace(/^"|"$/g, '')
+                        .replace(/"([^"]+)"/g, '$1'); // Strip quotes
                     // Filter obvious placeholders
                     const isPlaceholder = !question || /no\s+questions\s+detected/i.test(question);
                     if (!isPlaceholder) {
@@ -434,7 +541,7 @@ ${responseText}
                 structuredData.summary = previousResult.summary;
             }
         } catch (error) {
-            console.error('❌ Error parsing response text:', error);
+            console.error('❌ Error parsing response text (markdown):', error);
             // Return previous result on error
             return (
                 previousResult || {

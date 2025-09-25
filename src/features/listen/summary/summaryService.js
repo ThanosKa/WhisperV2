@@ -552,7 +552,7 @@ ${responseText}
                                 .replace(/^"|"$/g, '')
                                 .replace(/"([^"]+)"/g, '$1');
                             if (objection && !structuredData.actions.some(x => x.includes(objection))) {
-                                const prefixed = `🔄 Address Objection: ${objection}`;
+                                const prefixed = `❗❗ Objection: ${objection}`; // Updated to default !! emoji, dropped 'Address'
                                 structuredData.actions.push(prefixed);
                             }
                         });
@@ -588,7 +588,7 @@ ${responseText}
                                 .replace(/^"|"$/g, '')
                                 .replace(/"([^"]+)"/g, '$1');
                             if (gap && !structuredData.actions.some(x => x.includes(gap))) {
-                                const prefixed = `⚠️ Gap: ${gap}`;
+                                const prefixed = `❗❗Gap: ${gap}`; // Changed ⚠️ to ‼️ (double exclamation mark) for gaps
                                 structuredData.actions.push(prefixed);
                             }
                         });
@@ -798,12 +798,6 @@ ${responseText}
                             structuredData.actions.push(defineItem);
                             this.definedTerms.add(coreTerm.toLowerCase()); // Track this term as defined
                         }
-                    }
-                } else if (trimmedLine.startsWith('-') && currentSection === 'objections') {
-                    const objection = trimmedLine.substring(1).trim().replace(/^"|"$/g, '');
-                    const prefixed = `❗❗ Address Objection: ${objection}`;
-                    if (!structuredData.actions.some(x => x.toLowerCase() === prefixed.toLowerCase())) {
-                        structuredData.actions.push(prefixed);
                     }
                 } else if (trimmedLine.startsWith('-') && currentSection === 'follow_ups') {
                     const followup = trimmedLine.substring(1).trim().replace(/^"|"$/g, '');

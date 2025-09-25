@@ -30,11 +30,11 @@ class SummaryService {
             case 'sales':
                 return 'sales_analysis';
             case 'recruiting':
-                return 'recruiting_analysis'; // To be implemented
+                return 'recruiting_analysis';
             case 'customer-support':
-                return 'support_analysis'; // To be implemented
+                return 'support_analysis';
             case 'school':
-                return 'school_analysis'; // To be implemented
+                return 'school_analysis';
             default:
                 return 'meeting_analysis';
         }
@@ -485,6 +485,114 @@ ${responseText}
                                 structuredData.actions.push(prefixed);
                             }
                         });
+                    } else if (section.type === 'strengths' && Array.isArray(section.items)) {
+                        section.items.forEach(item => {
+                            const strength = item
+                                .trim()
+                                .replace(/^-?\s*/, '')
+                                .replace(/^"|"$/g, '')
+                                .replace(/"([^"]+)"/g, '$1');
+                            if (strength && !structuredData.summary.includes(strength)) {
+                                structuredData.summary.unshift(strength);
+                                if (structuredData.summary.length > 5) structuredData.summary.pop();
+                            }
+                        });
+                    } else if (section.type === 'gaps' && Array.isArray(section.items)) {
+                        section.items.forEach(item => {
+                            const gap = item
+                                .trim()
+                                .replace(/^-?\s*/, '')
+                                .replace(/^"|"$/g, '')
+                                .replace(/"([^"]+)"/g, '$1');
+                            if (gap && !structuredData.actions.some(x => x.includes(gap))) {
+                                const prefixed = `🔍 Gap: ${gap}`;
+                                structuredData.actions.push(prefixed);
+                            }
+                        });
+                    } else if (section.type === 'suggested_questions' && Array.isArray(section.items)) {
+                        section.items.forEach(item => {
+                            const question = item
+                                .trim()
+                                .replace(/^-?\s*/, '')
+                                .replace(/^"|"$/g, '')
+                                .replace(/"([^"]+)"/g, '$1');
+                            if (question) {
+                                const prefixed = `💡 Suggested Question: ${question}`;
+                                structuredData.actions.push(prefixed);
+                            }
+                        });
+                    } else if (section.type === 'issue_summary' && Array.isArray(section.items)) {
+                        section.items.forEach(item => {
+                            const summaryPoint = item
+                                .trim()
+                                .replace(/^-?\s*/, '')
+                                .replace(/^"|"$/g, '')
+                                .replace(/"([^"]+)"/g, '$1');
+                            if (summaryPoint && !structuredData.summary.includes(summaryPoint)) {
+                                structuredData.summary.unshift(summaryPoint);
+                                if (structuredData.summary.length > 5) structuredData.summary.pop();
+                            }
+                        });
+                    } else if (section.type === 'root_causes' && Array.isArray(section.items)) {
+                        section.items.forEach(item => {
+                            const cause = item
+                                .trim()
+                                .replace(/^-?\s*/, '')
+                                .replace(/^"|"$/g, '')
+                                .replace(/"([^"]+)"/g, '$1');
+                            if (cause && !structuredData.actions.some(x => x.includes(cause))) {
+                                const prefixed = `🔎 Root Cause: ${cause}`;
+                                structuredData.actions.push(prefixed);
+                            }
+                        });
+                    } else if (section.type === 'troubleshooting' && Array.isArray(section.items)) {
+                        section.items.forEach(item => {
+                            const step = item
+                                .trim()
+                                .replace(/^-?\s*/, '')
+                                .replace(/^"|"$/g, '')
+                                .replace(/"([^"]+)"/g, '$1');
+                            if (step) {
+                                const prefixed = `🛠️ Troubleshooting Step: ${step}`;
+                                structuredData.actions.push(prefixed);
+                            }
+                        });
+                    } else if (section.type === 'key_concepts' && Array.isArray(section.items)) {
+                        section.items.forEach(item => {
+                            const concept = item
+                                .trim()
+                                .replace(/^-?\s*/, '')
+                                .replace(/^"|"$/g, '')
+                                .replace(/"([^"]+)"/g, '$1');
+                            if (concept && !structuredData.summary.includes(concept)) {
+                                structuredData.summary.unshift(concept);
+                                if (structuredData.summary.length > 5) structuredData.summary.pop();
+                            }
+                        });
+                    } else if (section.type === 'unclear_points' && Array.isArray(section.items)) {
+                        section.items.forEach(item => {
+                            const unclear = item
+                                .trim()
+                                .replace(/^-?\s*/, '')
+                                .replace(/^"|"$/g, '')
+                                .replace(/"([^"]+)"/g, '$1');
+                            if (unclear && !structuredData.actions.some(x => x.includes(unclear))) {
+                                const prefixed = `❓ Clarify: ${unclear}`;
+                                structuredData.actions.push(prefixed);
+                            }
+                        });
+                    } else if (section.type === 'study_questions' && Array.isArray(section.items)) {
+                        section.items.forEach(item => {
+                            const question = item
+                                .trim()
+                                .replace(/^-?\s*/, '')
+                                .replace(/^"|"$/g, '')
+                                .replace(/"([^"]+)"/g, '$1');
+                            if (question) {
+                                const prefixed = `📚 Study Question: ${question}`;
+                                structuredData.actions.push(prefixed);
+                            }
+                        });
                     }
                 });
 
@@ -532,6 +640,33 @@ ${responseText}
                     continue;
                 } else if (trimmedLine === '### Follow-Up Questions') {
                     currentSection = 'follow_ups';
+                    continue;
+                } else if (trimmedLine === '### Candidate Strengths' || trimmedLine === '### Strengths') {
+                    currentSection = 'strengths';
+                    continue;
+                } else if (trimmedLine === '### Skill Gaps' || trimmedLine === '### Gaps') {
+                    currentSection = 'gaps';
+                    continue;
+                } else if (trimmedLine === '### Suggested Questions') {
+                    currentSection = 'suggested_questions';
+                    continue;
+                } else if (trimmedLine === '### Issue Summary') {
+                    currentSection = 'issue_summary';
+                    continue;
+                } else if (trimmedLine === '### Root Causes') {
+                    currentSection = 'root_causes';
+                    continue;
+                } else if (trimmedLine === '### Troubleshooting Steps') {
+                    currentSection = 'troubleshooting';
+                    continue;
+                } else if (trimmedLine === '### Key Concepts') {
+                    currentSection = 'key_concepts';
+                    continue;
+                } else if (trimmedLine === '### Unclear Points') {
+                    currentSection = 'unclear_points';
+                    continue;
+                } else if (trimmedLine === '### Study Questions') {
+                    currentSection = 'study_questions';
                     continue;
                 }
 
@@ -593,6 +728,90 @@ ${responseText}
                     if (!structuredData.actions.some(x => x.toLowerCase() === prefixed.toLowerCase())) {
                         structuredData.actions.push(prefixed);
                     }
+                } else if (trimmedLine.startsWith('-') && currentSection === 'strengths') {
+                    const strength = trimmedLine
+                        .substring(1)
+                        .trim()
+                        .replace(/^"|"$/g, '')
+                        .replace(/"([^"]+)"/g, '$1');
+                    if (strength && !structuredData.summary.includes(strength)) {
+                        structuredData.summary.unshift(strength);
+                        if (structuredData.summary.length > 5) structuredData.summary.pop();
+                    }
+                } else if (trimmedLine.startsWith('-') && currentSection === 'gaps') {
+                    const gap = trimmedLine
+                        .substring(1)
+                        .trim()
+                        .replace(/^"|"$/g, '')
+                        .replace(/"([^"]+)"/g, '$1');
+                    const prefixed = `🔍 Gap: ${gap}`;
+                    if (!structuredData.actions.some(x => x.toLowerCase() === prefixed.toLowerCase())) {
+                        structuredData.actions.push(prefixed);
+                    }
+                } else if (trimmedLine.startsWith('-') && currentSection === 'suggested_questions') {
+                    const question = trimmedLine
+                        .substring(1)
+                        .trim()
+                        .replace(/^"|"$/g, '')
+                        .replace(/"([^"]+)"/g, '$1');
+                    const prefixed = `💡 Suggested Question: ${question}`;
+                    structuredData.actions.push(prefixed);
+                } else if (trimmedLine.startsWith('-') && currentSection === 'issue_summary') {
+                    const summaryPoint = trimmedLine
+                        .substring(1)
+                        .trim()
+                        .replace(/^"|"$/g, '')
+                        .replace(/"([^"]+)"/g, '$1');
+                    if (summaryPoint && !structuredData.summary.includes(summaryPoint)) {
+                        structuredData.summary.unshift(summaryPoint);
+                        if (structuredData.summary.length > 5) structuredData.summary.pop();
+                    }
+                } else if (trimmedLine.startsWith('-') && currentSection === 'root_causes') {
+                    const cause = trimmedLine
+                        .substring(1)
+                        .trim()
+                        .replace(/^"|"$/g, '')
+                        .replace(/"([^"]+)"/g, '$1');
+                    const prefixed = `🔎 Root Cause: ${cause}`;
+                    if (!structuredData.actions.some(x => x.toLowerCase() === prefixed.toLowerCase())) {
+                        structuredData.actions.push(prefixed);
+                    }
+                } else if (trimmedLine.startsWith('-') && currentSection === 'troubleshooting') {
+                    const step = trimmedLine
+                        .substring(1)
+                        .trim()
+                        .replace(/^"|"$/g, '')
+                        .replace(/"([^"]+)"/g, '$1');
+                    const prefixed = `🛠️ Troubleshooting Step: ${step}`;
+                    structuredData.actions.push(prefixed);
+                } else if (trimmedLine.startsWith('-') && currentSection === 'key_concepts') {
+                    const concept = trimmedLine
+                        .substring(1)
+                        .trim()
+                        .replace(/^"|"$/g, '')
+                        .replace(/"([^"]+)"/g, '$1');
+                    if (concept && !structuredData.summary.includes(concept)) {
+                        structuredData.summary.unshift(concept);
+                        if (structuredData.summary.length > 5) structuredData.summary.pop();
+                    }
+                } else if (trimmedLine.startsWith('-') && currentSection === 'unclear_points') {
+                    const unclear = trimmedLine
+                        .substring(1)
+                        .trim()
+                        .replace(/^"|"$/g, '')
+                        .replace(/"([^"]+)"/g, '$1');
+                    const prefixed = `❓ Clarify: ${unclear}`;
+                    if (!structuredData.actions.some(x => x.toLowerCase() === prefixed.toLowerCase())) {
+                        structuredData.actions.push(prefixed);
+                    }
+                } else if (trimmedLine.startsWith('-') && currentSection === 'study_questions') {
+                    const question = trimmedLine
+                        .substring(1)
+                        .trim()
+                        .replace(/^"|"$/g, '')
+                        .replace(/"([^"]+)"/g, '$1');
+                    const prefixed = `📚 Study Question: ${question}`;
+                    structuredData.actions.push(prefixed);
                 }
             }
 

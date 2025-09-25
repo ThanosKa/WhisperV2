@@ -355,6 +355,25 @@ export class SummaryView extends LitElement {
                 );
             }
         }, 50);
+
+        // Compute split actions
+        this.scrollableActions = this.allActions.filter(
+            a =>
+                a.startsWith('❓') ||
+                a.startsWith('📘') ||
+                a.startsWith('🔄') ||
+                a.startsWith('🔍') ||
+                a.startsWith('🔎') ||
+                a.startsWith('🛠️') ||
+                a.includes('Clarify:') ||
+                a.startsWith('📚') ||
+                a.startsWith('💡') ||
+                a.includes('Follow-up:') ||
+                a.includes('Suggested Question:')
+        );
+        this.fixedActions = this.allActions.filter(
+            a => a.includes('What should I say next') || a.includes('Suggest follow-up') || a.includes('Recap meeting')
+        );
     }
 
     render() {
@@ -378,9 +397,31 @@ export class SummaryView extends LitElement {
                           ${(() => {
                               let title = 'Summary Insights';
                               if (this.allSummary.length > 0) {
-                                  title = this.presetId === 'sales' ? 'Sales Insights' : 'Meeting Introduction';
-                              } else if (this.allActions.some(a => a.includes('Objection') || a.includes('Sales Follow-up'))) {
-                                  title = 'Sales Insights';
+                                  switch (this.presetId) {
+                                      case 'sales':
+                                          title = 'Sales Insights';
+                                          break;
+                                      case 'recruiting':
+                                          title = 'Recruiting Insights';
+                                          break;
+                                      case 'customer-support':
+                                          title = 'Support Insights';
+                                          break;
+                                      case 'school':
+                                          title = 'Educational Insights';
+                                          break;
+                                      default:
+                                          title = 'Meeting Introduction';
+                                  }
+                              } else {
+                                  if (this.allActions.some(a => a.includes('Objection') || a.includes('Sales Follow-up'))) title = 'Sales Insights';
+                                  else if (this.allActions.some(a => a.includes('Gap') || a.includes('Suggested Question')))
+                                      title = 'Recruiting Insights';
+                                  else if (this.allActions.some(a => a.includes('Root Cause') || a.includes('Troubleshooting Step')))
+                                      title = 'Support Insights';
+                                  else if (this.allActions.some(a => a.includes('Clarify') || a.includes('Study Question')))
+                                      title = 'Educational Insights';
+                                  else title = 'Summary Insights';
                               }
                               return html`<insights-title>${title}</insights-title>`;
                           })()}
@@ -403,15 +444,35 @@ export class SummaryView extends LitElement {
                           <!-- Actions Section (always show fixed actions after first text) -->
                           <insights-title>Actions</insights-title>
 
-                          <!-- Unified Actions List -->
-                          ${this.allActions.length > 0
+                          <!-- Scrollable LLM Actions (Top) -->
+                          ${this.scrollableActions.length > 0
                               ? html`
-                                    <div class="actions-container">
-                                        ${this.allActions.map(
+                                    <div class="scrollable-actions-container">
+                                        ${this.scrollableActions.map(
                                             (action, index) => html`
                                                 <div
-                                                    class="markdown-content action-item"
-                                                    data-markdown-id="action-${index}"
+                                                    class="markdown-content scrollable-action-item"
+                                                    data-markdown-id="scrollable-action-${index}"
+                                                    data-original-text="${action}"
+                                                    @click=${() => this.handleMarkdownClick(action)}
+                                                >
+                                                    ${action}
+                                                </div>
+                                            `
+                                        )}
+                                    </div>
+                                `
+                              : ''}
+
+                          <!-- Fixed Defaults (Bottom) -->
+                          ${this.hasReceivedFirstText
+                              ? html`
+                                    <div class="fixed-actions-container">
+                                        ${this.fixedActions.map(
+                                            (action, index) => html`
+                                                <div
+                                                    class="markdown-content fixed-action-item"
+                                                    data-markdown-id="fixed-action-${index}"
                                                     data-original-text="${action}"
                                                     @click=${() => this.handleMarkdownClick(action)}
                                                 >

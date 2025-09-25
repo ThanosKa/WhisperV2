@@ -269,6 +269,20 @@ class AskService {
             return { mode: 'objection' };
         }
 
+        if (normalized.includes('gap') || normalized.includes('🔍')) {
+            return { mode: 'gaps' };
+        } else if (normalized.includes('root cause') || normalized.includes('🔎')) {
+            return { mode: 'root_causes' };
+        } else if (normalized.includes('clarify') || normalized.includes('❓ clarify')) {
+            return { mode: 'unclear' };
+        } else if (normalized.includes('study question') || normalized.includes('📚')) {
+            return { mode: 'study_questions' };
+        } else if (normalized.includes('troubleshooting') || normalized.includes('🛠️')) {
+            return { mode: 'troubleshooting' };
+        } else if (normalized.includes('suggested question') || normalized.includes('💡 suggested')) {
+            return { mode: 'suggested_questions' };
+        }
+
         return { mode: 'default' };
     }
 
@@ -515,7 +529,100 @@ class AskService {
                         useConversationContext = true;
                     }
                     // for default, remains 'whisper'
-                }
+                } else if (presetId === 'recruiting') {
+                    if (expansion.mode === 'define' || userPrompt.startsWith('📘')) {
+                        profileToUse = 'recruiting_define';
+                        useConversationContext = false;
+                    } else if (userPrompt.startsWith('❓') || expansion.mode === 'question') {
+                        profileToUse = 'recruiting_question';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'gaps') {
+                        profileToUse = 'recruiting_actions';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'suggested_questions') {
+                        profileToUse = 'recruiting_followup';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'email') {
+                        profileToUse = 'recruiting_email';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'actions') {
+                        profileToUse = 'recruiting_actions';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'next') {
+                        profileToUse = 'recruiting_next';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'followup') {
+                        profileToUse = 'recruiting_followup';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'recap') {
+                        profileToUse = 'recruiting_recap';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'summary') {
+                        profileToUse = 'recruiting_summary';
+                        useConversationContext = true;
+                    }
+                } else if (presetId === 'customer-support') {
+                    if (expansion.mode === 'define' || userPrompt.startsWith('📘')) {
+                        profileToUse = 'support_define';
+                        useConversationContext = false;
+                    } else if (userPrompt.startsWith('❓') || expansion.mode === 'question') {
+                        profileToUse = 'support_question';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'root_causes') {
+                        profileToUse = 'support_actions';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'troubleshooting') {
+                        profileToUse = 'support_actions';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'email') {
+                        profileToUse = 'support_email';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'actions') {
+                        profileToUse = 'support_actions';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'next') {
+                        profileToUse = 'support_next';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'followup') {
+                        profileToUse = 'support_followup';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'recap') {
+                        profileToUse = 'support_recap';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'summary') {
+                        profileToUse = 'support_summary';
+                        useConversationContext = true;
+                    }
+                } else if (presetId === 'school') {
+                    if (expansion.mode === 'define' || userPrompt.startsWith('📘')) {
+                        profileToUse = 'school_define';
+                        useConversationContext = false;
+                    } else if (userPrompt.startsWith('❓') || expansion.mode === 'question' || expansion.mode === 'unclear') {
+                        profileToUse = 'school_question';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'study_questions') {
+                        profileToUse = 'school_followup';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'email') {
+                        profileToUse = 'school_email';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'actions') {
+                        profileToUse = 'school_actions';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'next') {
+                        profileToUse = 'school_next';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'followup') {
+                        profileToUse = 'school_followup';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'recap') {
+                        profileToUse = 'school_recap';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'summary') {
+                        profileToUse = 'school_summary';
+                        useConversationContext = true;
+                    }
+                } // for default, remains 'whisper'
             } else {
                 console.log('[AskService] Manual Ask detected → forcing default profile: whisper');
             }

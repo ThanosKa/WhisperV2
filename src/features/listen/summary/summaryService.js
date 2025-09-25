@@ -52,6 +52,7 @@ class SummaryService {
         }
     }
 
+    // Update _mapPresetToProfile to ensure customer-support maps to customer_support_analysis
     _mapPresetToProfile(presetId) {
         switch (presetId) {
             case 'sales':
@@ -59,7 +60,7 @@ class SummaryService {
             case 'recruiting':
                 return 'recruiting_analysis';
             case 'customer-support':
-                return 'customer_support_analysis';
+                return 'customer_support_analysis'; // Ensure this maps correctly
             case 'school':
                 return 'school_analysis';
             default:
@@ -67,13 +68,14 @@ class SummaryService {
         }
     }
 
+    // Update _getPreviousContext to include customer_support_analysis
     _getPreviousContext(profile) {
         const prevDefines = Array.from(this.definedTerms).join(', ') || '(none)';
         const prevQuestions = Array.from(this.detectedQuestions).join(' | ') || '(none)';
         const mapping = {
             sales_analysis: `Previous Objections: ${prevQuestions}\nPrevious Opportunities: ${prevDefines}`,
             recruiting_analysis: `Previous Gaps: ${prevDefines}\nPrevious Strengths: ${prevQuestions}`,
-            customer_support_analysis: `Previous Root Causes: ${prevDefines}\nPrevious Steps: ${prevQuestions}`,
+            customer_support_analysis: `Previous Root Causes: ${prevDefines}\nPrevious Steps: ${prevQuestions}`, // Add this case
             school_analysis: `Previous Unclear Points: ${prevDefines}\nPrevious Concepts: ${prevQuestions}`,
             meeting_analysis: `Previously Defined Terms: ${prevDefines}\nPreviously Detected Questions: ${prevQuestions}`,
         };
@@ -200,7 +202,10 @@ class SummaryService {
             return;
         }
 
-        const mockKey = this.selectedPresetId === 'personal' ? 'meeting' : this.selectedPresetId;
+        let mockKey = this.selectedPresetId === 'personal' ? 'meeting' : this.selectedPresetId;
+        if (mockKey === 'customer-support') {
+            mockKey = 'customer_support'; // Map to match mock data key
+        }
         const mockData = this.mockDataMap[mockKey];
         if (!mockData || !mockData.conversation) {
             console.warn(`[SummaryService] No mock convo data for preset: ${mockKey}`);

@@ -255,9 +255,15 @@ class AskService {
             return { mode: 'recap' };
         }
 
-        // What should I say next
-        if (normalized.includes('what should i say next') || normalized.includes('what to say next')) {
-            return { mode: 'next' };
+        // What should I say next (enhanced for support)
+        if (
+            normalized.includes('what should i say next') ||
+            normalized.includes('what to say next') ||
+            normalized.includes('next support step') ||
+            normalized.includes('what to respond') ||
+            normalized.includes('support next action')
+        ) {
+            return { mode: 'next' }; // Now catches support variants
         }
 
         // Suggest follow-up questions
@@ -583,34 +589,30 @@ class AskService {
                 } else if (presetId === 'customer-support') {
                     if (expansion.mode === 'define' || userPrompt.startsWith('📘')) {
                         profileToUse = 'customer_support_define';
-                        useConversationContext = false;
                     } else if (userPrompt.startsWith('❓') || expansion.mode === 'question') {
                         profileToUse = 'customer_support_question';
-                        useConversationContext = true;
                     } else if (expansion.mode === 'root_causes') {
                         profileToUse = 'customer_support_root_cause';
-                        useConversationContext = true;
                     } else if (expansion.mode === 'troubleshooting') {
                         profileToUse = 'customer_support_troubleshooting';
-                        useConversationContext = true;
                     } else if (expansion.mode === 'email') {
                         profileToUse = 'customer_support_email';
-                        useConversationContext = true;
                     } else if (expansion.mode === 'actions') {
                         profileToUse = 'customer_support_actions';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'next') {
-                        profileToUse = 'customer_support_next';
+                    } else if (
+                        expansion.mode === 'next' ||
+                        userPrompt.toLowerCase().includes('next') ||
+                        userPrompt.toLowerCase().includes('respond') ||
+                        userPrompt.toLowerCase().includes('say next')
+                    ) {
+                        profileToUse = 'customer_support_next'; // Force for support preset
                         useConversationContext = true;
                     } else if (expansion.mode === 'followup') {
                         profileToUse = 'customer_support_followup';
-                        useConversationContext = true;
                     } else if (expansion.mode === 'recap') {
                         profileToUse = 'customer_support_recap';
-                        useConversationContext = true;
                     } else if (expansion.mode === 'summary') {
                         profileToUse = 'customer_support_summary';
-                        useConversationContext = true;
                     }
                 } else if (presetId === 'school') {
                     if (expansion.mode === 'define' || userPrompt.startsWith('📘')) {

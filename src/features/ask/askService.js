@@ -563,45 +563,48 @@ class AskService {
                     }
                 } else if (presetId === 'customer-support') {
                     if (expansion.mode === 'define' || userPrompt.startsWith('📘')) {
-                        profileToUse = 'support_define';
+                        profileToUse = 'customer_support_define';
                         useConversationContext = false;
                     } else if (userPrompt.startsWith('❓') || expansion.mode === 'question') {
-                        profileToUse = 'support_question';
+                        profileToUse = 'customer_support_question';
                         useConversationContext = true;
                     } else if (expansion.mode === 'root_causes') {
-                        profileToUse = 'support_actions';
+                        profileToUse = 'customer_support_root_cause';
                         useConversationContext = true;
                     } else if (expansion.mode === 'troubleshooting') {
-                        profileToUse = 'support_actions';
+                        profileToUse = 'customer_support_troubleshooting';
                         useConversationContext = true;
                     } else if (expansion.mode === 'email') {
-                        profileToUse = 'support_email';
+                        profileToUse = 'customer_support_email';
                         useConversationContext = true;
                     } else if (expansion.mode === 'actions') {
-                        profileToUse = 'support_actions';
+                        profileToUse = 'customer_support_actions';
                         useConversationContext = true;
                     } else if (expansion.mode === 'next') {
-                        profileToUse = 'support_next';
+                        profileToUse = 'customer_support_next';
                         useConversationContext = true;
                     } else if (expansion.mode === 'followup') {
-                        profileToUse = 'support_followup';
+                        profileToUse = 'customer_support_followup';
                         useConversationContext = true;
                     } else if (expansion.mode === 'recap') {
-                        profileToUse = 'support_recap';
+                        profileToUse = 'customer_support_recap';
                         useConversationContext = true;
                     } else if (expansion.mode === 'summary') {
-                        profileToUse = 'support_summary';
+                        profileToUse = 'customer_support_summary';
                         useConversationContext = true;
                     }
                 } else if (presetId === 'school') {
                     if (expansion.mode === 'define' || userPrompt.startsWith('📘')) {
                         profileToUse = 'school_define';
                         useConversationContext = false;
-                    } else if (userPrompt.startsWith('❓') || expansion.mode === 'question' || expansion.mode === 'unclear') {
+                    } else if (userPrompt.startsWith('❓') || expansion.mode === 'question') {
                         profileToUse = 'school_question';
                         useConversationContext = true;
+                    } else if (expansion.mode === 'unclear') {
+                        profileToUse = 'school_clarify';
+                        useConversationContext = true;
                     } else if (expansion.mode === 'study_questions') {
-                        profileToUse = 'school_followup';
+                        profileToUse = 'school_study_question';
                         useConversationContext = true;
                     } else if (expansion.mode === 'email') {
                         profileToUse = 'school_email';

@@ -59,7 +59,7 @@ class SummaryService {
             case 'recruiting':
                 return 'recruiting_analysis';
             case 'customer-support':
-                return 'support_analysis';
+                return 'customer_support_analysis';
             case 'school':
                 return 'school_analysis';
             default:
@@ -73,7 +73,7 @@ class SummaryService {
         const mapping = {
             sales_analysis: `Previous Objections: ${prevQuestions}\nPrevious Opportunities: ${prevDefines}`,
             recruiting_analysis: `Previous Gaps: ${prevDefines}\nPrevious Strengths: ${prevQuestions}`,
-            support_analysis: `Previous Root Causes: ${prevDefines}\nPrevious Steps: ${prevQuestions}`,
+            customer_support_analysis: `Previous Root Causes: ${prevDefines}\nPrevious Steps: ${prevQuestions}`,
             school_analysis: `Previous Unclear Points: ${prevDefines}\nPrevious Concepts: ${prevQuestions}`,
             meeting_analysis: `Previously Defined Terms: ${prevDefines}\nPreviously Detected Questions: ${prevQuestions}`,
         };

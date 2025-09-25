@@ -376,6 +376,7 @@ export class SummaryView extends LitElement {
         };
 
         const hasAnyContent = this.allSummary.length > 0 || data.actions.length > 0;
+        const rawSections = Array.isArray(this.structuredData?.rawLLMOutput?.sections) ? this.structuredData.rawLLMOutput.sections : null;
 
         return html`
             <div class="insights-container">

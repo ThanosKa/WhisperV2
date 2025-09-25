@@ -261,14 +261,21 @@ class AskService {
         }
 
         // Suggest follow-up questions
-        if (normalized.includes('suggest follow-up') || normalized.includes('follow-up questions')) {
+        if (normalized.includes('suggest follow-up') || normalized.includes('follow-up questions') || normalized.includes('💬')) {
+            return { mode: 'generic_followup' };
+        }
+        if (normalized.includes('sales follow-up') || normalized.includes('💡') || normalized.includes('📈')) {
             return { mode: 'followup' };
         }
-
+        if (normalized.includes('buyer asks') || normalized.includes('them asks') || normalized.includes('?')) {
+            return { mode: 'buyer_question' };
+        }
         if (normalized.includes('address objection') || normalized.includes('🔄')) {
             return { mode: 'objection' };
         }
-
+        if (normalized.includes('objection') || normalized.includes('‼️')) {
+            return { mode: 'objection' };
+        }
         if (normalized.includes('gap') || normalized.includes('🔍')) {
             return { mode: 'gaps' };
         } else if (normalized.includes('root cause') || normalized.includes('🔎')) {
@@ -494,6 +501,12 @@ class AskService {
                 } else if (expansion.mode === 'followup') {
                     profileToUse = 'whisper_followup';
                     useConversationContext = true; // Follow-up questions need meeting context
+                } else if (expansion.mode === 'generic_followup') {
+                    profileToUse = 'whisper_generic_followup';
+                    useConversationContext = true;
+                } else if (expansion.mode === 'buyer_question') {
+                    profileToUse = 'whisper_buyer_question';
+                    useConversationContext = true;
                 } else if (userPrompt.startsWith('❓')) {
                     profileToUse = 'whisper_question';
                     useConversationContext = true; // Provide context, let AI decide if relevant
@@ -526,6 +539,12 @@ class AskService {
                         useConversationContext = true;
                     } else if (expansion.mode === 'summary') {
                         profileToUse = 'sales_summary';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'generic_followup') {
+                        profileToUse = 'sales_generic_followup';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'buyer_question') {
+                        profileToUse = 'sales_answer_buyer';
                         useConversationContext = true;
                     }
                     // for default, remains 'whisper'

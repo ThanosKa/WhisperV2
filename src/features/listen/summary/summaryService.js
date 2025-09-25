@@ -449,10 +449,18 @@ ${responseText}
     }
 
     parseResponseText(responseText, previousResult) {
+        const defaultFollowUps = ['✉️ Draft a follow-up email', '✅ Generate action items', '📝 Show summary'];
         const structuredData = {
             summary: [],
             actions: [],
-            followUps: ['✉️ Draft a follow-up email', '✅ Generate action items', '📝 Show summary'],
+            followUps: [],
+            rawLLMOutput: null,
+        };
+        const addFollowUp = value => {
+            if (!value) return;
+            const cleaned = value.trim();
+            if (!cleaned) return;
+            structuredData.followUps.push(cleaned);
         };
 
         // If there are previous results, use them as default values (however, new analysis takes priority)
@@ -496,7 +504,7 @@ ${responseText}
                                 .replace(/^-?\s*/, '')
                                 .replace(/^"|"$/g, '')
                                 .replace(/"([^"]+)"/g, '$1'); // Strip quotes
-                            if (summaryPoint && !structuredData.summary.includes(summaryPoint)) {
+                            if (summaryPoint) {
                                 structuredData.summary.unshift(summaryPoint);
                                 if (structuredData.summary.length > 5) {
                                     structuredData.summary.pop();
@@ -510,17 +518,31 @@ ${responseText}
                                 .replace(/^-?\s*/, '')
                                 .replace(/^"|"$/g, '')
                                 .replace(/"([^"]+)"/g, '$1'); // Strip quotes
-                            const isPlaceholder = !question || /no\s+questions\s+detected/i.test(question);
-                            if (!isPlaceholder) {
-                                const prefixed = `❓ ${question}`;
-                                if (!structuredData.actions.includes(prefixed)) {
-                                    structuredData.actions.push(prefixed);
-                                    // Track for dedupe (case-insensitive)
-                                    const exists = Array.from(this.detectedQuestions).some(q => q.toLowerCase() === question.toLowerCase());
-                                    if (!exists) {
-                                        this.detectedQuestions.add(question);
-                                    }
-                                }
+                            const prefixed = `❓ ${question}`;
+                            structuredData.actions.push(prefixed);
+                        });
+                    } else if (section.type === 'follow_ups' && Array.isArray(section.items)) {
+                        section.items.forEach(item => {
+                            const followup = item
+                                .trim()
+                                .replace(/^-?\s*/, '')
+                                .replace(/^"|"$/g, '')
+                                .replace(/"([^"]+)"/g, '$1');
+                            if (followup) {
+                                const prefixed = `📈 Sales Follow-Up: ${followup}`;
+                                structuredData.actions.push(prefixed);
+                            }
+                        });
+                    } else if (section.type === 'buyer_questions' && Array.isArray(section.items)) {
+                        section.items.forEach(item => {
+                            const buyerQ = item
+                                .trim()
+                                .replace(/^-?\s*/, '')
+                                .replace(/^"|"$/g, '')
+                                .replace(/"([^"]+)"/g, '$1');
+                            if (buyerQ) {
+                                const prefixed = `❓ ${buyerQ}`;
+                                structuredData.actions.push(prefixed);
                             }
                         });
                     } else if (section.type === 'defines' && Array.isArray(section.items)) {
@@ -530,19 +552,11 @@ ${responseText}
                                 .replace(/^-?\s*/, '')
                                 .replace(/^"|"$/g, '')
                                 .replace(/"([^"]+)"/g, '$1');
-                            // Extract core term before explanation (e.g., before '(' or ':')
                             let coreTerm = term.split('(')[0].split(':')[0].trim();
-                            if (!coreTerm || coreTerm.length < 2) coreTerm = term; // Fallback
-                            const looksLikeSentence = /\w[\w\s,'"-]{12,}\.$/i.test(coreTerm) || /\s{2,}/.test(coreTerm) || /\./.test(coreTerm);
-                            const isPlaceholder = /too\s+short\s+to\s+detect/i.test(coreTerm) || /no\s+terms/i.test(coreTerm);
-                            const isInvalid = !coreTerm || looksLikeSentence || isPlaceholder;
-                            if (!isInvalid && !this.definedTerms.has(coreTerm.toLowerCase())) {
-                                const prefixed = `📘 Define ${coreTerm}`;
-                                if (!structuredData.actions.some(x => x.toLowerCase() === prefixed.toLowerCase())) {
-                                    structuredData.actions.push(prefixed);
-                                    this.definedTerms.add(coreTerm.toLowerCase());
-                                }
-                            }
+                            coreTerm = coreTerm.replace(/[.,;:!?]+$/, '');
+                            if (!coreTerm || coreTerm.length < 2) coreTerm = term;
+                            const prefixed = `📘 Define ${coreTerm}`;
+                            structuredData.actions.push(prefixed);
                         });
                     } else if (section.type === 'objections' && Array.isArray(section.items)) {
                         section.items.forEach(item => {
@@ -551,20 +565,8 @@ ${responseText}
                                 .replace(/^-?\s*/, '')
                                 .replace(/^"|"$/g, '')
                                 .replace(/"([^"]+)"/g, '$1');
-                            if (objection && !structuredData.actions.some(x => x.includes(objection))) {
-                                const prefixed = `❗❗ Objection: ${objection}`; // Updated to default !! emoji, dropped 'Address'
-                                structuredData.actions.push(prefixed);
-                            }
-                        });
-                    } else if (section.type === 'follow_ups' && Array.isArray(section.items)) {
-                        section.items.forEach(item => {
-                            const followup = item
-                                .trim()
-                                .replace(/^-?\s*/, '')
-                                .replace(/^"|"$/g, '')
-                                .replace(/"([^"]+)"/g, '$1');
-                            if (followup && !structuredData.actions.some(x => x.includes(followup))) {
-                                const prefixed = `💡 Sales Follow-up: ${followup}`;
+                            if (objection) {
+                                const prefixed = `❗❗ Objection: ${objection}`;
                                 structuredData.actions.push(prefixed);
                             }
                         });
@@ -575,7 +577,7 @@ ${responseText}
                                 .replace(/^-?\s*/, '')
                                 .replace(/^"|"$/g, '')
                                 .replace(/"([^"]+)"/g, '$1');
-                            if (strength && !structuredData.summary.includes(strength)) {
+                            if (strength) {
                                 structuredData.summary.unshift(strength);
                                 if (structuredData.summary.length > 5) structuredData.summary.pop();
                             }
@@ -587,8 +589,8 @@ ${responseText}
                                 .replace(/^-?\s*/, '')
                                 .replace(/^"|"$/g, '')
                                 .replace(/"([^"]+)"/g, '$1');
-                            if (gap && !structuredData.actions.some(x => x.includes(gap))) {
-                                const prefixed = `❗❗Gap: ${gap}`; // Changed ⚠️ to ‼️ (double exclamation mark) for gaps
+                            if (gap) {
+                                const prefixed = `❗❗Gap: ${gap}`;
                                 structuredData.actions.push(prefixed);
                             }
                         });
@@ -611,7 +613,7 @@ ${responseText}
                                 .replace(/^-?\s*/, '')
                                 .replace(/^"|"$/g, '')
                                 .replace(/"([^"]+)"/g, '$1');
-                            if (summaryPoint && !structuredData.summary.includes(summaryPoint)) {
+                            if (summaryPoint) {
                                 structuredData.summary.unshift(summaryPoint);
                                 if (structuredData.summary.length > 5) structuredData.summary.pop();
                             }
@@ -623,7 +625,7 @@ ${responseText}
                                 .replace(/^-?\s*/, '')
                                 .replace(/^"|"$/g, '')
                                 .replace(/"([^"]+)"/g, '$1');
-                            if (cause && !structuredData.actions.some(x => x.includes(cause))) {
+                            if (cause) {
                                 const prefixed = `🔎 Root Cause: ${cause}`;
                                 structuredData.actions.push(prefixed);
                             }
@@ -647,7 +649,7 @@ ${responseText}
                                 .replace(/^-?\s*/, '')
                                 .replace(/^"|"$/g, '')
                                 .replace(/"([^"]+)"/g, '$1');
-                            if (concept && !structuredData.summary.includes(concept)) {
+                            if (concept) {
                                 structuredData.summary.unshift(concept);
                                 if (structuredData.summary.length > 5) structuredData.summary.pop();
                             }
@@ -659,7 +661,7 @@ ${responseText}
                                 .replace(/^-?\s*/, '')
                                 .replace(/^"|"$/g, '')
                                 .replace(/"([^"]+)"/g, '$1');
-                            if (unclear && !structuredData.actions.some(x => x.includes(unclear))) {
+                            if (unclear) {
                                 const prefixed = `❓ Clarify: ${unclear}`;
                                 structuredData.actions.push(prefixed);
                             }
@@ -679,240 +681,37 @@ ${responseText}
                     }
                 });
 
-                // Limit actions
-                structuredData.actions = structuredData.actions.slice(0, 10);
+                // Removed uniqueActions deduplication - keep all
+                // structuredData.actions = uniqueActions;
 
                 // Merge with previous if needed
                 if (structuredData.summary.length === 0 && previousResult) {
                     structuredData.summary = previousResult.summary;
                 }
 
+                structuredData.rawLLMOutput = jsonData;
+                defaultFollowUps.forEach(addFollowUp);
+
                 return structuredData;
             }
         } catch (jsonError) {
-            console.log('[SummaryService] JSON parsing failed after extraction, falling back to markdown:', jsonError.message);
+            console.error('[SummaryService] JSON parsing failed:', jsonError.message);
+            console.warn('[SummaryService] LLM did not return expected JSON. Check prompts/conversation input.');
+            // Safe fallback: Previous data + defaults
+            if (previousResult) {
+                return {
+                    ...previousResult,
+                    followUps: [...(previousResult.followUps || []), ...defaultFollowUps],
+                };
+            }
+            return {
+                summary: [],
+                actions: ['✨ What should I say next?', '💬 Suggest follow-up questions'],
+                followUps: defaultFollowUps,
+            };
         }
 
-        // Fallback: Original markdown parsing (unchanged)
-        try {
-            const lines = trimmedResponse.split('\n');
-            let currentSection = '';
-
-            console.log('🔍 Parsing response lines (markdown fallback):', lines.length);
-
-            for (const line of lines) {
-                const trimmedLine = line.trim();
-
-                // Debug log each line being processed
-                if (trimmedLine) {
-                    // console.log(`🔍 Processing line: "${trimmedLine}" | Section: ${currentSection}`);
-                }
-
-                // Exact heading detection to reduce ambiguity
-                if (trimmedLine === '### Meeting Insights' || trimmedLine === '### Sales Opportunities') {
-                    currentSection = trimmedLine === '### Sales Opportunities' ? 'opportunities' : 'meeting-insights';
-                    continue;
-                } else if (trimmedLine === '### Questions Detected') {
-                    currentSection = 'detected-questions';
-                    continue;
-                } else if (trimmedLine === '### Terms to Define') {
-                    currentSection = 'define-candidates';
-                    continue;
-                } else if (trimmedLine === '### Objections & Needs') {
-                    currentSection = 'objections';
-                    continue;
-                } else if (trimmedLine === '### Follow-Up Questions') {
-                    currentSection = 'follow_ups';
-                    continue;
-                } else if (trimmedLine === '### Candidate Strengths' || trimmedLine === '### Strengths') {
-                    currentSection = 'strengths';
-                    continue;
-                } else if (trimmedLine === '### Skill Gaps' || trimmedLine === '### Gaps') {
-                    currentSection = 'gaps';
-                    continue;
-                } else if (trimmedLine === '### Suggested Questions') {
-                    currentSection = 'suggested_questions';
-                    continue;
-                } else if (trimmedLine === '### Issue Summary') {
-                    currentSection = 'issue_summary';
-                    continue;
-                } else if (trimmedLine === '### Root Causes') {
-                    currentSection = 'root_causes';
-                    continue;
-                } else if (trimmedLine === '### Troubleshooting Steps') {
-                    currentSection = 'troubleshooting';
-                    continue;
-                } else if (trimmedLine === '### Key Concepts') {
-                    currentSection = 'key_concepts';
-                    continue;
-                } else if (trimmedLine === '### Unclear Points') {
-                    currentSection = 'unclear_points';
-                    continue;
-                } else if (trimmedLine === '### Study Questions') {
-                    currentSection = 'study_questions';
-                    continue;
-                }
-
-                // Content parsing
-                if (trimmedLine.startsWith('-') && (currentSection === 'meeting-insights' || currentSection === 'opportunities')) {
-                    const summaryPoint = trimmedLine
-                        .substring(1)
-                        .trim()
-                        .replace(/^"|"$/g, '')
-                        .replace(/"([^"]+)"/g, '$1'); // Strip quotes
-                    if (summaryPoint && !structuredData.summary.includes(summaryPoint)) {
-                        // Update existing summary (maintain maximum 5 items)
-                        structuredData.summary.unshift(summaryPoint);
-                        if (structuredData.summary.length > 5) {
-                            structuredData.summary.pop();
-                        }
-                    }
-                } else if (trimmedLine.startsWith('-') && currentSection === 'detected-questions') {
-                    const question = trimmedLine
-                        .substring(1)
-                        .trim()
-                        .replace(/^"|"$/g, '')
-                        .replace(/"([^"]+)"/g, '$1'); // Strip quotes
-                    // Filter obvious placeholders
-                    const isPlaceholder = !question || /no\s+questions\s+detected/i.test(question);
-                    if (!isPlaceholder) {
-                        structuredData.actions.push(`❓ ${question}`);
-                        // Track question (case-insensitive dedupe)
-                        const exists = Array.from(this.detectedQuestions).some(q => q.toLowerCase() === question.toLowerCase());
-                        if (!exists) {
-                            this.detectedQuestions.add(question);
-                        }
-                    }
-                } else if (trimmedLine.startsWith('-') && currentSection === 'define-candidates') {
-                    const term = trimmedLine.substring(1).trim().replace(/^"|"$/g, '');
-                    // Extract core term before explanation
-                    let coreTerm = term.split('(')[0].split(':')[0].trim();
-                    if (!coreTerm || coreTerm.length < 2) coreTerm = term;
-                    // Filter invalid define terms: empty, sentences, placeholders
-                    const looksLikeSentence = /\w[\w\s,'"-]{12,}\.$/i.test(coreTerm) || /\s{2,}/.test(coreTerm) || /\./.test(coreTerm);
-                    const isPlaceholder = /too\s+short\s+to\s+detect/i.test(coreTerm) || /no\s+terms/i.test(coreTerm);
-                    const isInvalid = !coreTerm || looksLikeSentence || isPlaceholder;
-                    if (!isInvalid && !this.definedTerms.has(coreTerm.toLowerCase())) {
-                        const defineItem = `📘 Define ${coreTerm}`;
-                        if (!structuredData.actions.some(x => (x || '').toLowerCase() === defineItem.toLowerCase())) {
-                            structuredData.actions.push(defineItem);
-                            this.definedTerms.add(coreTerm.toLowerCase()); // Track this term as defined
-                        }
-                    }
-                } else if (trimmedLine.startsWith('-') && currentSection === 'follow_ups') {
-                    const followup = trimmedLine.substring(1).trim().replace(/^"|"$/g, '');
-                    const prefixed = `💡 Sales Follow-up: ${followup}`;
-                    if (!structuredData.actions.some(x => x.toLowerCase() === prefixed.toLowerCase())) {
-                        structuredData.actions.push(prefixed);
-                    }
-                } else if (trimmedLine.startsWith('-') && currentSection === 'strengths') {
-                    const strength = trimmedLine
-                        .substring(1)
-                        .trim()
-                        .replace(/^"|"$/g, '')
-                        .replace(/"([^"]+)"/g, '$1');
-                    if (strength && !structuredData.summary.includes(strength)) {
-                        structuredData.summary.unshift(strength);
-                        if (structuredData.summary.length > 5) structuredData.summary.pop();
-                    }
-                } else if (trimmedLine.startsWith('-') && currentSection === 'gaps') {
-                    const gap = trimmedLine
-                        .substring(1)
-                        .trim()
-                        .replace(/^"|"$/g, '')
-                        .replace(/"([^"]+)"/g, '$1');
-                    const prefixed = `⚠️ Gap: ${gap}`;
-                    if (!structuredData.actions.some(x => x.toLowerCase() === prefixed.toLowerCase())) {
-                        structuredData.actions.push(prefixed);
-                    }
-                } else if (trimmedLine.startsWith('-') && currentSection === 'suggested_questions') {
-                    const question = trimmedLine
-                        .substring(1)
-                        .trim()
-                        .replace(/^"|"$/g, '')
-                        .replace(/"([^"]+)"/g, '$1');
-                    const prefixed = `👆 Suggested Question: ${question}`;
-                    structuredData.actions.push(prefixed);
-                } else if (trimmedLine.startsWith('-') && currentSection === 'issue_summary') {
-                    const summaryPoint = trimmedLine
-                        .substring(1)
-                        .trim()
-                        .replace(/^"|"$/g, '')
-                        .replace(/"([^"]+)"/g, '$1');
-                    if (summaryPoint && !structuredData.summary.includes(summaryPoint)) {
-                        structuredData.summary.unshift(summaryPoint);
-                        if (structuredData.summary.length > 5) structuredData.summary.pop();
-                    }
-                } else if (trimmedLine.startsWith('-') && currentSection === 'root_causes') {
-                    const cause = trimmedLine
-                        .substring(1)
-                        .trim()
-                        .replace(/^"|"$/g, '')
-                        .replace(/"([^"]+)"/g, '$1');
-                    const prefixed = `🔎 Root Cause: ${cause}`;
-                    if (!structuredData.actions.some(x => x.toLowerCase() === prefixed.toLowerCase())) {
-                        structuredData.actions.push(prefixed);
-                    }
-                } else if (trimmedLine.startsWith('-') && currentSection === 'troubleshooting') {
-                    const step = trimmedLine
-                        .substring(1)
-                        .trim()
-                        .replace(/^"|"$/g, '')
-                        .replace(/"([^"]+)"/g, '$1');
-                    const prefixed = `🔍 Troubleshooting Step: ${step}`;
-                    structuredData.actions.push(prefixed);
-                } else if (trimmedLine.startsWith('-') && currentSection === 'key_concepts') {
-                    const concept = trimmedLine
-                        .substring(1)
-                        .trim()
-                        .replace(/^"|"$/g, '')
-                        .replace(/"([^"]+)"/g, '$1');
-                    if (concept && !structuredData.summary.includes(concept)) {
-                        structuredData.summary.unshift(concept);
-                        if (structuredData.summary.length > 5) structuredData.summary.pop();
-                    }
-                } else if (trimmedLine.startsWith('-') && currentSection === 'unclear_points') {
-                    const unclear = trimmedLine
-                        .substring(1)
-                        .trim()
-                        .replace(/^"|"$/g, '')
-                        .replace(/"([^"]+)"/g, '$1');
-                    const prefixed = `❓ Clarify: ${unclear}`;
-                    if (!structuredData.actions.some(x => x.toLowerCase() === prefixed.toLowerCase())) {
-                        structuredData.actions.push(prefixed);
-                    }
-                } else if (trimmedLine.startsWith('-') && currentSection === 'study_questions') {
-                    const question = trimmedLine
-                        .substring(1)
-                        .trim()
-                        .replace(/^"|"$/g, '')
-                        .replace(/"([^"]+)"/g, '$1');
-                    const prefixed = `📚 Study Question: ${question}`;
-                    structuredData.actions.push(prefixed);
-                }
-            }
-
-            // Default actions are injected by UI; avoid duplication here
-
-            // Limit action count
-            structuredData.actions = structuredData.actions.slice(0, 10);
-
-            // Validation check and merge with previous data
-            if (structuredData.summary.length === 0 && previousResult) {
-                structuredData.summary = previousResult.summary;
-            }
-        } catch (error) {
-            console.error('❌ Error parsing response text (markdown):', error);
-            // Return previous result on error
-            return (
-                previousResult || {
-                    summary: [],
-                    actions: ['✨ What should I say next?', '💬 Suggest follow-up questions'],
-                    followUps: ['✉️ Draft a follow-up email', '✅ Generate action items', '📝 Show summary'],
-                }
-            );
-        }
-
+        defaultFollowUps.forEach(addFollowUp);
         return structuredData;
     }
 

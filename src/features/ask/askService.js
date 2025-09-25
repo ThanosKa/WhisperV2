@@ -265,6 +265,10 @@ class AskService {
             return { mode: 'followup' };
         }
 
+        if (normalized.includes('address objection') || normalized.includes('🔄')) {
+            return { mode: 'objection' };
+        }
+
         return { mode: 'default' };
     }
 
@@ -367,7 +371,7 @@ class AskService {
      * @param {string} userPrompt
      * @returns {Promise<{success: boolean, response?: string, error?: string}>}
      */
-    async sendMessage(userPrompt, conversationHistoryRaw = []) {
+    async sendMessage(userPrompt, conversationHistoryRaw = [], presetId = null) {
         // Normalize and fallback to default help text when empty
         try {
             userPrompt = ((userPrompt ?? '') + '').trim();
@@ -479,6 +483,38 @@ class AskService {
                 } else if (userPrompt.startsWith('❓')) {
                     profileToUse = 'whisper_question';
                     useConversationContext = true; // Provide context, let AI decide if relevant
+                }
+
+                if (presetId === 'sales') {
+                    if (expansion.mode === 'define' || userPrompt.startsWith('📘')) {
+                        profileToUse = 'sales_define';
+                        useConversationContext = false;
+                    } else if (userPrompt.startsWith('❓') || expansion.mode === 'question') {
+                        profileToUse = 'sales_question';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'objection') {
+                        profileToUse = 'sales_objection';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'email') {
+                        profileToUse = 'sales_email';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'actions') {
+                        profileToUse = 'sales_actions';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'next') {
+                        profileToUse = 'sales_next';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'followup') {
+                        profileToUse = 'sales_followup';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'recap') {
+                        profileToUse = 'sales_recap';
+                        useConversationContext = true;
+                    } else if (expansion.mode === 'summary') {
+                        profileToUse = 'sales_summary';
+                        useConversationContext = true;
+                    }
+                    // for default, remains 'whisper'
                 }
             } else {
                 console.log('[AskService] Manual Ask detected → forcing default profile: whisper');

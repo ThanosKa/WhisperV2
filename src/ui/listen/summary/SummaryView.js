@@ -12,6 +12,7 @@ export class SummaryView extends LitElement {
         allActions: { type: Array },
         allFollowUps: { type: Array },
         allSummary: { type: Array },
+        presetId: { type: String },
     };
 
     constructor() {
@@ -47,6 +48,7 @@ export class SummaryView extends LitElement {
                 this.insightHistory.push(data);
                 this.structuredData = data; // Keep current for display
                 this.hasReceivedFirstText = true; // Mark that we've received first text
+                this.presetId = data.presetId || null;
                 this.buildFlattenedLists();
 
                 // Ensure default actions are always present after first text
@@ -367,19 +369,21 @@ export class SummaryView extends LitElement {
 
         const hasAnyContent = this.allSummary.length > 0 || data.actions.length > 0;
 
-        // Separate actions into fixed buttons and scrollable questions/defines
-        const fixedActions = this.allActions.filter(
-            action => action.includes('What should I say next') || action.includes('Suggest follow-up') || action.includes('Recap meeting')
-        );
-        const scrollableActions = this.allActions.filter(action => action.includes('📘 Define') || action.includes('❓'));
-
         return html`
             <div class="insights-container">
                 ${!hasAnyContent && this.allActions.length === 0
                     ? html`<div class="empty-state">Insights will appear here</div>`
                     : html`
                           <!-- Dynamic Section Title -->
-                          <insights-title>${this.allSummary.length > 0 ? 'Meeting Introduction' : 'Summary Insights'}</insights-title>
+                          ${(() => {
+                              let title = 'Summary Insights';
+                              if (this.allSummary.length > 0) {
+                                  title = this.presetId === 'sales' ? 'Sales Insights' : 'Meeting Introduction';
+                              } else if (this.allActions.some(a => a.includes('Objection') || a.includes('Sales Follow-up'))) {
+                                  title = 'Sales Insights';
+                              }
+                              return html`<insights-title>${title}</insights-title>`;
+                          })()}
                           ${this.allSummary.length > 0
                               ? html`
                                     <div class="meeting-intro-container">
@@ -399,15 +403,15 @@ export class SummaryView extends LitElement {
                           <!-- Actions Section (always show fixed actions after first text) -->
                           <insights-title>Actions</insights-title>
 
-                          <!-- Scrollable Questions and Defines -->
-                          ${scrollableActions.length > 0
+                          <!-- Unified Actions List -->
+                          ${this.allActions.length > 0
                               ? html`
-                                    <div class="scrollable-actions-container">
-                                        ${scrollableActions.map(
+                                    <div class="actions-container">
+                                        ${this.allActions.map(
                                             (action, index) => html`
                                                 <div
-                                                    class="markdown-content scrollable-action-item"
-                                                    data-markdown-id="scrollable-action-${index}"
+                                                    class="markdown-content action-item"
+                                                    data-markdown-id="action-${index}"
                                                     data-original-text="${action}"
                                                     @click=${() => this.handleMarkdownClick(action)}
                                                 >
@@ -416,24 +420,6 @@ export class SummaryView extends LitElement {
                                             `
                                         )}
                                     </div>
-                                `
-                              : ''}
-
-                          <!-- Fixed Action Buttons (always show after first text) -->
-                          ${this.hasReceivedFirstText
-                              ? html`
-                                    ${fixedActions.map(
-                                        (action, index) => html`
-                                            <div
-                                                class="markdown-content fixed-action-item"
-                                                data-markdown-id="fixed-action-${index}"
-                                                data-original-text="${action}"
-                                                @click=${() => this.handleMarkdownClick(action)}
-                                            >
-                                                ${action}
-                                            </div>
-                                        `
-                                    )}
                                 `
                               : ''}
 

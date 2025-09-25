@@ -74,7 +74,8 @@ module.exports = {
                 const preview = conversationHistory.slice(-2);
                 console.log('[FeatureBridge] history preview:', JSON.stringify(preview));
             }
-            return await askService.sendMessage(userPrompt, conversationHistory);
+            const presetId = listenService.summaryService.selectedPresetId;
+            return await askService.sendMessage(userPrompt, conversationHistory, presetId);
         });
         ipcMain.handle('ask:toggleAskButton', async () => await askService.toggleAskButton());
         ipcMain.handle('ask:closeAskWindow', async () => await askService.closeAskWindow());

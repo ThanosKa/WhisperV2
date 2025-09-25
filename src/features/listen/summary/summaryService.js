@@ -25,6 +25,21 @@ class SummaryService {
         this.batchTimer = null; // For time fallback
     }
 
+    _mapPresetToProfile(presetId) {
+        switch (presetId) {
+            case 'sales':
+                return 'sales_analysis';
+            case 'recruiting':
+                return 'recruiting_analysis'; // To be implemented
+            case 'customer-support':
+                return 'support_analysis'; // To be implemented
+            case 'school':
+                return 'school_analysis'; // To be implemented
+            default:
+                return 'meeting_analysis';
+        }
+    }
+
     /**
      * Extract up to maxTerms Define candidates from the last few conversation lines.
      * Looks for proper-noun sequences, acronyms, and technical terms.
@@ -123,6 +138,7 @@ class SummaryService {
 
             const roleText = this._extractRoleFromPrompt(preset.prompt);
             this.selectedRoleText = this._trimToWordLimit(roleText, 100);
+            this.analysisProfile = this._mapPresetToProfile(presetId);
             return { success: true };
         } catch (err) {
             console.warn('[SummaryService] setAnalysisPreset error:', err.message);
@@ -245,7 +261,7 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
         const fullContext = `Previously Defined Terms:\n${(prevDefines || []).join(', ') || '(none)'}\n\nPreviously Detected Questions:\n${(prevQuestions || []).join(' | ') || '(none)'}\n\nTranscript:\n${recentConversation}`;
 
         // Build base system prompt and inject role for ALL presets (role-only editing)
-        const baseSystem = getSystemPrompt('meeting_analysis', {
+        const baseSystem = getSystemPrompt(this.analysisProfile || 'meeting_analysis', {
             context: fullContext,
             // Simplified: rely on client-side de-duplication of defines
         });
@@ -390,7 +406,7 @@ ${responseText}
 
                 // Map JSON sections to structuredData (rest unchanged)
                 jsonData.sections.forEach(section => {
-                    if (section.type === 'insights' && Array.isArray(section.items)) {
+                    if ((section.type === 'insights' || section.type === 'opportunities') && Array.isArray(section.items)) {
                         section.items.forEach(item => {
                             const summaryPoint = item
                                 .trim()
@@ -429,16 +445,44 @@ ${responseText}
                             const term = item
                                 .trim()
                                 .replace(/^-?\s*/, '')
-                                .replace(/^"|"$/g, '');
-                            const looksLikeSentence = /\w[\w\s,'"-]{12,}\.$/i.test(term) || /\s{2,}/.test(term) || /\./.test(term);
-                            const isPlaceholder = /too\s+short\s+to\s+detect/i.test(term) || /no\s+terms/i.test(term);
-                            const isInvalid = !term || looksLikeSentence || isPlaceholder;
-                            if (!isInvalid && !this.definedTerms.has(term.toLowerCase())) {
-                                const prefixed = `📘 Define ${term}`;
+                                .replace(/^"|"$/g, '')
+                                .replace(/"([^"]+)"/g, '$1');
+                            // Extract core term before explanation (e.g., before '(' or ':')
+                            let coreTerm = term.split('(')[0].split(':')[0].trim();
+                            if (!coreTerm || coreTerm.length < 2) coreTerm = term; // Fallback
+                            const looksLikeSentence = /\w[\w\s,'"-]{12,}\.$/i.test(coreTerm) || /\s{2,}/.test(coreTerm) || /\./.test(coreTerm);
+                            const isPlaceholder = /too\s+short\s+to\s+detect/i.test(coreTerm) || /no\s+terms/i.test(coreTerm);
+                            const isInvalid = !coreTerm || looksLikeSentence || isPlaceholder;
+                            if (!isInvalid && !this.definedTerms.has(coreTerm.toLowerCase())) {
+                                const prefixed = `📘 Define ${coreTerm}`;
                                 if (!structuredData.actions.some(x => x.toLowerCase() === prefixed.toLowerCase())) {
                                     structuredData.actions.push(prefixed);
-                                    this.definedTerms.add(term.toLowerCase());
+                                    this.definedTerms.add(coreTerm.toLowerCase());
                                 }
+                            }
+                        });
+                    } else if (section.type === 'objections' && Array.isArray(section.items)) {
+                        section.items.forEach(item => {
+                            const objection = item
+                                .trim()
+                                .replace(/^-?\s*/, '')
+                                .replace(/^"|"$/g, '')
+                                .replace(/"([^"]+)"/g, '$1');
+                            if (objection && !structuredData.actions.some(x => x.includes(objection))) {
+                                const prefixed = `🔄 Address Objection: ${objection}`;
+                                structuredData.actions.push(prefixed);
+                            }
+                        });
+                    } else if (section.type === 'follow_ups' && Array.isArray(section.items)) {
+                        section.items.forEach(item => {
+                            const followup = item
+                                .trim()
+                                .replace(/^-?\s*/, '')
+                                .replace(/^"|"$/g, '')
+                                .replace(/"([^"]+)"/g, '$1');
+                            if (followup && !structuredData.actions.some(x => x.includes(followup))) {
+                                const prefixed = `💡 Sales Follow-up: ${followup}`;
+                                structuredData.actions.push(prefixed);
                             }
                         });
                     }
@@ -474,8 +518,8 @@ ${responseText}
                 }
 
                 // Exact heading detection to reduce ambiguity
-                if (trimmedLine === '### Meeting Insights') {
-                    currentSection = 'meeting-insights';
+                if (trimmedLine === '### Meeting Insights' || trimmedLine === '### Sales Opportunities') {
+                    currentSection = trimmedLine === '### Sales Opportunities' ? 'opportunities' : 'meeting-insights';
                     continue;
                 } else if (trimmedLine === '### Questions Detected') {
                     currentSection = 'detected-questions';
@@ -483,10 +527,16 @@ ${responseText}
                 } else if (trimmedLine === '### Terms to Define') {
                     currentSection = 'define-candidates';
                     continue;
+                } else if (trimmedLine === '### Objections & Needs') {
+                    currentSection = 'objections';
+                    continue;
+                } else if (trimmedLine === '### Follow-Up Questions') {
+                    currentSection = 'follow_ups';
+                    continue;
                 }
 
                 // Content parsing
-                if (trimmedLine.startsWith('-') && currentSection === 'meeting-insights') {
+                if (trimmedLine.startsWith('-') && (currentSection === 'meeting-insights' || currentSection === 'opportunities')) {
                     const summaryPoint = trimmedLine
                         .substring(1)
                         .trim()
@@ -517,16 +567,31 @@ ${responseText}
                     }
                 } else if (trimmedLine.startsWith('-') && currentSection === 'define-candidates') {
                     const term = trimmedLine.substring(1).trim().replace(/^"|"$/g, '');
+                    // Extract core term before explanation
+                    let coreTerm = term.split('(')[0].split(':')[0].trim();
+                    if (!coreTerm || coreTerm.length < 2) coreTerm = term;
                     // Filter invalid define terms: empty, sentences, placeholders
-                    const looksLikeSentence = /\w[\w\s,'"-]{12,}\.$/i.test(term) || /\s{2,}/.test(term) || /\./.test(term);
-                    const isPlaceholder = /too\s+short\s+to\s+detect/i.test(term) || /no\s+terms/i.test(term);
-                    const isInvalid = !term || looksLikeSentence || isPlaceholder;
-                    if (!isInvalid && !this.definedTerms.has(term.toLowerCase())) {
-                        const defineItem = `📘 Define ${term}`;
+                    const looksLikeSentence = /\w[\w\s,'"-]{12,}\.$/i.test(coreTerm) || /\s{2,}/.test(coreTerm) || /\./.test(coreTerm);
+                    const isPlaceholder = /too\s+short\s+to\s+detect/i.test(coreTerm) || /no\s+terms/i.test(coreTerm);
+                    const isInvalid = !coreTerm || looksLikeSentence || isPlaceholder;
+                    if (!isInvalid && !this.definedTerms.has(coreTerm.toLowerCase())) {
+                        const defineItem = `📘 Define ${coreTerm}`;
                         if (!structuredData.actions.some(x => (x || '').toLowerCase() === defineItem.toLowerCase())) {
                             structuredData.actions.push(defineItem);
-                            this.definedTerms.add(term.toLowerCase()); // Track this term as defined
+                            this.definedTerms.add(coreTerm.toLowerCase()); // Track this term as defined
                         }
+                    }
+                } else if (trimmedLine.startsWith('-') && currentSection === 'objections') {
+                    const objection = trimmedLine.substring(1).trim().replace(/^"|"$/g, '');
+                    const prefixed = `🔄 Address Objection: ${objection}`;
+                    if (!structuredData.actions.some(x => x.toLowerCase() === prefixed.toLowerCase())) {
+                        structuredData.actions.push(prefixed);
+                    }
+                } else if (trimmedLine.startsWith('-') && currentSection === 'follow_ups') {
+                    const followup = trimmedLine.substring(1).trim().replace(/^"|"$/g, '');
+                    const prefixed = `💡 Sales Follow-up: ${followup}`;
+                    if (!structuredData.actions.some(x => x.toLowerCase() === prefixed.toLowerCase())) {
+                        structuredData.actions.push(prefixed);
                     }
                 }
             }
@@ -645,7 +710,7 @@ ${responseText}
             }
 
             console.log('Sending structured data to renderer');
-            this.sendToRenderer('summary-update', data);
+            this.sendToRenderer('summary-update', { ...data, presetId: this.selectedPresetId });
 
             // Update tracking - we've now analyzed up to the current conversation length
             this.lastAnalyzedIndex = this.conversationHistory.length;

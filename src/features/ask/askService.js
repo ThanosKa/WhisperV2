@@ -3,6 +3,7 @@ const llmClient = require('../common/ai/llmClient');
 // Lazy require helper to avoid circular dependency issues
 const getWindowManager = () => require('../../window/windowManager');
 const internalBridge = require('../../bridge/internalBridge');
+const summaryService = require('../listen/summary/summaryService');
 
 const getWindowPool = () => {
     try {
@@ -188,6 +189,137 @@ class AskService {
         console.log('[AskService] Service instance created.');
     }
 
+    /**
+     * Determine explicit click intent from known action labels/prefixes.
+     * This is evaluated BEFORE NLP heuristics to ensure precise routing.
+     * @param {string} userPromptRaw
+     * @returns {string|null} intent key (e.g., 'next', 'generic_followup', 'email', 'actions', 'summary', 'recap', 'define', 'root_causes', 'troubleshooting', 'study_questions', 'unclear', 'suggested_questions', 'gaps', 'objection', 'question')
+     */
+    _detectIntentFromClickPill(userPromptRaw) {
+        const raw = (userPromptRaw || '').trim();
+        const lower = raw.toLowerCase();
+
+        // Exact common defaults
+        if (raw === '✨ What should I say next?') return 'next';
+        if (raw === '💬 Suggest follow-up questions') return 'generic_followup';
+        if (raw === '✉️ Draft a follow-up email') return 'email';
+        if (raw === '✅ Generate action items') return 'actions';
+        if (raw === '📝 Show summary') return 'summary';
+        if (raw === '🗒️ Recap meeting so far') return 'recap';
+
+        // Prefixed items from analysis parsing
+        if (raw.startsWith('📘 Define')) return 'define';
+        if (raw.startsWith('📈 Sales Follow-Up')) return 'followup';
+        if (raw.startsWith('❗❗ Objection')) return 'objection';
+        if (raw.startsWith('❗❗Gap')) return 'gaps';
+        if (raw.startsWith('👆 Suggested Question')) return 'suggested_questions';
+        if (raw.startsWith('🔎 Root Cause')) return 'root_causes';
+        if (raw.startsWith('🔍 Troubleshooting Step')) return 'troubleshooting';
+        if (raw.startsWith('📚 Study Question')) return 'study_questions';
+        if (raw.startsWith('❓ Clarify')) return 'unclear';
+
+        // Generic question pill (placed last so Clarify takes precedence)
+        if (raw.startsWith('❓ ')) return 'question';
+
+        // Heuristic fallbacks (if labels localized or slightly edited)
+        if (lower.includes('what should i say next')) return 'next';
+        if (lower.includes('follow-up')) return 'generic_followup';
+        if (lower.includes('action item')) return 'actions';
+        if (lower.includes('recap')) return 'recap';
+        if (lower.includes('summary')) return 'summary';
+        if (lower.includes('email')) return 'email';
+        if (lower.includes('root cause')) return 'root_causes';
+        if (lower.includes('troubleshooting')) return 'troubleshooting';
+
+        return null;
+    }
+
+    /**
+     * Resolve profile id and whether to include conversation context based on intent and preset.
+     * Only uses prompt IDs that exist in promptTemplates.
+     * @param {string} intent
+     * @param {string|null} presetId
+     * @returns {{ profileToUse: string, useConversationContext: boolean }}
+     */
+    _resolveProfileForIntent(intent, presetId) {
+        const preset = (presetId || '').trim() || 'default';
+        // Centralized, low-risk routing table
+        const MAP = {
+            default: {
+                next: 'whisper_next',
+                generic_followup: 'whisper_followup',
+                followup: 'whisper_followup',
+                define: 'whisper_define',
+                question: 'whisper_question',
+                actions: 'whisper_actions',
+                summary: 'whisper_summary',
+                recap: 'whisper_recap',
+                email: 'whisper_email',
+            },
+            sales: {
+                next: 'sales_next',
+                generic_followup: 'sales_generic_followup',
+                followup: 'sales_followup',
+                define: 'sales_define',
+                question: 'sales_answer_buyer',
+                objection: 'sales_objection',
+                suggested_questions: 'sales_followup',
+                actions: 'sales_actions',
+                summary: 'sales_summary',
+                recap: 'sales_recap',
+                email: 'sales_email',
+            },
+            recruiting: {
+                next: 'recruiting_should_say_next',
+                generic_followup: 'recruiting_followup',
+                followup: 'recruiting_followup',
+                define: 'recruiting_define',
+                question: 'recruiting_question',
+                suggested_questions: 'recruiting_suggested_question',
+                gaps: 'recruiting_gap',
+                actions: 'recruiting_actions',
+                summary: 'recruiting_summary',
+                recap: 'recruiting_recap',
+                email: 'recruiting_email',
+            },
+            'customer-support': {
+                next: 'customer_support_next',
+                generic_followup: 'customer_support_followup',
+                followup: 'customer_support_followup',
+                define: 'customer_support_define',
+                question: 'customer_support_question',
+                root_causes: 'customer_support_root_cause',
+                troubleshooting: 'customer_support_troubleshooting',
+                actions: 'customer_support_actions',
+                summary: 'customer_support_summary',
+                recap: 'customer_support_recap',
+                email: 'customer_support_email',
+            },
+            school: {
+                next: 'school_next',
+                generic_followup: 'school_followup',
+                followup: 'school_followup',
+                define: 'school_define',
+                question: 'school_question',
+                study_questions: 'school_followup',
+                unclear: 'school_question',
+                actions: 'school_actions',
+                summary: 'school_summary',
+                recap: 'school_recap',
+                email: 'school_email',
+            },
+        };
+
+        const table = MAP[preset] || MAP.default;
+        const profileToUse = table[intent] || MAP.default[intent] || 'whisper';
+
+        // Conversation context policy per intent
+        const intentsWithoutContext = new Set(['define']);
+        const useConversationContext = !intentsWithoutContext.has(intent);
+
+        return { profileToUse, useConversationContext };
+    }
+
     _deriveTitleFromPrompt(prompt) {
         try {
             const raw = (prompt || '').replace(/[\p{Emoji}\p{Extended_Pictographic}]/gu, '').trim();
@@ -273,7 +405,7 @@ class AskService {
         if (normalized.includes('sales follow-up') || normalized.includes('💡') || normalized.includes('📈')) {
             return { mode: 'followup' };
         }
-        if (normalized.includes('buyer asks') || normalized.includes('them asks') || normalized.includes('?')) {
+        if (normalized.includes('buyer asks') || normalized.includes('them asks')) {
             return { mode: 'buyer_question' };
         }
         if (normalized.includes('address objection') || normalized.includes('🔄')) {
@@ -479,176 +611,18 @@ class AskService {
                 `[AskService] what llm sees: clickLen=${userPrompt.trim().length}, historyChars=${conversationHistory.length}, screenshot=${screenshotBase64 ? 1 : 0}`
             );
             const expansion = this._expandInsightRequest(userPrompt);
-            console.log(`[AskService] expanded intent: mode=${expansion.mode}`);
+            console.log(`[AskService] expanded intent (heuristic): mode=${expansion.mode}`);
 
-            // Simple context logic - let AI decide when to use context
-            let profileToUse = 'whisper';
-            let useConversationContext = true;
+            // Prefer explicit click intent detection from pill labels/prefixes
+            const explicitIntent = this._detectIntentFromClickPill(userPrompt) || expansion.mode;
+            const activePreset = presetId || (summaryService && summaryService.selectedPresetId) || null;
 
-            if (!this._forceDefaultProfileOnce) {
-                if (expansion.mode === 'define') {
-                    profileToUse = 'whisper_define';
-                    useConversationContext = false; // Definitions are universal - no context needed
-                } else if (expansion.mode === 'email') {
-                    profileToUse = 'whisper_email';
-                    useConversationContext = true; // Email needs meeting context
-                } else if (expansion.mode === 'actions') {
-                    profileToUse = 'whisper_actions';
-                    useConversationContext = true; // Action items need meeting context
-                } else if (expansion.mode === 'summary') {
-                    profileToUse = 'whisper_summary';
-                    useConversationContext = true; // Summary needs meeting context
-                } else if (expansion.mode === 'recap') {
-                    profileToUse = 'whisper_recap';
-                    useConversationContext = true; // Recap needs meeting context
-                } else if (expansion.mode === 'next') {
-                    profileToUse = 'whisper_next';
-                    useConversationContext = true; // Next steps need meeting context
-                } else if (expansion.mode === 'followup') {
-                    profileToUse = 'whisper_followup';
-                    useConversationContext = true; // Follow-up questions need meeting context
-                } else if (expansion.mode === 'generic_followup') {
-                    profileToUse = 'whisper_generic_followup';
-                    useConversationContext = true;
-                } else if (expansion.mode === 'buyer_question') {
-                    profileToUse = 'whisper_buyer_question';
-                    useConversationContext = true;
-                } else if (userPrompt.startsWith('❓')) {
-                    profileToUse = 'whisper_question';
-                    useConversationContext = true; // Provide context, let AI decide if relevant
-                }
+            let { profileToUse, useConversationContext } = this._resolveProfileForIntent(explicitIntent, activePreset);
 
-                if (presetId === 'sales') {
-                    if (expansion.mode === 'define' || userPrompt.startsWith('📘')) {
-                        profileToUse = 'sales_define';
-                        useConversationContext = false;
-                    } else if (userPrompt.startsWith('❓') || expansion.mode === 'question') {
-                        profileToUse = 'sales_question';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'objection') {
-                        profileToUse = 'sales_objection';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'email') {
-                        profileToUse = 'sales_email';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'actions') {
-                        profileToUse = 'sales_actions';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'next') {
-                        profileToUse = 'sales_next';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'followup') {
-                        profileToUse = 'sales_followup';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'recap') {
-                        profileToUse = 'sales_recap';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'summary') {
-                        profileToUse = 'sales_summary';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'generic_followup') {
-                        profileToUse = 'sales_generic_followup';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'buyer_question') {
-                        profileToUse = 'sales_answer_buyer';
-                        useConversationContext = true;
-                    }
-                    // for default, remains 'whisper'
-                } else if (presetId === 'recruiting') {
-                    if (expansion.mode === 'define' || userPrompt.startsWith('📘')) {
-                        profileToUse = 'recruiting_define';
-                        useConversationContext = false;
-                    } else if (userPrompt.startsWith('❓') || expansion.mode === 'question') {
-                        profileToUse = 'recruiting_question';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'gaps') {
-                        profileToUse = 'recruiting_gap';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'suggested_questions') {
-                        profileToUse = 'recruiting_suggested_question';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'email') {
-                        profileToUse = 'recruiting_email';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'actions') {
-                        profileToUse = 'recruiting_actions';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'next') {
-                        profileToUse = 'recruiting_should_say_next';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'followup') {
-                        profileToUse = 'recruiting_followup';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'recap') {
-                        profileToUse = 'recruiting_recap';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'summary') {
-                        profileToUse = 'recruiting_summary';
-                        useConversationContext = true;
-                    }
-                } else if (presetId === 'customer-support') {
-                    if (expansion.mode === 'define' || userPrompt.startsWith('📘')) {
-                        profileToUse = 'customer_support_define';
-                    } else if (userPrompt.startsWith('❓') || expansion.mode === 'question') {
-                        profileToUse = 'customer_support_question';
-                    } else if (expansion.mode === 'root_causes') {
-                        profileToUse = 'customer_support_root_cause';
-                    } else if (expansion.mode === 'troubleshooting') {
-                        profileToUse = 'customer_support_troubleshooting';
-                    } else if (expansion.mode === 'email') {
-                        profileToUse = 'customer_support_email';
-                    } else if (expansion.mode === 'actions') {
-                        profileToUse = 'customer_support_actions';
-                    } else if (
-                        expansion.mode === 'next' ||
-                        userPrompt.toLowerCase().includes('next') ||
-                        userPrompt.toLowerCase().includes('respond') ||
-                        userPrompt.toLowerCase().includes('say next')
-                    ) {
-                        profileToUse = 'customer_support_next'; // Force for support preset
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'followup') {
-                        profileToUse = 'customer_support_followup';
-                    } else if (expansion.mode === 'recap') {
-                        profileToUse = 'customer_support_recap';
-                    } else if (expansion.mode === 'summary') {
-                        profileToUse = 'customer_support_summary';
-                    }
-                } else if (presetId === 'school') {
-                    if (expansion.mode === 'define' || userPrompt.startsWith('📘')) {
-                        profileToUse = 'school_define';
-                        useConversationContext = false;
-                    } else if (userPrompt.startsWith('❓') || expansion.mode === 'question') {
-                        profileToUse = 'school_question';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'unclear') {
-                        profileToUse = 'school_clarify';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'study_questions') {
-                        profileToUse = 'school_study_question';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'email') {
-                        profileToUse = 'school_email';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'actions') {
-                        profileToUse = 'school_actions';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'next') {
-                        profileToUse = 'school_next';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'followup') {
-                        profileToUse = 'school_followup';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'recap') {
-                        profileToUse = 'school_recap';
-                        useConversationContext = true;
-                    } else if (expansion.mode === 'summary') {
-                        profileToUse = 'school_summary';
-                        useConversationContext = true;
-                    }
-                } // for default, remains 'whisper'
-            } else {
+            if (this._forceDefaultProfileOnce) {
                 console.log('[AskService] Manual Ask detected → forcing default profile: whisper');
+                profileToUse = 'whisper';
+                // Keep context decision based on intent (e.g., define=false), do not override
             }
 
             // Use conversation context only for meeting-related actions

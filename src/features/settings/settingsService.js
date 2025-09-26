@@ -178,7 +178,7 @@ function getDefaultSettings() {
         backgroundTransparency: 0.5,
         fontSize: 14,
         contentProtection: true,
-        analysisPresetId: 'personal',
+        analysisPresetId: 'meetings',
     };
 }
 

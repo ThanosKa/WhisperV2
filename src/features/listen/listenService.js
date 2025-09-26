@@ -195,7 +195,7 @@ class ListenService {
             try {
                 const settingsService = require('../settings/settingsService');
                 const currentSettings = await settingsService.getSettings();
-                await this.summaryService.setAnalysisPreset(currentSettings?.analysisPresetId || 'personal');
+                await this.summaryService.setAnalysisPreset(currentSettings?.analysisPresetId || 'meetings');
             } catch (e) {
                 console.warn('[ListenService] Failed to apply saved analysis preset:', e.message);
             }

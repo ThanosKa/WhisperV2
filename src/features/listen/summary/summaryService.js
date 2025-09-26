@@ -166,7 +166,7 @@ class SummaryService {
         try {
             this.selectedPresetId = presetId || null;
 
-            if (!presetId) presetId = 'personal';
+            if (!presetId) presetId = 'meetings';
 
             const settingsService = require('../../settings/settingsService');
             const presets = await settingsService.getPresets();
@@ -202,7 +202,7 @@ class SummaryService {
             return;
         }
 
-        let mockKey = this.selectedPresetId === 'personal' ? 'meeting' : this.selectedPresetId;
+        let mockKey = this.selectedPresetId === 'meetings' ? 'meeting' : this.selectedPresetId;
         if (mockKey === 'customer-support') {
             mockKey = 'customer_support'; // Map to match mock data key
         }

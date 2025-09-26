@@ -274,9 +274,9 @@ export class ListenView extends LitElement {
 
     render() {
         const selectedPresetName = (() => {
-            if (!this.selectedPresetId) return 'Personal (Default)';
+            if (!this.selectedPresetId) return 'Meetings (Default)';
             const found = (this.presets || []).find(p => p && p.id === this.selectedPresetId);
-            return found?.title || 'Personal';
+            return found?.title || 'Meetings';
         })();
 
         const displayText = this.isHovering

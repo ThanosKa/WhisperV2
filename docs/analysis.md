@@ -16,10 +16,10 @@ This document explains the end-to-end pipeline that turns live speech into struc
 1. User starts a Listen session (via the UI) → `ListenService` initializes a DB session and connects to the STT relay WebSocket.
 2. Renderer captures microphone and system audio, streams chunks via IPC to main; `sttService` forwards audio to the relay.
 3. STT relay processes audio server-side (proxies to OpenAI/Gemini), streams partial text for both speakers ("Me" and "Them") and signals turn completion.
-4. On each final utterance (debounced ~800ms silence), `ListenService`:
+4. On each final utterance (debounced ~1200ms silence), `ListenService`:
     - Pre-filters very short text (<3 chars, e.g., noise)
     - Saves the transcript row to SQLite
-    - Forwards the utterance to `SummaryService.addConversationTurn`
+    - Forwards the utterance to `SummaryService.addConversationTurn` (which further skips <5 chars for analysis)
 5. `SummaryService` decides when to trigger analysis (smart batching or step-based). When it does:
     - Builds the system prompt by combining the analysis profile template with contextual elements (prior summary, dedup terms/questions, recent transcript window)
     - Optionally prefixes with a role from the selected preset
@@ -39,13 +39,13 @@ This document explains the end-to-end pipeline that turns live speech into struc
 - Connects to STT relay WebSocket (`ws://localhost:8080` or env `STT_RELAY_URL`) with `X-Session-UUID` auth header.
 - On init: sends `OPEN` message with sessionId, language, streams=['me','them'].
 - Forwards audio chunks as `AUDIO` messages (Base64 PCM 24kHz) to relay; relay proxies to provider (OpenAI conversation API).
-- Receives: `PARTIAL` (deltas/transcripts) → emits partial `stt-update` to renderer; `TURN_COMPLETE`/`completed` → debounces (800ms), filters noise (e.g., [NOISE]), aggregates final text, calls `onTranscriptionComplete` callback, sends final `stt-update`.
+- Receives: `PARTIAL` (deltas/transcripts) → emits partial `stt-update` to renderer; `TURN_COMPLETE`/`completed` → debounces (1200ms), filters noise (e.g., [NOISE]), aggregates final text, calls `onTranscriptionComplete` callback, sends final `stt-update`.
 - Separate buffers/timers per speaker; smart handling for provider messages (e.g., OpenAI `conversation.item.input_audio_transcription.delta/completed`).
 
 Key details:
 
 - Noise filtering of placeholders (e.g., `[NOISE]`, `<noise>`)
-- Debounce via `utteranceSilenceMs: 800`
+- Debounce via `utteranceSilenceMs: 1200`
 - Relay lifecycle: `CONNECTED` confirms upstream ready; `CLOSE` on session end
 - Errors surfaced via `ERROR` messages and status updates
 
@@ -80,7 +80,7 @@ Key details:
     - Content gate: trigger if batch >=80 chars OR ~12 tokens (rough estimate via `_roughTokenCount`, skips fluff)
     - Max wait: force at 6 utterances
     - Time fallback: 120s timer from first utterance (clears on activity)
-    - Fallback: every `analysisStep:1` utterances for responsiveness
+    - Fallback: every `analysisStep:5` utterances for responsiveness
     - In mock mode: Forces single analysis on full injected history after simulation via `simulateMockAnalysis()`
 - Only sends NEW utterances since last analysis to LLM (with priors for dedup); mock uses full history once.
 - When triggered: calls `makeOutlineAndRequests(newUtterances)`:
@@ -134,7 +134,7 @@ To avoid spammy LLM calls in chit-chat, batches 3-5 finalized utterances, gating
 
 **Flow**:
 
-1. On utterance final (~800ms silence): Pre-filter <3 chars in `ListenService`; in `SummaryService`, add only meaningful (>=5 chars) to batch.
+1. On utterance final (~1200ms silence): Pre-filter <3 chars in `ListenService`; in `SummaryService`, add only meaningful (>=5 chars) to batch.
 2. Accumulate in `conversationHistory`; track new via `lastAnalyzedIndex`.
 3. In `triggerAnalysisIfNeeded()`: If batch <3, wait (uses `batchTimer`).
     - Substance: >=80 chars OR ~12 tokens total (skips "Yeah, cool.").
@@ -144,10 +144,10 @@ To avoid spammy LLM calls in chit-chat, batches 3-5 finalized utterances, gating
 
 **Config Knobs** (`config.js`):
 
-- `smartTrigger.enabled: true` (batches; fallback `analysisStep:1` if false)
+- `smartTrigger.enabled: true` (batches; fallback `analysisStep:5` if false)
 - `minCharCount:80`, `minTokenCount:12` (thresholds)
 - `maxWaitUtterances:6` (batch max)
-- `utteranceSilenceMs:800` (STT final speed)
+- `utteranceSilenceMs:1200` (STT final speed)
 
 Cuts LLM calls 50-70% (e.g., 3-4 in chit-chat), focuses on key moments (like Otter.ai). All utterances saved to DB—no discards.
 
@@ -174,7 +174,7 @@ Cuts LLM calls 50-70% (e.g., 3-4 in chit-chat), focuses on key moments (like Ott
 - Preset format: `{ id, title, prompt (raw text or role) }`; CRUD ops (getPresets, savePreset, etc.).
 - Seeded defaults: 'personal'/'meetings' (standard), 'sales', 'recruiting', 'customer-support', 'school'.
 - Flow:
-    1. Session init (`ListenService`): Load `settingsService.getSettings().analysisPresetId` (default 'personal').
+    1. Session init (`ListenService`): Load `settingsService.getSettings().analysisPresetId` (default 'meetings').
     2. `SummaryService.setAnalysisPreset(presetId)`: Fetch via preset repo, set profile by ID (e.g., 'sales' → 'sales_analysis'), extract/trim role (~100 words) to `selectedRoleText`.
     3. In `makeOutlineAndRequests`: Prefix prompt `<role>[role]</role>\n\n[base]`.
     4. Every analysis uses full (role + base + context).
@@ -187,7 +187,7 @@ Cuts LLM calls 50-70% (e.g., 3-4 in chit-chat), focuses on key moments (like Ott
     - 'personal'/'meetings' → 'meeting_analysis': Sections `### Meeting Insights` (bullets → plain summary), `### Questions Detected` (numbered → ❓ actions), `### Terms to Define` (bullets → 📘 actions)
     - 'sales' → 'sales_analysis': `### Sales Opportunities` (bullets → plain summary), `### Objections & Needs` (bullets → ❗❗ Address Objection actions), `### Follow-Up Questions` (numbered → 💡 Sales Follow-up actions), `### Terms to Define` (bullets → 📘 actions)
     - 'recruiting' → 'recruiting_analysis': `### Candidate Strengths`/`### Strengths` (bullets → plain summary), `### Skill Gaps`/`### Gaps` (bullets → ⚠️ Gap actions), `### Suggested Questions` (numbered → 👆 Suggested Question actions), `### Terms to Define` (bullets → 📘 actions)
-    - 'customer-support' → 'support_analysis': `### Issue Summary` (bullets → plain summary), `### Root Causes` (bullets → 🔎 Root Cause actions), `### Troubleshooting Steps` (bullets → 🔍 Troubleshooting Step actions), `### Terms to Define` (bullets → 📘 actions)
+    - 'customer-support' → 'customer_support_analysis': `### Issue Summary` (bullets → plain summary), `### Root Causes` (bullets → 🔎 Root Cause actions), `### Troubleshooting Steps` (bullets → 🔍 Troubleshooting Step actions), `### Terms to Define` (bullets → 📘 actions)
     - 'school' → 'school_analysis': `### Key Concepts` (bullets → plain summary), `### Unclear Points` (bullets → ❓ Clarify actions), `### Study Questions` (numbered → 📚 Study Question actions), `### Terms to Define` (bullets → 📘 actions)
 - Fallback: Unknown/user-raw → 'meeting_analysis' with injected role text.
 - Parsing: Maps variant sections to unified `summary`/`actions` (e.g., 'Root Causes' → 🔎 Root Cause actions; bullets to plain summary). Handles JSON `sections` array with `type` (e.g., "gaps" → ⚠️) or markdown headings exactly.
@@ -234,7 +234,7 @@ Note: Firebase impls exist (`firebase.repository.js`) but disabled; local-first 
 - Renderer: Web Audio API (24kHz PCM chunks ~0.1s) for mic; `getDisplayMedia` loopback for system (Win/Linux)
 - IPC: `listen:sendMicAudio`/`sendSystemAudio` → `sttService` → relay `AUDIO {stream: 'me'|'them', data: base64}`
 - Relay → client: `PARTIAL {stream, text/delta}` → `sttService` appends to buffer, emits partial `stt-update {speaker, text, isPartial: true}`
-- `TURN_COMPLETE`/`completed` → debounce timer (800ms), flush final buffer (noise-filtered), emit final `stt-update {isFinal: true}`, call `onTranscriptionComplete(speaker, finalText)`
+- `TURN_COMPLETE`/`completed` → debounce timer (1200ms), flush final buffer (noise-filtered), emit final `stt-update {isFinal: true}`, call `onTranscriptionComplete(speaker, finalText)`
 
 3. Persist the utterance
 
@@ -266,8 +266,8 @@ Note: Firebase impls exist (`firebase.repository.js`) but disabled; local-first 
 ### Transcript line (in-memory)
 
 ```
-"me: I think we should upgrade to Next.js 15."
-"them: Let's first check compatibility with our Tailwind setup."
+|"me: I think we should upgrade to Next.js 15."
+|"them: Let's first check compatibility with our Tailwind setup."
 ```
 
 ### LLM messages
@@ -352,8 +352,8 @@ Note: If long session, prepends "🗒️ Recap meeting so far" to actions. Actio
 ### Key config knobs (see `src/features/common/config/config.js`)
 
 - `sttRelayUrl`: WS endpoint (default 'ws://localhost:8080')
-- `utteranceSilenceMs: 800` (debounce for finals)
-- `analysisStep: 1` (fallback trigger every N utts)
+- `utteranceSilenceMs: 1200` (debounce for finals)
+- `analysisStep: 5` (fallback trigger every N utts)
 - `smartTrigger.enabled: true`, `minCharCount:80`, `minTokenCount:12`, `maxWaitUtterances:6` (batching gates)
 - `recapStep: 15` (show recap after N utts)
 

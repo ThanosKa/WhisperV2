@@ -352,6 +352,15 @@ export class SettingsView extends LitElement {
         }
     };
 
+    handleOpenDbPath() {
+        console.log('Open DB Path clicked');
+        if (window.api && window.api.settingsView && window.api.settingsView.openDbPath) {
+            window.api.settingsView.openDbPath();
+        } else {
+            console.error('IPC handler for openDbPath not available');
+        }
+    }
+
     render() {
         if (this.isLoading) {
             return html`
@@ -525,6 +534,12 @@ export class SettingsView extends LitElement {
                     <div class="move-buttons">
                         <button class="settings-button full-width" @click=${this.handleViewOnboarding}>
                             <span>View Onboarding</span>
+                        </button>
+                    </div>
+
+                    <div class="move-buttons">
+                        <button class="settings-button full-width" @click=${this.handleOpenDbPath}>
+                            <span>Open DB Folder</span>
                         </button>
                     </div>
                 </div>

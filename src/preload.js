@@ -195,11 +195,21 @@ contextBridge.exposeInMainWorld('api', {
 
         // Settings Management
         getPresets: () => ipcRenderer.invoke('settings:getPresets'),
+
+        // New method for opening DB path
+        openDbPath: () => ipcRenderer.invoke('settings:open-db-path'),
+
+        // Auto Update
         getAutoUpdate: () => ipcRenderer.invoke('settings:get-auto-update'),
         setAutoUpdate: isEnabled => ipcRenderer.invoke('settings:set-auto-update', isEnabled),
+
+        // Content Protection
         getContentProtectionStatus: () => ipcRenderer.invoke('get-content-protection-status'),
         toggleContentProtection: () => ipcRenderer.invoke('toggle-content-protection'),
+
+        // Shortcuts
         getCurrentShortcuts: () => ipcRenderer.invoke('settings:getCurrentShortcuts'),
+        openShortcutSettingsWindow: () => ipcRenderer.invoke('open-shortcut-settings-window'),
 
         // Window Management
         moveWindowStep: direction => ipcRenderer.invoke('move-window-step', direction),

@@ -21,6 +21,20 @@ module.exports = {
         ipcMain.handle('settings:clear-api-key', async (e, { provider }) => await settingsService.clearApiKey(provider));
         ipcMain.handle('settings:set-selected-model', async (e, { type, modelId }) => await settingsService.setSelectedModel(type, modelId));
 
+        // Add new handler for opening DB path
+        ipcMain.handle('settings:open-db-path', async () => {
+            const { app, shell } = require('electron');
+            try {
+                const userDataPath = app.getPath('userData');
+                await shell.openPath(userDataPath);
+                console.log('[FeatureBridge] Opened DB folder:', userDataPath);
+                return { success: true };
+            } catch (error) {
+                console.error('[FeatureBridge] Failed to open DB folder:', error);
+                return { success: false, error: error.message };
+            }
+        });
+
         // Shortcuts
         ipcMain.handle('settings:getCurrentShortcuts', async () => await shortcutsService.loadKeybinds());
         ipcMain.handle('shortcut:toggleAllWindowsVisibility', async () => await shortcutsService.toggleAllWindowsVisibility());

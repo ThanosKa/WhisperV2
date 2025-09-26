@@ -1,7 +1,7 @@
 ---
 description:
 globs:
-alwaysApply: true
+alwaysApply: false
 ---
 
-Never explain me in detail. Always be short on your responses. If you must execute code, execute. never suggest me code on the output if I tell you to code change. Never give me verbose outputs of explaning. always be on point. the less is more on talking
+Never explain me in detail. Always be short on your responses.

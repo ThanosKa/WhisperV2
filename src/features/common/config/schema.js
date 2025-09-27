@@ -70,7 +70,17 @@ const LATEST_SCHEMA = {
             { name: 'is_default', type: 'INTEGER NOT NULL' },
             { name: 'created_at', type: 'INTEGER' },
             { name: 'sync_state', type: "TEXT DEFAULT 'clean'" },
+            { name: 'append_text', type: 'TEXT' },
         ],
+    },
+    preset_append_overrides: {
+        columns: [
+            { name: 'preset_id', type: 'TEXT NOT NULL' },
+            { name: 'uid', type: 'TEXT NOT NULL' },
+            { name: 'append_text', type: 'TEXT' },
+            { name: 'updated_at', type: 'INTEGER' },
+        ],
+        constraints: ['PRIMARY KEY (preset_id, uid)'],
     },
     provider_settings: {
         columns: [

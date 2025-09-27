@@ -255,12 +255,12 @@ class SQLiteClient {
         ];
 
         const stmt = this.db.prepare(`
-            INSERT OR IGNORE INTO prompt_presets (id, uid, title, prompt, is_default, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO prompt_presets (id, uid, title, prompt, is_default, created_at, append_text)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         `);
 
         for (const preset of defaultPresets) {
-            stmt.run(preset[0], this.defaultUserId, preset[1], preset[2], preset[3], now);
+            stmt.run(preset[0], '', preset[1], preset[2], preset[3], now, null);
         }
 
         console.log('Default data initialized.');

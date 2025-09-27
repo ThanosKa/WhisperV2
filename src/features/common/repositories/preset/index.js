@@ -14,7 +14,8 @@ const presetRepositoryAdapter = {
     },
 
     getById: id => {
-        return getBaseRepository().getById(id);
+        const uid = authService.getCurrentUserId();
+        return getBaseRepository().getById(id, uid);
     },
 
     findUserPresetByTitle: title => {
@@ -26,19 +27,9 @@ const presetRepositoryAdapter = {
         return getBaseRepository().getPresetTemplates();
     },
 
-    create: options => {
-        const uid = authService.getCurrentUserId();
-        return getBaseRepository().create({ uid, ...options });
-    },
-
     update: (id, options) => {
         const uid = authService.getCurrentUserId();
         return getBaseRepository().update(id, options, uid);
-    },
-
-    delete: id => {
-        const uid = authService.getCurrentUserId();
-        return getBaseRepository().delete(id, uid);
     },
 };
 

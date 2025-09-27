@@ -482,20 +482,10 @@ function setupWebDataHandlers() {
                     // Adapter injects UID
                     result = await presetRepository.getPresets();
                     break;
-                case 'create-preset':
-                    // Adapter injects UID
-                    result = await presetRepository.create(payload);
-                    settingsService.notifyPresetUpdate('created', result.id, payload.title);
-                    break;
                 case 'update-preset':
                     // Adapter injects UID
                     result = await presetRepository.update(payload.id, payload.data);
                     settingsService.notifyPresetUpdate('updated', payload.id, payload.data.title);
-                    break;
-                case 'delete-preset':
-                    // Adapter injects UID
-                    result = await presetRepository.delete(payload);
-                    settingsService.notifyPresetUpdate('deleted', payload);
                     break;
 
                 // BATCH

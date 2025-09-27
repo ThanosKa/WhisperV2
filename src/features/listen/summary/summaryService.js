@@ -21,6 +21,7 @@ class SummaryService {
         // Phase 1: Analysis preset selection state
         this.selectedPresetId = null;
         this.selectedRoleText = '';
+        this.customSystemPrompt = null; // New: For full custom system prompts
 
         // Callbacks
         this.onAnalysisComplete = null;
@@ -166,7 +167,12 @@ class SummaryService {
         try {
             this.selectedPresetId = presetId || null;
 
-            if (!presetId) presetId = 'meetings';
+            if (!presetId) {
+                this.selectedRoleText = '';
+                this.customSystemPrompt = null;
+                this.analysisProfile = 'meeting_analysis'; // default
+                return { success: false, error: 'preset_not_found' };
+            }
 
             const settingsService = require('../../settings/settingsService');
             const presets = await settingsService.getPresets();
@@ -175,13 +181,25 @@ class SummaryService {
             if (!preset) {
                 console.warn('[SummaryService] setAnalysisPreset: preset not found, clearing role');
                 this.selectedRoleText = '';
+                this.customSystemPrompt = null;
                 return { success: false, error: 'preset_not_found' };
             }
 
-            const roleText = this._extractRoleFromPrompt(preset.prompt);
-            this.selectedRoleText = this._trimToWordLimit(roleText, 100);
-            this.analysisProfile = this._mapPresetToProfile(presetId);
-            console.log(`[SummaryService] Set preset: ${presetId} -> profile: ${this.analysisProfile}`);
+            if (preset.is_default === 1) {
+                // Default: Extract role and set profile
+                const fullPrompt = preset.prompt + (preset.append_text || '');
+                const roleText = this._extractRoleFromPrompt(fullPrompt);
+                this.selectedRoleText = this._trimToWordLimit(roleText, 100);
+                this.customSystemPrompt = null;
+                this.analysisProfile = this._mapPresetToProfile(presetId);
+                console.log(`[SummaryService] Set default preset: ${presetId} -> profile: ${this.analysisProfile}`);
+            } else {
+                // Custom: Use full concatenated prompt as system
+                this.customSystemPrompt = preset.prompt + (preset.append_text || '');
+                this.selectedRoleText = '';
+                this.analysisProfile = null;
+                console.log(`[SummaryService] Set custom preset: ${presetId}, full prompt length: ${this.customSystemPrompt.length}`);
+            }
 
             if (this.mockMode) {
                 console.log('[SummaryService] Mock STT mode active - simulating convo for preset:', presetId);
@@ -192,6 +210,7 @@ class SummaryService {
         } catch (err) {
             console.warn('[SummaryService] setAnalysisPreset error:', err.message);
             this.selectedRoleText = '';
+            this.customSystemPrompt = null;
             return { success: false, error: err.message };
         }
     }
@@ -354,13 +373,13 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
             }
         }
 
-        const fullContext = this._getPreviousContext(this.analysisProfile) + `\n\nTranscript:\n${recentConversation}`;
+        const fullContext = this._getPreviousContext(this.analysisProfile || 'meeting_analysis') + `\n\nTranscript:\n${recentConversation}`;
 
         const baseSystem = getSystemPrompt(this.analysisProfile || 'meeting_analysis', {
             context: fullContext,
         });
         const rolePrefix = this.selectedRoleText && this.selectedRoleText.trim() ? `<role>${this.selectedRoleText.trim()}</role>\n\n` : '';
-        const systemPrompt = `${rolePrefix}${baseSystem}`;
+        const systemPrompt = this.customSystemPrompt ? this.customSystemPrompt : `${rolePrefix}${baseSystem}`;
 
         try {
             if (this.currentSessionId) {

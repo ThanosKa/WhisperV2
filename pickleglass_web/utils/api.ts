@@ -74,6 +74,7 @@ export interface PromptPreset {
     is_default: 0 | 1;
     created_at: number;
     sync_state: 'clean' | 'dirty';
+    append_text?: string;
 }
 
 export interface SessionDetails {
@@ -590,57 +591,31 @@ export const getPresets = async (): Promise<PromptPreset[]> => {
     return response.json();
 };
 
-export const createPreset = async (data: { title: string; prompt: string }): Promise<{ id: string }> => {
-    if (isDevMockEnabled()) {
-        initDevIfNeeded();
-        const now = Math.floor(Date.now() / 1000);
-        const presets = getPresetsMock();
-        const id = `preset-${Math.random().toString(36).slice(2, 8)}`;
-        presets.push({ id, uid: 'dev_user', title: data.title, prompt: data.prompt, is_default: 0, created_at: now, sync_state: 'clean' } as any);
-        setPresetsMock(presets as any);
-        if (typeof window !== 'undefined') window.dispatchEvent(new Event('presetUpdated'));
-        return { id };
-    }
-    const response = await apiCall(`/api/presets`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-    });
-    if (!response.ok) throw new Error('Failed to create preset');
-    return response.json();
-};
-
-export const updatePreset = async (id: string, data: { title: string; prompt: string }): Promise<void> => {
+export const updatePreset = async (id: string, data: { title?: string; prompt?: string; append_text?: string }): Promise<void> => {
     if (isDevMockEnabled()) {
         initDevIfNeeded();
         const presets = getPresetsMock();
         const idx = presets.findIndex(p => p.id === id);
         if (idx >= 0) {
-            (presets as any)[idx] = { ...(presets as any)[idx], title: data.title, prompt: data.prompt };
+            const updated = { ...(presets as any)[idx] };
+            if (data.title !== undefined) updated.title = data.title;
+            if (data.prompt !== undefined) updated.prompt = data.prompt;
+            if (data.append_text !== undefined) updated.append_text = data.append_text;
+            (presets as any)[idx] = updated;
             setPresetsMock(presets as any);
         }
         if (typeof window !== 'undefined') window.dispatchEvent(new Event('presetUpdated'));
         return;
     }
+    const body = { ...data }; // Only send provided fields
     const response = await apiCall(`/api/presets/${id}`, {
         method: 'PUT',
-        body: JSON.stringify(data),
+        body: JSON.stringify(body),
     });
     if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Failed to update preset: ${response.status} ${errorText}`);
     }
-};
-
-export const deletePreset = async (id: string): Promise<void> => {
-    if (isDevMockEnabled()) {
-        initDevIfNeeded();
-        const presets = getPresetsMock().filter(p => p.id !== id);
-        setPresetsMock(presets as any);
-        if (typeof window !== 'undefined') window.dispatchEvent(new Event('presetUpdated'));
-        return;
-    }
-    const response = await apiCall(`/api/presets/${id}`, { method: 'DELETE' });
-    if (!response.ok) throw new Error('Failed to delete preset');
 };
 
 export interface BatchData {

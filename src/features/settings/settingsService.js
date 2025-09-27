@@ -240,55 +240,19 @@ async function getPresetTemplates() {
     }
 }
 
-async function createPreset(title, prompt) {
+async function updatePreset(id, updates) {
+    // updates: {title?, prompt?, append_text?}
     try {
         // The adapter injects the UID.
-        const result = await settingsRepository.createPreset({ title, prompt });
-
-        windowNotificationManager.notifyRelevantWindows('presets-updated', {
-            action: 'created',
-            presetId: result.id,
-            title,
-        });
-
-        return { success: true, id: result.id };
-    } catch (error) {
-        console.error('[SettingsService] Error creating preset:', error);
-        return { success: false, error: error.message };
-    }
-}
-
-async function updatePreset(id, title, prompt) {
-    try {
-        // The adapter injects the UID.
-        await settingsRepository.updatePreset(id, { title, prompt });
-
+        await settingsRepository.updatePreset(id, updates);
         windowNotificationManager.notifyRelevantWindows('presets-updated', {
             action: 'updated',
             presetId: id,
-            title,
+            title: updates.title || undefined, // Only if changed
         });
-
         return { success: true };
     } catch (error) {
         console.error('[SettingsService] Error updating preset:', error);
-        return { success: false, error: error.message };
-    }
-}
-
-async function deletePreset(id) {
-    try {
-        // The adapter injects the UID.
-        await settingsRepository.deletePreset(id);
-
-        windowNotificationManager.notifyRelevantWindows('presets-updated', {
-            action: 'deleted',
-            presetId: id,
-        });
-
-        return { success: true };
-    } catch (error) {
-        console.error('[SettingsService] Error deleting preset:', error);
         return { success: false, error: error.message };
     }
 }
@@ -409,9 +373,7 @@ module.exports = {
     saveSettings,
     getPresets,
     getPresetTemplates,
-    createPreset,
     updatePreset,
-    deletePreset,
     saveApiKey,
     removeApiKey,
     updateContentProtection,

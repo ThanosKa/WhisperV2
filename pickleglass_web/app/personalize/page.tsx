@@ -1,29 +1,41 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { ChevronDown, Plus, Copy, Search, X } from 'lucide-react';
+import { ChevronDown, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { InputDialog } from '@/components/ui/input-dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
-import { getPresets, updatePreset, createPreset, deletePreset, PromptPreset } from '@/utils/api';
+import { getPresets, updatePreset, PromptPreset } from '@/utils/api';
 import { useToast } from '@/hooks/use-toast';
+
+const DEFAULT_ORIGINALS = {
+    Brainstorm: 'You are a creative assistant.',
+    Summarize: 'Summarize the following content',
+    'Code Review': 'Review the code and suggest improvements',
+};
 
 export default function PersonalizePage() {
     const [allPresets, setAllPresets] = useState<PromptPreset[]>([]);
     const [selectedPreset, setSelectedPreset] = useState<PromptPreset | null>(null);
     const [showPresets, setShowPresets] = useState(true);
-    const [editorContent, setEditorContent] = useState('');
+    const [savedContent, setSavedContent] = useState(''); // What's in the gray area
+    const [newContent, setNewContent] = useState(''); // What user is typing
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [isDirty, setIsDirty] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const { toast } = useToast();
 
-    // Role editor limit
-    const MAX_CHARS = 2000;
+    // Modal states - only keep reset confirm
+    const [showResetConfirm, setShowResetConfirm] = useState(false);
 
-    // Filter presets based on search term
+    const MAX_CHARS = 2000;
+    const fullContent = savedContent + newContent;
+    const isOverLimit = fullContent.length > MAX_CHARS;
+    const canSave = newContent.trim() && !isOverLimit && !saving;
+
+    // Check if there's appended content to reset (compare saved vs original)
+    const canReset = !!selectedPreset?.append_text && !saving;
+
     const filteredPresets = useMemo(() => {
         if (!searchTerm.trim()) return allPresets;
         return allPresets.filter(
@@ -31,30 +43,15 @@ export default function PersonalizePage() {
         );
     }, [allPresets, searchTerm]);
 
-    // Check if exceeding character limit
-    const isOverLimit = editorContent.length > MAX_CHARS;
-
-    // Modal state for creating/duplicating presets
-    const [showPresetModal, setShowPresetModal] = useState(false);
-    const [modalType, setModalType] = useState<'create' | 'duplicate'>('create');
-    const [duplicatePresetName, setDuplicatePresetName] = useState('');
-
-    // Confirm dialogs
-    const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
-    const [pendingPreset, setPendingPreset] = useState<PromptPreset | null>(null);
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
     useEffect(() => {
         const fetchData = async () => {
             try {
                 setLoading(true);
                 const presetsData = await getPresets();
                 setAllPresets(presetsData);
-
                 if (presetsData.length > 0) {
-                    const firstPreset = presetsData.find(p => p.title === 'Personal') || presetsData[0];
-                    setSelectedPreset(firstPreset);
-                    setEditorContent(firstPreset.prompt);
+                    const firstPreset = presetsData[0];
+                    selectPreset(firstPreset);
                 }
             } catch (error) {
                 console.error('Failed to fetch presets:', error);
@@ -62,169 +59,91 @@ export default function PersonalizePage() {
                 setLoading(false);
             }
         };
-
         fetchData();
     }, []);
 
-    const handlePresetClick = (preset: PromptPreset) => {
-        if (isDirty) {
-            setPendingPreset(preset);
-            setShowUnsavedConfirm(true);
-            return;
-        }
+    const selectPreset = (preset: PromptPreset) => {
         setSelectedPreset(preset);
-        setEditorContent(preset.prompt);
-        setIsDirty(false);
-    };
-
-    const handleEditorChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setEditorContent(e.target.value);
-        setIsDirty(true);
+        setSavedContent((preset.prompt || '') + (preset.append_text || ''));
+        setNewContent('');
     };
 
     const handleSave = async () => {
-        if (!selectedPreset || saving || !isDirty) return;
-
-        // Prevent saving if over character limit
-        if (editorContent.length > MAX_CHARS) {
-            return;
-        }
+        if (!canSave || !selectedPreset) return;
 
         try {
             setSaving(true);
-            await updatePreset(selectedPreset.id, {
-                title: selectedPreset.title,
-                prompt: editorContent,
-            });
-
-            setAllPresets(prev => prev.map(p => (p.id === selectedPreset.id ? { ...p, prompt: editorContent } : p)));
-            setIsDirty(false);
-
-            toast({
-                title: 'Preset saved',
-            });
+            let updatedPreset: PromptPreset;
+            if (selectedPreset.is_default === 1) {
+                // For defaults, append to append_text
+                await updatePreset(selectedPreset.id, {
+                    title: selectedPreset.title,
+                    append_text: newContent,
+                });
+                // Update local: add to append_text
+                updatedPreset = { ...selectedPreset, append_text: newContent };
+                setAllPresets(prev => prev.map(p => (p.id === selectedPreset.id ? updatedPreset : p)));
+                setSelectedPreset(updatedPreset);
+                setSavedContent(selectedPreset.prompt + newContent);
+            } else {
+                // For customs, full prompt update
+                const updatedContent = savedContent + newContent;
+                await updatePreset(selectedPreset.id, {
+                    title: selectedPreset.title,
+                    prompt: updatedContent,
+                    append_text: '',
+                });
+                updatedPreset = { ...selectedPreset, prompt: updatedContent, append_text: '' };
+                setAllPresets(prev => prev.map(p => (p.id === selectedPreset.id ? updatedPreset : p)));
+                setSelectedPreset(updatedPreset);
+                setSavedContent(updatedContent);
+            }
+            setNewContent('');
+            toast({ title: 'Saved' });
         } catch (error) {
             console.error('Save failed:', error);
-            toast({
-                title: 'Error',
-                variant: 'destructive',
-            });
+            toast({ title: 'Error saving', variant: 'destructive' });
         } finally {
             setSaving(false);
         }
     };
 
-    const handleCreateNewPreset = () => {
-        setModalType('create');
-        setDuplicatePresetName('');
-        setShowPresetModal(true);
-    };
-
-    const handleCreatePresetConfirm = async (title: string) => {
-        try {
-            setSaving(true);
-            const { id } = await createPreset({
-                title,
-                prompt: '',
-            });
-
-            const newPreset: PromptPreset = {
-                id,
-                uid: 'current_user',
-                title,
-                prompt: '',
-                is_default: 0,
-                created_at: Date.now(),
-                sync_state: 'clean',
-            };
-
-            setAllPresets(prev => [...prev, newPreset]);
-            setSelectedPreset(newPreset);
-            setEditorContent(newPreset.prompt);
-            setIsDirty(false);
-
-            toast({
-                title: 'Preset created',
-            });
-        } catch (error) {
-            console.error('Failed to create preset:', error);
-            toast({
-                title: 'Error',
-                variant: 'destructive',
-            });
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const handleDuplicatePreset = () => {
+    const handleResetConfirm = async () => {
         if (!selectedPreset) return;
 
-        setModalType('duplicate');
-        setDuplicatePresetName(`${selectedPreset.title} (Copy)`);
-        setShowPresetModal(true);
-    };
-
-    const handleDuplicatePresetConfirm = async (title: string) => {
         try {
             setSaving(true);
-            const { id } = await createPreset({
-                title,
-                prompt: editorContent,
-            });
-
-            const newPreset: PromptPreset = {
-                id,
-                uid: 'current_user',
-                title,
-                prompt: editorContent,
-                is_default: 0,
-                created_at: Date.now(),
-                sync_state: 'clean',
-            };
-
-            setAllPresets(prev => [...prev, newPreset]);
-            setSelectedPreset(newPreset);
-            setIsDirty(false);
-
-            toast({
-                title: 'Preset duplicated',
-            });
+            let updatedPreset: PromptPreset;
+            if (selectedPreset.is_default === 1) {
+                // Clear append_text for defaults
+                await updatePreset(selectedPreset.id, {
+                    title: selectedPreset.title,
+                    append_text: '',
+                });
+                updatedPreset = { ...selectedPreset, append_text: '' };
+                setAllPresets(prev => prev.map(p => (p.id === selectedPreset.id ? updatedPreset : p)));
+                setSelectedPreset(updatedPreset);
+                setSavedContent(selectedPreset.prompt);
+            } else {
+                // Clear prompt for customs
+                await updatePreset(selectedPreset.id, {
+                    title: selectedPreset.title,
+                    prompt: '',
+                    append_text: '',
+                });
+                updatedPreset = { ...selectedPreset, prompt: '', append_text: '' };
+                setAllPresets(prev => prev.map(p => (p.id === selectedPreset.id ? updatedPreset : p)));
+                setSelectedPreset(updatedPreset);
+                setSavedContent('');
+            }
+            setNewContent(''); // Clear typing
+            toast({ title: 'Reset complete' });
         } catch (error) {
-            console.error('Failed to duplicate preset:', error);
-            toast({
-                title: 'Error',
-                variant: 'destructive',
-            });
+            console.error('Reset failed:', error);
+            toast({ title: 'Error resetting', variant: 'destructive' });
         } finally {
             setSaving(false);
-        }
-    };
-
-    const handleDeletePreset = async () => {
-        if (!selectedPreset || selectedPreset.is_default === 1 || saving) return;
-        try {
-            setSaving(true);
-            await deletePreset(selectedPreset.id);
-            setAllPresets(prev => prev.filter(p => p.id !== selectedPreset.id));
-            const remaining = allPresets.filter(p => p.id !== selectedPreset.id);
-            const next = remaining.find(p => p.title === 'Personal') || remaining[0] || null;
-            setSelectedPreset(next);
-            setEditorContent(next ? next.prompt : '');
-            setIsDirty(false);
-
-            toast({
-                title: 'Preset deleted',
-            });
-        } catch (error) {
-            console.error('Failed to delete preset:', error);
-            toast({
-                title: 'Error',
-                variant: 'destructive',
-            });
-        } finally {
-            setSaving(false);
-            setShowDeleteConfirm(false);
+            setShowResetConfirm(false);
         }
     };
 
@@ -240,7 +159,6 @@ export default function PersonalizePage() {
         <div className="flex h-full bg-gray-50">
             {/* Sidebar */}
             <div className={`bg-white border-r border-gray-200 transition-all duration-300 ${showPresets ? 'w-96' : 'w-16'}`}>
-                {/* Sidebar Header */}
                 <div className="p-4 border-b border-gray-100">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -279,7 +197,6 @@ export default function PersonalizePage() {
                     )}
                 </div>
 
-                {/* Preset List */}
                 <div className="flex-1 overflow-y-auto">
                     {showPresets && (
                         <div className="p-2">
@@ -292,7 +209,7 @@ export default function PersonalizePage() {
                                     {filteredPresets.map(preset => (
                                         <div
                                             key={preset.id}
-                                            onClick={() => handlePresetClick(preset)}
+                                            onClick={() => selectPreset(preset)}
                                             className={`
                                                 p-3 rounded-lg cursor-pointer transition-all duration-200 hover:bg-gray-50
                                                 ${
@@ -323,127 +240,66 @@ export default function PersonalizePage() {
                     )}
                 </div>
 
-                {/* Sidebar Actions */}
-                {showPresets && (
-                    <div className="p-4 border-t border-gray-100">
-                        <div className="flex gap-2">
-                            <Button onClick={handleCreateNewPreset} disabled={saving} size="sm" className="flex-1">
-                                <Plus className="h-4 w-4 mr-2" />
-                                New
-                            </Button>
-                            {selectedPreset && (
-                                <Button onClick={handleDuplicatePreset} disabled={saving} variant="outline" size="sm" className="flex-1">
-                                    <Copy className="h-4 w-4 mr-2" />
-                                    Duplicate
-                                </Button>
-                            )}
-                        </div>
-                        {selectedPreset && selectedPreset.is_default === 0 && (
-                            <Button
-                                onClick={() => setShowDeleteConfirm(true)}
-                                disabled={saving}
-                                variant="destructive"
-                                size="sm"
-                                className="w-full mt-2"
-                            >
-                                Delete
-                            </Button>
-                        )}
-                    </div>
-                )}
+                {showPresets && <div className="p-4 border-t border-gray-100">{/* No action buttons for create/duplicate/delete */}</div>}
             </div>
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col">
-                {/* Header */}
                 <div className="bg-white border-b border-gray-200 px-8 py-6">
                     <div className="flex justify-between items-center">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">{selectedPreset ? selectedPreset.title : 'Personalize'}</h1>
                             <p className="text-sm text-gray-500 mt-1">
-                                {selectedPreset ? 'Edit your preset role and behavior' : 'Select a preset to customize'}
+                                {selectedPreset ? 'Add your custom instructions below' : 'Select a preset to customize'}
                             </p>
                         </div>
-                        <Button
-                            onClick={handleSave}
-                            disabled={saving || !isDirty || editorContent.length > MAX_CHARS}
-                            variant={!isDirty && !saving ? 'secondary' : 'default'}
-                        >
-                            {!isDirty && !saving ? 'Saved' : saving ? 'Saving...' : 'Save'}
-                        </Button>
+                        <div className="flex gap-2 items-center">
+                            <div className="text-sm px-2 py-1 rounded-full bg-blue-50 text-blue-600">
+                                {fullContent.length}/{MAX_CHARS}
+                            </div>
+                            <Button onClick={() => setShowResetConfirm(true)} disabled={!canReset} variant="outline" size="sm">
+                                Reset
+                            </Button>
+                            <Button onClick={handleSave} disabled={!canSave} variant={canSave ? 'default' : 'secondary'}>
+                                {saving ? 'Saving...' : canSave ? 'Save' : 'Save'}
+                            </Button>
+                        </div>
                     </div>
                 </div>
 
-                {/* Role Editor */}
                 <div className="flex-1 bg-white p-8">
-                    <div className="mb-4">
-                        <div className="flex justify-between items-start mb-2">
-                            <h3 className="text-lg font-semibold text-gray-900">Role</h3>
-                            <div className="text-sm px-2 py-1 rounded-full bg-blue-50 text-blue-600">
-                                {editorContent.length}/{MAX_CHARS} chars
-                            </div>
+                    <div className="h-full rounded-lg border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+                        {/* Saved Content - Gray Area */}
+                        <div className="bg-gray-50 p-6 border-b border-gray-200 min-h-[40%] max-h-[60%] overflow-y-auto">
+                            <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">{savedContent || 'No content yet'}</div>
                         </div>
-                        <p className="text-sm text-gray-600">Describe the assistant's role and behavior for this preset</p>
-                        {isOverLimit && <p className="text-sm text-yellow-600 mt-1">⚠️ Role description exceeds {MAX_CHARS} characters.</p>}
-                    </div>
-                    <div className="h-[calc(100%-8rem)] rounded-lg border border-gray-200 bg-white shadow-sm">
-                        <textarea
-                            value={editorContent}
-                            onChange={handleEditorChange}
-                            className={`w-full h-full p-6 text-base border-0 resize-none focus:outline-none bg-white leading-relaxed ${
-                                isOverLimit ? 'text-red-900' : 'text-gray-900'
-                            }`}
-                            placeholder="Describe the assistant's role for this preset (e.g., 'You are a senior software engineer specializing in React and TypeScript...')"
-                            readOnly={false}
-                        />
+
+                        {/* New Content - White Area */}
+                        <div className="flex-1">
+                            <textarea
+                                value={newContent}
+                                onChange={e => setNewContent(e.target.value)}
+                                className={`w-full h-full p-6 text-base border-0 resize-none focus:outline-none bg-white leading-relaxed ${
+                                    isOverLimit ? 'text-red-900' : 'text-gray-900'
+                                }`}
+                                placeholder="Add your custom instructions here..."
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* Create/Duplicate Preset dialog */}
-            <InputDialog
-                open={showPresetModal}
-                onOpenChange={setShowPresetModal}
-                title={modalType === 'create' ? 'Create New Preset' : 'Duplicate Preset'}
-                description={modalType === 'create' ? 'Enter a name for your new preset.' : 'Enter a name for the duplicated preset.'}
-                defaultValue={duplicatePresetName}
-                placeholder={modalType === 'create' ? 'Enter preset name...' : `${selectedPreset?.title} (Copy)`}
-                confirmLabel={modalType === 'create' ? 'Create Preset' : 'Duplicate'}
-                onConfirm={modalType === 'create' ? handleCreatePresetConfirm : handleDuplicatePresetConfirm}
-                onCancel={() => setShowPresetModal(false)}
-                loading={saving}
-            />
-
-            {/* Unsaved changes confirm */}
+            {/* Reset Confirm */}
             <ConfirmDialog
-                open={showUnsavedConfirm}
-                onOpenChange={setShowUnsavedConfirm}
-                title="Unsaved Changes"
-                description="You have unsaved changes. Switch presets without saving?"
-                confirmLabel="Switch"
-                cancelLabel="Stay"
-                onConfirm={() => {
-                    if (pendingPreset) {
-                        setSelectedPreset(pendingPreset);
-                        setEditorContent(pendingPreset.prompt);
-                        setIsDirty(false);
-                        setPendingPreset(null);
-                    }
-                    setShowUnsavedConfirm(false);
-                }}
-            />
-
-            {/* Delete preset confirm */}
-            <ConfirmDialog
-                open={showDeleteConfirm}
-                onOpenChange={setShowDeleteConfirm}
-                title="Delete Preset"
-                description={selectedPreset ? `Delete preset "${selectedPreset.title}"? This cannot be undone.` : 'Delete this preset?'}
-                confirmLabel={saving ? 'Deleting...' : 'Delete'}
-                cancelLabel="Cancel"
+                open={showResetConfirm}
+                onOpenChange={setShowResetConfirm}
+                title="Reset to Original"
+                description="This will remove all your custom instructions and reset back to the original prompt. Continue?"
+                confirmLabel={saving ? 'Resetting...' : 'Yes, Reset'}
+                cancelLabel="No, Keep"
                 variant="destructive"
                 loading={saving}
-                onConfirm={handleDeletePreset}
+                onConfirm={handleResetConfirm}
             />
         </div>
     );

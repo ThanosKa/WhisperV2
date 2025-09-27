@@ -1,18 +1,11 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { ChevronDown, Search, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ChevronDown, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { Input } from '@/components/ui/input';
 import { getPresets, updatePreset, PromptPreset } from '@/utils/api';
 import { useToast } from '@/hooks/use-toast';
-
-const DEFAULT_ORIGINALS = {
-    Brainstorm: 'You are a creative assistant.',
-    Summarize: 'Summarize the following content',
-    'Code Review': 'Review the code and suggest improvements',
-};
 
 export default function PersonalizePage() {
     const [allPresets, setAllPresets] = useState<PromptPreset[]>([]);
@@ -22,7 +15,6 @@ export default function PersonalizePage() {
     const [newContent, setNewContent] = useState(''); // What user is typing
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
     const { toast } = useToast();
 
     // Modal states - only keep reset confirm
@@ -35,13 +27,6 @@ export default function PersonalizePage() {
 
     // Check if there's appended content to reset (compare saved vs original)
     const canReset = !!selectedPreset?.append_text && !saving;
-
-    const filteredPresets = useMemo(() => {
-        if (!searchTerm.trim()) return allPresets;
-        return allPresets.filter(
-            preset => preset.title.toLowerCase().includes(searchTerm.toLowerCase()) || preset.prompt.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-    }, [allPresets, searchTerm]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -156,131 +141,103 @@ export default function PersonalizePage() {
     }
 
     return (
-        <div className="flex h-full bg-gray-50">
-            {/* Sidebar */}
-            <div className={`bg-white border-r border-gray-200 transition-all duration-300 ${showPresets ? 'w-96' : 'w-16'}`}>
-                <div className="p-4 border-b border-gray-100">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            {showPresets && (
-                                <>
-                                    <h2 className="text-lg font-semibold text-gray-900">Presets</h2>
-                                    <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">{filteredPresets.length}</span>
-                                </>
-                            )}
+        <div className="flex flex-col h-full bg-gray-50">
+            {/* Top Header */}
+            <div className="bg-white border-b border-gray-200 px-8 pt-8 pb-6">
+                <div className="flex justify-between items-start">
+                    <div>
+                        <p className="text-sm text-gray-500 mb-2">Presets</p>
+                        <h1 className="text-3xl font-bold text-gray-900">{selectedPreset ? selectedPreset.title : 'Personalize'}</h1>
+                        <p className="text-sm text-gray-500 mt-1">
+                            {selectedPreset ? 'Customize your instructions' : 'Select a preset to customize'}
+                        </p>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                        <div className={`text-sm px-2 py-1 rounded-full ${isOverLimit ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                            {fullContent.length}/{MAX_CHARS}
                         </div>
-                        <Button onClick={() => setShowPresets(!showPresets)} variant="ghost" size="sm" className="p-2">
-                            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showPresets ? 'rotate-90' : '-rotate-90'}`} />
+                        <Button onClick={() => setShowResetConfirm(true)} disabled={!canReset} variant="outline" size="sm">
+                            Reset
+                        </Button>
+                        <Button onClick={handleSave} disabled={!canSave} variant={canSave ? 'default' : 'secondary'}>
+                            {saving ? 'Saving...' : canSave ? 'Save' : 'Saved'}
+                        </Button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Presets Section - Collapsible Grid */}
+            <div className={`bg-white border-b border-gray-200 transition-all duration-300 ${showPresets ? 'pb-6' : ''}`}>
+                <div className="px-8 py-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <Button
+                            onClick={() => setShowPresets(!showPresets)}
+                            variant="ghost"
+                            size="sm"
+                            className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
+                        >
+                            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showPresets ? 'rotate-180' : ''}`} />
+                            {showPresets ? 'Hide Presets' : 'Show Presets'}
                         </Button>
                     </div>
 
                     {showPresets && (
-                        <div className="mt-4">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                <Input
-                                    placeholder="Search presets..."
-                                    value={searchTerm}
-                                    onChange={e => setSearchTerm(e.target.value)}
-                                    className="pl-10 pr-10"
-                                />
-                                {searchTerm && (
-                                    <button
-                                        onClick={() => setSearchTerm('')}
-                                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                                    >
-                                        <X className="h-4 w-4" />
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                <div className="flex-1 overflow-y-auto">
-                    {showPresets && (
-                        <div className="p-2">
-                            {filteredPresets.length === 0 ? (
-                                <div className="text-center py-8 text-gray-500">
-                                    {searchTerm ? 'No presets match your search' : 'No presets found'}
-                                </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                            {allPresets.length === 0 ? (
+                                <div className="col-span-full text-center py-8 text-gray-500">No presets found</div>
                             ) : (
-                                <div className="space-y-1">
-                                    {filteredPresets.map(preset => (
-                                        <div
-                                            key={preset.id}
-                                            onClick={() => selectPreset(preset)}
-                                            className={`
-                                                p-3 rounded-lg cursor-pointer transition-all duration-200 hover:bg-gray-50
-                                                ${
-                                                    selectedPreset?.id === preset.id
-                                                        ? 'bg-blue-50 border border-blue-200 shadow-sm'
-                                                        : 'bg-white border border-gray-100 hover:border-gray-200'
-                                                }
-                                            `}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex-1 min-w-0">
-                                                    <h3 className="font-medium text-gray-900 text-sm truncate">{preset.title}</h3>
-                                                    {preset.is_default === 1 && (
-                                                        <span className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-xs bg-yellow-100 text-yellow-800">
-                                                            Default
-                                                        </span>
-                                                    )}
-                                                </div>
+                                allPresets.map(preset => (
+                                    <div
+                                        key={preset.id}
+                                        onClick={() => selectPreset(preset)}
+                                        className={`
+                                            p-4 rounded-lg cursor-pointer transition-all duration-200 bg-white
+                                            h-48 flex flex-col shadow-sm hover:shadow-md relative
+                                            ${
+                                                selectedPreset?.id === preset.id
+                                                    ? 'border-2 border-blue-500 shadow-md'
+                                                    : 'border border-gray-200 hover:border-gray-300'
+                                            }
+                                        `}
+                                    >
+                                        {preset.is_default === 1 && (
+                                            <div className="absolute top-2 right-2 bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
+                                                Default
                                             </div>
-                                            <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-                                                {preset.prompt.substring(0, 120) + (preset.prompt.length > 120 ? '...' : '')}
-                                            </p>
-                                        </div>
-                                    ))}
-                                </div>
+                                        )}
+                                        <h3 className="font-semibold text-gray-900 mb-3 text-center text-sm truncate">{preset.title}</h3>
+                                        <p className="text-xs text-gray-600 leading-relaxed flex-1 overflow-hidden line-clamp-3">
+                                            {preset.prompt.substring(0, 100) + (preset.prompt.length > 100 ? '...' : '')}
+                                        </p>
+                                    </div>
+                                ))
                             )}
                         </div>
                     )}
                 </div>
-
-                {showPresets && <div className="p-4 border-t border-gray-100">{/* No action buttons for create/duplicate/delete */}</div>}
             </div>
 
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col">
-                <div className="bg-white border-b border-gray-200 px-8 py-6">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900">{selectedPreset ? selectedPreset.title : 'Personalize'}</h1>
-                            <p className="text-sm text-gray-500 mt-1">
-                                {selectedPreset ? 'Add your custom instructions below' : 'Select a preset to customize'}
-                            </p>
-                        </div>
-                        <div className="flex gap-2 items-center">
-                            <div className="text-sm px-2 py-1 rounded-full bg-blue-50 text-blue-600">
-                                {fullContent.length}/{MAX_CHARS}
-                            </div>
-                            <Button onClick={() => setShowResetConfirm(true)} disabled={!canReset} variant="outline" size="sm">
-                                Reset
-                            </Button>
-                            <Button onClick={handleSave} disabled={!canSave} variant={canSave ? 'default' : 'secondary'}>
-                                {saving ? 'Saving...' : canSave ? 'Save' : 'Save'}
-                            </Button>
-                        </div>
-                    </div>
+            {/* Editor Section */}
+            <div className="flex-1 flex flex-col bg-white">
+                <div className="px-8 py-6 border-b border-gray-200">
+                    <div className="mb-2 text-sm text-gray-600">Role</div>
                 </div>
-
-                <div className="flex-1 bg-white p-8">
+                <div className="flex-1 px-8 pb-6 overflow-hidden">
                     <div className="h-full rounded-lg border border-gray-200 shadow-sm overflow-hidden flex flex-col">
                         {/* Saved Content - Gray Area */}
                         <div className="bg-gray-50 p-6 border-b border-gray-200 min-h-[40%] max-h-[60%] overflow-y-auto">
-                            <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">{savedContent || 'No content yet'}</div>
+                            <div className="text-gray-700 leading-relaxed whitespace-pre-wrap font-mono text-sm">
+                                {savedContent || 'No content yet'}
+                            </div>
                         </div>
 
                         {/* New Content - White Area */}
-                        <div className="flex-1">
+                        <div className="flex-1 relative">
                             <textarea
                                 value={newContent}
                                 onChange={e => setNewContent(e.target.value)}
-                                className={`w-full h-full p-6 text-base border-0 resize-none focus:outline-none bg-white leading-relaxed ${
-                                    isOverLimit ? 'text-red-900' : 'text-gray-900'
+                                className={`w-full h-full p-6 text-sm text-gray-900 border-0 resize-none focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-transparent bg-white font-mono leading-relaxed ${
+                                    isOverLimit ? 'text-red-900' : ''
                                 }`}
                                 placeholder="Add your custom instructions here..."
                             />

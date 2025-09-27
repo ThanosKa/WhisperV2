@@ -72,7 +72,10 @@ export class ListenView extends LitElement {
                             const sttView = this.shadowRoot.querySelector('stt-view');
                             const summaryView = this.shadowRoot.querySelector('summary-view');
                             if (sttView) sttView.resetTranscript();
-                            if (summaryView) summaryView.resetAnalysis();
+                            if (summaryView) {
+                                summaryView.resetAnalysis();
+                                summaryView.prepareAwaitingAnalysis?.();
+                            }
                         });
                     }
                     this.requestUpdate();

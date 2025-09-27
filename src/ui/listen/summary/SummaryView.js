@@ -12,6 +12,8 @@ export class SummaryView extends LitElement {
         allActions: { type: Array },
         allFollowUps: { type: Array },
         allSummary: { type: Array },
+        fixedActions: { type: Array },
+        scrollableActions: { type: Array },
         presetId: { type: String },
     };
 
@@ -28,7 +30,10 @@ export class SummaryView extends LitElement {
         this.allActions = []; // Flattened, persistent actions
         this.allFollowUps = []; // Flattened, persistent follow-ups
         this.allSummary = []; // Flattened, persistent summary bullets
+        this.fixedActions = [];
+        this.scrollableActions = [];
         this.hasReceivedFirstText = false; // Track if any text has been received
+        this.placeholderTimer = null;
 
         // 마크다운 라이브러리 초기화
         this.marked = null;
@@ -44,22 +49,13 @@ export class SummaryView extends LitElement {
         super.connectedCallback();
         if (window.api) {
             window.api.summaryView.onSummaryUpdate((event, data) => {
+                this.clearPlaceholderTimer();
                 // Append to history instead of overwriting
                 this.insightHistory.push(data);
                 this.structuredData = data; // Keep current for display
                 this.hasReceivedFirstText = true; // Mark that we've received first text
                 this.presetId = data.presetId || null;
                 this.buildFlattenedLists();
-
-                // Ensure default actions are always present after first text
-                if (this.hasReceivedFirstText) {
-                    const defaultActions = ['✨ What should I say next?', '💬 Suggest follow-up questions'];
-                    defaultActions.forEach(action => {
-                        if (!this.allActions.includes(action)) {
-                            this.allActions.push(action);
-                        }
-                    });
-                }
                 this.requestUpdate();
             });
 
@@ -69,14 +65,9 @@ export class SummaryView extends LitElement {
                     console.log('[SummaryView] received existing transcript, length:', history?.length || 0);
                     // Mark as having received first text if there's history
                     if (history && history.length > 0) {
+                        this.clearPlaceholderTimer();
                         this.hasReceivedFirstText = true;
-                        // Ensure default actions are present
-                        const defaultActions = ['✨ What should I say next?', '💬 Suggest follow-up questions'];
-                        defaultActions.forEach(action => {
-                            if (!this.allActions.includes(action)) {
-                                this.allActions.push(action);
-                            }
-                        });
+                        this.buildFlattenedLists();
                         this.requestUpdate();
                     }
                 });
@@ -103,9 +94,20 @@ export class SummaryView extends LitElement {
         });
 
         // Convert to arrays and reverse order (newest first)
+        if (this.hasReceivedFirstText) {
+            ['✨ What should I say next?', '💬 Suggest follow-up questions'].forEach(action => actions.add(action));
+        }
+
         this.allActions = Array.from(actions).reverse();
         this.allFollowUps = Array.from(followUps).reverse();
         this.allSummary = Array.from(summaryBullets).reverse();
+
+        const fixedActionSet = new Set(
+            this.allActions.filter(a => a.includes('What should I say next') || a.includes('Suggest follow-up') || a.includes('Recap meeting'))
+        );
+
+        this.fixedActions = Array.from(fixedActionSet);
+        this.scrollableActions = this.allActions.filter(a => !fixedActionSet.has(a));
     }
 
     disconnectedCallback() {
@@ -113,10 +115,12 @@ export class SummaryView extends LitElement {
         if (window.api) {
             window.api.summaryView.removeAllSummaryUpdateListeners();
         }
+        this.clearPlaceholderTimer();
     }
 
     // Handle session reset from parent
     resetAnalysis() {
+        this.clearPlaceholderTimer();
         this.structuredData = {
             summary: [],
             actions: [],
@@ -126,8 +130,32 @@ export class SummaryView extends LitElement {
         this.allActions = [];
         this.allFollowUps = [];
         this.allSummary = [];
+        this.fixedActions = [];
+        this.scrollableActions = [];
         this.hasReceivedFirstText = false; // Reset first text flag
         this.requestUpdate();
+    }
+
+    prepareAwaitingAnalysis(delayMs = 2000) {
+        if (this.hasReceivedFirstText || this.placeholderTimer) {
+            return;
+        }
+
+        this.placeholderTimer = setTimeout(() => {
+            this.placeholderTimer = null;
+            if (!this.hasReceivedFirstText) {
+                this.hasReceivedFirstText = true;
+                this.buildFlattenedLists();
+                this.requestUpdate();
+            }
+        }, delayMs);
+    }
+
+    clearPlaceholderTimer() {
+        if (this.placeholderTimer) {
+            clearTimeout(this.placeholderTimer);
+            this.placeholderTimer = null;
+        }
     }
 
     async loadLibraries() {
@@ -355,14 +383,6 @@ export class SummaryView extends LitElement {
                 );
             }
         }, 50);
-
-        // Compute split actions (fixed defaults stay pinned, everything else scrolls)
-        const fixedActionSet = new Set(
-            this.allActions.filter(a => a.includes('What should I say next') || a.includes('Suggest follow-up') || a.includes('Recap meeting'))
-        );
-
-        this.fixedActions = Array.from(fixedActionSet);
-        this.scrollableActions = this.allActions.filter(a => !fixedActionSet.has(a));
     }
 
     render() {
@@ -375,7 +395,7 @@ export class SummaryView extends LitElement {
             actions: [],
         };
 
-        const hasAnyContent = this.allSummary.length > 0 || data.actions.length > 0;
+        const hasAnyContent = this.allSummary.length > 0 || data.actions.length > 0 || this.allActions.length > 0;
         const rawSections = Array.isArray(this.structuredData?.rawLLMOutput?.sections) ? this.structuredData.rawLLMOutput.sections : null;
 
         return html`

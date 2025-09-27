@@ -302,6 +302,8 @@ export const summaryViewStyles = css`
         word-wrap: break-word;
         transition: all 0.15s ease;
         border-left: 2px solid rgba(255, 255, 255, 0.2);
+        opacity: 0;
+        animation: fadeIn 0.5s ease-in-out forwards;
     }
 
     .scrollable-action-item:hover {
@@ -356,5 +358,14 @@ export const summaryViewStyles = css`
         text-align: center;
         margin: 16px 0 8px 0;
         padding: 4px 8px;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
     }
 `;

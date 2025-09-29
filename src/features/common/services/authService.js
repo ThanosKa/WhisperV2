@@ -3,7 +3,6 @@ const fetch = require('node-fetch');
 const Store = require('electron-store');
 const encryptionService = require('./encryptionService');
 const sessionRepository = require('../repositories/session');
-const providerSettingsRepository = require('../repositories/providerSettings');
 const permissionService = require('./permissionService');
 
 // Webapp configuration
@@ -169,14 +168,6 @@ class AuthService {
         // Migration service disabled - using local-first data strategy with webapp authentication
 
         // Update model state with user plan information
-        if (global.modelStateService && typeof global.modelStateService.setUserPlan === 'function') {
-            try {
-                await global.modelStateService.setUserPlan(userProfile.plan, userProfile.apiQuota);
-                console.log(`[AuthService] User plan (${userProfile.plan}) has been processed and state updated.`);
-            } catch (error) {
-                console.error('[AuthService] Failed to update model state with user plan:', error);
-            }
-        }
     }
 
     handleUserSignOut() {
@@ -185,13 +176,6 @@ class AuthService {
         console.log(`[AuthService] User signed out or no session found.`);
         if (previousUser) {
             console.log(`[AuthService] Clearing user data for logged-out user: ${previousUser.uid}`);
-            if (global.modelStateService && typeof global.modelStateService.setUserPlan === 'function') {
-                try {
-                    global.modelStateService.setUserPlan(null, null);
-                } catch (e) {
-                    console.warn('[AuthService] Failed to clear user plan during logout:', e.message);
-                }
-            }
         }
 
         this.currentUser = null;

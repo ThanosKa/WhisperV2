@@ -1,4 +1,4 @@
-const { profilePrompts } = require('./promptTemplates.js');
+const profilePrompts = require('./promptTemplates');
 
 function buildSystemPrompt(promptParts, context = {}, googleSearchEnabled = true) {
     // New simplified path: if a template provides a single `system` string (markdown), use it as-is
@@ -57,7 +57,7 @@ function buildSystemPrompt(promptParts, context = {}, googleSearchEnabled = true
 }
 
 function getSystemPrompt(profile, context, googleSearchEnabled = true) {
-    const promptParts = profilePrompts[profile] || profilePrompts.whisper;
+    const promptParts = profilePrompts[profile] || profilePrompts.assistant;
     const promptContext = typeof context === 'string' ? { context } : context || {};
     const builtPrompt = buildSystemPrompt(promptParts, promptContext, googleSearchEnabled);
     console.log(`[PromptBuilder] Built prompt for profile '${profile}': ${builtPrompt.substring(0, 200)}...`); // Debug log (truncate for brevity)

@@ -22,7 +22,6 @@ const os = require('os');
 const util = require('util');
 const execFile = util.promisify(require('child_process').execFile);
 const { desktopCapturer, screen } = require('electron');
-const modelStateService = require('../common/services/modelStateService');
 const config = require('../common/config/config');
 
 // Try to load sharp, but don't fail if it's not available
@@ -246,15 +245,15 @@ class AskService {
         // Centralized, low-risk routing table
         const MAP = {
             default: {
-                next: 'whisper_next',
-                generic_followup: 'whisper_followup',
-                followup: 'whisper_followup',
-                define: 'whisper_define',
-                question: 'whisper_question',
-                actions: 'whisper_actions',
-                summary: 'whisper_summary',
-                recap: 'whisper_recap',
-                email: 'whisper_email',
+                next: 'assistant_next',
+                generic_followup: 'assistant_followup',
+                followup: 'assistant_followup',
+                define: 'assistant_define',
+                question: 'assistant_question',
+                actions: 'assistant_actions',
+                summary: 'assistant_summary',
+                recap: 'assistant_recap',
+                email: 'assistant_email',
             },
             sales: {
                 next: 'sales_next',
@@ -311,7 +310,7 @@ class AskService {
         };
 
         const table = MAP[preset] || MAP.default;
-        const profileToUse = table[intent] || MAP.default[intent] || 'whisper';
+        const profileToUse = table[intent] || MAP.default[intent] || 'assistant';
 
         // Conversation context policy per intent
         const intentsWithoutContext = new Set(['define']);
@@ -620,8 +619,8 @@ class AskService {
             let { profileToUse, useConversationContext } = this._resolveProfileForIntent(explicitIntent, activePreset);
 
             if (this._forceDefaultProfileOnce) {
-                console.log('[AskService] Manual Ask detected → forcing default profile: whisper');
-                profileToUse = 'whisper';
+                console.log('[AskService] Manual Ask detected → forcing default profile: assistant');
+                profileToUse = 'assistant';
                 // Keep context decision based on intent (e.g., define=false), do not override
             }
 

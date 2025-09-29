@@ -37,7 +37,6 @@ contextBridge.exposeInMainWorld('api', {
     headerController: {
         // State Management
         sendHeaderStateChanged: state => ipcRenderer.send('header-state-changed', state),
-        reInitializeModelState: () => ipcRenderer.invoke('model:re-initialize-state'),
 
         // Window Management
         resizeHeaderWindow: dimensions => ipcRenderer.invoke('resize-header-window', dimensions),
@@ -181,17 +180,6 @@ contextBridge.exposeInMainWorld('api', {
         openPersonalizePage: () => ipcRenderer.invoke('open-personalize-page'),
         firebaseLogout: () => ipcRenderer.invoke('firebase-logout'),
         startWebappAuth: () => ipcRenderer.invoke('start-webapp-auth'),
-
-        // Model & Provider Management
-        getModelSettings: () => ipcRenderer.invoke('settings:get-model-settings'), // Facade call
-        getProviderConfig: () => ipcRenderer.invoke('model:get-provider-config'),
-        getAllKeys: () => ipcRenderer.invoke('model:get-all-keys'),
-        getAvailableModels: type => ipcRenderer.invoke('model:get-available-models', type),
-        getSelectedModels: () => ipcRenderer.invoke('model:get-selected-models'),
-        validateKey: data => ipcRenderer.invoke('model:validate-key', data),
-        saveApiKey: key => ipcRenderer.invoke('model:save-api-key', key),
-        removeApiKey: provider => ipcRenderer.invoke('model:remove-api-key', provider),
-        setSelectedModel: data => ipcRenderer.invoke('model:set-selected-model', data),
 
         // Settings Management
         getPresets: () => ipcRenderer.invoke('settings:getPresets'),

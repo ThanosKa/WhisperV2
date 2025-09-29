@@ -352,7 +352,7 @@ export class MainHeader extends LitElement {
 
     async _fetchUserProfile(sessionUuid) {
         try {
-            const baseUrl = (window.api?.env?.API_BASE_URL || 'https://www.app-whisper.com').replace(/\/$/, '');
+            const baseUrl = (window.api?.env?.API_BASE_URL || 'https://app.glass.ai').replace(/\/$/, '');
             const res = await fetch(`${baseUrl}/api/auth/user-by-session/${sessionUuid}`, {
                 method: 'GET',
                 headers: { 'Content-Type': 'application/json' },
@@ -394,7 +394,7 @@ export class MainHeader extends LitElement {
         if (this.isLoadingPlan) return; // Don't allow clicks while loading
         const isFree = (this.userPlan || 'free') === 'free';
         if (!isFree) return;
-        const baseUrl = (window.api?.env?.API_BASE_URL || 'https://www.app-whisper.com').replace(/\/$/, '');
+        const baseUrl = (window.api?.env?.API_BASE_URL || 'https://app.glass.ai').replace(/\/$/, '');
         const url = `${baseUrl}/pricing`;
         if (window.api) {
             window.api.common.openExternal(url);

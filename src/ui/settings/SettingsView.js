@@ -6,7 +6,6 @@ import { settingsViewStyles } from './settings-view.css.js';
 export class SettingsView extends LitElement {
     static styles = settingsViewStyles;
 
-    //////// after_modelStateService ////////
     static properties = {
         shortcuts: { type: Object, state: true },
         firebaseUser: { type: Object, state: true },
@@ -21,7 +20,6 @@ export class SettingsView extends LitElement {
         showMonitors: { type: Boolean, state: true },
         isLoggingOut: { type: Boolean, state: true },
     };
-    //////// after_modelStateService ////////
 
     constructor() {
         super();
@@ -75,7 +73,6 @@ export class SettingsView extends LitElement {
         this.requestUpdate();
     }
 
-    //////// after_modelStateService ////////
     async loadInitialData() {
         if (!window.api) return;
         this.isLoading = true;
@@ -108,7 +105,6 @@ export class SettingsView extends LitElement {
         console.log('Requesting Firebase authentication from main process...');
         window.api.settingsView.startWebappAuth();
     }
-    //////// after_modelStateService ////////
 
     openShortcutEditor() {
         window.api.settingsView.openShortcutSettingsWindow();
@@ -155,7 +151,6 @@ export class SettingsView extends LitElement {
             }
             this.isLoggingOut = false; // Reset logout state
             this.loadAutoUpdateSetting();
-            // Reload model settings when user state changes (Firebase login/logout)
             this.loadInitialData();
         };
 
@@ -546,7 +541,6 @@ export class SettingsView extends LitElement {
             </div>
         `;
     }
-    //////// after_modelStateService ////////
 }
 
 customElements.define('settings-view', SettingsView);

@@ -56,10 +56,6 @@ class HeaderTransitionManager {
                 });
                 this.permissionHeader.addEventListener('request-auth', this.handlePermissionLoginRequest);
                 this.permissionHeader.continueCallback = async () => {
-                    if (window.api && window.api.headerController) {
-                        console.log('[HeaderController] Re-initializing model state after permission grant...');
-                        await window.api.headerController.reInitializeModelState();
-                    }
                     // Only transition to main if logged in
                     try {
                         const userState = await window.api?.common.getCurrentUser();
@@ -162,7 +158,6 @@ class HeaderTransitionManager {
         }
     }
 
-    //////// after_modelStateService ////////
     async handleStateUpdate(userState) {
         const isLoggedIn = !!(userState && userState.isLoggedIn);
         if (!isLoggedIn) {

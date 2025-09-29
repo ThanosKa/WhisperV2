@@ -58,7 +58,6 @@ const { EventEmitter } = require('events');
 const askService = require('./features/ask/askService');
 const settingsService = require('./features/settings/settingsService');
 const sessionRepository = require('./features/common/repositories/session');
-const modelStateService = require('./features/common/services/modelStateService');
 const featureBridge = require('./bridge/featureBridge');
 const windowBridge = require('./bridge/windowBridge');
 
@@ -66,10 +65,6 @@ const windowBridge = require('./bridge/windowBridge');
 const eventBridge = new EventEmitter();
 let WEB_PORT = 3000;
 let isShuttingDown = false; // Flag to prevent infinite shutdown loop
-
-//////// after_modelStateService ////////
-global.modelStateService = modelStateService;
-//////// after_modelStateService ////////
 
 // Native deep link handling - cross-platform compatible
 let pendingDeepLinkUrl = null;
@@ -258,10 +253,6 @@ app.whenReady().then(async () => {
         // sessionRepository.endAllActiveSessions();
 
         await authService.initialize();
-
-        //////// after_modelStateService ////////
-        await modelStateService.initialize();
-        //////// after_modelStateService ////////
 
         featureBridge.initialize(); // Added: featureBridge initialization
         windowBridge.initialize();
@@ -462,15 +453,6 @@ function setupWebDataHandlers() {
                     break;
                 case 'find-or-create-user':
                     result = await userRepository.findOrCreate(payload);
-                    break;
-                case 'save-api-key':
-                    // Use ModelStateService as the single source of truth for API key management
-                    result = await modelStateService.setApiKey(payload.provider, payload.apiKey);
-                    break;
-                case 'check-api-key-status':
-                    // Use ModelStateService to check API key status
-                    const hasApiKey = await modelStateService.hasValidApiKey();
-                    result = { hasApiKey };
                     break;
                 case 'delete-account':
                     // Adapter injects UID

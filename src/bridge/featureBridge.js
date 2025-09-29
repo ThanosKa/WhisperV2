@@ -2,7 +2,6 @@
 const { ipcMain, app, BrowserWindow } = require('electron');
 const settingsService = require('../features/settings/settingsService');
 const authService = require('../features/common/services/authService');
-const modelStateService = require('../features/common/services/modelStateService');
 const shortcutsService = require('../features/shortcuts/shortcutsService');
 const presetRepository = require('../features/common/repositories/preset');
 const askService = require('../features/ask/askService');
@@ -17,7 +16,6 @@ module.exports = {
         ipcMain.handle('settings:getPresets', async () => await settingsService.getPresets());
         ipcMain.handle('settings:get-auto-update', async () => await settingsService.getAutoUpdateSetting());
         ipcMain.handle('settings:set-auto-update', async (event, isEnabled) => await settingsService.setAutoUpdateSetting(isEnabled));
-        ipcMain.handle('settings:get-model-settings', async () => await settingsService.getModelSettings());
         ipcMain.handle('settings:clear-api-key', async (e, { provider }) => await settingsService.clearApiKey(provider));
         ipcMain.handle('settings:set-selected-model', async (e, { type, modelId }) => await settingsService.setSelectedModel(type, modelId));
 
@@ -142,34 +140,6 @@ module.exports = {
         });
 
         // ModelStateService
-        ipcMain.handle('model:validate-key', async (e, { provider, key }) => await modelStateService.handleValidateKey(provider, key));
-        ipcMain.handle('model:get-all-keys', async () => await modelStateService.getAllApiKeys());
-        ipcMain.handle('model:set-api-key', async (e, { provider, key }) => await modelStateService.setApiKey(provider, key));
-        ipcMain.handle('model:remove-api-key', async (e, provider) => await modelStateService.handleRemoveApiKey(provider));
-        ipcMain.handle('model:get-selected-models', async () => await modelStateService.getSelectedModels());
-        ipcMain.handle('model:set-selected-model', async (e, { type, modelId }) => await modelStateService.handleSetSelectedModel(type, modelId));
-        ipcMain.handle('model:get-available-models', async (e, { type }) => await modelStateService.getAvailableModels(type));
-        ipcMain.handle('model:are-providers-configured', async () => await modelStateService.areProvidersConfigured());
-        ipcMain.handle('model:get-provider-config', () => modelStateService.getProviderConfig());
-        ipcMain.handle('model:re-initialize-state', async () => await modelStateService.initialize());
-
-        // Broadcast ModelStateService events to all windows
-        modelStateService.on('state-updated', state => {
-            BrowserWindow.getAllWindows().forEach(win => {
-                if (win && !win.isDestroyed()) {
-                    win.webContents.send('model-state:updated', state);
-                }
-            });
-        });
-        modelStateService.on('settings-updated', () => {
-            BrowserWindow.getAllWindows().forEach(win => {
-                if (win && !win.isDestroyed()) {
-                    win.webContents.send('settings-updated');
-                }
-            });
-        });
-        // Removed force-show-apikey-header broadcast (ApiKeyHeader removed)
-
         console.log('[FeatureBridge] Initialized with all feature handlers.');
     },
 

@@ -1,6 +1,6 @@
 # Listen STT Architecture (Server‑Side)
 
-This is the single source of truth for the Listen speech‑to‑text (STT) pipeline after migrating realtime STT to a backend relay service.
+This is the single source of truth for the Listen speech‑to‑text (STT) pipeline after migrating realtime STT to a backend relay service. The client no longer opens provider SDKs or manages provider models/keys.
 
 ## 1) High‑Level Flow
 
@@ -65,7 +65,7 @@ Relay protocol (client‑facing)
 
 Client session wrappers
 
-- `sttService` installs lightweight session objects once relay is `CONNECTED`:
+- `sttService` installs lightweight session objects once relay is `CONNECTED` (client is provider‑agnostic):
     - `meSttSession.sendRealtimeInput(payload)` → wraps to `AUDIO` with `stream: 'me'`.
     - `themSttSession.sendRealtimeInput(payload)` → wraps to `AUDIO` with `stream: 'them'`.
 - Renewal/keep‑alive: handled upstream by relay; local timers are no‑ops now.
@@ -130,11 +130,14 @@ Payload shape (both streams)
 
 ## 11) Post‑Migration Cleanup Suggestions
 
-Client no longer opens provider SDK sessions directly. Consider removing or refactoring these now‑stale client artifacts:
+Client no longer opens provider SDK sessions directly. The following client artifacts were removed/pruned:
 
-- STT provider shim (unused by runtime): `src/features/common/ai/providers/gemini.js`
-    - Its `createSTT` and `GeminiProvider` exports are not referenced by `sttService` anymore. Keep only if used by other features/tests.
-- STT factory STT bits: `src/features/common/ai/factory.js`
-    - `createSTT()` appears unused after relay migration. `getProviderClass()` may be kept if model validation UIs depend on it; otherwise prune STT‑specific codepaths.
-- Any direct Gemini Live client usage within main/renderer (search `live.connect`, `sendRealtimeInput` in `src/`).
-- Docs superseded by this file (already removed in this change).
+- Client provider management (models/keys) and related IPC handlers
+- Any direct Gemini/OpenAI client SDK usage
+- Provider‑specific branches in `sttService` (Whisper/OpenAI)
+
+What remains on the client:
+
+- Relay WebSocket client (`sttService`) only
+- UI rendering (`SttView`, `SummaryView`) and local capture
+- Server‑backed LLM via `llmClient`

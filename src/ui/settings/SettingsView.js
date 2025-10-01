@@ -155,7 +155,7 @@ export class SettingsView extends LitElement {
             }
             this.isLoggingOut = false; // Reset logout state
             this.loadAutoUpdateSetting();
-            // Reload model settings when user state changes (Firebase login/logout)
+            // Reload basic settings when user state changes
             this.loadInitialData();
         };
 

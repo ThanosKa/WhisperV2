@@ -15,7 +15,7 @@ This document explains the end-to-end pipeline that turns live speech into struc
 
 1. User starts a Listen session (via the UI) → `ListenService` initializes a DB session and connects to the STT relay WebSocket.
 2. Renderer captures microphone and system audio, streams chunks via IPC to main; `sttService` forwards audio to the relay.
-3. STT relay processes audio server-side (proxies to OpenAI/Gemini), streams partial text for both speakers ("Me" and "Them") and signals turn completion.
+3. STT relay processes audio server-side (provider-agnostic), streams partial text for both speakers ("Me" and "Them") and signals turn completion.
 4. On each final utterance (debounced ~1200ms silence), `ListenService`:
     - Pre-filters very short text (<3 chars, e.g., noise)
     - Saves the transcript row to SQLite
@@ -38,7 +38,7 @@ This document explains the end-to-end pipeline that turns live speech into struc
 - Handles two streams: `Me` (microphone audio via renderer IPC) and `Them` (system audio: renderer loopback on Win/Linux, native `SystemAudioDump` on macOS).
 - Connects to STT relay WebSocket (`ws://localhost:8080` or env `STT_RELAY_URL`) with `X-Session-UUID` auth header.
 - On init: sends `OPEN` message with sessionId, language, streams=['me','them'].
-- Forwards audio chunks as `AUDIO` messages (Base64 PCM 24kHz) to relay; relay proxies to provider (OpenAI conversation API).
+- Forwards audio chunks as `AUDIO` messages (Base64 PCM 24kHz) to relay; relay proxies upstream (provider-agnostic).
 - Receives: `PARTIAL` (deltas/transcripts) → emits partial `stt-update` to renderer; `TURN_COMPLETE`/`completed` → debounces (1200ms), filters noise (e.g., [NOISE]), aggregates final text, calls `onTranscriptionComplete` callback, sends final `stt-update`.
 - Separate buffers/timers per speaker; smart handling for provider messages (e.g., OpenAI `conversation.item.input_audio_transcription.delta/completed`).
 

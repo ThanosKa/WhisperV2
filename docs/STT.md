@@ -1,6 +1,6 @@
 # STT How‑To (Server‑Side Relay Edition)
 
-This doc reflects the current server‑side STT implementation. We no longer open provider SDK sessions in the client. Instead, the Electron main process connects to a backend STT relay over WebSocket. For a broader architectural overview, see `docs/listen-stt-architecture.md`.
+This doc reflects the current server‑side STT implementation. The client no longer manages any provider SDKs, models, or keys. The Electron main process connects to a backend STT relay over WebSocket. For a broader architectural overview, see `docs/listen-stt-architecture.md`.
 
 ## Key Files
 
@@ -71,7 +71,7 @@ switch (message.type) {
 
 ## 2) Session Ownership (Me/Them wrappers)
 
-Relay session wrappers are installed after CONNECTED:
+Relay session wrappers are installed after CONNECTED (client is provider‑agnostic):
 
 ```576:587:src/features/listen/stt/sttService.js
 _installRelaySessions() {
@@ -96,7 +96,7 @@ _sendRelayAudio(stream, payload) {
 
 ## 3) What We Send (Payloads to Relay)
 
-All audio is 24 kHz, 16‑bit PCM, mono, Base64.
+All audio is 24 kHz, 16‑bit PCM, mono, Base64. Client always sends relay‑shaped payloads.
 
 - Mic → Me
 
@@ -179,8 +179,6 @@ this.sendToRenderer('change-listen-capture-state', { status: 'start' });
 
 ## 8) Post‑Migration Cleanup Notes
 
-- Direct provider STT on client is deprecated. The legacy shim remains only for Settings UI compatibility.
-- File `src/features/common/ai/providers/gemini.js` now exports a lightweight `GeminiProvider` (no SDK import) and a deprecated `createSTT()` stub.
-- `createSTT()` should not be used; STT always goes through the relay.
+- Direct provider STT on client was removed. Client has no provider/model selection or key storage. STT always goes through the relay.
 
 Refer also to `docs/listen-stt-architecture.md` for the authoritative architecture.

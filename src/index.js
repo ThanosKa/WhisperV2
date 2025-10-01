@@ -445,11 +445,7 @@ function setupWebDataHandlers() {
                 // USER
                 case 'get-user-profile':
                     // Adapter injects UID
-                    console.log('[WebData] get-user-profile request - current auth state:');
-                    console.log('[WebData] - authService.getCurrentUserId():', authService.getCurrentUserId());
-                    console.log('[WebData] - authService.getCurrentUser():', authService.getCurrentUser());
                     result = await userRepository.getById();
-                    console.log('[WebData] - userRepository.getById() result:', result);
                     break;
                 case 'update-user-profile':
                     // Adapter injects UID

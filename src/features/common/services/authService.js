@@ -376,16 +376,7 @@ class AuthService {
     }
 
     getCurrentUserId() {
-        // Return null for unauthenticated state to prevent fake user creation
-        // Repositories should handle null gracefully by skipping user-specific operations
         const result = this.currentUserId || null;
-        console.log('[AuthService] getCurrentUserId() called, returning:', result || 'null (unauthenticated)');
-        console.log('[AuthService] Current auth state:', {
-            currentUserId: this.currentUserId,
-            currentUserMode: this.currentUserMode,
-            hasCurrentUser: !!this.currentUser,
-            isInitialized: this.isInitialized,
-        });
         return result;
     }
 
@@ -399,36 +390,13 @@ class AuthService {
     }
 
     getCurrentUser() {
-        const isLoggedIn = !!(this.currentUserMode === 'webapp' && this.currentUser);
-
-        console.log('[AuthService] getCurrentUser() called:', {
+        const userState = {
             currentUserMode: this.currentUserMode,
-            hasCurrentUser: !!this.currentUser,
+            hasCurrentUser: !!this.currentUserId,
             currentUserId: this.currentUserId,
-            isLoggedIn: isLoggedIn,
-        });
-
-        if (isLoggedIn) {
-            return {
-                uid: this.currentUser.uid,
-                email: this.currentUser.email,
-                displayName: this.currentUser.displayName,
-                plan: this.currentUser.plan,
-                mode: 'webapp',
-                isLoggedIn: true,
-                sessionUuid: this.sessionUuid,
-            };
-        }
-
-        // Return unauthenticated state - no fake default user
-        return {
-            uid: null,
-            email: null,
-            displayName: null,
-            mode: 'unauthenticated',
-            isLoggedIn: false,
-            plan: null,
+            isLoggedIn: this.isAuthenticated(),
         };
+        return userState;
     }
 
     // Method to refresh user profile data

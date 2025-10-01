@@ -60,7 +60,7 @@ function getSystemPrompt(profile, context, googleSearchEnabled = true) {
     const promptParts = profilePrompts[profile] || profilePrompts.whisper;
     const promptContext = typeof context === 'string' ? { context } : context || {};
     const builtPrompt = buildSystemPrompt(promptParts, promptContext, googleSearchEnabled);
-    console.log(`[PromptBuilder] Built prompt for profile '${profile}': ${builtPrompt.substring(0, 200)}...`); // Debug log (truncate for brevity)
+    // console.log(`[PromptBuilder] Built prompt for profile '${profile}': ${builtPrompt.substring(0, 200)}...`); // Debug log (truncate for brevity)
     return builtPrompt;
 }
 

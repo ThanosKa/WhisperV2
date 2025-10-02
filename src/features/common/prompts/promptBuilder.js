@@ -6,7 +6,7 @@ function buildSystemPrompt(promptParts, context = {}, googleSearchEnabled = true
         const systemText = promptParts.system.trim();
         const ctxString = typeof context === 'string' ? context : context && typeof context.context === 'string' ? context.context : '';
         if (ctxString && ctxString.trim()) {
-            return `${systemText}\n\nContext\n---\n${ctxString.trim()}\n`;
+            return `${systemText}\n\n<Transcription>\n${ctxString.trim()}\n</Transcription>\n`;
         }
         return systemText;
     }
@@ -36,7 +36,7 @@ function buildSystemPrompt(promptParts, context = {}, googleSearchEnabled = true
         sections.push('\n\n', promptParts.content.trim());
         const ctx = typeof context === 'string' ? context : context && typeof context.context === 'string' ? context.context : '';
         if (ctx && ctx.trim()) {
-            sections.push('\n\nConversation context\n-----\n', ctx.trim(), '\n-----\n\n');
+            sections.push('\n\nConversation context\n-----\n<Transcription>\n', ctx.trim(), '\n</Transcription>\n-----\n\n');
         } else {
             sections.push('\n\n');
         }

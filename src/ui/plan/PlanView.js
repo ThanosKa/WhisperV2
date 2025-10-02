@@ -79,29 +79,36 @@ export class PlanView extends LitElement {
         }
 
         try {
-            const user = await window.api.common.getCurrentUser();
+            const userState = await window.api.common.getCurrentUser();
 
-            if (!user || !user.isLoggedIn) {
+            if (!userState || !userState.isLoggedIn) {
                 this._setDefaultUsage();
                 return;
             }
 
-            const plan = user.plan || 'free';
+            const currentUser = userState.currentUser;
+            if (!currentUser) {
+                this._setDefaultUsage();
+                return;
+            }
 
-            if (plan !== 'free') {
+            const plan = currentUser.plan || 'free';
+            const apiQuota = currentUser.apiQuota;
+
+            if (apiQuota) {
                 this.usage = {
-                    plan: 'pro',
-                    used: 0,
-                    remaining: null,
-                    limit: null,
+                    plan: plan,
+                    used: apiQuota.used || 0,
+                    remaining: apiQuota.remaining || 0,
+                    limit: apiQuota.daily || (plan === 'pro' ? null : 10),
                 };
                 this.isLoading = false;
                 return;
             }
 
-            // Fetch full profile for quota data if user has sessionUuid
-            if (user.sessionUuid) {
-                await this._fetchUserProfile(user.sessionUuid);
+            // Fallback: fetch full profile if no quota in userState
+            if (currentUser.sessionUuid) {
+                await this._fetchUserProfile(currentUser.sessionUuid);
             } else {
                 this._setDefaultUsage();
             }

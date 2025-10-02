@@ -18,7 +18,7 @@ class PermissionService {
             if (process.platform === 'darwin') {
                 const authService = this._getAuthService();
                 const currentUser = authService.getCurrentUser();
-                const isKeychainRequired = currentUser.mode === 'firebase';
+                const isKeychainRequired = !!currentUser; // True if user logged in (Clerk auth)
 
                 console.log('[Permissions] User mode:', currentUser.mode, 'Keychain required:', isKeychainRequired);
 

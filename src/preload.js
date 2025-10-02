@@ -20,7 +20,7 @@ contextBridge.exposeInMainWorld('api', {
         // User & Auth
         getCurrentUser: () => ipcRenderer.invoke('get-current-user'),
         startWebappAuth: () => ipcRenderer.invoke('start-webapp-auth'),
-        firebaseLogout: () => ipcRenderer.invoke('firebase-logout'),
+        // firebaseLogout: () => ipcRenderer.invoke('firebase-logout'),  // Removed: Firebase deprecated
 
         // App Control
         quitApplication: () => ipcRenderer.invoke('quit-application'),
@@ -179,8 +179,9 @@ contextBridge.exposeInMainWorld('api', {
         // User & Auth
         getCurrentUser: () => ipcRenderer.invoke('get-current-user'),
         openPersonalizePage: () => ipcRenderer.invoke('open-personalize-page'),
-        firebaseLogout: () => ipcRenderer.invoke('firebase-logout'),
+        // firebaseLogout: () => ipcRenderer.invoke('firebase-logout'),  // Removed: Firebase deprecated
         startWebappAuth: () => ipcRenderer.invoke('start-webapp-auth'),
+        signOut: () => ipcRenderer.invoke('sign-out'), // New: For logout without webapp redirect
 
         // Model & Provider Management
         // Removed provider-model APIs (server-only)

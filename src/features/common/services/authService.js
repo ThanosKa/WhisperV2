@@ -55,22 +55,7 @@ async function validateSession(sessionUuid) {
         throw new Error(profileData.error || `Failed to fetch user profile: ${profileResponse.status}`);
     }
 
-    // Transform Clerk user data to expected SQLite format
-    const clerkUser = profileData.data;
-    const transformedUser = {
-        uid: clerkUser.uid || clerkUser.id, // Try uid first, fallback to id for different Clerk versions
-        displayName: clerkUser.displayName || clerkUser.fullName || clerkUser.firstName || 'User', // Try displayName first
-        email: clerkUser.email || clerkUser.primaryEmailAddress?.emailAddress || 'no-email@example.com', // Try email first, fallback to nested structure
-        plan: clerkUser.plan || 'free', // Keep additional Clerk data
-        apiQuota: clerkUser.apiQuota || null,
-    };
-
-    console.log('[AuthService] Transformed Clerk user data:', {
-        original: clerkUser,
-        transformed: transformedUser,
-    });
-
-    return transformedUser; // Return transformed user data compatible with SQLite schema
+    return profileData.data;
 }
 
 class AuthService {
@@ -395,6 +380,16 @@ class AuthService {
             hasCurrentUser: !!this.currentUserId,
             currentUserId: this.currentUserId,
             isLoggedIn: this.isAuthenticated(),
+            // Add full profile if available
+            currentUser: this.currentUser
+                ? {
+                      uid: this.currentUser.uid,
+                      displayName: this.currentUser.displayName,
+                      email: this.currentUser.email,
+                      plan: this.currentUser.plan,
+                      apiQuota: this.currentUser.apiQuota,
+                  }
+                : null,
         };
         return userState;
     }

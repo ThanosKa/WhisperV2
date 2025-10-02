@@ -139,7 +139,7 @@ export class PermissionHeader extends LitElement {
                 this.requestUpdate();
             }
 
-            const isKeychainRequired = this.userMode === 'firebase';
+            const isKeychainRequired = this.isLoggedIn;
             const keychainOk = !isKeychainRequired || this.keychainGranted === 'granted';
 
             // if all permissions granted and on step 0 == show continue button
@@ -287,7 +287,7 @@ export class PermissionHeader extends LitElement {
     }
 
     async handleContinue() {
-        const isKeychainRequired = this.userMode === 'firebase';
+        const isKeychainRequired = this.isLoggedIn;
         const keychainOk = !isKeychainRequired || this.keychainGranted === 'granted';
 
         if (this.continueCallback && this.microphoneGranted === 'granted' && this.screenGranted === 'granted' && keychainOk) {
@@ -306,7 +306,7 @@ export class PermissionHeader extends LitElement {
     }
 
     async handleCommandsPrimaryAction() {
-        const isKeychainRequired = this.userMode === 'firebase';
+        const isKeychainRequired = this.isLoggedIn;
         const keychainOk = !isKeychainRequired || this.keychainGranted === 'granted';
         const allGranted = this.microphoneGranted === 'granted' && this.screenGranted === 'granted' && keychainOk;
 
@@ -338,7 +338,7 @@ export class PermissionHeader extends LitElement {
     }
 
     renderPermissionsStep() {
-        const isKeychainRequired = this.userMode === 'firebase';
+        const isKeychainRequired = this.isLoggedIn;
         const keychainOk = !isKeychainRequired || this.keychainGranted === 'granted';
         const allGranted = this.microphoneGranted === 'granted' && this.screenGranted === 'granted' && keychainOk;
 
@@ -625,7 +625,7 @@ export class PermissionHeader extends LitElement {
     }
 
     render() {
-        const isKeychainRequired = this.userMode === 'firebase';
+        const isKeychainRequired = this.isLoggedIn;
         const keychainOk = !isKeychainRequired || this.keychainGranted === 'granted';
         const allGranted = this.microphoneGranted === 'granted' && this.screenGranted === 'granted' && keychainOk;
 

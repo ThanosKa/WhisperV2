@@ -270,7 +270,7 @@ class SttService {
                 }
             };
 
-            const sessionUuid = authService?.getCurrentUser()?.sessionUuid;
+            const sessionUuid = authService.sessionUuid || null; // Direct access instead of authService?.getCurrentUser()?.sessionUuid
             if (!sessionUuid) {
                 const error = new Error('STT relay connection blocked: missing authenticated session');
                 console.error('[SttService]', error.message);

@@ -9,7 +9,7 @@ export class SettingsView extends LitElement {
     //////// after_modelStateService ////////
     static properties = {
         shortcuts: { type: Object, state: true },
-        firebaseUser: { type: Object, state: true },
+        user: { type: Object },
         isLoading: { type: Boolean, state: true },
         isContentProtectionOn: { type: Boolean, state: true },
         presets: { type: Array, state: true },
@@ -26,7 +26,7 @@ export class SettingsView extends LitElement {
     constructor() {
         super();
         this.shortcuts = {};
-        this.firebaseUser = null;
+        this.user = null;
         this.isLoading = true;
         this.isContentProtectionOn = true;
         this.presets = [];
@@ -88,7 +88,7 @@ export class SettingsView extends LitElement {
                 window.api.settingsView.getCurrentShortcuts(),
             ]);
 
-            if (userState && userState.isLoggedIn) this.firebaseUser = userState;
+            if (userState && userState.isLoggedIn) this.user = userState;
 
             this.presets = presets || [];
             this.isContentProtectionOn = contentProtection;
@@ -149,9 +149,9 @@ export class SettingsView extends LitElement {
         this._userStateListener = (event, userState) => {
             console.log('[SettingsView] Received user-state-changed:', userState);
             if (userState && userState.isLoggedIn) {
-                this.firebaseUser = userState;
+                this.user = userState.currentUser || userState;
             } else {
-                this.firebaseUser = null;
+                this.user = null;
             }
             this.isLoggingOut = false; // Reset logout state
             this.loadAutoUpdateSetting();
@@ -336,11 +336,22 @@ export class SettingsView extends LitElement {
         window.api.settingsView.quitApplication();
     }
 
-    handleFirebaseLogout() {
-        console.log('Firebase Logout clicked');
+    async handleLogout() {
+        console.log('Logout clicked');
         this.isLoggingOut = true;
         this.requestUpdate();
-        window.api.settingsView.firebaseLogout();
+        try {
+            const result = await window.api.settingsView.signOut();
+            if (result && result.success) {
+                console.log('Logout successful');
+            } else {
+                console.error('Logout failed');
+            }
+        } catch (error) {
+            console.error('Error during logout:', error);
+        }
+        this.isLoggingOut = false;
+        this.requestUpdate();
     }
 
     handleViewOnboarding = async () => {
@@ -379,7 +390,7 @@ export class SettingsView extends LitElement {
                     <div>
                         <h1 class="app-title">Whisper</h1>
                         <div class="account-info">
-                            ${this.firebaseUser ? html`Account: ${this.firebaseUser.email || 'Logged In'}` : `Account: Not Logged In`}
+                            ${this.user ? html`Account: ${this.user.currentUser?.email || this.user.email || 'Logged In'}` : `Account: Not Logged In`}
                         </div>
                     </div>
                 </div>
@@ -503,12 +514,9 @@ export class SettingsView extends LitElement {
                     </div>
 
                     <div class="move-buttons">
-                        ${this.firebaseUser
+                        ${this.user
                             ? html`
-                                  <button
-                                      class="settings-button half-width ${this.isLoggingOut ? 'logout-loading' : ''}"
-                                      @click=${this.handleFirebaseLogout}
-                                  >
+                                  <button class="settings-button half-width ${this.isLoggingOut ? 'logout-loading' : ''}" @click=${this.handleLogout}>
                                       <span>Logout</span>
                                       ${this.isLoggingOut
                                           ? html`

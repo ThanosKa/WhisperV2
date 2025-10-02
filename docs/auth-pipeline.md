@@ -1,178 +1,97 @@
-# Authentication & Identity Pipeline
+# Authentication Pipeline (Updated 2025)
 
-This document explains how authentication works end-to-end across the desktop app (Electron), the hosted web app, and the local web stack. It includes the files involved, requests sent/received, and how the app determines “which user is who”.
+## Overview
 
-## Summary
+Single-user auth per app instance. Desktop owns state via authService; webapp syncs via localStorage injection and API fetches. Flow: UI trigger → remote session init → browser sign-in → deep link callback → validate & persist → broadcast to windows. Data scoped to authService.currentUserId in repos (ignores API headers). Dev mock bypasses for UI testing.
 
-- Desktop initiates auth by creating a temporary web session, then opens the browser for sign‑in.
-- The web app completes sign‑in and calls back via a custom deep link: `pickleglass://auth-success?...`.
-- Electron validates the session (or consumes user info) and sets the current user in `authService`.
-- The main process broadcasts user state and injects user info into renderer `localStorage`.
-- The local frontend adds an `X-User-ID` header for API calls; the local backend receives it but ultimately the main process queries data using its own `authService` user state.
+## Desktop Auth Flow
 
-## Key Files
+1. **UI Trigger**: Renderer calls `window.api.common.startWebappAuth()` → IPC `start-webapp-auth` → authService.startWebappAuthFlow() (src/bridge/featureBridge.js:46, src/features/common/services/authService.js:211).
 
-- Custom URL + Deep link handler: `src/index.js:480` (see `handleCustomUrl`, `handleWebappAuthCallback`)
-- Auth service (flows, persistence, user state):
-  - `src/features/common/services/authService.js:20` (`validateSession`)
-  - `src/features/common/services/authService.js:211` (`startWebappAuthFlow`)
-  - `src/features/common/services/authService.js:249` (`signInWithSession`)
-  - `src/features/common/services/authService.js:294` (`broadcastUserState`)
-- IPC bridge to start auth from UI: `src/bridge/featureBridge.js:46` (`start-webapp-auth`)
-- Renderer env exposure: `src/preload.js:15` (`API_BASE_URL`)
-- Frontend adds identity header: `pickleglass_web/utils/api.ts:171` (`X-User-ID`)
-- Local backend reads identity header: `pickleglass_web/backend_node/middleware/auth.js:1` (`identifyUser`)
-- Local backend → main process IPC: `pickleglass_web/backend_node/ipcBridge.js:1` (`ipcRequest`)
-- Repositories use main `authService` identity:
-  - Sessions: `src/features/common/repositories/session/index.js:1`
-  - Users: `src/features/common/repositories/user/index.js:1`
+2. **Session Init**: POST `${API_BASE_URL}/api/auth/session/init` → { success, data: { session_uuid } } (authService.js:215).
 
-## Desktop → Web Sign‑In Flow
+3. **Browser Sign-In**: Opens `${API_BASE_URL}/session/<uuid>` for Clerk flow (authService.js:235).
 
-1) Start auth from UI
-- Renderer calls `window.api.common.startWebappAuth()` → `ipcMain` `start-webapp-auth` → `authService.startWebappAuthFlow()`
-- File: `src/bridge/featureBridge.js:46`
+4. **Deep Link Callback**: Browser navigates `pickleglass://auth-success?sessionUuid=<uuid>&uid=<id>&email=<email>&displayName=<name>` (or alias ://login). Handled in src/index.js:515 → handleWebappAuthCallback → signInWithSession(sessionUuid, userInfo) (index.js:572-645).
 
-2) Create temporary session on the web
-- POST to remote web app: `POST ${API_BASE_URL}/api/auth/session/init`
-- Headers: `Content-Type: application/json`
-- Response (example):
-  ```json
-  { "success": true, "data": { "session_uuid": "<uuid>" } }
-  ```
-- File: `src/features/common/services/authService.js:215`
+5. **Validation**: If no userInfo in link, GET `/api/auth/session/<uuid>` (status: authenticated), then GET `/api/auth/user-by-session/<uuid>` → transform Clerk profile to { uid, displayName, email, plan, apiQuota } (authService.js:20 validateSession).
 
-3) Open browser to complete sign‑in
-- The app opens: `${API_BASE_URL}/session/<session_uuid>`
-- File: `src/features/common/services/authService.js:235`
+6. **Persist & Set State**: handleUserSignIn(userProfile, sessionUuid): Set currentUserId = uid, currentUserMode = 'webapp', sessionUuid; Persist to electron-store ('auth-session'); Sync to SQLite via userRepository.findOrCreate; End prior sessions; Init encryption key; Update model/plan/quota (authService.js:119-165).
 
-4) Web app calls back via deep link
-- On success the browser navigates: `pickleglass://auth-success?sessionUuid=<uuid>&uid=<id>&email=<email>&displayName=<name>`
-- Example from logs:
-  - Action: `auth-success`
-  - Params:
-    ```json
-    {
-      "sessionUuid": "c5424da2-acff-4b1f-9f00-112fd07af39e",
-      "uid": "user_32ZOTgz9LOujkBegz7APwtVsxfN",
-      "email": "thakawork2@gmail.com",
-      "displayName": "thanos ka"
+7. **Broadcast**: broadcastUserState(): Emit 'user-state-changed' to all windows with { uid, email, displayName, plan, mode: 'webapp', isLoggedIn: true, sessionUuid }; Inject localStorage.pickleglass_user = { uid, display_name, email }; Dispatch 'userInfoChanged' event (authService.js:294).
+
+## Webapp Integration
+
+- **useAuth Hook** (pickleglass_web/utils/auth.ts:1-162): Detects Electron via /runtime-config.json. In Electron: Fetch /api/user/profile to set/overwrite localStorage.pickleglass_user (server-authoritative). Dev mock: Fake user, skip checks. Web mode: Use localStorage or fetch profile.
+
+- **AuthGuard** (components/AuthGuard.tsx:8-68): Wraps routes (via ClientLayout.tsx). Blocks !user || !uid; In Electron, also blocks 'default_user' → redirect /login. Loading spinner during checks.
+
+- **Home Redirect** (app/page.tsx:1-71): In Electron + authenticated (non-default_user) → /personalize; Else /login. Dev mock → /personalize.
+
+- **Login Page** (app/login/page.tsx:9-165): Sync button fetches /api/user/profile, sets localStorage if in Electron.
+
+## Local API & Data Scoping
+
+- **Frontend Headers**: api.ts:178-200 sets X-User-ID from localStorage.pickleglass_user.uid on all /api calls.
+
+- **Backend Middleware**: backend_node/middleware/auth.ts:3-13: identifyUser sets req.uid = X-User-ID or 'default_user'.
+
+- **IPC Bridge**: backend_node/ipcBridge.ts:4-35: ipcRequest emits 'web-data-request' with payload + \_\_uid = req.uid.
+
+- **Electron Handling**: src/index.js:348,528 setupWebDataHandlers listens, calls repos with authService.getCurrentUserId() (ignores \_\_uid). E.g., preset repo (src/features/common/repositories/preset/index.js:1-36): uid = authService.getCurrentUserId(); Queries defaults + user presets (sqlite.repository.js:1-97 joins on uid).
+
+- **Repos Examples**:
+    - Sessions/User: Scope to currentUserId (repositories/session/index.js, user/index.js).
+    - Defaults: Fallback to 'default_user' for unauth (e.g., presets show defaults only).
+
+## Sign-Out
+
+- UI calls window.api.common.firebaseLogout() → IPC firebase-logout → authService.signOut(): Clear currentUser/sessionUuid/mode; Delete electron-store 'auth-session'; End active sessions; Broadcast 'user-state-changed' { isLoggedIn: false }; Remove localStorage.pickleglass_user; Reload windows (bridge/featureBridge.js:47, authService.js:280).
+
+## Key Code Snippets
+
+**Deep Link Handler** (src/index.js:572-645):
+
+```js
+async function handleWebappAuthCallback(params) {
+    const { sessionUuid, uid, email, displayName } = params;
+    const userInfo = { uid, email, displayName: displayName || '' };
+    try {
+        await authService.signInWithSession(sessionUuid, userInfo);
+        // Broadcast and inject
+    } catch (error) {
+        /* log */
     }
-    ```
-- File: `src/index.js:515` (dispatch) → `handleWebappAuthCallback`
+}
+```
 
-## Session Validation + User Profile
+**Repo Scoping** (preset/index.js:11-36):
 
-On deep link, the main process handles auth in one of two ways:
+```js
+getPresets: () => {
+  const uid = authService.getCurrentUserId();
+  return getBaseRepository().getPresets(uid);  // Ignores API __uid
+},
+```
 
-- If deep link included user fields: `authService.signInWithSession(sessionUuid, userInfo)` uses those values.
-- Otherwise it validates via the remote API:
-  1) `GET ${API_BASE_URL}/api/auth/session/<session_uuid>` → `{"success":true,"data":{"status":"authenticated"}}`
-  2) `GET ${API_BASE_URL}/api/auth/user-by-session/<session_uuid>` → Clerk user profile; transformed to local shape:
-     - Input (Clerk-ish): `{ id|uid, displayName|fullName|firstName, email|primaryEmailAddress.emailAddress, plan, apiQuota }`
-     - Output (local): `{ uid, displayName, email, plan, apiQuota }`
+**useAuth Electron Sync** (utils/auth.ts:57-75):
 
-Files:
-- `validateSession`: `src/features/common/services/authService.js:20`
-- `signInWithSession`: `src/features/common/services/authService.js:249`
-
-## Persisting + Broadcasting User State
-
-After successful sign‑in:
-
-- `authService.handleUserSignIn()` sets:
-  - `currentUserId = user.uid`, `currentUserMode = 'webapp'`, `sessionUuid = <uuid>`
-  - Persists to `electron-store` (`auth-session`) and ensures the user exists in SQLite
-  - Ends any previous active sessions for data consistency
-  - Initializes encryption key for the user, then updates model plan/quota state
-- `authService.broadcastUserState()`:
-  - Sends `'user-state-changed'` to all windows with:
-    ```json
-    { "uid": "...", "email": "...", "displayName": "...", "plan": "...", "mode": "webapp", "isLoggedIn": true, "sessionUuid": "..." }
-    ```
-  - Injects renderer `localStorage.pickleglass_user = { uid, display_name, email }` and fires `window.dispatchEvent(new Event('userInfoChanged'))`.
-
-Files:
-- `src/features/common/services/authService.js:134` (handleUserSignIn)
-- `src/features/common/services/authService.js:294` (broadcastUserState)
-
-## Local Frontend → Local Backend Identity
-
-- Frontend attaches identity header on every API call:
-  - Header: `X-User-ID: <uid>`
-  - Where it comes from: `localStorage.pickleglass_user.uid`
-  - File: `pickleglass_web/utils/api.ts:171` (`getApiHeaders`)
-
-- Local backend middleware records the identity:
-  - `identifyUser` reads `X-User-ID` and sets `req.uid` (default `default_user` if missing)
-  - File: `pickleglass_web/backend_node/middleware/auth.js:1`
-
-- For all local API routes, the backend forwards requests to the main process via IPC:
-  - `ipcRequest(req, channel, payload)` emits `web-data-request` and awaits a `responseChannel`
-  - File: `pickleglass_web/backend_node/ipcBridge.js:1`
-
-- The main process repositories do not trust the header; they query using the current user from `authService`:
-  - Sessions: `src/features/common/repositories/session/index.js:1` (injects `authService.getCurrentUserId()`)
-  - Users: `src/features/common/repositories/user/index.js:1`
-
-This means “who the user is” is ultimately governed by the Electron main process `authService` state, not by the HTTP header.
-
-## Renderer Usage Examples
-
-- Read current user state: `window.api.common.getCurrentUser()`
-- React to updates: subscribe to `'user-state-changed'` in renderer
-- Fetch remote plan/quota to show in UI (uses remote API_BASE_URL):
-  - `src/ui/app/MainHeader.js:308`
-  - `src/ui/plan/PlanView.js:74`
-
-## Requests Sent + Responses Received
-
-Remote (hosted web app):
-- POST `/api/auth/session/init` → `{ success, data: { session_uuid } }`
-- GET `/api/auth/session/:session_uuid` → `{ success, data: { status } }`
-- GET `/api/auth/user-by-session/:session_uuid` → `{ success, data: <user_profile> }`
-
-Local (frontend → backend on localhost):
-- All `/api/**` calls include header: `X-User-ID: <uid>`
-- Middleware sets `req.uid` but IPC handlers use `authService.getCurrentUserId()` in the main process for DB operations.
-
-## Deep Link Formats
-
-- Success: `pickleglass://auth-success?sessionUuid=<uuid>&uid=<id>&email=<email>&displayName=<name>`
-- Also accepted alias: `pickleglass://login?...` (handled the same way)
-- Handler switch: `src/index.js:515` → `handleWebappAuthCallback`
-
-## Sign‑Out
-
-- Renderer calls `window.api.common.firebaseLogout()` → main clears user state, ends active sessions, removes `pickleglass_user` from renderer storage
-- Files:
-  - `src/bridge/featureBridge.js:47` → `authService.signOut()`
-  - `src/features/common/services/authService.js:280` (`signOut`)
-
-## Configuration
-
-- Remote web app base URL: `process.env.API_BASE_URL` exposed to renderer via `preload.js`
-- In development (if unset): defaults to `http://localhost:3000` for session/init and `https://www.app-whisper.com` for some UI fetches
-
-## Security Considerations
-
-- Deep link trust: `handleWebappAuthCallback` passes `userInfo` from the deep link to `signInWithSession`. If `userInfo` is provided, `signInWithSession` does not necessarily validate the session with the server.
-  - Recommendation: Always validate `sessionUuid` with the web app, then fetch the authoritative profile and ensure the UID matches before finalizing sign‑in.
-- Local API header: `X-User-ID` can be spoofed by other software on localhost; however, the main process ignores this for DB authorization and uses its own `authService` state instead. Keep it this way unless you introduce remote/local separation.
-- CORS is limited to the local frontend origin; avoid broadening allowed origins.
+```js
+if (isElectronMode) {
+    const apiUser = await getUserProfile(); // /api/user/profile
+    if (apiUser && apiUser.uid) {
+        setUserInfo(profile, true); // Overwrite localStorage
+    }
+}
+```
 
 ## Troubleshooting
 
-- Look for logs:
-  - `[Protocol]`, `[Custom URL]` in `src/index.js`
-  - `[AuthService]` in `src/features/common/services/authService.js`
-  - `[API]` in local backend routes under `pickleglass_web/backend_node`
-- Verify persistence: `electron-store` name `auth-session` stores `sessionUuid` and `userProfile`.
-- Programmatic checks:
-  - `authService.isAuthenticated()` returns true when mode is `webapp` and a user is set
-  - `authService.getCurrentUser()` includes `{ uid, email, displayName, plan, isLoggedIn, sessionUuid }`
+- **Logs**: [AuthService] in authService.js; [API] in backend_node routes; Check electron-store 'auth-session'.
+- **Default User Redirects**: In Electron, AuthGuard blocks 'default_user' → Ensure login flow or /login sync.
+- **Stale localStorage**: Windows reload on broadcast; Fetch /api/user/profile in useAuth overwrites.
+- **Deep Link Fails**: Validate sessionUuid always; Mismatch uid from link vs API → sign-in fails.
+- **Unauth Data**: Repos fallback to defaults; No cross-user access (ownership checks in session ops).
+- **Dev**: NEXT_PUBLIC_DEV_MOCK=1 bypasses; Fake user in localStorage.
 
----
-
-This pipeline ensures identity flows from the hosted sign‑in to the Electron main process and then down to the local UI and API stack, with the main process as the single source of truth for “who the user is”.
-
+For solo dev: Auth is robust, single-source (authService). Test: Login → Check broadcast/logs → API calls scoped correctly (e.g., presets). Edge: External browser needs /login sync.

@@ -42,6 +42,15 @@ export const settingsViewStyles = css`
         opacity: 1;
     }
 
+    /* Auto update toggle opacity */
+    .auto-update-toggle.off {
+        opacity: 0.5;
+    }
+
+    .auto-update-toggle.on {
+        opacity: 1;
+    }
+
     .toggle-switch {
         position: relative;
         width: 32px;

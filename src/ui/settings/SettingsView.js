@@ -12,8 +12,6 @@ export class SettingsView extends LitElement {
         user: { type: Object },
         isLoading: { type: Boolean, state: true },
         isContentProtectionOn: { type: Boolean, state: true },
-        presets: { type: Array, state: true },
-        showPresets: { type: Boolean, state: true },
         autoUpdateEnabled: { type: Boolean, state: true },
         autoUpdateLoading: { type: Boolean, state: true },
         displays: { type: Array, state: true },
@@ -29,8 +27,6 @@ export class SettingsView extends LitElement {
         this.user = null;
         this.isLoading = true;
         this.isContentProtectionOn = true;
-        this.presets = [];
-        this.showPresets = false;
         this.handleUsePicklesKey = this.handleUsePicklesKey.bind(this);
         this.autoUpdateEnabled = true;
         this.autoUpdateLoading = true;
@@ -81,16 +77,14 @@ export class SettingsView extends LitElement {
         this.isLoading = true;
         try {
             // Load essential data only for current UI
-            const [userState, presets, contentProtection, shortcuts] = await Promise.all([
+            const [userState, contentProtection, shortcuts] = await Promise.all([
                 window.api.settingsView.getCurrentUser(),
-                window.api.settingsView.getPresets(),
                 window.api.settingsView.getContentProtectionStatus(),
                 window.api.settingsView.getCurrentShortcuts(),
             ]);
 
             if (userState && userState.isLoggedIn) this.user = userState;
 
-            this.presets = presets || [];
             this.isContentProtectionOn = contentProtection;
             this.shortcuts = shortcuts || {};
             await this.loadDisplays();
@@ -165,21 +159,8 @@ export class SettingsView extends LitElement {
             this.requestUpdate();
         };
 
-        // Add preset update listener
-        this._presetsUpdatedListener = async event => {
-            console.log('[SettingsView] Received presets-updated, refreshing presets');
-            try {
-                const presets = await window.api.settingsView.getPresets();
-                this.presets = presets || [];
-                this.requestUpdate();
-            } catch (error) {
-                console.error('[SettingsView] Failed to refresh presets:', error);
-            }
-        };
-
         window.api.settingsView.onUserStateChanged(this._userStateListener);
         window.api.settingsView.onSettingsUpdated(this._settingsUpdatedListener);
-        window.api.settingsView.onPresetsUpdated(this._presetsUpdatedListener);
     }
 
     cleanupIpcListeners() {
@@ -190,9 +171,6 @@ export class SettingsView extends LitElement {
         }
         if (this._settingsUpdatedListener) {
             window.api.settingsView.removeOnSettingsUpdated(this._settingsUpdatedListener);
-        }
-        if (this._presetsUpdatedListener) {
-            window.api.settingsView.removeOnPresetsUpdated(this._presetsUpdatedListener);
         }
     }
 
@@ -273,10 +251,6 @@ export class SettingsView extends LitElement {
 
         const keys = processedAccelerator.split('+');
         return html`${keys.map(key => html`<span class="shortcut-key">${keyMap[key] || key}</span>`)}`;
-    }
-
-    togglePresets() {
-        this.showPresets = !this.showPresets;
     }
 
     async loadDisplays() {
@@ -447,40 +421,11 @@ export class SettingsView extends LitElement {
                       `
                     : ''}
 
-                <div class="preset-section">
-                    <div class="preset-header">
-                        <span class="preset-title">
-                            My Presets
-                            <span class="preset-count">(${this.presets.filter(p => p.is_default === 0).length})</span>
-                        </span>
-                        <span class="preset-toggle" @click=${this.togglePresets}> ${this.showPresets ? '▼' : '▶'} </span>
-                    </div>
-
-                    <div class="preset-list ${this.showPresets ? '' : 'hidden'}">
-                        ${this.presets.filter(p => p.is_default === 0).length === 0
-                            ? html`
-                                  <div class="no-presets-message">
-                                      No custom presets yet.<br />
-                                      <span class="web-link" @click=${this.handlePersonalize}> Create your first preset </span>
-                                  </div>
-                              `
-                            : this.presets
-                                  .filter(p => p.is_default === 0)
-                                  .map(
-                                      preset => html`
-                                          <div class="preset-item preset-item-plain">
-                                              <span class="preset-name">${preset.title}</span>
-                                          </div>
-                                      `
-                                  )}
-                    </div>
-                </div>
-
                 <div class="buttons-section">
                     <button class="settings-button full-width" @click=${this.handlePersonalize}>
                         <span>Personalize / Meeting Notes</span>
                     </button>
-                    <div class="toggle-container">
+                    <div class="toggle-container auto-update-toggle ${this.autoUpdateEnabled ? 'on' : 'off'}">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
                             width="14"

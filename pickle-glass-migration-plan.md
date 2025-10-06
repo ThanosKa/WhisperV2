@@ -267,11 +267,11 @@ pickleglass.db   queries       profile   sessions
 
 #### Files to Modify
 
-- [ ] `pickleglass_web/components/Sidebar.tsx`: Line 529
-- [ ] `pickleglass_web/app/settings/billing/page.tsx`: Line 63
-- [ ] `src/ui/settings/SettingsView.js`: Lines 30,98,478
-- [ ] `src/index.js`: Line 770 (update message)
-- [ ] `pickleglass_web/backend_node/index.ts`: Line 22
+- [x] `whisper_web/components/Sidebar.tsx`: Line 529
+- [x] `whisper_web/app/settings/billing/page.tsx`: Line 63
+- [x] `src/ui/settings/SettingsView.js`: Lines 30,98,478
+- [x] `src/index.js`: Line 770 (update message)
+- [x] `whisper_web/backend_node/index.ts`: Line 22
 
 #### Order of Operations
 
@@ -359,7 +359,7 @@ pickleglass.db   queries       profile   sessions
 - [x] **Phase 3**: Deep link callbacks work end-to-end
 - [x] **Phase 4**: User data persists across app restarts
 - [x] **Phase 5**: All imports resolve, build pipeline complete
-- [ ] **Phase 6**: UI displays correct product branding
+- [x] **Phase 6**: UI displays correct product branding
 - [ ] **Phase 7**: No outdated references in documentation
 
 ### Critical Path Testing

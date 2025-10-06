@@ -27,7 +27,7 @@ export class SettingsView extends LitElement {
         this.user = null;
         this.isLoading = true;
         this.isContentProtectionOn = true;
-        this.handleUsePicklesKey = this.handleUsePicklesKey.bind(this);
+        this.handleLogin = this.handleLogin.bind(this);
         this.autoUpdateEnabled = true;
         this.autoUpdateLoading = true;
         this.displays = [];
@@ -95,7 +95,7 @@ export class SettingsView extends LitElement {
         }
     }
 
-    handleUsePicklesKey(e) {
+    handleLogin(e) {
         e.preventDefault();
         if (this.wasJustDragged) return;
 
@@ -475,7 +475,7 @@ export class SettingsView extends LitElement {
                                   </button>
                               `
                             : html`
-                                  <button class="settings-button half-width" @click=${this.handleUsePicklesKey}>
+                                  <button class="settings-button half-width" @click=${this.handleLogin}>
                                       <span>Login</span>
                                   </button>
                               `}

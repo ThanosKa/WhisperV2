@@ -526,7 +526,7 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
                 {!isCollapsed && hasApiKey !== null && (
                     <div className="px-2.5 py-2 text-center">
                         <span className={`text-xs px-2 py-1 rounded-full ${hasApiKey ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
-                            {hasApiKey ? 'Local running' : 'Pickle Free System'}
+                            {hasApiKey ? 'Local running' : 'Whisper Free System'}
                         </span>
                     </div>
                 )}

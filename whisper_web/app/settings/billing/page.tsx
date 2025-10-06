@@ -60,7 +60,7 @@ export default function BillingPage() {
                                 <div className="text-3xl font-bold">
                                     $0<span className="text-lg font-normal text-muted-foreground">/month</span>
                                 </div>
-                                <CardDescription>Experience how Pickle Glass works with unlimited responses.</CardDescription>
+                                <CardDescription>Experience how Whisper works with unlimited responses.</CardDescription>
                             </CardHeader>
 
                             <CardContent className="space-y-4">

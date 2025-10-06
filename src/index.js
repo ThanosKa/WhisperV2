@@ -767,7 +767,7 @@ async function initAutoUpdater() {
                 .showMessageBox({
                     type: 'info',
                     title: 'Application Update',
-                    message: `A new version of PickleGlass (${releaseName}) has been downloaded. It will be installed the next time you launch the application.`,
+                    message: `A new version of Whisper (${releaseName}) has been downloaded. It will be installed the next time you launch the application.`,
                     buttons: ['Restart', 'Later'],
                 })
                 .then(response => {

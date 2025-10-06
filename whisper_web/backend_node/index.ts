@@ -19,7 +19,7 @@ function createApp(eventBridge: EventEmitter) {
     app.use(express.json());
 
     app.get('/', (_req: Request, res: Response) => {
-        res.json({ message: 'pickleglass API is running' });
+        res.json({ message: 'whisper API is running' });
     });
 
     app.use((req: Request, _res: Response, next: NextFunction) => {

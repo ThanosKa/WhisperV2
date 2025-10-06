@@ -59,7 +59,7 @@ export default function SyncPage() {
                     email: user.email,
                 };
 
-                localStorage.setItem('pickleglass_user', JSON.stringify(userProfile));
+                localStorage.setItem('whisper_user', JSON.stringify(userProfile));
                 window.dispatchEvent(new Event('userInfoChanged'));
 
                 setSyncStatus('success');

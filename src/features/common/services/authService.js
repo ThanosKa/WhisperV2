@@ -310,7 +310,7 @@ class AuthService {
                             `
                         try {
                             // Update localStorage with user data
-                            localStorage.setItem('pickleglass_user', JSON.stringify(${JSON.stringify(userProfile)}));
+                            localStorage.setItem('whisper_user', JSON.stringify(${JSON.stringify(userProfile)}));
                             
                             // Trigger userInfoChanged event to notify React components
                             window.dispatchEvent(new Event('userInfoChanged'));
@@ -338,7 +338,7 @@ class AuthService {
                         .executeJavaScript(
                             `
                         try {
-                            localStorage.removeItem('pickleglass_user');
+                            localStorage.removeItem('whisper_user');
                             window.dispatchEvent(new Event('userInfoChanged'));
                             console.log('🗑️ Local webapp user data cleared (unauthenticated)');
                         } catch (error) {

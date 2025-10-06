@@ -219,7 +219,7 @@ class SQLiteClient {
             VALUES (?, ?, ?, ?)
         `;
 
-        this.db.prepare(initUserQuery).run(this.defaultUserId, 'Default User', 'contact@pickle.com', now);
+        this.db.prepare(initUserQuery).run(this.defaultUserId, 'Default User', 'contact@whisper.app', now);
 
         const defaultPresets = [
             [

@@ -8,7 +8,7 @@ const { windowPool } = require('../../window/windowManager');
 // Model provider management removed (server-only)
 
 const store = new Store({
-    name: 'pickle-glass-settings',
+    name: 'whisper-settings',
     defaults: {
         users: {},
     },

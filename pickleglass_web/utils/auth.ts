@@ -84,7 +84,7 @@ export const useAuth = () => {
                     }
                 } else {
                     // Web mode: Check localStorage for webapp authentication
-                    const storedUserInfo = localStorage.getItem('pickleglass_user');
+                    const storedUserInfo = localStorage.getItem('whisper_user');
                     if (storedUserInfo) {
                         const profile = JSON.parse(storedUserInfo);
                         if (profile.uid && profile.uid !== 'default_user') {
@@ -118,7 +118,7 @@ export const useAuth = () => {
 
         // Listen for storage changes (e.g., from authentication in another tab)
         const handleStorageChange = (e: StorageEvent) => {
-            if (e.key === 'pickleglass_user') {
+            if (e.key === 'whisper_user') {
                 console.log('🔄 localStorage change detected, rechecking auth...');
                 setRetryCount(0); // Reset retry count on external changes
                 checkStoredAuth();
@@ -144,7 +144,7 @@ export const useAuth = () => {
         // 🔥 Additional listener for desktop app sync
         const handleBeforeUnload = () => {
             // Final sync check before page unload
-            const storedUser = localStorage.getItem('pickleglass_user');
+            const storedUser = localStorage.getItem('whisper_user');
             if (storedUser && JSON.parse(storedUser).uid && JSON.parse(storedUser).uid !== 'default_user') {
                 console.log('🔄 Page unload - ensuring user sync is complete');
             }

@@ -11,15 +11,15 @@ class DatabaseInitializer {
         // Final DB path to be used (writable location)
         const userDataPath = app.getPath('userData');
         // In both development and production mode, the database is stored in the userData directory:
-        //   macOS: ~/Library/Application Support/Glass/pickleglass.db
-        //   Windows: %APPDATA%\Glass\pickleglass.db
-        this.dbPath = path.join(userDataPath, 'pickleglass.db');
+        //   macOS: ~/Library/Application Support/Whisper/whisper.db
+        //   Windows: %APPDATA%\Whisper\whisper.db
+        this.dbPath = path.join(userDataPath, 'whisper.db');
         this.dataDir = userDataPath;
 
         // The original DB path (read-only location in the package)
         this.sourceDbPath = app.isPackaged
-            ? path.join(process.resourcesPath, 'data', 'pickleglass.db')
-            : path.join(app.getAppPath(), 'data', 'pickleglass.db');
+            ? path.join(process.resourcesPath, 'data', 'whisper.db')
+            : path.join(app.getAppPath(), 'data', 'whisper.db');
     }
 
     ensureDatabaseExists() {

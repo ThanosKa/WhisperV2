@@ -14,7 +14,7 @@ class SummaryService {
         this.lastAnalyzedIndex = 0; // Track how many utterances we've already analyzed
         this.detectedQuestions = new Set(); // Track previously detected questions
         this.analysisProfile = 'meeting_analysis'; // base template id
-        this.mockMode = true; // New: Mock STT mode flag (enabled for testing)
+        this.mockMode = false; // New: Mock STT mode flag (enabled for testing)
         console.log('[SummaryService] Mock STT mode enabled by default for testing');
         this.mockDataMap = null; // Will load mock convo data
 

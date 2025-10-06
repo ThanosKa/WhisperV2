@@ -4,8 +4,8 @@ This enables working on the Next.js UI with `npm run dev` (no Electron, no IPC, 
 
 ## TL;DR
 
-- Add/keep `NEXT_PUBLIC_DEV_MOCK=1` in `pickleglass_web/.env.local`.
-- Run: `cd pickleglass_web && npm run dev` → open `http://localhost:3000`.
+- Add/keep `NEXT_PUBLIC_DEV_MOCK=1` in `webapp/.env.local`.
+- Run: `cd webapp && npm run dev` → open `http://localhost:3000`.
 - You are auto “logged in” as a mock user and see fake sessions/presets.
 - No Electron/IPC required; all data is local and persistent in `localStorage`.
 
@@ -17,35 +17,35 @@ This enables working on the Next.js UI with `npm run dev` (no Electron, no IPC, 
 
 ## What Changed (by file)
 
-- `pickleglass_web/utils/devMock.ts` (new)
+- `webapp/utils/devMock.ts` (new)
     - `isDevMockEnabled()` — reads env/URL/localStorage to decide dev mode.
     - Seeds mock user, presets, sessions, and per-session details to `localStorage`.
     - Helpers to get/set presets, sessions, and session details.
     - Keys used:
         - `dev_mock_presets`, `dev_mock_sessions`, `dev_mock_session_details_<id>`, `dev_mock_api_key`, `dev_mock_init`.
 
-- `pickleglass_web/utils/auth.ts`
+- `webapp/utils/auth.ts`
     - If dev mode is enabled, short-circuits auth:
         - Sets mock user in `localStorage.whisper_user`.
         - Returns authenticated state immediately (no redirects, no network).
 
-- `pickleglass_web/utils/api.ts`
+- `webapp/utils/api.ts`
     - If dev mode is enabled:
         - Never calls network. `apiCall()` throws to guard accidental fetches.
         - All data methods return local mock data (sessions, presets, stats, details, CRUD, search, API key status/save, batch).
         - Emits `window` events like `sessionUpdated` and `presetUpdated` for UI refreshes.
         - Skips trying to read `/runtime-config.json`.
 
-- `pickleglass_web/components/AuthGuard.tsx`
+- `webapp/components/AuthGuard.tsx`
     - In dev mode, bypasses checks and renders children immediately.
 
-- `pickleglass_web/app/page.tsx`
+- `webapp/app/page.tsx`
     - In dev mode, redirects directly to `/personalize` for a quick landing.
 
-- `pickleglass_web/app/login/page.tsx`
+- `webapp/app/login/page.tsx`
     - In dev mode, does not attempt Electron sync or fetch `/runtime-config.json`.
 
-- `pickleglass_web/.env.local` (new)
+- `webapp/.env.local` (new)
     - `NEXT_PUBLIC_DEV_MOCK=1` to enable mock mode by default during `npm run dev`.
 
 ## How It Works
@@ -70,7 +70,7 @@ This enables working on the Next.js UI with `npm run dev` (no Electron, no IPC, 
 
 ## Typical Dev Loop
 
-1. `cd pickleglass_web`
+1. `cd webapp`
 2. Ensure `.env.local` has `NEXT_PUBLIC_DEV_MOCK=1`
 3. `npm run dev`
 4. Edit UI, refresh browser — you’ll see changes immediately with fake data.

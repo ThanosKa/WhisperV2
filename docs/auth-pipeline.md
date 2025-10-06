@@ -22,7 +22,7 @@ Single-user auth per app instance. Desktop owns state via authService; webapp sy
 
 ## Webapp Integration
 
-- **useAuth Hook** (pickleglass_web/utils/auth.ts:1-162): Detects Electron via /runtime-config.json. In Electron: Fetch /api/user/profile to set/overwrite localStorage.whisper_user (server-authoritative). Dev mock: Fake user, skip checks. Web mode: Use localStorage or fetch profile.
+- **useAuth Hook** (webapp/utils/auth.ts:1-162): Detects Electron via /runtime-config.json. In Electron: Fetch /api/user/profile to set/overwrite localStorage.whisper_user (server-authoritative). Dev mock: Fake user, skip checks. Web mode: Use localStorage or fetch profile.
 
 - **AuthGuard** (components/AuthGuard.tsx:8-68): Wraps routes (via ClientLayout.tsx). Blocks !user || !uid; In Electron, also blocks 'default_user' → redirect /login. Loading spinner during checks.
 

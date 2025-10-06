@@ -34,7 +34,7 @@ Init: `databaseInitializer` creates tables; seeds defaults (e.g., 'sales', 'recr
 
 - `web-data-request` channels: `get-presets`, `update-preset` → adapter.
 
-## Frontend Flow (Webapp - `pickleglass_web/`)
+## Frontend Flow (Webapp - `webapp/`)
 
 ### API (`utils/api.ts`)
 

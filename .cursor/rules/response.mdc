@@ -11,3 +11,5 @@ suggest a commit message wit this format only if requested:
 <type>(<scope>): <short summary>
 
 ALWAYS remeber that i now use WINDOWS OS so prolly commands is changed from mac/linux since its powershell
+
+ALWAYS when you have a tasks I needed e2e TODO list. the more big is it the better for debugging.

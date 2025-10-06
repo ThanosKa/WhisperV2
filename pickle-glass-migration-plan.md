@@ -166,11 +166,11 @@ pickleglass.db   queries       profile   sessions
 
 #### Files to Modify
 
-- [ ] `src/index.js`: Lines 667-674 (env var assignments), 673-674 (export object)
-- [ ] `src/features/common/config/config.js`: Lines 10,13,55-61,70-87,113
-- [ ] `src/bridge/featureBridge.js`: Line 71
-- [ ] `src/window/windowManager.js`: Line 448
-- [ ] `pickleglass_web/backend_node/index.ts`: Line 9
+- [x] `src/index.js`: Lines 667-674 (env var assignments), 673-674 (export object)
+- [x] `src/features/common/config/config.js`: Lines 10,13,55-61,70-87,113
+- [x] `src/bridge/featureBridge.js`: Line 71
+- [x] `src/window/windowManager.js`: Line 448
+- [x] `pickleglass_web/backend_node/index.ts`: Line 9
 
 #### Order of Operations
 
@@ -355,7 +355,7 @@ pickleglass.db   queries       profile   sessions
 ### Phase-by-Phase Validation
 
 - [x] **Phase 1**: Build succeeds with new bundle ID and package names
-- [ ] **Phase 2**: Environment variables load correctly at startup
+- [x] **Phase 2**: Environment variables load correctly at startup
 - [ ] **Phase 3**: Deep link callbacks work end-to-end
 - [ ] **Phase 4**: User data persists across app restarts
 - [ ] **Phase 5**: All imports resolve, build pipeline complete

@@ -664,14 +664,14 @@ async function startWebStack() {
 
     console.log(`🔧 Allocated ports: API=${apiPort}, Frontend=${frontendPort}`);
 
-    process.env.pickleglass_API_PORT = apiPort.toString();
-    process.env.pickleglass_API_URL = `http://localhost:${apiPort}`;
-    process.env.pickleglass_WEB_PORT = frontendPort.toString();
-    process.env.pickleglass_WEB_URL = `http://localhost:${frontendPort}`;
+    process.env.whisper_API_PORT = apiPort.toString();
+    process.env.whisper_API_URL = `http://localhost:${apiPort}`;
+    process.env.whisper_WEB_PORT = frontendPort.toString();
+    process.env.whisper_WEB_URL = `http://localhost:${frontendPort}`;
 
     console.log(`🌍 Environment variables set:`, {
-        pickleglass_API_URL: process.env.pickleglass_API_URL,
-        pickleglass_WEB_URL: process.env.pickleglass_WEB_URL,
+        whisper_API_URL: process.env.whisper_API_URL,
+        whisper_WEB_URL: process.env.whisper_WEB_URL,
     });
 
     const createBackendApp = require('../pickleglass_web/backend_node/dist');

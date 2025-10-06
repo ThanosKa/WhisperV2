@@ -68,7 +68,7 @@ module.exports = {
 
         // General
         ipcMain.handle('get-preset-templates', () => presetRepository.getPresetTemplates());
-        ipcMain.handle('get-web-url', () => process.env.pickleglass_WEB_URL || 'http://localhost:3000');
+        ipcMain.handle('get-web-url', () => process.env.whisper_WEB_URL || 'http://localhost:3000');
 
         // Ask
         ipcMain.handle('ask:sendQuestionFromAsk', async (event, userPrompt) => {

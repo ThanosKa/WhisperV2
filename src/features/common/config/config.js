@@ -7,10 +7,10 @@ class Config {
     constructor() {
         this.env = process.env.NODE_ENV || 'development';
         this.defaults = {
-            apiUrl: process.env.pickleglass_API_URL || 'http://localhost:9001',
+            apiUrl: process.env.whisper_API_URL || 'http://localhost:9001',
             apiTimeout: 10000,
 
-            webUrl: process.env.pickleglass_WEB_URL || 'http://localhost:3000',
+            webUrl: process.env.whisper_WEB_URL || 'http://localhost:3000',
 
             sttRelayUrl: process.env.STT_RELAY_URL || 'ws://localhost:8080',
 
@@ -52,13 +52,13 @@ class Config {
     }
 
     loadEnvironmentConfig() {
-        if (process.env.pickleglass_API_URL) {
-            this.config.apiUrl = process.env.pickleglass_API_URL;
+        if (process.env.whisper_API_URL) {
+            this.config.apiUrl = process.env.whisper_API_URL;
             console.log(`[Config] API URL from env: ${this.config.apiUrl}`);
         }
 
-        if (process.env.pickleglass_WEB_URL) {
-            this.config.webUrl = process.env.pickleglass_WEB_URL;
+        if (process.env.whisper_WEB_URL) {
+            this.config.webUrl = process.env.whisper_WEB_URL;
             console.log(`[Config] Web URL from env: ${this.config.webUrl}`);
         }
 
@@ -67,24 +67,24 @@ class Config {
             console.log(`[Config] STT relay URL from env: ${this.config.sttRelayUrl}`);
         }
 
-        if (process.env.pickleglass_API_TIMEOUT) {
-            this.config.apiTimeout = parseInt(process.env.pickleglass_API_TIMEOUT);
+        if (process.env.whisper_API_TIMEOUT) {
+            this.config.apiTimeout = parseInt(process.env.whisper_API_TIMEOUT);
         }
 
-        if (process.env.pickleglass_ENABLE_JWT) {
-            this.config.enableJWT = process.env.pickleglass_ENABLE_JWT === 'true';
+        if (process.env.whisper_ENABLE_JWT) {
+            this.config.enableJWT = process.env.whisper_ENABLE_JWT === 'true';
         }
 
-        if (process.env.pickleglass_CACHE_TIMEOUT) {
-            this.config.cacheTimeout = parseInt(process.env.pickleglass_CACHE_TIMEOUT);
+        if (process.env.whisper_CACHE_TIMEOUT) {
+            this.config.cacheTimeout = parseInt(process.env.whisper_CACHE_TIMEOUT);
         }
 
-        if (process.env.pickleglass_LOG_LEVEL) {
-            this.config.logLevel = process.env.pickleglass_LOG_LEVEL;
+        if (process.env.whisper_LOG_LEVEL) {
+            this.config.logLevel = process.env.whisper_LOG_LEVEL;
         }
 
-        if (process.env.pickleglass_DEBUG) {
-            this.config.enableDebugLogging = process.env.pickleglass_DEBUG === 'true';
+        if (process.env.whisper_DEBUG) {
+            this.config.enableDebugLogging = process.env.whisper_DEBUG === 'true';
         }
 
         if (this.env === 'production') {

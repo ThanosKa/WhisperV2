@@ -6,7 +6,7 @@ import { EventEmitter } from 'events';
 function createApp(eventBridge: EventEmitter) {
     const app = express();
 
-    const webUrl = process.env.pickleglass_WEB_URL || 'http://localhost:3000';
+    const webUrl = process.env.whisper_WEB_URL || 'http://localhost:3000';
     console.log(`🔧 Backend CORS configured for: ${webUrl}`);
 
     app.use(

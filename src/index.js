@@ -674,10 +674,10 @@ async function startWebStack() {
         whisper_WEB_URL: process.env.whisper_WEB_URL,
     });
 
-    const createBackendApp = require('../pickleglass_web/backend_node/dist');
+    const createBackendApp = require('../whisper_web/backend_node/dist');
     const nodeApi = createBackendApp(eventBridge);
 
-    const staticDir = app.isPackaged ? path.join(process.resourcesPath, 'out') : path.join(__dirname, '..', 'pickleglass_web', 'out');
+    const staticDir = app.isPackaged ? path.join(process.resourcesPath, 'out') : path.join(__dirname, '..', 'whisper_web', 'out');
 
     const fs = require('fs');
 

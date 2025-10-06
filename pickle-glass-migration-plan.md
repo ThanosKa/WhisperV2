@@ -7,7 +7,7 @@ This plan outlines the complete rebranding of the codebase from "Pickle Glass" t
 **What we're changing:**
 
 - `pickle-glass` → `whisper` (package names, bundle ID)
-- `pickleglass_web/` → `webapp/` (directory structure)
+- `pickleglass_web/` → `whisper_web/` (directory structure)
 - `pickleglass_*` → `whisper_*` (environment variable **names in code** - no .env files exist)
 - `pickleglass://` → `whisper://` (protocol scheme)
 - `pickleglass.db` → `whisper.db` (database file)
@@ -242,12 +242,12 @@ pickleglass.db   queries       profile   sessions
 
 #### Files to Modify
 
-- [ ] Rename `pickleglass_web/` → `webapp/` directory
-- [ ] `src/index.js`: Lines 677,680 (import paths)
-- [ ] `electron-builder.yml`: Lines 26,32 (file paths)
-- [ ] All relative imports within webapp directory
-- [ ] `docs/dev-mock-mode.md`: Directory references
-- [ ] `docs/dev-mock-mode-webapp.md`: Directory references
+- [x] Rename `pickleglass_web/` → `whisper_web/` directory
+- [x] `src/index.js`: Lines 677,680 (import paths)
+- [x] `electron-builder.yml`: Lines 26,32 (file paths)
+- [x] All relative imports within whisper_web directory
+- [x] `docs/dev-mock-mode.md`: Directory references
+- [x] `docs/dev-mock-mode-webapp.md`: Directory references
 
 #### Order of Operations
 
@@ -358,7 +358,7 @@ pickleglass.db   queries       profile   sessions
 - [x] **Phase 2**: Environment variables load correctly at startup
 - [x] **Phase 3**: Deep link callbacks work end-to-end
 - [x] **Phase 4**: User data persists across app restarts
-- [ ] **Phase 5**: All imports resolve, build pipeline complete
+- [x] **Phase 5**: All imports resolve, build pipeline complete
 - [ ] **Phase 6**: UI displays correct product branding
 - [ ] **Phase 7**: No outdated references in documentation
 

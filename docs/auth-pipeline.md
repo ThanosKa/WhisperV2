@@ -12,7 +12,7 @@ Single-user auth per app instance. Desktop owns state via authService; webapp sy
 
 3. **Browser Sign-In**: Opens `${API_BASE_URL}/session/<uuid>` for Clerk flow (authService.js:235).
 
-4. **Deep Link Callback**: Browser navigates `whisper://auth-success?sessionUuid=<uuid>&uid=<id>&email=<email>&displayName=<name>` (or alias ://login). Handled in src/index.js:515 → handleWebappAuthCallback → signInWithSession(sessionUuid, userInfo) (index.js:572-645).
+4. **Deep Link Callback**: Browser navigates `whisper://auth-success?sessionUuid=<uuid>&uid=<id>&email=<email>&displayName=<name>` (or alias ://login). Handled in src/index.js:515 → handleWebappAuthCallback → signInWithSession(sessionUuid, userInfo) (index.js:572-645)..
 
 5. **Validation**: If no userInfo in link, GET `/api/auth/session/<uuid>` (status: authenticated), then GET `/api/auth/user-by-session/<uuid>` → transform Clerk profile to { uid, displayName, email, plan, apiQuota } (authService.js:20 validateSession).
 

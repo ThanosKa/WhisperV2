@@ -24,7 +24,7 @@ Key goals: Streaming responses for Ask UI, structured outputs for analysis, sess
 - `chat(messages)`: Non-stream POST `/api/llm/chat` → `{content, raw}`.
 - `stream(messages, {signal})`: SSE POST `/api/llm/stream` → Response for line-by-line parsing.
 - Auth: Throws if no `sessionUuid`; adds `X-Session-UUID` header.
-- Base URL: From `getBaseUrl()` (env `pickleglass_WEB_URL` or localhost:3000).
+- Base URL: From `getBaseUrl()` (env `whisper_WEB_URL` or localhost:3000).
 
 ### Ask Service (`features/ask/askService.js`)
 
@@ -64,7 +64,7 @@ Server (backend_node): Processes via providers (e.g., OpenAI/Gemini), enforces q
 ## Auth & Config
 
 - **Auth**: `authService.sessionUuid` from webapp sign-in (deep link callback); persists in electron-store. Required for all calls.
-- **Env/Config**: `pickleglass_WEB_URL` (base for API); no client LLM keys (server-handled).
+- **Env/Config**: `whisper_WEB_URL` (base for API); no client LLM keys (server-handled).
 - **Error Handling**: 4xx/5xx → throw/log; stream aborts on signal; analysis falls back to prev result.
 - **Multimodal**: Image as base64 in `image_url`; server supports (e.g., GPT-4V).
 

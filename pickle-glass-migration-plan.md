@@ -190,12 +190,12 @@ pickleglass.db   queries       profile   sessions
 
 #### Files to Modify
 
-- [ ] `src/index.js`: Lines 25,32,78,83,85,88,93,109,141,182,527
-- [ ] `docs/auth-pipeline.md`: Protocol documentation
-- [ ] `docs/dev-mock-mode.md`: Protocol references
-- [ ] `docs/dev-mock-mode-webapp.md`: Protocol references
-- [ ] `docs/llm-pipeline.md`: Base URL references
-- [ ] `docs/presets-pipeline.md`: Directory references
+- [x] `src/index.js`: Lines 25,32,78,83,85,88,93,109,141,182,527
+- [x] `docs/auth-pipeline.md`: Protocol documentation
+- [x] `docs/dev-mock-mode.md`: Protocol references
+- [x] `docs/dev-mock-mode-webapp.md`: Protocol references
+- [x] `docs/llm-pipeline.md`: Base URL references
+- [x] `docs/presets-pipeline.md`: Directory references
 
 #### Order of Operations
 
@@ -356,7 +356,7 @@ pickleglass.db   queries       profile   sessions
 
 - [x] **Phase 1**: Build succeeds with new bundle ID and package names
 - [x] **Phase 2**: Environment variables load correctly at startup
-- [ ] **Phase 3**: Deep link callbacks work end-to-end
+- [x] **Phase 3**: Deep link callbacks work end-to-end
 - [ ] **Phase 4**: User data persists across app restarts
 - [ ] **Phase 5**: All imports resolve, build pipeline complete
 - [ ] **Phase 6**: UI displays correct product branding

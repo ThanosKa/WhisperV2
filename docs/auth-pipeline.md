@@ -12,17 +12,17 @@ Single-user auth per app instance. Desktop owns state via authService; webapp sy
 
 3. **Browser Sign-In**: Opens `${API_BASE_URL}/session/<uuid>` for Clerk flow (authService.js:235).
 
-4. **Deep Link Callback**: Browser navigates `pickleglass://auth-success?sessionUuid=<uuid>&uid=<id>&email=<email>&displayName=<name>` (or alias ://login). Handled in src/index.js:515 → handleWebappAuthCallback → signInWithSession(sessionUuid, userInfo) (index.js:572-645).
+4. **Deep Link Callback**: Browser navigates `whisper://auth-success?sessionUuid=<uuid>&uid=<id>&email=<email>&displayName=<name>` (or alias ://login). Handled in src/index.js:515 → handleWebappAuthCallback → signInWithSession(sessionUuid, userInfo) (index.js:572-645).
 
 5. **Validation**: If no userInfo in link, GET `/api/auth/session/<uuid>` (status: authenticated), then GET `/api/auth/user-by-session/<uuid>` → transform Clerk profile to { uid, displayName, email, plan, apiQuota } (authService.js:20 validateSession).
 
 6. **Persist & Set State**: handleUserSignIn(userProfile, sessionUuid): Set currentUserId = uid, currentUserMode = 'webapp', sessionUuid; Persist to electron-store ('auth-session'); Sync to SQLite via userRepository.findOrCreate; End prior sessions; Init encryption key; Update model/plan/quota (authService.js:119-165).
 
-7. **Broadcast**: broadcastUserState(): Emit 'user-state-changed' to all windows with { uid, email, displayName, plan, mode: 'webapp', isLoggedIn: true, sessionUuid }; Inject localStorage.pickleglass_user = { uid, display_name, email }; Dispatch 'userInfoChanged' event (authService.js:294).
+7. **Broadcast**: broadcastUserState(): Emit 'user-state-changed' to all windows with { uid, email, displayName, plan, mode: 'webapp', isLoggedIn: true, sessionUuid }; Inject localStorage.whisper_user = { uid, display_name, email }; Dispatch 'userInfoChanged' event (authService.js:294).
 
 ## Webapp Integration
 
-- **useAuth Hook** (pickleglass_web/utils/auth.ts:1-162): Detects Electron via /runtime-config.json. In Electron: Fetch /api/user/profile to set/overwrite localStorage.pickleglass_user (server-authoritative). Dev mock: Fake user, skip checks. Web mode: Use localStorage or fetch profile.
+- **useAuth Hook** (pickleglass_web/utils/auth.ts:1-162): Detects Electron via /runtime-config.json. In Electron: Fetch /api/user/profile to set/overwrite localStorage.whisper_user (server-authoritative). Dev mock: Fake user, skip checks. Web mode: Use localStorage or fetch profile.
 
 - **AuthGuard** (components/AuthGuard.tsx:8-68): Wraps routes (via ClientLayout.tsx). Blocks !user || !uid; In Electron, also blocks 'default_user' → redirect /login. Loading spinner during checks.
 
@@ -32,7 +32,7 @@ Single-user auth per app instance. Desktop owns state via authService; webapp sy
 
 ## Local API & Data Scoping
 
-- **Frontend Headers**: api.ts:178-200 sets X-User-ID from localStorage.pickleglass_user.uid on all /api calls.
+- **Frontend Headers**: api.ts:178-200 sets X-User-ID from localStorage.whisper_user.uid on all /api calls.
 
 - **Backend Middleware**: backend_node/middleware/auth.ts:3-13: identifyUser sets req.uid = X-User-ID or 'default_user'.
 
@@ -46,7 +46,7 @@ Single-user auth per app instance. Desktop owns state via authService; webapp sy
 
 ## Sign-Out
 
-- UI calls window.api.common.firebaseLogout() → IPC firebase-logout → authService.signOut(): Clear currentUser/sessionUuid/mode; Delete electron-store 'auth-session'; End active sessions; Broadcast 'user-state-changed' { isLoggedIn: false }; Remove localStorage.pickleglass_user; Reload windows (bridge/featureBridge.js:47, authService.js:280).
+- UI calls window.api.common.firebaseLogout() → IPC firebase-logout → authService.signOut(): Clear currentUser/sessionUuid/mode; Delete electron-store 'auth-session'; End active sessions; Broadcast 'user-state-changed' { isLoggedIn: false }; Remove localStorage.whisper_user; Reload windows (bridge/featureBridge.js:47, authService.js:280).
 
 ## Key Code Snippets
 

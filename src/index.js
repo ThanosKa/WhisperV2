@@ -22,14 +22,14 @@ if (process.platform === 'win32' && !app.isPackaged) {
     const repoRoot = path.resolve(__dirname, '..'); // repo folder
     const correctCmd = `"${process.execPath}" "${repoRoot}" "%1"`;
 
-    const key = 'HKCU\\Software\\Classes\\pickleglass\\shell\\open\\command';
+    const key = 'HKCU\\Software\\Classes\\whisper\\shell\\open\\command';
 
     // 1) check current value
     const { stdout } = spawnSync('reg', ['query', key, '/ve'], { encoding: 'utf8' });
     const needsUpdate = !stdout || !stdout.includes(correctCmd);
 
     if (needsUpdate) {
-        console.log('[Dev] Re-registering pickleglass:// protocol');
+        console.log('[Dev] Re-registering whisper:// protocol');
         // 2) set new value
         const { status, stderr } = spawnSync('reg', ['add', key, '/ve', '/d', correctCmd, '/f'], { encoding: 'utf8' });
         if (status !== 0) {
@@ -75,22 +75,22 @@ function setupProtocolHandling() {
     // Protocol registration - must be done before app is ready
     try {
         const isDevRegistration = process.defaultApp || !app.isPackaged;
-        if (!app.isDefaultProtocolClient('pickleglass')) {
+        if (!app.isDefaultProtocolClient('whisper')) {
             // In dev, pass the app folder as an argument so Windows launches the correct project
             let success = false;
             if (isDevRegistration) {
                 const appArg = process.argv.length >= 2 ? [path.resolve(process.argv[1])] : [];
-                success = app.setAsDefaultProtocolClient('pickleglass', process.execPath, appArg);
+                success = app.setAsDefaultProtocolClient('whisper', process.execPath, appArg);
             } else {
-                success = app.setAsDefaultProtocolClient('pickleglass');
+                success = app.setAsDefaultProtocolClient('whisper');
             }
             if (success) {
-                console.log('[Protocol] Successfully set as default protocol client for pickleglass://');
+                console.log('[Protocol] Successfully set as default protocol client for whisper://');
             } else {
                 console.warn('[Protocol] Failed to set as default protocol client - this may affect deep linking');
             }
         } else {
-            console.log('[Protocol] Already registered as default protocol client for pickleglass://');
+            console.log('[Protocol] Already registered as default protocol client for whisper://');
         }
     } catch (error) {
         console.error('[Protocol] Error during protocol registration:', error);
@@ -106,7 +106,7 @@ function setupProtocolHandling() {
 
         // Search through all command line arguments for a valid protocol URL
         for (const arg of commandLine) {
-            if (arg && typeof arg === 'string' && arg.startsWith('pickleglass://')) {
+            if (arg && typeof arg === 'string' && arg.startsWith('whisper://')) {
                 // Clean up the URL by removing problematic characters
                 const cleanUrl = arg.replace(/[\\₩]/g, '');
 
@@ -138,7 +138,7 @@ function setupProtocolHandling() {
         event.preventDefault();
         console.log('[Protocol] Received URL via open-url:', url);
 
-        if (!url || !url.startsWith('pickleglass://')) {
+        if (!url || !url.startsWith('whisper://')) {
             console.warn('[Protocol] Invalid URL format:', url);
             return;
         }
@@ -179,7 +179,7 @@ function focusMainWindow() {
 
 if (process.platform === 'win32') {
     for (const arg of process.argv) {
-        if (arg && typeof arg === 'string' && arg.startsWith('pickleglass://')) {
+        if (arg && typeof arg === 'string' && arg.startsWith('whisper://')) {
             // Clean up the URL by removing problematic characters (korean characters issue...)
             const cleanUrl = arg.replace(/[\\₩]/g, '');
 
@@ -524,7 +524,7 @@ async function handleCustomUrl(url) {
         console.log('[Custom URL] Processing URL:', url);
 
         // Validate and clean URL
-        if (!url || typeof url !== 'string' || !url.startsWith('pickleglass://')) {
+        if (!url || typeof url !== 'string' || !url.startsWith('whisper://')) {
             console.error('[Custom URL] Invalid URL format:', url);
             return;
         }

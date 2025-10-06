@@ -263,7 +263,7 @@ pickleglass.db   queries       profile   sessions
 
 ### Phase 6: UI Text and Branding (1 day)
 
-**Risk**: Low | **Files**: 6 | **Test**: Visual verification
+**Risk**: Low | **Files**: 11 | **Test**: Visual verification
 
 #### Files to Modify
 
@@ -272,6 +272,12 @@ pickleglass.db   queries       profile   sessions
 - [x] `src/ui/settings/SettingsView.js`: Lines 30,98,478
 - [x] `src/index.js`: Line 770 (update message)
 - [x] `whisper_web/backend_node/index.ts`: Line 22
+- [x] `src/ui/app/header.html`: HTML title tag
+- [x] `src/ui/app/content.html`: HTML title tag and custom element usage
+- [x] `src/ui/app/PickleGlassApp.js` → `WhisperApp.js`: Component class, custom element name
+- [x] `package.json`: Author field ("Pickle Team" → "Whisper Team")
+- [x] `build.js`: Build entry point path
+- [x] `src/preload.js`: Comment reference
 
 #### Order of Operations
 

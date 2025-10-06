@@ -107,7 +107,7 @@ contextBridge.exposeInMainWorld('api', {
         initializeEncryptionKey: () => ipcRenderer.invoke('initialize-encryption-key'), // New for keychain
     },
 
-    // src/ui/app/PickleGlassApp.js
+    // src/ui/app/WhisperApp.js
     pickleGlassApp: {
         // Listeners
         onClickThroughToggled: callback => ipcRenderer.on('click-through-toggled', callback),

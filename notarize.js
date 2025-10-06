@@ -16,7 +16,7 @@ exports.notarizeApp = async function (context) {
     }
 
     await notarize({
-        appBundleId: 'com.pickle.glass',
+        appBundleId: 'com.whisper.app',
         appPath: appPath,
         appleId: process.env.APPLE_ID,
         appleIdPassword: process.env.APPLE_ID_PASSWORD,

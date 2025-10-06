@@ -1,23 +1,23 @@
 # electron-builder.yml
 
 # The unique application ID
-appId: com.pickle.glass
+appId: com.whisper.app
 
 # The user-facing application name
-productName: Glass
+productName: Whisper
 
 # Publish configuration for GitHub releases
 publish:
     provider: github
-    owner: pickle-com
-    repo: glass
+    owner: whisper-app
+    repo: whisper
     releaseType: draft
 
 # Protocols configuration for deep linking
 protocols:
-    name: PickleGlass Protocol
+    name: Whisper Protocol
     schemes:
-        - pickleglass
+        - whisper
 
 # List of files to be included in the app package
 files:

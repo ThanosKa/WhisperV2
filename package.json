@@ -1,6 +1,6 @@
 {
-    "name": "pickle-glass",
-    "productName": "Glass",
+    "name": "whisper",
+    "productName": "Whisper",
     "version": "0.2.4",
     "description": "Cl*ely for Free",
     "main": "src/index.js",
@@ -20,8 +20,7 @@
         "watch:renderer": "node build.js --watch"
     },
     "keywords": [
-        "glass",
-        "pickle glass",
+        "whisper",
         "ai assistant",
         "real-time",
         "live summary",

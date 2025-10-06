@@ -6,3 +6,6 @@ alwaysApply: true
 
 Never explain me in detail. Always be short on your responses.
 never write me big explanations. never. your output otken must be short
+
+suggest a commit message wit this format only if requested:
+<type>(<scope>): <short summary>

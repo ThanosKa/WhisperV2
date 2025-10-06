@@ -83,7 +83,7 @@ class WindowLayoutManager {
         const { x: workAreaX, y: workAreaY, width: screenWidth, height: screenHeight } = display.workArea;
 
         const PAD = 5;
-        const buttonPadding = 170;
+        const buttonPadding = 100;
 
         const x = headerBounds.x + headerBounds.width - settingsBounds.width + buttonPadding;
         const y = headerBounds.y + headerBounds.height + PAD;

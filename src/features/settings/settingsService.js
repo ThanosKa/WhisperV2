@@ -5,7 +5,7 @@ const settingsRepository = require('./repositories');
 const { windowPool } = require('../../window/windowManager');
 
 // New imports for common services
-const modelStateService = require('../common/services/modelStateService');
+// Model provider management removed (server-only)
 
 const store = new Store({
     name: 'pickle-glass-settings',
@@ -22,33 +22,7 @@ const NOTIFICATION_CONFIG = {
     RETRY_BASE_DELAY: 1000, // exponential backoff base (ms)
 };
 
-// New facade functions for model state management
-async function getModelSettings() {
-    try {
-        const [config, storedKeys, selectedModels, availableLlm, availableStt] = await Promise.all([
-            modelStateService.getProviderConfig(),
-            modelStateService.getAllApiKeys(),
-            modelStateService.getSelectedModels(),
-            modelStateService.getAvailableModels('llm'),
-            modelStateService.getAvailableModels('stt'),
-        ]);
-
-        return { success: true, data: { config, storedKeys, availableLlm, availableStt, selectedModels } };
-    } catch (error) {
-        console.error('[SettingsService] Error getting model settings:', error);
-        return { success: false, error: error.message };
-    }
-}
-
-async function clearApiKey(provider) {
-    const success = await modelStateService.handleRemoveApiKey(provider);
-    return { success };
-}
-
-async function setSelectedModel(type, modelId) {
-    const success = await modelStateService.handleSetSelectedModel(type, modelId);
-    return { success };
-}
+// Removed provider-model facade functions
 
 // window targeting system
 class WindowNotificationManager {
@@ -257,55 +231,7 @@ async function updatePreset(id, updates) {
     }
 }
 
-async function saveApiKey(apiKey, provider = 'gemini') {
-    try {
-        // Use ModelStateService as the single source of truth for API key management
-        const modelStateService = global.modelStateService;
-        if (!modelStateService) {
-            throw new Error('ModelStateService not initialized');
-        }
-
-        await modelStateService.setApiKey(provider, apiKey);
-
-        // Notify windows
-        BrowserWindow.getAllWindows().forEach(win => {
-            if (!win.isDestroyed()) {
-                win.webContents.send('api-key-validated', apiKey);
-            }
-        });
-
-        return { success: true };
-    } catch (error) {
-        console.error('[SettingsService] Error saving API key:', error);
-        return { success: false, error: error.message };
-    }
-}
-
-async function removeApiKey() {
-    try {
-        // Use ModelStateService as the single source of truth for API key management
-        const modelStateService = global.modelStateService;
-        if (!modelStateService) {
-            throw new Error('ModelStateService not initialized');
-        }
-
-        // Remove API key for supported provider (Gemini only)
-        await modelStateService.removeApiKey('gemini');
-
-        // Notify windows
-        BrowserWindow.getAllWindows().forEach(win => {
-            if (!win.isDestroyed()) {
-                win.webContents.send('api-key-removed');
-            }
-        });
-
-        console.log('[SettingsService] API key removed for Gemini');
-        return { success: true };
-    } catch (error) {
-        console.error('[SettingsService] Error removing API key:', error);
-        return { success: false, error: error.message };
-    }
-}
+// Removed API key save/remove (server-only)
 
 async function updateContentProtection(enabled) {
     try {
@@ -374,13 +300,7 @@ module.exports = {
     getPresets,
     getPresetTemplates,
     updatePreset,
-    saveApiKey,
-    removeApiKey,
     updateContentProtection,
     getAutoUpdateSetting,
     setAutoUpdateSetting,
-    // Model settings facade
-    getModelSettings,
-    clearApiKey,
-    setSelectedModel,
 };

@@ -55,22 +55,7 @@ async function validateSession(sessionUuid) {
         throw new Error(profileData.error || `Failed to fetch user profile: ${profileResponse.status}`);
     }
 
-    // Transform Clerk user data to expected SQLite format
-    const clerkUser = profileData.data;
-    const transformedUser = {
-        uid: clerkUser.uid || clerkUser.id, // Try uid first, fallback to id for different Clerk versions
-        displayName: clerkUser.displayName || clerkUser.fullName || clerkUser.firstName || 'User', // Try displayName first
-        email: clerkUser.email || clerkUser.primaryEmailAddress?.emailAddress || 'no-email@example.com', // Try email first, fallback to nested structure
-        plan: clerkUser.plan || 'free', // Keep additional Clerk data
-        apiQuota: clerkUser.apiQuota || null,
-    };
-
-    console.log('[AuthService] Transformed Clerk user data:', {
-        original: clerkUser,
-        transformed: transformedUser,
-    });
-
-    return transformedUser; // Return transformed user data compatible with SQLite schema
+    return profileData.data;
 }
 
 class AuthService {
@@ -376,16 +361,7 @@ class AuthService {
     }
 
     getCurrentUserId() {
-        // Return null for unauthenticated state to prevent fake user creation
-        // Repositories should handle null gracefully by skipping user-specific operations
         const result = this.currentUserId || null;
-        console.log('[AuthService] getCurrentUserId() called, returning:', result || 'null (unauthenticated)');
-        console.log('[AuthService] Current auth state:', {
-            currentUserId: this.currentUserId,
-            currentUserMode: this.currentUserMode,
-            hasCurrentUser: !!this.currentUser,
-            isInitialized: this.isInitialized,
-        });
         return result;
     }
 
@@ -399,36 +375,23 @@ class AuthService {
     }
 
     getCurrentUser() {
-        const isLoggedIn = !!(this.currentUserMode === 'webapp' && this.currentUser);
-
-        console.log('[AuthService] getCurrentUser() called:', {
+        const userState = {
             currentUserMode: this.currentUserMode,
-            hasCurrentUser: !!this.currentUser,
+            hasCurrentUser: !!this.currentUserId,
             currentUserId: this.currentUserId,
-            isLoggedIn: isLoggedIn,
-        });
-
-        if (isLoggedIn) {
-            return {
-                uid: this.currentUser.uid,
-                email: this.currentUser.email,
-                displayName: this.currentUser.displayName,
-                plan: this.currentUser.plan,
-                mode: 'webapp',
-                isLoggedIn: true,
-                sessionUuid: this.sessionUuid,
-            };
-        }
-
-        // Return unauthenticated state - no fake default user
-        return {
-            uid: null,
-            email: null,
-            displayName: null,
-            mode: 'unauthenticated',
-            isLoggedIn: false,
-            plan: null,
+            isLoggedIn: this.isAuthenticated(),
+            // Add full profile if available
+            currentUser: this.currentUser
+                ? {
+                      uid: this.currentUser.uid,
+                      displayName: this.currentUser.displayName,
+                      email: this.currentUser.email,
+                      plan: this.currentUser.plan,
+                      apiQuota: this.currentUser.apiQuota,
+                  }
+                : null,
         };
+        return userState;
     }
 
     // Method to refresh user profile data

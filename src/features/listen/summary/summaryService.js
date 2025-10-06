@@ -310,8 +310,31 @@ class SummaryService {
             }, 120000); // 2 min
         }
 
+        // SEPARATE: Show UI actions after FIRST utterance (no LLM call)
+        if (this.conversationHistory.length === 1) {
+            this.triggerInitialUIState();
+        }
+
         // Trigger analysis if needed (skipped in mock)
         this.triggerAnalysisIfNeeded();
+    }
+
+    /**
+     * Trigger initial UI state after first utterance - shows default actions WITHOUT LLM call
+     */
+    triggerInitialUIState() {
+        console.log('[SummaryTrigger] FIRST UTTERANCE: Showing initial UI actions (no LLM call)');
+
+        // Create initial state with default actions only
+        const initialData = {
+            summary: [], // Empty - will show "No insights yet"
+            actions: [], // Empty initially - SummaryView will add defaults when hasReceivedFirstText=true
+            followUps: [],
+            presetId: this.selectedPresetId,
+        };
+
+        // Send to UI to trigger display of default actions
+        this.sendToRenderer('summary-update', initialData);
     }
 
     getConversationHistory() {

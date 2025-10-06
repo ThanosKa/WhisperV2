@@ -655,9 +655,9 @@ class AskService {
             try {
                 const parts = Array.isArray(messages?.[1]?.content) ? messages[1].content.map(c => c.type || 'text') : ['text'];
                 const hasImagePart = parts.includes('image_url');
-                console.log('[AskService] sending request to llm', { parts, hasImagePart });
+                // console.log('[AskService] sending request to llm', { parts, hasImagePart });
             } catch (_) {
-                console.log('[AskService] sending request to llm');
+                // console.log('[AskService] sending request to llm');
             }
 
             // Write LLM input to response.txt

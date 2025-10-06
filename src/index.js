@@ -58,7 +58,6 @@ const { EventEmitter } = require('events');
 const askService = require('./features/ask/askService');
 const settingsService = require('./features/settings/settingsService');
 const sessionRepository = require('./features/common/repositories/session');
-const modelStateService = require('./features/common/services/modelStateService');
 const featureBridge = require('./bridge/featureBridge');
 const windowBridge = require('./bridge/windowBridge');
 
@@ -67,9 +66,7 @@ const eventBridge = new EventEmitter();
 let WEB_PORT = 3000;
 let isShuttingDown = false; // Flag to prevent infinite shutdown loop
 
-//////// after_modelStateService ////////
-global.modelStateService = modelStateService;
-//////// after_modelStateService ////////
+// Model provider management removed (server-only); no global modelStateService
 
 // Native deep link handling - cross-platform compatible
 let pendingDeepLinkUrl = null;
@@ -259,9 +256,7 @@ app.whenReady().then(async () => {
 
         await authService.initialize();
 
-        //////// after_modelStateService ////////
-        await modelStateService.initialize();
-        //////// after_modelStateService ////////
+        // Removed modelStateService initialization (server-only)
 
         featureBridge.initialize(); // Added: featureBridge initialization
         windowBridge.initialize();
@@ -450,11 +445,7 @@ function setupWebDataHandlers() {
                 // USER
                 case 'get-user-profile':
                     // Adapter injects UID
-                    console.log('[WebData] get-user-profile request - current auth state:');
-                    console.log('[WebData] - authService.getCurrentUserId():', authService.getCurrentUserId());
-                    console.log('[WebData] - authService.getCurrentUser():', authService.getCurrentUser());
                     result = await userRepository.getById();
-                    console.log('[WebData] - userRepository.getById() result:', result);
                     break;
                 case 'update-user-profile':
                     // Adapter injects UID
@@ -463,15 +454,7 @@ function setupWebDataHandlers() {
                 case 'find-or-create-user':
                     result = await userRepository.findOrCreate(payload);
                     break;
-                case 'save-api-key':
-                    // Use ModelStateService as the single source of truth for API key management
-                    result = await modelStateService.setApiKey(payload.provider, payload.apiKey);
-                    break;
-                case 'check-api-key-status':
-                    // Use ModelStateService to check API key status
-                    const hasApiKey = await modelStateService.hasValidApiKey();
-                    result = { hasApiKey };
-                    break;
+                // Removed save/check api key routes (server-only)
                 case 'delete-account':
                     // Adapter injects UID
                     result = await userRepository.deleteById();
@@ -515,6 +498,14 @@ function setupWebDataHandlers() {
                     result = batchResult;
                     break;
 
+                case 'save-api-key':
+                    // Server-only; accept and no-op
+                    result = { success: true };
+                    break;
+                case 'check-api-key-status':
+                    // Always report configured in server-only mode
+                    result = { hasApiKey: true };
+                    break;
                 default:
                     throw new Error(`Unknown web data channel: ${channel}`);
             }

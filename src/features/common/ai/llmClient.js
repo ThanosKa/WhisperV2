@@ -11,7 +11,7 @@ function getBaseUrl() {
 
 async function chat(messages) {
     const baseUrl = getBaseUrl();
-    const sessionUuid = authService?.getCurrentUser()?.sessionUuid || null;
+    const sessionUuid = authService.sessionUuid || null; // Direct access
     if (!sessionUuid) {
         throw new Error('Not authenticated: missing session. Please sign in.');
     }
@@ -36,7 +36,7 @@ async function chat(messages) {
 
 async function stream(messages, { signal } = {}) {
     const baseUrl = getBaseUrl();
-    const sessionUuid = authService?.getCurrentUser()?.sessionUuid || null;
+    const sessionUuid = authService.sessionUuid || null; // Direct access
     if (!sessionUuid) {
         throw new Error('Not authenticated: missing session. Please sign in.');
     }

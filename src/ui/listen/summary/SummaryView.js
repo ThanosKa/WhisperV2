@@ -1,6 +1,8 @@
 import { html, LitElement } from '../../assets/lit-core-2.7.4.min.js';
 import { summaryViewStyles } from './summary-view.css.js';
 
+const DEFAULT_ACTIONS = ['✨ What should I say next?', '💬 Suggest follow-up questions'];
+
 export class SummaryView extends LitElement {
     static styles = summaryViewStyles;
 
@@ -56,6 +58,11 @@ export class SummaryView extends LitElement {
                 this.hasReceivedFirstText = true; // Mark that we've received first text
                 this.presetId = data.presetId || null;
                 this.buildFlattenedLists();
+
+                // Ensure default actions are always present after first text
+                if (this.hasReceivedFirstText) {
+                    this.ensureDefaultActions();
+                }
                 this.requestUpdate();
             });
 
@@ -67,7 +74,8 @@ export class SummaryView extends LitElement {
                     if (history && history.length > 0) {
                         this.clearPlaceholderTimer();
                         this.hasReceivedFirstText = true;
-                        this.buildFlattenedLists();
+                        // Ensure default actions are present
+                        this.ensureDefaultActions();
                         this.requestUpdate();
                     }
                 });
@@ -101,13 +109,14 @@ export class SummaryView extends LitElement {
         this.allActions = Array.from(actions).reverse();
         this.allFollowUps = Array.from(followUps).reverse();
         this.allSummary = Array.from(summaryBullets).reverse();
+    }
 
-        const fixedActionSet = new Set(
-            this.allActions.filter(a => a.includes('What should I say next') || a.includes('Suggest follow-up') || a.includes('Recap meeting'))
-        );
-
-        this.fixedActions = Array.from(fixedActionSet);
-        this.scrollableActions = this.allActions.filter(a => !fixedActionSet.has(a));
+    ensureDefaultActions() {
+        DEFAULT_ACTIONS.forEach(action => {
+            if (!this.allActions.includes(action)) {
+                this.allActions.push(action);
+            }
+        });
     }
 
     disconnectedCallback() {
@@ -395,8 +404,17 @@ export class SummaryView extends LitElement {
             actions: [],
         };
 
-        const hasAnyContent = this.allSummary.length > 0 || data.actions.length > 0 || this.allActions.length > 0;
+        const hasAnyContent = this.allSummary.length > 0 || this.allActions.length > 0 || data.actions.length > 0;
         const rawSections = Array.isArray(this.structuredData?.rawLLMOutput?.sections) ? this.structuredData.rawLLMOutput.sections : null;
+
+        const fixedActionSet = new Set(
+            this.allActions.filter(
+                action => action.includes('What should I say next') || action.includes('Suggest follow-up') || action.includes('Recap meeting')
+            )
+        );
+
+        const fixedActions = Array.from(fixedActionSet);
+        const scrollableActions = this.allActions.filter(action => !fixedActionSet.has(action));
 
         return html`
             <div class="insights-container">
@@ -455,10 +473,10 @@ export class SummaryView extends LitElement {
                           <insights-title>Actions</insights-title>
 
                           <!-- Scrollable LLM Actions (Top) -->
-                          ${this.scrollableActions.length > 0
+                          ${scrollableActions.length > 0
                               ? html`
                                     <div class="scrollable-actions-container">
-                                        ${this.scrollableActions.map(
+                                        ${scrollableActions.map(
                                             (action, index) => html`
                                                 <div
                                                     class="markdown-content scrollable-action-item"
@@ -478,7 +496,7 @@ export class SummaryView extends LitElement {
                           ${this.hasReceivedFirstText
                               ? html`
                                     <div class="fixed-actions-container">
-                                        ${this.fixedActions.map(
+                                        ${fixedActions.map(
                                             (action, index) => html`
                                                 <div
                                                     class="markdown-content fixed-action-item"

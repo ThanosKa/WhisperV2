@@ -3,7 +3,7 @@ const listenCapture = require('./listenCapture.js');
 const params = new URLSearchParams(window.location.search);
 const isListenView = params.get('view') === 'listen';
 
-window.pickleGlass = {
+window.whisper = {
     startCapture: listenCapture.startCapture,
     stopCapture: listenCapture.stopCapture,
     isLinux: listenCapture.isLinux,

@@ -50,7 +50,7 @@ win:
     cscLink: build\certs\glass-dev.pfx
     cscKeyPassword: '${env.CSC_KEY_PASSWORD}'
     signtoolOptions:
-        certificateSubjectName: 'Glass Dev Code Signing'
+        certificateSubjectName: 'Whisper Dev Code Signing'
 
 # NSIS installer configuration for Windows
 nsis:
@@ -60,7 +60,7 @@ nsis:
     deleteAppDataOnUninstall: true
     createDesktopShortcut: always
     createStartMenuShortcut: true
-    shortcutName: Glass
+    shortcutName: Whisper
 
 # macOS specific configuration
 mac:

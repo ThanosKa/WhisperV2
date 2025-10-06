@@ -1,19 +1,19 @@
 <p align="center">
-  <a href="https://pickle.com/glass">
+  <a href="https://whisper.com">
    <img src="./public/assets/banner.gif" alt="Logo">
   </a>
 
-  <h1 align="center">Glass by Pickle: Digital Mind Extension 🧠</h1>
+  <h1 align="center">Whisper: Digital Mind Extension 🧠</h1>
 
 </p>
 
 <p align="center">
-  <a href="https://discord.gg/UCZH5B5Hpd"><img src="./public/assets/button_dc.png" width="80" alt="Pickle Discord"></a>&ensp;<a href="https://pickle.com"><img src="./public/assets/button_we.png" width="105" alt="Pickle Website"></a>&ensp;<a href="https://x.com/intent/user?screen_name=leinadpark"><img src="./public/assets/button_xe.png" width="109" alt="Follow Daniel"></a>
+  <a href="https://discord.gg/UCZH5B5Hpd"><img src="./public/assets/button_dc.png" width="80" alt="Discord"></a>&ensp;<a href="https://whisper.com"><img src="./public/assets/button_we.png" width="105" alt="Whisper Website"></a>&ensp;<a href="https://x.com/intent/user?screen_name=leinadpark"><img src="./public/assets/button_xe.png" width="109" alt="Follow Daniel"></a>
 </p>
 
 > This project is a fork of [CheatingDaddy](https://github.com/sohzm/cheating-daddy) with modifications and enhancements. Thanks to [Soham](https://x.com/soham_btw) and all the open-source contributors who made this possible!
 
-🤖 **Fast, light & open-source**—Glass lives on your desktop, sees what you see, listens in real time, understands your context, and turns every moment into structured knowledge.
+🤖 **Fast, light & open-source**—Whisper lives on your desktop, sees what you see, listens in real time, understands your context, and turns every moment into structured knowledge.
 
 💬 **Proactive in meetings**—it surfaces action items, summaries, and answers the instant you need them.
 
@@ -23,7 +23,7 @@ To have fun building with us, join our [Discord](https://discord.gg/UCZH5B5Hpd)!
 
 ## Instant Launch
 
-⚡️  Skip the setup—launch instantly with our ready-to-run macOS app. [[Download Here]](https://www.dropbox.com/scl/fi/znid09apxiwtwvxer6oc9/Glass_latest.dmg?rlkey=gwvvyb3bizkl25frhs4k1zwds&st=37q31b4w&dl=1)
+⚡️  Skip the setup—launch instantly with our ready-to-run macOS app. [[Download Here]](https://www.dropbox.com/scl/fi/znid09apxiwtwvxer6oc9/Whisper_latest.dmg?rlkey=gwvvyb3bizkl25frhs4k1zwds&st=37q31b4w&dl=1)
 
 ## Quick Start (Local Build)
 
@@ -101,13 +101,13 @@ We love contributions! Feel free to open issues for bugs or feature requests. Fo
 
 ### Contributors
 
-<a href="https://github.com/pickle-com/glass/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=pickle-com/glass" />
+<a href="https://github.com/whisper/whisper/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=whisper/whisper" />
 </a>
 
 ### Help Wanted Issues
 
-We have a list of [help wanted](https://github.com/pickle-com/glass/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22%F0%9F%99%8B%E2%80%8D%E2%99%82%EF%B8%8Fhelp%20wanted%22) that contain small features and bugs which have a relatively limited scope. This is a great place to get started, gain experience, and get familiar with our contribution process.
+We have a list of [help wanted](https://github.com/whisper/whisper/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22%F0%9F%99%8B%E2%80%8D%E2%99%82%EF%B8%8Fhelp%20wanted%22) that contain small features and bugs which have a relatively limited scope. This is a great place to get started, gain experience, and get familiar with our contribution process.
 
 ### 🛠 Current Issues & Improvements
 
@@ -123,10 +123,10 @@ We have a list of [help wanted](https://github.com/pickle-com/glass/issues?q=is%
 - Jul 8: Now support Windows(beta), Improved AEC by Rust(to seperate mic/system audio), shortcut editing(beta)
 - Jul 8: Now support Local LLM & STT, Webapp Authentication
 
-## About Pickle
+## About Whisper
 
-**Our mission is to build a living digital clone for everyone.** Glass is part of Step 1—a trusted pipeline that transforms your daily data into a scalable clone. Visit [pickle.com](https://pickle.com) to learn more.
+**Our mission is to build a living digital clone for everyone.** Whisper is part of Step 1—a trusted pipeline that transforms your daily data into a scalable clone. Visit [whisper.com](https://whisper.com) to learn more.
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=pickle-com/glass&type=Date)](https://www.star-history.com/#pickle-com/glass&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=whisper/whisper&type=Date)](https://www.star-history.com/#whisper/whisper&Date)

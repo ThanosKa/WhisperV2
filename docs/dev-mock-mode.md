@@ -5,7 +5,7 @@ This enables working on the Next.js UI with `npm run dev` (no Electron, no IPC, 
 ## TL;DR
 
 - Add/keep `NEXT_PUBLIC_DEV_MOCK=1` in `whisper_web/.env.local`.
-- Run: `cd webapp && npm run dev` → open `http://localhost:3000`.
+- Run: `cd whisper_web && npm run dev` → open `http://localhost:3000`.
 - You are auto “logged in” as a mock user and see fake sessions/presets.
 - No Electron/IPC required; all data is local and persistent in `localStorage`.
 
@@ -70,7 +70,7 @@ This enables working on the Next.js UI with `npm run dev` (no Electron, no IPC, 
 
 ## Typical Dev Loop
 
-1. `cd webapp`
+1. `cd whisper_web`
 2. Ensure `.env.local` has `NEXT_PUBLIC_DEV_MOCK=1`
 3. `npm run dev`
 4. Edit UI, refresh browser — you’ll see changes immediately with fake data.

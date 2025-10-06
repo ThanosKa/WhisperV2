@@ -108,7 +108,7 @@ contextBridge.exposeInMainWorld('api', {
     },
 
     // src/ui/app/WhisperApp.js
-    pickleGlassApp: {
+    whisperApp: {
         // Listeners
         onClickThroughToggled: callback => ipcRenderer.on('click-through-toggled', callback),
         removeOnClickThroughToggled: callback => ipcRenderer.removeListener('click-through-toggled', callback),

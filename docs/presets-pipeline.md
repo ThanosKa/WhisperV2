@@ -34,7 +34,7 @@ Init: `databaseInitializer` creates tables; seeds defaults (e.g., 'sales', 'recr
 
 - `web-data-request` channels: `get-presets`, `update-preset` → adapter.
 
-## Frontend Flow (Webapp - `webapp/`)
+## Frontend Flow (Webapp - `whisper_web/`)
 
 ### API (`utils/api.ts`)
 

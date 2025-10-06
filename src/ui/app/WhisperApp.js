@@ -78,7 +78,7 @@ export class WhisperApp extends LitElement {
         super.connectedCallback();
 
         if (window.api) {
-            window.api.pickleGlassApp.onClickThroughToggled((_, isEnabled) => {
+            window.api.whisperApp.onClickThroughToggled((_, isEnabled) => {
                 this._isClickThrough = isEnabled;
             });
         }
@@ -87,7 +87,7 @@ export class WhisperApp extends LitElement {
     disconnectedCallback() {
         super.disconnectedCallback();
         if (window.api) {
-            window.api.pickleGlassApp.removeAllClickThroughListeners();
+            window.api.whisperApp.removeAllClickThroughListeners();
         }
     }
 

@@ -9,7 +9,7 @@ function getBaseUrl() {
     }
 }
 
-async function chat(messages) {
+async function chat(profile, userMessage, context = {}, screenshotBase64 = null) {
     const baseUrl = getBaseUrl();
     const sessionUuid = authService.sessionUuid || null; // Direct access
     if (!sessionUuid) {
@@ -22,7 +22,12 @@ async function chat(messages) {
             'Content-Type': 'application/json',
             'X-Session-UUID': sessionUuid,
         },
-        body: JSON.stringify({ messages }),
+        body: JSON.stringify({
+            profile,
+            userMessage,
+            context,
+            screenshotBase64,
+        }),
     });
 
     const data = await res.json().catch(() => ({}));
@@ -34,7 +39,7 @@ async function chat(messages) {
     return { content: data.content, raw: data };
 }
 
-async function stream(messages, { signal } = {}) {
+async function stream(profile, userMessage, context = {}, screenshotBase64 = null, { signal } = {}) {
     const baseUrl = getBaseUrl();
     const sessionUuid = authService.sessionUuid || null; // Direct access
     if (!sessionUuid) {
@@ -47,7 +52,12 @@ async function stream(messages, { signal } = {}) {
             'Content-Type': 'application/json',
             'X-Session-UUID': sessionUuid,
         },
-        body: JSON.stringify({ messages }),
+        body: JSON.stringify({
+            profile,
+            userMessage,
+            context,
+            screenshotBase64,
+        }),
         signal,
     });
 

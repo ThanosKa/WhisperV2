@@ -14,7 +14,7 @@ class SummaryService {
         this.lastAnalyzedIndex = 0; // Track how many utterances we've already analyzed
         this.detectedQuestions = new Set(); // Track previously detected questions
         this.analysisProfile = 'meeting_analysis'; // base template id
-        this.mockMode = true; // New: Mock STT mode flag (enabled for testing)
+        this.mockMode = false; // New: Mock STT mode flag (enabled for testing)
         console.log('[SummaryService] Mock STT mode enabled by default for testing');
         this.mockDataMap = null; // Will load mock convo data
 
@@ -396,34 +396,21 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
             }
         }
 
-        const fullContext = this._getPreviousContext(this.analysisProfile || 'meeting_analysis') + `\n\nTranscript:\n${recentConversation}`;
+        const previousContext = this._getPreviousContext(this.analysisProfile || 'meeting_analysis');
+        const contextForPrompt = `Transcript:\n${recentConversation}\n\n${previousContext}`;
 
-        const baseSystem = getSystemPrompt(this.analysisProfile || 'meeting_analysis', {
-            context: fullContext,
-        });
-        const rolePrefix = this.selectedRoleText && this.selectedRoleText.trim() ? `<role>${this.selectedRoleText.trim()}</role>\n\n` : '';
-        const systemPrompt = this.customSystemPrompt ? this.customSystemPrompt : `${rolePrefix}${baseSystem}`;
+        const profile = this.analysisProfile || 'meeting_analysis';
+        const userMessage =
+            'Analyze **ONLY** the conversation provided above IN THE **LANGUAGE OF THE TRANSCRIPT**. If nothing is detected then DO NOT RETURN ANYTHING.';
 
         try {
             if (this.currentSessionId) {
                 await sessionRepository.touch(this.currentSessionId);
             }
 
-            const messages = [
-                {
-                    role: 'system',
-                    content: systemPrompt,
-                },
-                {
-                    role: 'user',
-                    content:
-                        'Analyze **ONLY** the conversation provided in the Transcript context above IN THE **LANGUAGE OF THE TRANSCRIPT**. If nothing is detected then DO NOT RETURN ANYTHING.',
-                },
-            ];
-
             console.log('🤖 Sending analysis request to AI...');
 
-            const completion = await llmClient.chat(messages);
+            const completion = await llmClient.chat(profile, userMessage, contextForPrompt, null);
 
             const responseText = completion.content.trim();
             console.log('[SummaryService] Response starts with JSON?:', responseText.startsWith('{') ? 'Yes' : 'No (likely markdown)');
@@ -436,19 +423,12 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
                 const responsePath = path.join(rootPath, 'analysis.txt');
                 const timestamp = new Date().toISOString();
 
-                const llmMessages = messages
-                    .map(msg => {
-                        return `${msg.role.toUpperCase()}: ${msg.content}`;
-                    })
-                    .join('\n\n');
-
                 const responseEntry = `[${timestamp}]
 User prompt: (Analysis Request)
-Mode: Mock STT + Real LLM
+Mode: Server-side Prompts
 Profile: ${this.analysisProfile}
-
-What LLM got:
-${llmMessages}
+Context (sent to server): ${contextForPrompt}
+User Message (instruction only): ${userMessage}
 
 LLM Output:
 ${responseText}
@@ -567,6 +547,8 @@ ${responseText}
                                 .replace(/"([^"]+)"/g, '$1'); // Strip quotes
                             const prefixed = `❓ ${question}`;
                             structuredData.actions.push(prefixed);
+                            // Track for future context
+                            this.detectedQuestions.add(question);
                         });
                     } else if (section.type === 'follow_ups' && Array.isArray(section.items)) {
                         section.items.forEach(item => {
@@ -590,6 +572,8 @@ ${responseText}
                             if (buyerQ) {
                                 const prefixed = `❓ ${buyerQ}`;
                                 structuredData.actions.push(prefixed);
+                                // Track for future context
+                                this.detectedQuestions.add(buyerQ);
                             }
                         });
                     } else if (section.type === 'defines' && Array.isArray(section.items)) {
@@ -604,6 +588,8 @@ ${responseText}
                             if (!coreTerm || coreTerm.length < 2) coreTerm = term;
                             const prefixed = `📘 Define ${coreTerm}`;
                             structuredData.actions.push(prefixed);
+                            // Track for future context
+                            this.definedTerms.add(coreTerm);
                         });
                     } else if (section.type === 'objections' && Array.isArray(section.items)) {
                         section.items.forEach(item => {
@@ -615,6 +601,8 @@ ${responseText}
                             if (objection) {
                                 const prefixed = `❗❗ Objection: ${objection}`;
                                 structuredData.actions.push(prefixed);
+                                // Track for future context
+                                this.definedTerms.add(objection);
                             }
                         });
                     } else if (section.type === 'strengths' && Array.isArray(section.items)) {
@@ -639,6 +627,8 @@ ${responseText}
                             if (gap) {
                                 const prefixed = `❗❗Gap: ${gap}`;
                                 structuredData.actions.push(prefixed);
+                                // Track for future context
+                                this.definedTerms.add(gap);
                             }
                         });
                     } else if (section.type === 'suggested_questions' && Array.isArray(section.items)) {
@@ -651,6 +641,8 @@ ${responseText}
                             if (question) {
                                 const prefixed = `👆 Suggested Question: ${question}`;
                                 structuredData.actions.push(prefixed);
+                                // Track for future context
+                                this.detectedQuestions.add(question);
                             }
                         });
                     } else if (section.type === 'issue_summary' && Array.isArray(section.items)) {
@@ -675,6 +667,8 @@ ${responseText}
                             if (cause) {
                                 const prefixed = `🔎 Root Cause: ${cause}`;
                                 structuredData.actions.push(prefixed);
+                                // Track for future context
+                                this.definedTerms.add(cause);
                             }
                         });
                     } else if (section.type === 'troubleshooting' && Array.isArray(section.items)) {
@@ -711,6 +705,8 @@ ${responseText}
                             if (unclear) {
                                 const prefixed = `❓ Clarify: ${unclear}`;
                                 structuredData.actions.push(prefixed);
+                                // Track for future context
+                                this.definedTerms.add(unclear);
                             }
                         });
                     } else if (section.type === 'study_questions' && Array.isArray(section.items)) {
@@ -723,6 +719,8 @@ ${responseText}
                             if (question) {
                                 const prefixed = `📚 Study Question: ${question}`;
                                 structuredData.actions.push(prefixed);
+                                // Track for future context
+                                this.detectedQuestions.add(question);
                             }
                         });
                     }

@@ -627,16 +627,8 @@ class AskService {
 
             // Use conversation context only for meeting-related actions
             const contextForPrompt = useConversationContext ? conversationHistory : '';
-            const systemPrompt = getSystemPrompt(profileToUse, contextForPrompt, false);
 
             const userTask = userPrompt.trim();
-            const messages = [
-                { role: 'system', content: systemPrompt },
-                {
-                    role: 'user',
-                    content: [{ type: 'text', text: `${userTask}` }],
-                },
-            ];
 
             if (screenshotBase64) {
                 try {
@@ -645,19 +637,6 @@ class AskService {
                         head: screenshotBase64.slice(0, 32),
                     });
                 } catch (_) {}
-                messages[1].content.push({
-                    type: 'image_url',
-                    image_url: { url: `data:image/jpeg;base64,${screenshotBase64}` },
-                });
-            }
-
-            // concise request log
-            try {
-                const parts = Array.isArray(messages?.[1]?.content) ? messages[1].content.map(c => c.type || 'text') : ['text'];
-                const hasImagePart = parts.includes('image_url');
-                // console.log('[AskService] sending request to llm', { parts, hasImagePart });
-            } catch (_) {
-                // console.log('[AskService] sending request to llm');
             }
 
             // Write LLM input to response.txt
@@ -668,29 +647,12 @@ class AskService {
                 const responsePath = path.join(rootPath, 'response.txt');
                 const timestamp = new Date().toISOString();
 
-                const llmMessages = messages
-                    .map(msg => {
-                        if (msg.role === 'system') {
-                            return `SYSTEM: ${msg.content}`;
-                        } else if (msg.role === 'user') {
-                            if (Array.isArray(msg.content)) {
-                                return `USER: ${msg.content.map(c => (c.type === 'text' ? c.text : '[IMAGE]')).join(' ')}`;
-                            } else {
-                                return `USER: ${msg.content}`;
-                            }
-                        }
-                        return `${msg.role.toUpperCase()}: ${msg.content}`;
-                    })
-                    .join('\n\n');
-
                 const responseEntry = `[${timestamp}]
 User prompt: ${userPrompt}
 Mode: Meeting Copilot
 Profile used: ${profileToUse}
 Using conversation context: ${useConversationContext}
-
-What LLM got:
-${llmMessages}
+Screenshot included: ${!!screenshotBase64}
 
 `;
                 fs.appendFileSync(responsePath, responseEntry);
@@ -699,7 +661,7 @@ ${llmMessages}
             }
 
             try {
-                const response = await llmClient.stream(messages, { signal });
+                const response = await llmClient.stream(profileToUse, userTask, contextForPrompt, screenshotBase64, { signal });
 
                 // Broadcast quota headers immediately on stream start
                 broadcastQuotaUpdateFromResponse(response);
@@ -730,16 +692,7 @@ ${llmMessages}
                 if (screenshotBase64 && this._isMultimodalError(multimodalError)) {
                     console.log(`[AskService] Multimodal request failed, retrying with text-only: ${multimodalError.message}`);
 
-                    // 텍스트만으로 메시지 재구성
-                    const textOnlyMessages = [
-                        { role: 'system', content: systemPrompt },
-                        {
-                            role: 'user',
-                            content: `User Request: ${userPrompt.trim()}`,
-                        },
-                    ];
-
-                    const fallbackResponse = await llmClient.stream(textOnlyMessages, { signal });
+                    const fallbackResponse = await llmClient.stream(profileToUse, userPrompt.trim(), contextForPrompt, null, { signal });
                     // Broadcast quota headers for fallback as well
                     broadcastQuotaUpdateFromResponse(fallbackResponse);
                     const askWin = getWindowPool()?.get('ask');

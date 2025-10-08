@@ -384,14 +384,9 @@ class ListenService {
             // 2) Try LLM for best-quality title (server-backed)
             let title = '';
             try {
-                const messages = [
-                    { role: 'system', content: 'You create concise, descriptive meeting titles. Respond with title only.' },
-                    {
-                        role: 'user',
-                        content: `Create a short (max 8 words) meeting title in the same language as this content.\n\nContent:\n${baseCandidate}`,
-                    },
-                ];
-                const completion = await llmClient.chat(messages);
+                const profile = 'whisper'; // Use basic whisper profile for title generation
+                const userMessage = `Create a short (max 8 words) meeting title in the same language as this content.\n\nContent:\n${baseCandidate}`;
+                const completion = await llmClient.chat(profile, userMessage, '', null);
                 title = (completion?.content || '').split('\n')[0].replace(/^"|"$/g, '').trim();
             } catch (e) {
                 console.warn('[ListenService] LLM title generation failed, using heuristic:', e.message);

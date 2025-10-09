@@ -71,9 +71,18 @@ function buildSystemPrompt(promptParts, context = {}, googleSearchEnabled = true
 function getSystemPrompt(profile, context, googleSearchEnabled = true) {
     const promptParts = profilePrompts[profile] || profilePrompts.whisper;
 
-    // Handle new XML structure for analysis profiles
+    // Handle new XML structure for analysis profiles and comprehensive summary
     if (context && typeof context === 'object' && context.transcript) {
-        // Pass full previous items array instead of categorized strings
+        // For comprehensive summary, we don't need previous items, just transcription
+        if (profile === 'comprehensive_summary') {
+            const transcriptionXML = `<transcription>\n${context.transcript || ''}\n</transcription>`;
+            // Return object with separated system and user content
+            return {
+                system: promptParts.system,
+                user: transcriptionXML
+            };
+        }
+        // Pass full previous items array instead of categorized strings for analysis profiles
         const previousItems = context.previousItems || [];
         const xmlContext = buildXMLContext(previousItems, context.transcript);
         const builtPrompt = `${promptParts.system}\n\n${xmlContext}`;

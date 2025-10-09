@@ -1210,6 +1210,25 @@ Language of term.`,
 ## STRICT OUTPUT FORMAT
 - Always in transcription context language.`,
     },
+
+    // Comprehensive meeting summary for session closure
+    comprehensive_summary: {
+        system: `You are an expert meeting summarizer. Provide comprehensive, well-structured summaries.
+
+INSTRUCTIONS FOR COMPREHENSIVE SUMMARY:
+- Analyze the ENTIRE conversation provided below
+- Generate a comprehensive summary of ALL key points discussed
+- Create a descriptive title for the entire meeting
+- Focus on main topics, decisions, insights, and outcomes
+- Structure the summary logically (chronologically or by topic)
+- Return ONLY valid JSON with this structure:
+{
+  "title": "Meeting title (max 10 words)",
+  "summary": "Comprehensive summary covering all main points discussed",
+  "key_topics": ["Topic 1", "Topic 2", "Topic 3"],
+  "action_items": ["Action 1", "Action 2"] (if any discussed)
+}`,
+    },
 };
 
 module.exports = {

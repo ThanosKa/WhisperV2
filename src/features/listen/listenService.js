@@ -456,38 +456,18 @@ class ListenService {
             const currentSettings = await settingsService.getSettings();
             const analysisPresetId = currentSettings?.analysisPresetId || 'meetings';
 
-            // Get the analysis prompt template
+            // Get the comprehensive summary prompt template
             const { getSystemPrompt } = require('../common/prompts/promptBuilder');
-            const systemPrompt = getSystemPrompt('meeting_analysis'); // Use meeting analysis for final summary
-
-            // Create comprehensive summary prompt
-            const comprehensivePrompt = `${systemPrompt}
-
-INSTRUCTIONS FOR COMPREHENSIVE SUMMARY:
-- Analyze the ENTIRE conversation provided below
-- Generate a comprehensive summary of ALL key points discussed
-- Create a descriptive title for the entire meeting
-- Focus on main topics, decisions, insights, and outcomes
-- Structure the summary logically (chronologically or by topic)
-- Return ONLY valid JSON with this structure:
-{
-  "title": "Meeting title (max 10 words)",
-  "summary": "Comprehensive summary covering all main points discussed",
-  "key_topics": ["Topic 1", "Topic 2", "Topic 3"],
-  "action_items": ["Action 1", "Action 2"] (if any discussed)
-}
-
-FULL CONVERSATION TRANSCRIPT:
-${fullTranscript}`;
+            const promptData = getSystemPrompt('comprehensive_summary', { transcript: fullTranscript });
 
             const messages = [
                 {
                     role: 'system',
-                    content: 'You are an expert meeting summarizer. Provide comprehensive, well-structured summaries.',
+                    content: promptData.system,
                 },
                 {
                     role: 'user',
-                    content: comprehensivePrompt,
+                    content: promptData.user,
                 },
             ];
 

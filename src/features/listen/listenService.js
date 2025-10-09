@@ -527,18 +527,7 @@ class ListenService {
 TIMESTAMP: ${new Date().toISOString()}
 TITLE: ${summaryData.title}
 
-COMPREHENSIVE SUMMARY:
-${summaryData.summary}
 
-KEY TOPICS:
-${(summaryData.key_topics || []).map(topic => `- ${topic}`).join('\n')}
-
-ACTION ITEMS:
-${(summaryData.action_items || []).map(action => `- ${action}`).join('\n')}
-
-TRANSCRIPT LENGTH: ${allTranscripts.length} turns
-FULL TRANSCRIPT:
-${fullTranscript}
 
 ---
 WHAT LLM GOT:

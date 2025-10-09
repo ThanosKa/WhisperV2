@@ -73,13 +73,13 @@ function getSystemPrompt(profile, context, googleSearchEnabled = true) {
 
     // Handle new XML structure for analysis profiles and comprehensive summary
     if (context && typeof context === 'object' && context.transcript) {
-        // For comprehensive summary, we don't need previous items, just transcription
+        // For comprehensive summary, include transcription in system prompt
         if (profile === 'comprehensive_summary') {
             const transcriptionXML = `<transcription>\n${context.transcript || ''}\n</transcription>`;
-            // Return object with separated system and user content
+            // Return object with system prompt including transcription, and simple user instruction
             return {
-                system: promptParts.system,
-                user: transcriptionXML
+                system: `${promptParts.system}\n\n${transcriptionXML}`,
+                user: 'Please analyze and summarize the conversation in the transcription above.',
             };
         }
         // Pass full previous items array instead of categorized strings for analysis profiles

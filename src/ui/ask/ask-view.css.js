@@ -350,33 +350,31 @@ export const styles = css`
     }
 
     .thinking-dot {
-        width: 4px;
-        height: 4px;
+        width: 6px;
+        height: 6px;
         background: rgb(255, 255, 255);
         border-radius: 50%;
-        animation: thinkingDotPulse 1.4s ease-in-out infinite;
+        animation: bounce 1.4s infinite ease-in-out both;
     }
 
     .thinking-dot:nth-child(1) {
-        animation-delay: 0s;
+        animation-delay: -0.32s;
     }
 
     .thinking-dot:nth-child(2) {
-        animation-delay: 0.2s;
+        animation-delay: -0.16s;
     }
 
     .thinking-dot:nth-child(3) {
-        animation-delay: 0.4s;
+        animation-delay: 0s;
     }
 
-    @keyframes thinkingDotPulse {
+    @keyframes bounce {
         0%, 80%, 100% {
-            opacity: 0.4;
-            transform: scale(0.8) translateY(0);
+            transform: scale(0);
         }
         40% {
-            opacity: 1;
-            transform: scale(1.2) translateY(-6px);
+            transform: scale(1);
         }
     }
 
@@ -1140,62 +1138,4 @@ export const styles = css`
         }
     }
 
-    /* Thinking dots animation - adapted from PulsingDots component */
-    .thinking-dots {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-    }
-
-    .response-header .thinking-dots {
-        margin-left: 8px;
-    }
-
-    /* Slide animations for state transitions */
-    .thinking-dots.thinking-slide {
-        animation: slideInFromBottom 0.3s ease-out forwards;
-    }
-
-    @keyframes slideInFromBottom {
-        0% {
-            opacity: 0;
-            transform: translateY(10px);
-        }
-        100% {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    .thinking-dot {
-        width: 6px;
-        height: 6px;
-        background: rgb(255, 255, 255);
-        border-radius: 50%;
-        animation: dotWave 1.2s ease-in-out infinite;
-    }
-
-    .thinking-dot:nth-child(1) {
-        animation-delay: 0s;
-    }
-
-    .thinking-dot:nth-child(2) {
-        animation-delay: 0.2s;
-    }
-
-    .thinking-dot:nth-child(3) {
-        animation-delay: 0.4s;
-    }
-
-    /* Dot wave animation - bouncing version for typing indicator */
-    @keyframes dotWave {
-        0%, 80%, 100% {
-            opacity: 0.4;
-            transform: scale(0.8) translateY(0);
-        }
-        40% {
-            opacity: 1;
-            transform: scale(1.2) translateY(-6px);
-        }
-    }
 `;

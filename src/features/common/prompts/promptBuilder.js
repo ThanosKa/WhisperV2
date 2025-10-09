@@ -1,9 +1,21 @@
 const { profilePrompts } = require('./promptTemplates.js');
 
+// Simple XML structure - pure transcription, full previous items
+function buildXMLContext(previousItems, transcript) {
+    const previousXML =
+        previousItems && previousItems.length > 0 ? `<previous>\n${previousItems.join('\n')}\n</previous>` : '<previous>\n(none)\n</previous>';
+
+    const transcriptionXML = `<transcription>\n${transcript || ''}\n</transcription>`;
+
+    return `${previousXML}\n\n${transcriptionXML}`;
+}
+
 function buildSystemPrompt(promptParts, context = {}, googleSearchEnabled = true) {
-    // New simplified path: if a template provides a single `system` string (markdown), use it as-is
+    // Simplified path: if a template provides a single `system` string (markdown), use it as-is
     if (promptParts && typeof promptParts.system === 'string' && promptParts.system.trim().length > 0) {
         const systemText = promptParts.system.trim();
+
+        // Fallback to old string context for non-analysis prompts
         const ctxString = typeof context === 'string' ? context : context && typeof context.context === 'string' ? context.context : '';
         if (ctxString && ctxString.trim()) {
             return `${systemText}\n\n<Transcription>\n${ctxString.trim()}\n</Transcription>\n`;
@@ -58,6 +70,18 @@ function buildSystemPrompt(promptParts, context = {}, googleSearchEnabled = true
 
 function getSystemPrompt(profile, context, googleSearchEnabled = true) {
     const promptParts = profilePrompts[profile] || profilePrompts.whisper;
+
+    // Handle new XML structure for analysis profiles
+    if (context && typeof context === 'object' && context.transcript) {
+        // Pass full previous items array instead of categorized strings
+        const previousItems = context.previousItems || [];
+        const xmlContext = buildXMLContext(previousItems, context.transcript);
+        const builtPrompt = `${promptParts.system}\n\n${xmlContext}`;
+        // console.log(`[PromptBuilder] Built XML prompt for profile '${profile}': ${builtPrompt.substring(0, 300)}...`);
+        return builtPrompt;
+    }
+
+    // Fallback to old string context
     const promptContext = typeof context === 'string' ? { context } : context || {};
     const builtPrompt = buildSystemPrompt(promptParts, promptContext, googleSearchEnabled);
     // console.log(`[PromptBuilder] Built prompt for profile '${profile}': ${builtPrompt.substring(0, 200)}...`); // Debug log (truncate for brevity)

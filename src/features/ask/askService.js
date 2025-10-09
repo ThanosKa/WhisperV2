@@ -625,8 +625,22 @@ class AskService {
                 // Keep context decision based on intent (e.g., define=false), do not override
             }
 
-            // Use conversation context only for meeting-related actions
-            const contextForPrompt = useConversationContext ? conversationHistory : '';
+            // Build context for prompt
+            let contextForPrompt = useConversationContext ? conversationHistory : '';
+
+            // For analysis profiles, include previous terms/questions context from summary service
+            if (isInMeeting && profileToUse && profileToUse.endsWith('_analysis')) {
+                const summaryContext = summaryService.getCurrentContext();
+                if (summaryContext && (summaryContext.definedTerms.length > 0 || summaryContext.detectedQuestions.length > 0)) {
+                    // Use the summary service's method to format context appropriately for the analysis type
+                    const previousContext = summaryService.getFormattedPreviousContext(profileToUse);
+                    contextForPrompt = contextForPrompt ? `${contextForPrompt}\n\n${previousContext}` : previousContext;
+                    console.log(
+                        `[AskService] Added summary context for ${profileToUse}: ${summaryContext.definedTerms.length} terms, ${summaryContext.detectedQuestions.length} questions`
+                    );
+                }
+            }
+
             const systemPrompt = getSystemPrompt(profileToUse, contextForPrompt, false);
 
             const userTask = userPrompt.trim();

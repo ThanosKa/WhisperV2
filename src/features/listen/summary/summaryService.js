@@ -69,18 +69,51 @@ class SummaryService {
         }
     }
 
-    // Update _getPreviousContext to include customer_support_analysis
+    /**
+     * Generate context string for previous terms and questions based on analysis type
+     * @param {string} profile - The analysis profile (e.g., 'sales_analysis', 'meeting_analysis')
+     * @returns {string} - Context string with appropriate labels for the analysis type
+     */
     _getPreviousContext(profile) {
         const prevDefines = Array.from(this.definedTerms).join(', ') || '(none)';
         const prevQuestions = Array.from(this.detectedQuestions).join(' | ') || '(none)';
-        const mapping = {
-            sales_analysis: `Previous Objections: ${prevQuestions}\nPrevious Opportunities: ${prevDefines}`,
-            recruiting_analysis: `Previous Gaps: ${prevDefines}\nPrevious Strengths: ${prevQuestions}`,
-            customer_support_analysis: `Previous Root Causes: ${prevDefines}\nPrevious Steps: ${prevQuestions}`, // Add this case
-            school_analysis: `Previous Unclear Points: ${prevDefines}\nPrevious Concepts: ${prevQuestions}`,
-            meeting_analysis: `Previously Defined Terms: ${prevDefines}\nPreviously Detected Questions: ${prevQuestions}`,
+
+        // Generic mapping for different analysis types
+        const contextMapping = {
+            // Sales context - objections are "questions", opportunities are "terms"
+            sales_analysis: {
+                termsLabel: 'Previous Opportunities',
+                questionsLabel: 'Previous Objections',
+            },
+            // Recruiting context - gaps are "terms", strengths are "questions"
+            recruiting_analysis: {
+                termsLabel: 'Previous Gaps',
+                questionsLabel: 'Previous Strengths',
+            },
+            // Customer support context - root causes are "terms", troubleshooting steps are "questions"
+            customer_support_analysis: {
+                termsLabel: 'Previous Root Causes',
+                questionsLabel: 'Previous Steps',
+            },
+            // School context - unclear points are "terms", concepts are "questions"
+            school_analysis: {
+                termsLabel: 'Previous Unclear Points',
+                questionsLabel: 'Previous Concepts',
+            },
+            // Meeting context - standard terms and questions
+            meeting_analysis: {
+                termsLabel: 'Previously Defined Terms',
+                questionsLabel: 'Previously Detected Questions',
+            },
         };
-        return mapping[profile] || `Previous Terms: ${prevDefines}\nPrevious Questions: ${prevQuestions}`;
+
+        const contextConfig = contextMapping[profile];
+        if (contextConfig) {
+            return `${contextConfig.termsLabel}: ${prevDefines}\n${contextConfig.questionsLabel}: ${prevQuestions}`;
+        }
+
+        // Fallback for unknown analysis types
+        return `Previous Terms: ${prevDefines}\nPrevious Questions: ${prevQuestions}`;
     }
 
     /**
@@ -231,29 +264,35 @@ class SummaryService {
             return;
         }
 
-        console.log(`[SummaryService] Mock STT: Simulating conversation for ${mockKey}`);
+        console.log(`[SummaryService] Mock STT: Simulating conversation for ${mockKey} with batch processing`);
 
         // Clear previous history for clean simulation
         this.conversationHistory = [];
 
-        // Add all fake turns WITHOUT triggering (to avoid spam)
+        // Inject turns gradually with realistic delays to simulate batching
         const numTurns = mockData.conversation.length;
-        for (let i = 0; i < numTurns; i++) {
-            const speaker = i % 2 === 0 ? 'me' : 'them';
-            const text = mockData.conversation[i];
-            this.addConversationTurn(speaker, text); // Now skips trigger in mock
-        }
+        let turnIndex = 0;
 
-        // Clear any timer to prevent fallback
-        if (this.batchTimer) {
-            clearTimeout(this.batchTimer);
-            this.batchTimer = null;
-        }
+        const injectNextTurn = () => {
+            if (turnIndex >= numTurns) {
+                console.log(`[SummaryService] Mock STT: All ${numTurns} turns injected - simulation complete`);
+                return;
+            }
 
-        console.log(`[SummaryService] Mock STT: Added ${numTurns} fake turns - now triggering SINGLE real analysis`);
+            const speaker = turnIndex % 2 === 0 ? 'me' : 'them';
+            const text = mockData.conversation[turnIndex];
+            turnIndex++;
 
-        // Single trigger with full history
-        this.triggerAnalysisIfNeeded(true);
+            console.log(`[SummaryService] Mock STT: Injecting turn ${turnIndex}/${numTurns}`);
+            this.addConversationTurn(speaker, text); // Now allows batching triggers in mock mode
+
+            // Schedule next turn with realistic delay (1-3 seconds between turns)
+            const delay = Math.random() * 2000 + 1000; // 1-3 seconds
+            setTimeout(injectNextTurn, delay);
+        };
+
+        // Start the simulation
+        injectNextTurn();
     }
 
     _extractRoleFromPrompt(prompt) {
@@ -294,13 +333,9 @@ class SummaryService {
 
         const conversationText = `${speaker.toLowerCase()}: ${trimmedText}`;
         this.conversationHistory.push(conversationText);
-        if (this.mockMode) {
-            console.log(`[SummaryTrigger] Mock STT: Added to batch (${this.conversationHistory.length} total): ${speaker}: "${trimmedText}"`);
-            // In mock STT mode, skip auto-trigger to avoid spamming - trigger once after full injection
-            return;
-        } else {
-            console.log(`[SummaryTrigger] Added to batch (${this.conversationHistory.length} total in history): ${speaker}: "${trimmedText}"`);
-        }
+        console.log(
+            `[SummaryTrigger] ${this.mockMode ? 'Mock STT:' : ''} Added to batch (${this.conversationHistory.length} total${this.mockMode ? ' (mock)' : ' in history'}): ${speaker}: "${trimmedText}"`
+        );
 
         // Start time fallback timer if first utterance
         if (this.conversationHistory.length === 1 && !this.batchTimer) {
@@ -396,11 +431,21 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
             }
         }
 
-        const fullContext = this._getPreviousContext(this.analysisProfile || 'meeting_analysis') + `\n\nTranscript:\n${recentConversation}`;
+        // Use new XML structure for analysis profiles - include ALL previous LLM items
+        const allPreviousItems = [];
+        if (this.previousAnalysisResult && this.previousAnalysisResult.actions) {
+            allPreviousItems.push(...this.previousAnalysisResult.actions);
+        }
+        // Also include any accumulated terms/questions from history
+        Array.from(this.definedTerms).forEach(term => allPreviousItems.push(`📘 Define ${term}`));
+        Array.from(this.detectedQuestions).forEach(question => allPreviousItems.push(`❓ ${question}`));
 
-        const baseSystem = getSystemPrompt(this.analysisProfile || 'meeting_analysis', {
-            context: fullContext,
-        });
+        const contextData = {
+            previousItems: allPreviousItems,
+            transcript: recentConversation,
+        };
+
+        const baseSystem = getSystemPrompt(this.analysisProfile || 'meeting_analysis', contextData);
         const rolePrefix = this.selectedRoleText && this.selectedRoleText.trim() ? `<role>${this.selectedRoleText.trim()}</role>\n\n` : '';
         const systemPrompt = this.customSystemPrompt ? this.customSystemPrompt : `${rolePrefix}${baseSystem}`;
 
@@ -460,6 +505,9 @@ ${responseText}
             }
 
             const structuredData = this.parseResponseText(responseText, this.previousAnalysisResult);
+
+            // Populate definedTerms and detectedQuestions Sets from LLM response
+            this._populateContextFromLLMResponse(structuredData);
 
             if (this.currentSessionId) {
                 try {
@@ -788,11 +836,11 @@ ${responseText}
             return;
         }
 
-        // In mock STT + force, always analyze full history once
+        // Check if we should analyze based on smart triggers or force flag
         let shouldAnalyze = false;
-        if (this.mockMode && force) {
+        if (force) {
             shouldAnalyze = true;
-            console.log('[SummaryTrigger] Mock STT force: Analyzing full fake history once');
+            console.log(`[SummaryTrigger] Force trigger ${this.mockMode ? '(mock mode)' : ''}`);
         } else if (smartCfg.enabled) {
             const sinceLast = this.conversationHistory.slice(this.lastAnalyzedIndex);
             const textSince = sinceLast.join(' ');
@@ -841,16 +889,9 @@ ${responseText}
             `[SummaryTrigger] TRIGGERING ANALYSIS! Total history: ${this.conversationHistory.length}, new batch: ${this.conversationHistory.slice(this.lastAnalyzedIndex).length} utterances`
         );
 
-        // For mock STT, use FULL history for single comprehensive analysis
-        let textsToAnalyze;
-        if (this.mockMode) {
-            textsToAnalyze = this.conversationHistory.slice(0); // Full fake convo
-            console.log(`[SummaryTrigger] Mock STT: Analyzing full ${textsToAnalyze.length} turns with real LLM`);
-        } else {
-            // Original: Only new since last
-            textsToAnalyze = this.conversationHistory.slice(this.lastAnalyzedIndex);
-            console.log(`📝 Analyzing ${textsToAnalyze.length} new utterances (from index ${this.lastAnalyzedIndex})`);
-        }
+        // Analyze only new utterances since last analysis (works for both real and mock STT)
+        const textsToAnalyze = this.conversationHistory.slice(this.lastAnalyzedIndex);
+        console.log(`📝 Analyzing ${textsToAnalyze.length} new utterances (from index ${this.lastAnalyzedIndex})${this.mockMode ? ' [MOCK]' : ''}`);
 
         const data = await this.makeOutlineAndRequests(textsToAnalyze);
         if (data) {
@@ -879,6 +920,70 @@ ${responseText}
     }
 
     // Rough approximation: ~4 chars per token
+    /**
+     * Populate definedTerms and detectedQuestions Sets from LLM response actions
+     * Handles different action types based on analysis profile
+     * @param {Object} structuredData - The parsed LLM response data
+     */
+    _populateContextFromLLMResponse(structuredData) {
+        if (!structuredData || !Array.isArray(structuredData.actions)) {
+            return;
+        }
+
+        structuredData.actions.forEach(action => {
+            if (!action || typeof action !== 'string') return;
+
+            const actionStr = action.trim();
+
+            // Define term patterns (these go into definedTerms Set)
+            const termPatterns = [
+                { prefix: '📘 Define ', type: 'define' },
+                { prefix: '❗❗ Objection: ', type: 'objection' },
+                { prefix: '❗❗Gap: ', type: 'gap' },
+                { prefix: '🔎 Root Cause: ', type: 'root_cause' },
+                { prefix: '❓ Clarify: ', type: 'clarify' },
+            ];
+
+            // Question patterns (these go into detectedQuestions Set)
+            const questionPatterns = [
+                { prefix: '❓ ', type: 'question' },
+                { prefix: '👆 Suggested Question: ', type: 'suggested_question' },
+                { prefix: '📚 Study Question: ', type: 'study_question' },
+                { prefix: '🔍 Troubleshooting Step: ', type: 'troubleshooting' },
+            ];
+
+            // Check for term patterns first
+            let termAdded = false;
+            for (const pattern of termPatterns) {
+                if (actionStr.startsWith(pattern.prefix)) {
+                    const content = actionStr.substring(pattern.prefix.length).trim();
+                    if (content && content.length > 1) {
+                        this.definedTerms.add(content);
+                        console.log(`[SummaryService] Added ${pattern.type}: "${content}"`);
+                        termAdded = true;
+                        break;
+                    }
+                }
+            }
+
+            // Check for question patterns if not a term
+            if (!termAdded) {
+                for (const pattern of questionPatterns) {
+                    if (actionStr.startsWith(pattern.prefix)) {
+                        const content = actionStr.substring(pattern.prefix.length).trim();
+                        if (content && content.length > 3) {
+                            this.detectedQuestions.add(content);
+                            console.log(`[SummaryService] Added ${pattern.type}: "${content}"`);
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+
+        console.log(`[SummaryService] Context updated - Terms: ${this.definedTerms.size}, Questions: ${this.detectedQuestions.size}`);
+    }
+
     _roughTokenCount(str) {
         if (!str) return 0;
         return Math.ceil(str.length / 4);
@@ -890,7 +995,48 @@ ${responseText}
             history: this.analysisHistory,
             conversationLength: this.conversationHistory.length,
             definedTerms: Array.from(this.definedTerms), // Include defined terms for debugging
+            detectedQuestions: Array.from(this.detectedQuestions), // Include detected questions for debugging
         };
+    }
+
+    /**
+     * Get current context for external services (like ask service)
+     * @returns {Object} - Context object with terms and questions
+     */
+    getCurrentContext() {
+        return {
+            definedTerms: Array.from(this.definedTerms),
+            detectedQuestions: Array.from(this.detectedQuestions),
+            analysisProfile: this.analysisProfile,
+            selectedPresetId: this.selectedPresetId,
+        };
+    }
+
+    /**
+     * Get formatted previous context string for a specific analysis profile
+     * @param {string} profile - The analysis profile (optional, uses current if not provided)
+     * @returns {string} - Formatted context string (XML for analysis profiles, text for others)
+     */
+    getFormattedPreviousContext(profile = null) {
+        const targetProfile = profile || this.analysisProfile;
+
+        // For analysis profiles, return all actual LLM items in XML
+        if (targetProfile && targetProfile.endsWith('_analysis')) {
+            const allPreviousItems = [];
+            if (this.previousAnalysisResult && this.previousAnalysisResult.actions) {
+                allPreviousItems.push(...this.previousAnalysisResult.actions);
+            }
+            Array.from(this.definedTerms).forEach(term => allPreviousItems.push(`📘 Define ${term}`));
+            Array.from(this.detectedQuestions).forEach(question => allPreviousItems.push(`❓ ${question}`));
+
+            const previousXML =
+                allPreviousItems.length > 0 ? `<previous>\n${allPreviousItems.join('\n')}\n</previous>` : '<previous>\n(none)\n</previous>';
+
+            return previousXML;
+        }
+
+        // Fallback to old text format for non-analysis profiles
+        return this._getPreviousContext(targetProfile);
     }
 }
 

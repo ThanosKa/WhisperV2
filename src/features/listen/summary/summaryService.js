@@ -286,6 +286,21 @@ class SummaryService {
             console.log(`[SummaryService] Mock STT: Injecting turn ${turnIndex}/${numTurns}`);
             this.addConversationTurn(speaker, text); // Now allows batching triggers in mock mode
 
+            // Also save mock transcripts to database like real STT
+            if (this.currentSessionId) {
+                try {
+                    const sttRepository = require('../stt/repositories');
+                    sttRepository.addTranscript({
+                        sessionId: this.currentSessionId,
+                        speaker: speaker,
+                        text: text.trim(),
+                    });
+                    console.log(`[SummaryService] Mock STT: Saved transcript to DB for session ${this.currentSessionId}`);
+                } catch (err) {
+                    console.warn('[SummaryService] Mock STT: Failed to save transcript to DB:', err.message);
+                }
+            }
+
             // Schedule next turn with realistic delay (1-3 seconds between turns)
             const delay = Math.random() * 2000 + 1000; // 1-3 seconds
             setTimeout(injectNextTurn, delay);
@@ -471,7 +486,7 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
             const completion = await llmClient.chat(messages);
 
             const responseText = completion.content.trim();
-            console.log('[SummaryService] Response starts with JSON?:', responseText.startsWith('{') ? 'Yes' : 'No (likely markdown)');
+            // console.log('[SummaryService] Response starts with JSON?:', responseText.startsWith('{') ? 'Yes' : 'No (likely markdown)');
 
             // Write LLM input and output to analysis.txt (real output for testing prompts)
             try {
@@ -959,7 +974,7 @@ ${responseText}
                     const content = actionStr.substring(pattern.prefix.length).trim();
                     if (content && content.length > 1) {
                         this.definedTerms.add(content);
-                        console.log(`[SummaryService] Added ${pattern.type}: "${content}"`);
+                        // console.log(`[SummaryService] Added ${pattern.type}: "${content}"`);
                         termAdded = true;
                         break;
                     }
@@ -973,7 +988,7 @@ ${responseText}
                         const content = actionStr.substring(pattern.prefix.length).trim();
                         if (content && content.length > 3) {
                             this.detectedQuestions.add(content);
-                            console.log(`[SummaryService] Added ${pattern.type}: "${content}"`);
+                            // console.log(`[SummaryService] Added ${pattern.type}: "${content}"`);
                             break;
                         }
                     }
@@ -981,7 +996,7 @@ ${responseText}
             }
         });
 
-        console.log(`[SummaryService] Context updated - Terms: ${this.definedTerms.size}, Questions: ${this.detectedQuestions.size}`);
+        // console.log(`[SummaryService] Context updated - Terms: ${this.definedTerms.size}, Questions: ${this.detectedQuestions.size}`);
     }
 
     _roughTokenCount(str) {

@@ -303,6 +303,15 @@ class ListenService {
                         console.warn('[ListenService] Failed to generate meeting title:', e.message);
                     }
                 })();
+
+                // Fire-and-forget: generate comprehensive summary with full transcript
+                (async () => {
+                    try {
+                        await this._generateAndSaveComprehensiveSummary(endedSessionId);
+                    } catch (e) {
+                        console.warn('[ListenService] Failed to generate comprehensive summary:', e.message);
+                    }
+                })();
             }
 
             // Reset state
@@ -415,6 +424,155 @@ class ListenService {
             }
         } catch (err) {
             console.warn('[ListenService] Error in _generateAndSaveMeetingTitle:', err.message);
+        }
+    }
+
+    async _generateAndSaveComprehensiveSummary(sessionId) {
+        try {
+            const sttRepository = require('./stt/repositories');
+            const summaryRepository = require('./summary/repositories');
+            const llmClient = require('../common/ai/llmClient');
+
+            // Get the full transcript
+            console.log(`[ListenService] Looking for transcripts for session: ${sessionId}`);
+            const allTranscripts = await sttRepository.getAllTranscriptsBySessionId(sessionId);
+            console.log(`[ListenService] Found ${allTranscripts ? allTranscripts.length : 0} transcripts for session ${sessionId}`);
+
+            if (!allTranscripts || allTranscripts.length === 0) {
+                console.log('[ListenService] No transcripts found for comprehensive summary');
+                return;
+            }
+
+            // Format the full conversation
+            const fullTranscript = allTranscripts.map(t => `${t.speaker || 'Unknown'}: ${t.text || ''}`.trim()).join('\n');
+
+            if (!fullTranscript.trim()) {
+                console.log('[ListenService] Empty transcript for comprehensive summary');
+                return;
+            }
+
+            // Get current settings for analysis profile
+            const settingsService = require('../settings/settingsService');
+            const currentSettings = await settingsService.getSettings();
+            const analysisPresetId = currentSettings?.analysisPresetId || 'meetings';
+
+            // Get the analysis prompt template
+            const { getSystemPrompt } = require('../common/prompts/promptBuilder');
+            const systemPrompt = getSystemPrompt('meeting_analysis'); // Use meeting analysis for final summary
+
+            // Create comprehensive summary prompt
+            const comprehensivePrompt = `${systemPrompt}
+
+INSTRUCTIONS FOR COMPREHENSIVE SUMMARY:
+- Analyze the ENTIRE conversation provided below
+- Generate a comprehensive summary of ALL key points discussed
+- Create a descriptive title for the entire meeting
+- Focus on main topics, decisions, insights, and outcomes
+- Structure the summary logically (chronologically or by topic)
+- Return ONLY valid JSON with this structure:
+{
+  "title": "Meeting title (max 10 words)",
+  "summary": "Comprehensive summary covering all main points discussed",
+  "key_topics": ["Topic 1", "Topic 2", "Topic 3"],
+  "action_items": ["Action 1", "Action 2"] (if any discussed)
+}
+
+FULL CONVERSATION TRANSCRIPT:
+${fullTranscript}`;
+
+            const messages = [
+                {
+                    role: 'system',
+                    content: 'You are an expert meeting summarizer. Provide comprehensive, well-structured summaries.',
+                },
+                {
+                    role: 'user',
+                    content: comprehensivePrompt,
+                },
+            ];
+
+            console.log(`[ListenService] Generating comprehensive summary for session ${sessionId}...`);
+
+            const completion = await llmClient.chat(messages);
+            const responseText = completion.content.trim();
+
+            // Parse the JSON response
+            let summaryData;
+            try {
+                // Extract JSON from markdown code blocks if present
+                const jsonMatch = responseText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i);
+                const jsonString = jsonMatch ? jsonMatch[1] : responseText;
+                summaryData = JSON.parse(jsonString);
+            } catch (parseError) {
+                console.warn('[ListenService] Failed to parse comprehensive summary JSON:', parseError.message);
+                // Fallback: create basic summary
+                summaryData = {
+                    title: `Meeting Summary - ${new Date().toLocaleDateString()}`,
+                    summary: `Meeting transcript analysis completed. ${allTranscripts.length} conversation turns recorded.`,
+                    key_topics: ['Meeting recorded'],
+                    action_items: [],
+                };
+            }
+
+            // Save comprehensive summary to database
+            await summaryRepository.saveSummary({
+                sessionId: sessionId,
+                tldr: summaryData.summary,
+                text: responseText, // Store the full LLM response
+                bullet_json: JSON.stringify(summaryData.key_topics || []),
+                action_json: JSON.stringify(summaryData.action_items || []),
+                model: 'comprehensive_summary',
+            });
+
+            // Update the session title if a better one was generated
+            if (summaryData.title && summaryData.title !== 'Meeting Summary') {
+                try {
+                    await sessionRepository.updateTitle(sessionId, summaryData.title);
+                    console.log(`[ListenService] 📝 Updated session title to: ${summaryData.title}`);
+                } catch (titleError) {
+                    console.warn('[ListenService] Could not update title:', titleError.message);
+                }
+            }
+
+            // Write to summary.txt file
+            const fs = require('fs');
+            const path = require('path');
+            const rootPath = path.resolve(__dirname, '../../');
+            const summaryPath = path.join(rootPath, 'summary.txt');
+
+            // Format the LLM input for logging
+            const llmInput = messages.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n\n');
+
+            const summaryContent = `SESSION: ${sessionId}
+TIMESTAMP: ${new Date().toISOString()}
+TITLE: ${summaryData.title}
+
+COMPREHENSIVE SUMMARY:
+${summaryData.summary}
+
+KEY TOPICS:
+${(summaryData.key_topics || []).map(topic => `- ${topic}`).join('\n')}
+
+ACTION ITEMS:
+${(summaryData.action_items || []).map(action => `- ${action}`).join('\n')}
+
+TRANSCRIPT LENGTH: ${allTranscripts.length} turns
+FULL TRANSCRIPT:
+${fullTranscript}
+
+---
+WHAT LLM GOT:
+${llmInput}
+
+LLM OUTPUT:
+${responseText}
+
+`;
+
+            fs.appendFileSync(summaryPath, summaryContent);
+            console.log(`[ListenService] ✅ Comprehensive summary saved for session ${sessionId}`);
+        } catch (err) {
+            console.warn('[ListenService] Error in _generateAndSaveComprehensiveSummary:', err.message);
         }
     }
 

@@ -717,10 +717,12 @@ class AskService {
 User prompt: ${userPrompt}
 Mode: Meeting Copilot
 Profile used: ${profileToUse}
+Preset ID: (not applicable - regular profile)
 Using conversation context: ${!!context}
 
 What LLM got:
 PROFILE: ${profileToUse}
+PRESET_ID: (omitted - regular profile)
 USER_CONTENT: ${userContentStr}
 CONTEXT: ${context ? JSON.stringify(context, null, 2) : 'null'}
 MODEL: gemini-2.5-flash-lite

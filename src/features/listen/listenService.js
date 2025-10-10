@@ -524,8 +524,7 @@ TEMPERATURE: ${payload.temperature}`;
             const summaryContent = `SESSION: ${sessionId}
 TIMESTAMP: ${new Date().toISOString()}
 TITLE: ${summaryData.title}
-
-
+Preset ID: (not applicable - comprehensive summary)
 
 ---
 WHAT LLM GOT:

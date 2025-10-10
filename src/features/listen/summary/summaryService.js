@@ -468,6 +468,7 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
                 await sessionRepository.touch(this.currentSessionId);
             }
 
+            // Conditionally include presetId only for analysis profiles
             const payload = {
                 profile: profileToUse,
                 userContent:
@@ -476,6 +477,14 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
                 model: 'gemini-2.5-flash-lite',
                 temperature: 0.7,
             };
+
+            // Only include presetId for analysis profiles that need role context
+            if (profileToUse && profileToUse.endsWith('_analysis') && this.selectedPresetId) {
+                payload.presetId = this.selectedPresetId;
+                console.log(`[SummaryService] 📋 Sending presetId '${this.selectedPresetId}' for analysis profile '${profileToUse}'`);
+            } else {
+                console.log(`[SummaryService] 📋 Not sending presetId for profile '${profileToUse}' (not an analysis profile or no preset selected)`);
+            }
 
             console.log('🤖 Sending analysis request to AI...');
 
@@ -496,9 +505,11 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
 User prompt: (Analysis Request)
 Mode: Server-side Prompt Construction
 Profile: ${profileToUse}
+Preset ID: ${payload.presetId || '(not included - regular profile)'}
 
 What LLM got:
 PROFILE: ${profileToUse}
+${payload.presetId ? `PRESET_ID: ${payload.presetId}` : 'PRESET_ID: (omitted)'}
 USER_CONTENT: ${payload.userContent}
 CONTEXT: ${JSON.stringify(payload.context, null, 2)}
 MODEL: ${payload.model}

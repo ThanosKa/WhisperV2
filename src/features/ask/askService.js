@@ -15,7 +15,7 @@ const getWindowPool = () => {
 
 const sessionRepository = require('../common/repositories/session');
 const askRepository = require('./repositories');
-const { getSystemPrompt } = require('../common/prompts/promptBuilder');
+// const { getSystemPrompt } = require('../common/prompts/promptBuilder'); // Deprecated - using server-side prompt construction
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('os');
@@ -641,16 +641,16 @@ class AskService {
                 }
             }
 
-            const systemPrompt = getSystemPrompt(profileToUse, contextForPrompt, false);
-
-            const userTask = userPrompt.trim();
-            const messages = [
-                { role: 'system', content: systemPrompt },
-                {
-                    role: 'user',
-                    content: [{ type: 'text', text: `${userTask}` }],
-                },
-            ];
+            // Build new payload format for server-side prompt construction
+            const userContent = screenshotBase64
+                ? [
+                      { type: 'text', text: userPrompt.trim() },
+                      {
+                          type: 'image_url',
+                          image_url: { url: `data:image/jpeg;base64,${screenshotBase64}` },
+                      },
+                  ]
+                : userPrompt.trim();
 
             if (screenshotBase64) {
                 try {
@@ -659,19 +659,46 @@ class AskService {
                         head: screenshotBase64.slice(0, 32),
                     });
                 } catch (_) {}
-                messages[1].content.push({
-                    type: 'image_url',
-                    image_url: { url: `data:image/jpeg;base64,${screenshotBase64}` },
-                });
             }
+
+            // Build context object for analysis profiles
+            let context = null;
+            if (isInMeeting && profileToUse && profileToUse.endsWith('_analysis')) {
+                const summaryContext = summaryService.getCurrentContext();
+                if (summaryContext && (summaryContext.definedTerms.length > 0 || summaryContext.detectedQuestions.length > 0)) {
+                    context = {
+                        transcript: contextForPrompt,
+                        previousItems: [
+                            ...summaryContext.definedTerms.map(term => `📘 Define ${term}`),
+                            ...summaryContext.detectedQuestions.map(question => `❓ ${question}`),
+                        ],
+                    };
+                    console.log(
+                        `[AskService] Added summary context for ${profileToUse}: ${summaryContext.definedTerms.length} terms, ${summaryContext.detectedQuestions.length} questions`
+                    );
+                }
+            } else if (useConversationContext && contextForPrompt) {
+                context = contextForPrompt; // Simple string context for non-analysis profiles
+            }
+
+            const payload = {
+                profile: profileToUse,
+                userContent: userContent,
+                context: context,
+                model: 'gemini-2.5-flash-lite',
+                temperature: 0.7,
+            };
 
             // concise request log
             try {
-                const parts = Array.isArray(messages?.[1]?.content) ? messages[1].content.map(c => c.type || 'text') : ['text'];
-                const hasImagePart = parts.includes('image_url');
-                // console.log('[AskService] sending request to llm', { parts, hasImagePart });
+                const hasImagePart = screenshotBase64 ? true : false;
+                console.log('[AskService] sending request to llm', {
+                    profile: profileToUse,
+                    hasImage: hasImagePart,
+                    hasContext: !!context,
+                });
             } catch (_) {
-                // console.log('[AskService] sending request to llm');
+                console.log('[AskService] sending request to llm');
             }
 
             // Write LLM input to response.txt
@@ -682,29 +709,22 @@ class AskService {
                 const responsePath = path.join(rootPath, 'response.txt');
                 const timestamp = new Date().toISOString();
 
-                const llmMessages = messages
-                    .map(msg => {
-                        if (msg.role === 'system') {
-                            return `SYSTEM: ${msg.content}`;
-                        } else if (msg.role === 'user') {
-                            if (Array.isArray(msg.content)) {
-                                return `USER: ${msg.content.map(c => (c.type === 'text' ? c.text : '[IMAGE]')).join(' ')}`;
-                            } else {
-                                return `USER: ${msg.content}`;
-                            }
-                        }
-                        return `${msg.role.toUpperCase()}: ${msg.content}`;
-                    })
-                    .join('\n\n');
+                const userContentStr = Array.isArray(userContent)
+                    ? userContent.map(c => (c.type === 'text' ? c.text : '[IMAGE]')).join(' ')
+                    : userContent;
 
                 const responseEntry = `[${timestamp}]
 User prompt: ${userPrompt}
 Mode: Meeting Copilot
 Profile used: ${profileToUse}
-Using conversation context: ${useConversationContext}
+Using conversation context: ${!!context}
 
 What LLM got:
-${llmMessages}
+PROFILE: ${profileToUse}
+USER_CONTENT: ${userContentStr}
+CONTEXT: ${context ? JSON.stringify(context, null, 2) : 'null'}
+MODEL: gemini-2.5-flash-lite
+TEMPERATURE: 0.7
 
 `;
                 fs.appendFileSync(responsePath, responseEntry);
@@ -713,7 +733,7 @@ ${llmMessages}
             }
 
             try {
-                const response = await llmClient.stream(messages, { signal });
+                const response = await llmClient.stream(payload, { signal });
 
                 // Broadcast quota headers immediately on stream start
                 broadcastQuotaUpdateFromResponse(response);
@@ -744,16 +764,16 @@ ${llmMessages}
                 if (screenshotBase64 && this._isMultimodalError(multimodalError)) {
                     console.log(`[AskService] Multimodal request failed, retrying with text-only: ${multimodalError.message}`);
 
-                    // 텍스트만으로 메시지 재구성
-                    const textOnlyMessages = [
-                        { role: 'system', content: systemPrompt },
-                        {
-                            role: 'user',
-                            content: `User Request: ${userPrompt.trim()}`,
-                        },
-                    ];
+                    // 텍스트만으로 payload 재구성
+                    const textOnlyPayload = {
+                        profile: profileToUse,
+                        userContent: `User Request: ${userPrompt.trim()}`,
+                        context: context,
+                        model: 'gemini-2.5-flash-lite',
+                        temperature: 0.7,
+                    };
 
-                    const fallbackResponse = await llmClient.stream(textOnlyMessages, { signal });
+                    const fallbackResponse = await llmClient.stream(textOnlyPayload, { signal });
                     // Broadcast quota headers for fallback as well
                     broadcastQuotaUpdateFromResponse(fallbackResponse);
                     const askWin = getWindowPool()?.get('ask');

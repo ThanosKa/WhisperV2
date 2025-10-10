@@ -9,11 +9,19 @@ function getBaseUrl() {
     }
 }
 
-async function chat(messages) {
+async function chat(payload) {
     const baseUrl = getBaseUrl();
     const sessionUuid = authService.sessionUuid || null; // Direct access
     if (!sessionUuid) {
         throw new Error('Not authenticated: missing session. Please sign in.');
+    }
+
+    // Validate new payload format
+    if (!payload || typeof payload !== 'object') {
+        throw new Error('Invalid payload: must be an object');
+    }
+    if (!payload.profile || !payload.userContent) {
+        throw new Error('Invalid payload: missing required fields "profile" and "userContent"');
     }
 
     const res = await fetch(`${baseUrl}/api/llm/chat`, {
@@ -22,7 +30,7 @@ async function chat(messages) {
             'Content-Type': 'application/json',
             'X-Session-UUID': sessionUuid,
         },
-        body: JSON.stringify({ messages }),
+        body: JSON.stringify(payload),
     });
 
     const data = await res.json().catch(() => ({}));
@@ -34,11 +42,19 @@ async function chat(messages) {
     return { content: data.content, raw: data };
 }
 
-async function stream(messages, { signal } = {}) {
+async function stream(payload, { signal } = {}) {
     const baseUrl = getBaseUrl();
     const sessionUuid = authService.sessionUuid || null; // Direct access
     if (!sessionUuid) {
         throw new Error('Not authenticated: missing session. Please sign in.');
+    }
+
+    // Validate new payload format
+    if (!payload || typeof payload !== 'object') {
+        throw new Error('Invalid payload: must be an object');
+    }
+    if (!payload.profile || !payload.userContent) {
+        throw new Error('Invalid payload: missing required fields "profile" and "userContent"');
     }
 
     const response = await fetch(`${baseUrl}/api/llm/stream`, {
@@ -47,7 +63,7 @@ async function stream(messages, { signal } = {}) {
             'Content-Type': 'application/json',
             'X-Session-UUID': sessionUuid,
         },
-        body: JSON.stringify({ messages }),
+        body: JSON.stringify(payload),
         signal,
     });
 

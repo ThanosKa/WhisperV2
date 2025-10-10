@@ -393,14 +393,14 @@ class ListenService {
             // 2) Try LLM for best-quality title (server-backed)
             let title = '';
             try {
-                const messages = [
-                    { role: 'system', content: 'You create concise, descriptive meeting titles. Respond with title only.' },
-                    {
-                        role: 'user',
-                        content: `Create a short (max 8 words) meeting title in the same language as this content.\n\nContent:\n${baseCandidate}`,
-                    },
-                ];
-                const completion = await llmClient.chat(messages);
+                const payload = {
+                    profile: 'whisper',
+                    userContent: `Create a short (max 8 words) meeting title in the same language as this content.\n\nContent:\n${baseCandidate}`,
+                    context: null,
+                    model: 'gemini-2.5-flash-lite',
+                    temperature: 0.7,
+                };
+                const completion = await llmClient.chat(payload);
                 title = (completion?.content || '').split('\n')[0].replace(/^"|"$/g, '').trim();
             } catch (e) {
                 console.warn('[ListenService] LLM title generation failed, using heuristic:', e.message);
@@ -456,24 +456,18 @@ class ListenService {
             const currentSettings = await settingsService.getSettings();
             const analysisPresetId = currentSettings?.analysisPresetId || 'meetings';
 
-            // Get the comprehensive summary prompt template
-            const { getSystemPrompt } = require('../common/prompts/promptBuilder');
-            const promptData = getSystemPrompt('comprehensive_summary', { transcript: fullTranscript });
-
-            const messages = [
-                {
-                    role: 'system',
-                    content: promptData.system,
-                },
-                {
-                    role: 'user',
-                    content: promptData.user,
-                },
-            ];
+            // Build new payload format for comprehensive summary
+            const payload = {
+                profile: 'comprehensive_summary',
+                userContent: 'Please analyze and summarize the conversation in the transcription above.',
+                context: { transcript: fullTranscript },
+                model: 'gemini-2.5-flash-lite',
+                temperature: 0.7,
+            };
 
             console.log(`[ListenService] Generating comprehensive summary for session ${sessionId}...`);
 
-            const completion = await llmClient.chat(messages);
+            const completion = await llmClient.chat(payload);
             const responseText = completion.content.trim();
 
             // Parse the JSON response
@@ -520,8 +514,12 @@ class ListenService {
             const rootPath = path.resolve(__dirname, '../../');
             const summaryPath = path.join(rootPath, 'summary.txt');
 
-            // Format the LLM input for logging
-            const llmInput = messages.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n\n');
+            // Format the LLM input for logging (new payload format)
+            const llmInput = `PROFILE: ${payload.profile}
+USER_CONTENT: ${payload.userContent}
+CONTEXT: ${payload.context ? JSON.stringify(payload.context, null, 2) : 'null'}
+MODEL: ${payload.model}
+TEMPERATURE: ${payload.temperature}`;
 
             const summaryContent = `SESSION: ${sessionId}
 TIMESTAMP: ${new Date().toISOString()}

@@ -2,7 +2,7 @@ const llmClient = require('../../common/ai/llmClient');
 const sessionRepository = require('../../common/repositories/session');
 const summaryRepository = require('./repositories');
 const config = require('../../common/config/config');
-const { getSystemPrompt } = require('../../common/prompts/promptBuilder');
+// const { getSystemPrompt } = require('../../common/prompts/promptBuilder'); // Deprecated - using server-side prompt construction
 
 class SummaryService {
     constructor() {
@@ -460,30 +460,26 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
             transcript: recentConversation,
         };
 
-        const baseSystem = getSystemPrompt(this.analysisProfile || 'meeting_analysis', contextData);
-        const rolePrefix = this.selectedRoleText && this.selectedRoleText.trim() ? `<role>${this.selectedRoleText.trim()}</role>\n\n` : '';
-        const systemPrompt = this.customSystemPrompt ? this.customSystemPrompt : `${rolePrefix}${baseSystem}`;
+        // Build new payload format for server-side prompt construction
+        const profileToUse = this.analysisProfile || 'meeting_analysis';
 
         try {
             if (this.currentSessionId) {
                 await sessionRepository.touch(this.currentSessionId);
             }
 
-            const messages = [
-                {
-                    role: 'system',
-                    content: systemPrompt,
-                },
-                {
-                    role: 'user',
-                    content:
-                        'Analyze **ONLY** the conversation provided in the Transcript context above IN THE **LANGUAGE OF THE TRANSCRIPT**. If nothing is detected then DO NOT RETURN ANYTHING.',
-                },
-            ];
+            const payload = {
+                profile: profileToUse,
+                userContent:
+                    'Analyze **ONLY** the conversation provided in the Transcript context above IN THE **LANGUAGE OF THE TRANSCRIPT**. If nothing is detected then DO NOT RETURN ANYTHING.',
+                context: contextData, // Contains transcript and previousItems
+                model: 'gemini-2.5-flash-lite',
+                temperature: 0.7,
+            };
 
             console.log('🤖 Sending analysis request to AI...');
 
-            const completion = await llmClient.chat(messages);
+            const completion = await llmClient.chat(payload);
 
             const responseText = completion.content.trim();
             // console.log('[SummaryService] Response starts with JSON?:', responseText.startsWith('{') ? 'Yes' : 'No (likely markdown)');
@@ -496,19 +492,17 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
                 const responsePath = path.join(rootPath, 'analysis.txt');
                 const timestamp = new Date().toISOString();
 
-                const llmMessages = messages
-                    .map(msg => {
-                        return `${msg.role.toUpperCase()}: ${msg.content}`;
-                    })
-                    .join('\n\n');
-
                 const responseEntry = `[${timestamp}]
 User prompt: (Analysis Request)
-Mode: Mock STT + Real LLM
-Profile: ${this.analysisProfile}
+Mode: Server-side Prompt Construction
+Profile: ${profileToUse}
 
 What LLM got:
-${llmMessages}
+PROFILE: ${profileToUse}
+USER_CONTENT: ${payload.userContent}
+CONTEXT: ${JSON.stringify(payload.context, null, 2)}
+MODEL: ${payload.model}
+TEMPERATURE: ${payload.temperature}
 
 LLM Output:
 ${responseText}

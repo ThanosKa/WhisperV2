@@ -38,7 +38,7 @@ export default function PrivacySettingsPage() {
                         </CardHeader>
                         <CardContent className="pt-0">
                             <Button
-                                onClick={() => window.open('https://www.pickle.com/ko/privacy-policy', '_blank')}
+                                onClick={() => window.open('https://whisper.ai/privacy-policy', '_blank')}
                                 variant="outline"
                                 className="w-full"
                                 rel="noopener noreferrer"
@@ -56,7 +56,7 @@ export default function PrivacySettingsPage() {
                         </CardHeader>
                         <CardContent className="pt-0">
                             <Button
-                                onClick={() => window.open('https://www.pickle.com/ko/terms-of-service', '_blank')}
+                                onClick={() => window.open('https://whisper.ai/terms-of-service', '_blank')}
                                 variant="outline"
                                 className="w-full"
                                 rel="noopener noreferrer"

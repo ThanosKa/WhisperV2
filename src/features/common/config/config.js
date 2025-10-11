@@ -110,7 +110,7 @@ class Config {
     }
 
     getUserConfigPath() {
-        const configDir = path.join(os.homedir(), '.pickleglass');
+        const configDir = path.join(os.homedir(), '.whisper');
         if (!fs.existsSync(configDir)) {
             fs.mkdirSync(configDir, { recursive: true });
         }

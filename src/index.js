@@ -685,7 +685,7 @@ async function startWebStack() {
         console.error(`============================================================`);
         console.error(`[ERROR] Frontend build directory not found!`);
         console.error(`Path: ${staticDir}`);
-        console.error(`Please run 'npm run build' inside the 'pickleglass_web' directory first.`);
+        console.error(`Please run 'npm run build' inside the 'whisper_web' directory first.`);
         console.error(`============================================================`);
         app.quit();
         return;

@@ -23,8 +23,8 @@ jobs:
         run: npm install
 
       - name: 🌐 Install and build web (Renderer) part
-        # Move to pickleglass_web directory and run commands
-        working-directory: ./pickleglass_web
+        # Move to whisper_web directory and run commands
+        working-directory: ./whisper_web
         run: |
           npm install
           npm run build

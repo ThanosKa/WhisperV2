@@ -468,9 +468,10 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
                 await sessionRepository.touch(this.currentSessionId);
             }
 
-            // Conditionally include presetId only for analysis profiles
+            // Build payload with role from database
             const payload = {
                 profile: profileToUse,
+                role: this.selectedRoleText || '',
                 userContent:
                     'Analyze **ONLY** the conversation provided in the Transcript context above IN THE **LANGUAGE OF THE TRANSCRIPT**. If nothing is detected then DO NOT RETURN ANYTHING.',
                 context: contextData, // Contains transcript and previousItems
@@ -478,13 +479,7 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
                 temperature: 0.7,
             };
 
-            // Only include presetId for analysis profiles that need role context
-            if (profileToUse && profileToUse.endsWith('_analysis') && this.selectedPresetId) {
-                payload.presetId = this.selectedPresetId;
-                console.log(`[SummaryService] 📋 Sending presetId '${this.selectedPresetId}' for analysis profile '${profileToUse}'`);
-            } else {
-                console.log(`[SummaryService] 📋 Not sending presetId for profile '${profileToUse}' (not an analysis profile or no preset selected)`);
-            }
+            console.log(`[SummaryService] 📋 Sending payload with profile '${profileToUse}' and role length: ${payload.role.length}`);
 
             console.log('🤖 Sending analysis request to AI...');
 

@@ -295,16 +295,8 @@ class ListenService {
                 await sessionRepository.end(endedSessionId);
                 console.log(`[DB] Session ${endedSessionId} ended.`);
 
-                // Fire-and-forget: generate and save a concise meeting title
-                (async () => {
-                    try {
-                        await this._generateAndSaveMeetingTitle(endedSessionId);
-                    } catch (e) {
-                        console.warn('[ListenService] Failed to generate meeting title:', e.message);
-                    }
-                })();
-
                 // Fire-and-forget: generate comprehensive summary with full transcript
+                // This provides: title, summary, key_topics, action_items - everything we need
                 (async () => {
                     try {
                         await this._generateAndSaveComprehensiveSummary(endedSessionId);
@@ -420,7 +412,6 @@ class ListenService {
 
             if (title) {
                 await sessionRepository.updateTitle(sessionId, title);
-                console.log(`[ListenService] 🏷️ Saved meeting title for ${sessionId}: ${title}`);
             }
         } catch (err) {
             console.warn('[ListenService] Error in _generateAndSaveMeetingTitle:', err.message);
@@ -497,12 +488,13 @@ class ListenService {
                 action_json: JSON.stringify(summaryData.action_items || []),
                 model: 'comprehensive_summary',
             });
+            console.log(`[DB] 💾 Session ${sessionId} comprehensive summary saved (profile: comprehensive_summary)`);
 
             // Update the session title if a better one was generated
             if (summaryData.title && summaryData.title !== 'Meeting Summary') {
                 try {
                     await sessionRepository.updateTitle(sessionId, summaryData.title);
-                    console.log(`[ListenService] 📝 Updated session title to: ${summaryData.title}`);
+                    console.log(`[DB] 📝 Session ${sessionId} title updated: "${summaryData.title}" (profile: comprehensive_summary)`);
                 } catch (titleError) {
                     console.warn('[ListenService] Could not update title:', titleError.message);
                 }

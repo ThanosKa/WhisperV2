@@ -448,7 +448,7 @@ class ListenService {
             // Build new payload format for comprehensive summary
             const payload = {
                 profile: 'comprehensive_summary',
-                userContent: 'Please analyze and summarize the conversation in the transcription above.',
+                userContent: '', // Empty userContent for server-side prompt construction
                 context: { transcript: fullTranscript },
             };
 

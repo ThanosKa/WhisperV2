@@ -472,8 +472,7 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
             const payload = {
                 profile: profileToUse,
                 role: this.selectedRoleText || '',
-                userContent:
-                    'Analyze **ONLY** the conversation provided in the Transcript context above IN THE **LANGUAGE OF THE TRANSCRIPT**. If nothing is detected then DO NOT RETURN ANYTHING.',
+                userContent: '', // Empty userContent for server-side prompt construction
                 context: contextData, // Contains transcript and previousItems
             };
 

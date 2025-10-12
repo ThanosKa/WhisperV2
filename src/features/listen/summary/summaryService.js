@@ -488,37 +488,6 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
             const responseText = completion.content.trim();
             // console.log('[SummaryService] Response starts with JSON?:', responseText.startsWith('{') ? 'Yes' : 'No (likely markdown)');
 
-            // Write LLM input and output to analysis.txt (real output for testing prompts)
-            try {
-                const fs = require('fs');
-                const path = require('path');
-                const rootPath = path.resolve(__dirname, '../../../');
-                const responsePath = path.join(rootPath, 'analysis.txt');
-                const timestamp = new Date().toISOString();
-
-                const responseEntry = `[${timestamp}]
-User prompt: (Analysis Request)
-Mode: Server-side Prompt Construction
-Profile: ${profileToUse}
-Preset ID: ${payload.presetId || '(not included - regular profile)'}
-
-What LLM got:
-PROFILE: ${profileToUse}
-${payload.presetId ? `PRESET_ID: ${payload.presetId}` : 'PRESET_ID: (omitted)'}
-USER_CONTENT: ${payload.userContent}
-CONTEXT: ${JSON.stringify(payload.context, null, 2)}
-MODEL: ${payload.model}
-TEMPERATURE: ${payload.temperature}
-
-LLM Output:
-${responseText}
-
-`;
-                fs.appendFileSync(responsePath, responseEntry);
-            } catch (error) {
-                console.error('[SummaryService] Failed to write analysis.txt:', error);
-            }
-
             const structuredData = this.parseResponseText(responseText, this.previousAnalysisResult);
 
             // Populate definedTerms and detectedQuestions Sets from LLM response

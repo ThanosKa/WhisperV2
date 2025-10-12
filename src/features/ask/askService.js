@@ -701,39 +701,6 @@ class AskService {
                 console.log('[AskService] sending request to llm');
             }
 
-            // Write LLM input to response.txt
-            try {
-                const fs = require('fs');
-                const path = require('path');
-                const rootPath = path.resolve(__dirname, '../../../');
-                const responsePath = path.join(rootPath, 'response.txt');
-                const timestamp = new Date().toISOString();
-
-                const userContentStr = Array.isArray(userContent)
-                    ? userContent.map(c => (c.type === 'text' ? c.text : '[IMAGE]')).join(' ')
-                    : userContent;
-
-                const responseEntry = `[${timestamp}]
-User prompt: ${userPrompt}
-Mode: Meeting Copilot
-Profile used: ${profileToUse}
-Preset ID: (not applicable - regular profile)
-Using conversation context: ${!!context}
-
-What LLM got:
-PROFILE: ${profileToUse}
-PRESET_ID: (omitted - regular profile)
-USER_CONTENT: ${userContentStr}
-CONTEXT: ${context ? JSON.stringify(context, null, 2) : 'null'}
-MODEL: gemini-2.5-flash-lite
-TEMPERATURE: 0.7
-
-`;
-                fs.appendFileSync(responsePath, responseEntry);
-            } catch (error) {
-                console.error('[AskService] Failed to write response.txt:', error);
-            }
-
             try {
                 const response = await llmClient.stream(payload, { signal });
 

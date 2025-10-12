@@ -500,34 +500,6 @@ class ListenService {
                 }
             }
 
-            // Write to summary.txt file
-            const fs = require('fs');
-            const path = require('path');
-            const rootPath = path.resolve(__dirname, '../../');
-            const summaryPath = path.join(rootPath, 'summary.txt');
-
-            // Format the LLM input for logging (new payload format)
-            const llmInput = `PROFILE: ${payload.profile}
-USER_CONTENT: ${payload.userContent}
-CONTEXT: ${payload.context ? JSON.stringify(payload.context, null, 2) : 'null'}
-MODEL: ${payload.model}
-TEMPERATURE: ${payload.temperature}`;
-
-            const summaryContent = `SESSION: ${sessionId}
-TIMESTAMP: ${new Date().toISOString()}
-TITLE: ${summaryData.title}
-Preset ID: (not applicable - comprehensive summary)
-
----
-WHAT LLM GOT:
-${llmInput}
-
-LLM OUTPUT:
-${responseText}
-
-`;
-
-            fs.appendFileSync(summaryPath, summaryContent);
             console.log(`[ListenService] ✅ Comprehensive summary saved for session ${sessionId}`);
         } catch (err) {
             console.warn('[ListenService] Error in _generateAndSaveComprehensiveSummary:', err.message);

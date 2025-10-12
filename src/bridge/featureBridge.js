@@ -1,5 +1,5 @@
 // src/bridge/featureBridge.js
-const { ipcMain, app, BrowserWindow } = require('electron');
+const { ipcMain, app } = require('electron');
 const settingsService = require('../features/settings/settingsService');
 const authService = require('../features/common/services/authService');
 // Model provider management removed (server-only)

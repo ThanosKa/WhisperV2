@@ -20,8 +20,13 @@ async function chat(payload) {
     if (!payload || typeof payload !== 'object') {
         throw new Error('Invalid payload: must be an object');
     }
-    if (!payload.profile || !payload.userContent) {
-        throw new Error('Invalid payload: missing required fields "profile" and "userContent"');
+    if (!payload.profile) {
+        throw new Error('Invalid payload: missing required field "profile"');
+    }
+    // userContent is optional for analysis profiles and comprehensive_summary
+    const requiresUserContent = payload.profile && !payload.profile.endsWith('_analysis') && payload.profile !== 'comprehensive_summary';
+    if (requiresUserContent && (payload.userContent === undefined || payload.userContent === null)) {
+        throw new Error('Invalid payload: missing required field "userContent"');
     }
 
     const res = await fetch(`${baseUrl}/api/llm/chat`, {
@@ -53,8 +58,13 @@ async function stream(payload, { signal } = {}) {
     if (!payload || typeof payload !== 'object') {
         throw new Error('Invalid payload: must be an object');
     }
-    if (!payload.profile || !payload.userContent) {
-        throw new Error('Invalid payload: missing required fields "profile" and "userContent"');
+    if (!payload.profile) {
+        throw new Error('Invalid payload: missing required field "profile"');
+    }
+    // userContent is optional for analysis profiles and comprehensive_summary
+    const requiresUserContent = payload.profile && !payload.profile.endsWith('_analysis') && payload.profile !== 'comprehensive_summary';
+    if (requiresUserContent && (payload.userContent === undefined || payload.userContent === null)) {
+        throw new Error('Invalid payload: missing required field "userContent"');
     }
 
     const response = await fetch(`${baseUrl}/api/llm/stream`, {

@@ -19,8 +19,13 @@ WhisperV2 uses a client-server architecture where the client sends simplified pa
 
 ```javascript
 // Validates required fields
-if (!payload.profile || !payload.userContent) {
-    throw new Error('Invalid payload: missing required fields "profile" and "userContent"');
+if (!payload.profile) {
+    throw new Error('Invalid payload: missing required field "profile"');
+}
+// userContent is optional for analysis profiles and comprehensive_summary
+const requiresUserContent = payload.profile && !payload.profile.endsWith('_analysis') && payload.profile !== 'comprehensive_summary';
+if (requiresUserContent && (payload.userContent === undefined || payload.userContent === null)) {
+    throw new Error('Invalid payload: missing required field "userContent"');
 }
 ```
 
@@ -92,8 +97,6 @@ const payload = {
     profile: profileToUse, // e.g., "whisper", "sales_next"
     userContent: userContent, // text or multimodal array
     context: context, // conversation history or analysis context
-    model: 'gemini-2.5-flash-lite', // hardcoded for now
-    temperature: 0.7, // default temperature
 };
 ```
 
@@ -141,15 +144,13 @@ Tracks and prevents repetition of:
 const payload = {
     profile: profileToUse, // e.g., "meeting_analysis"
     role: this.selectedRoleText || '', // From preset database
-    userContent: 'Analyze **ONLY** the conversation provided in the Transcript context...',
+    userContent: '', // Empty userContent for server-side prompt construction
     context: {
         transcript: recentConversation,
         previousItems: [
             /* formatted previous terms/questions */
         ],
     },
-    model: 'gemini-2.5-flash-lite',
-    temperature: 0.7,
 };
 ```
 
@@ -192,7 +193,7 @@ const payload = {
 {
     "profile": "sales_analysis",
     "role": "You are a sales analysis expert...",
-    "userContent": "Analyze **ONLY** the conversation provided in the Transcript context above IN THE **LANGUAGE OF THE TRANSCRIPT**. If nothing is detected then DO NOT RETURN ANYTHING.",
+    "userContent": "",
     "context": {
         "transcript": "me: Let's discuss pricing\n them: Sure, what are your thoughts?",
         "previousItems": ["📘 Define ROI", "❓ How does the pricing work?"]
@@ -273,7 +274,7 @@ const payload = {
 
 ### Client-Side Errors
 
-- **400**: Missing `profile` or `userContent` fields
+- **400**: Missing `profile` field or `userContent` field (when required for non-analysis profiles)
 - **401**: Invalid session/authentication
 - **429**: Stream endpoint usage limits
 - **500**: Internal server errors

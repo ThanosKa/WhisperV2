@@ -684,6 +684,7 @@ class AskService {
             const payload = {
                 profile: profileToUse,
                 userContent: userContent,
+                context: context,
                 model: 'gemini-2.5-flash-lite',
                 temperature: 0.7,
             };
@@ -694,6 +695,7 @@ class AskService {
                 console.log('[AskService] sending request to llm', {
                     profile: profileToUse,
                     hasImage: hasImagePart,
+                    hasContext: !!context,
                 });
             } catch (_) {
                 console.log('[AskService] sending request to llm');

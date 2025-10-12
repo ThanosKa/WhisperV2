@@ -357,6 +357,67 @@ class ListenService {
         return this.summaryService.getConversationHistory();
     }
 
+    async _generateAndSaveMeetingTitle(sessionId) {
+        // Prefer summary TL;DR, then fall back to transcript snippet;
+        // if LLM available, ask for a short title in the transcript language.
+        try {
+            const summaryRepository = require('./summary/repositories');
+            const sttRepository = require('./stt/repositories');
+            const llmClient = require('../common/ai/llmClient');
+
+            // 1) Gather context
+            let tldr = null;
+            try {
+                const s = await summaryRepository.getSummaryBySessionId(sessionId);
+                tldr = s?.tldr || null;
+            } catch (_) {}
+
+            let transcriptSample = '';
+            try {
+                const all = await sttRepository.getAllTranscriptsBySessionId(sessionId);
+                const lastFew = (all || []).slice(-8).map(t => `${t.speaker || ''}: ${t.text || ''}`.trim());
+                transcriptSample = lastFew.join('\n');
+            } catch (_) {}
+
+            const baseCandidate = (tldr || '').trim() || (transcriptSample || '').trim();
+            if (!baseCandidate) return; // nothing to title
+
+            // 2) Try LLM for best-quality title (server-backed)
+            let title = '';
+            try {
+                const payload = {
+                    profile: 'whisper',
+                    userContent: `Create a short (max 8 words) meeting title in the same language as this content.\n\nContent:\n${baseCandidate}`,
+                    context: null,
+                    model: 'gemini-2.5-flash-lite',
+                    temperature: 0.7,
+                };
+                const completion = await llmClient.chat(payload);
+                title = (completion?.content || '').split('\n')[0].replace(/^"|"$/g, '').trim();
+            } catch (e) {
+                console.warn('[ListenService] LLM title generation failed, using heuristic:', e.message);
+            }
+
+            // 3) Heuristic fallback if needed
+            if (!title) {
+                const from = baseCandidate.split(/\n+/)[0];
+                title = (from || '')
+                    .replace(/[\p{Emoji}\p{Extended_Pictographic}]/gu, '')
+                    .split(/\s+/)
+                    .slice(0, 10)
+                    .join(' ')
+                    .trim();
+                if (title) title = title.charAt(0).toUpperCase() + title.slice(1);
+            }
+
+            if (title) {
+                await sessionRepository.updateTitle(sessionId, title);
+            }
+        } catch (err) {
+            console.warn('[ListenService] Error in _generateAndSaveMeetingTitle:', err.message);
+        }
+    }
+
     async _generateAndSaveComprehensiveSummary(sessionId) {
         try {
             const sttRepository = require('./stt/repositories');
@@ -389,7 +450,8 @@ class ListenService {
             // Build new payload format for comprehensive summary
             const payload = {
                 profile: 'comprehensive_summary',
-                userContent: `Transcription:\n${fullTranscript}\n\nPlease analyze and summarize the conversation in the transcription above.`,
+                userContent: 'Please analyze and summarize the conversation in the transcription above.',
+                context: { transcript: fullTranscript },
                 model: 'gemini-2.5-flash-lite',
                 temperature: 0.7,
             };

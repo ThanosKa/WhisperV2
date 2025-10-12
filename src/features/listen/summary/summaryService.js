@@ -455,11 +455,10 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
         Array.from(this.definedTerms).forEach(term => allPreviousItems.push(`📘 Define ${term}`));
         Array.from(this.detectedQuestions).forEach(question => allPreviousItems.push(`❓ ${question}`));
 
-        // Build embedded context for userContent
-        const previousItemsText =
-            allPreviousItems.length > 0 ? `\n\nPreviously identified items:\n${allPreviousItems.map(item => `- ${item}`).join('\n')}` : '';
-
-        const embeddedContext = `Transcript:\n${recentConversation}${previousItemsText}`;
+        const contextData = {
+            previousItems: allPreviousItems,
+            transcript: recentConversation,
+        };
 
         // Build new payload format for server-side prompt construction
         const profileToUse = this.analysisProfile || 'meeting_analysis';
@@ -473,7 +472,9 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
             const payload = {
                 profile: profileToUse,
                 role: this.selectedRoleText || '',
-                userContent: `${embeddedContext}\n\nAnalyze **ONLY** the conversation provided in the Transcript above IN THE **LANGUAGE OF THE TRANSCRIPT**. If nothing is detected then DO NOT RETURN ANYTHING.`,
+                userContent:
+                    'Analyze **ONLY** the conversation provided in the Transcript context above IN THE **LANGUAGE OF THE TRANSCRIPT**. If nothing is detected then DO NOT RETURN ANYTHING.',
+                context: contextData, // Contains transcript and previousItems
                 model: 'gemini-2.5-flash-lite',
                 temperature: 0.7,
             };

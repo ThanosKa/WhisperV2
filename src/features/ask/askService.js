@@ -685,8 +685,6 @@ class AskService {
                 profile: profileToUse,
                 userContent: userContent,
                 context: context,
-                model: 'gemini-2.5-flash-lite',
-                temperature: 0.7,
             };
 
             // concise request log

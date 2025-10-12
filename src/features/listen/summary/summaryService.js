@@ -475,8 +475,6 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
                 userContent:
                     'Analyze **ONLY** the conversation provided in the Transcript context above IN THE **LANGUAGE OF THE TRANSCRIPT**. If nothing is detected then DO NOT RETURN ANYTHING.',
                 context: contextData, // Contains transcript and previousItems
-                model: 'gemini-2.5-flash-lite',
-                temperature: 0.7,
             };
 
             console.log(`[SummaryService] 📋 Sending payload with profile '${profileToUse}' and role length: ${payload.role.length}`);

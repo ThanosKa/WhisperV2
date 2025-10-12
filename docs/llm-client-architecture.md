@@ -161,9 +161,7 @@ const payload = {
 {
     "profile": "whisper_next",
     "userContent": "What should I say next?",
-    "context": "me: Hello\n them: Hi there",
-    "model": "gemini-2.5-flash-lite",
-    "temperature": 0.7
+    "context": "me: Hello\n them: Hi there"
 }
 ```
 
@@ -184,9 +182,7 @@ const payload = {
             }
         }
     ],
-    "context": null,
-    "model": "gemini-2.5-flash-lite",
-    "temperature": 0.7
+    "context": null
 }
 ```
 
@@ -200,9 +196,7 @@ const payload = {
     "context": {
         "transcript": "me: Let's discuss pricing\n them: Sure, what are your thoughts?",
         "previousItems": ["📘 Define ROI", "❓ How does the pricing work?"]
-    },
-    "model": "gemini-2.5-flash-lite",
-    "temperature": 0.7
+    }
 }
 ```
 
@@ -305,10 +299,12 @@ const payload = {
 - `getSystemPrompt()` client-side function calls
 - `promptBuilder.js` and `promptTemplates.js` dependencies
 - Complex client-side prompt construction logic
+- **`model` and `temperature` parameters** from all API payloads
 
 ### New Architecture Benefits
 
 - **Simplified client code**: Focus on intent detection and context formatting
+- **Server-side model configuration**: Optimized model and temperature settings handled centrally
 - **Centralized prompt management**: All prompts managed server-side
 - **Better separation of concerns**: Client handles UI/interaction, server handles AI logic
 - **Improved maintainability**: Profile updates require only server changes

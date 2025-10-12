@@ -389,8 +389,6 @@ class ListenService {
                     profile: 'whisper',
                     userContent: `Create a short (max 8 words) meeting title in the same language as this content.\n\nContent:\n${baseCandidate}`,
                     context: null,
-                    model: 'gemini-2.5-flash-lite',
-                    temperature: 0.7,
                 };
                 const completion = await llmClient.chat(payload);
                 title = (completion?.content || '').split('\n')[0].replace(/^"|"$/g, '').trim();
@@ -452,8 +450,6 @@ class ListenService {
                 profile: 'comprehensive_summary',
                 userContent: 'Please analyze and summarize the conversation in the transcription above.',
                 context: { transcript: fullTranscript },
-                model: 'gemini-2.5-flash-lite',
-                temperature: 0.7,
             };
 
             console.log(`[ListenService] Generating comprehensive summary for session ${sessionId}...`);

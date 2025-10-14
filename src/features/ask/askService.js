@@ -258,7 +258,7 @@ class AskService {
             },
             sales: {
                 next: 'sales_next',
-                generic_followup: 'sales_generic_followup',
+                generic_followup: 'sales_followup',
                 followup: 'sales_followup',
                 define: 'sales_define',
                 question: 'sales_answer_buyer',

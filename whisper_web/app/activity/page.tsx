@@ -8,7 +8,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { UserProfile, Session, deleteSession, getConversationStats, updateSessionTitle, getMeetingsPage, getQuestionsPage } from '@/utils/api';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ArrowRight } from 'lucide-react';
 
 export default function ActivityPage() {
     const userInfo = useRedirectIfNotAuth() as UserProfile | null;
@@ -206,7 +206,7 @@ export default function ActivityPage() {
                     </h1>
                 </div>
                 {/* Quick stats */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12">
                     {isStatsLoading ? (
                         <>
                             <SkeletonStatsCard />
@@ -214,13 +214,13 @@ export default function ActivityPage() {
                         </>
                     ) : (
                         <>
-                            <div className="bg-white rounded-lg p-5 border border-gray-200">
-                                <div className="text-sm text-gray-500 mb-1">Total time in meetings</div>
-                                <div className="text-2xl font-semibold text-gray-900">{formatDuration(totalMeetingSeconds)}</div>
+                            <div className="bg-white rounded-lg p-8 border border-gray-200">
+                                <div className="text-lg text-gray-500 mb-2">Total time in meetings</div>
+                                <div className="text-3xl text-gray-900">{formatDuration(totalMeetingSeconds)}</div>
                             </div>
-                            <div className="bg-white rounded-lg p-5 border border-gray-200">
-                                <div className="text-sm text-gray-500 mb-1">Total questions</div>
-                                <div className="text-2xl font-semibold text-gray-900">{totalQuestions}</div>
+                            <div className="bg-white rounded-lg p-8 border border-gray-200">
+                                <div className="text-lg text-gray-500 mb-2">Whisper Uses</div>
+                                <div className="text-3xl text-gray-900">{totalQuestions}</div>
                             </div>
                         </>
                     )}
@@ -347,7 +347,7 @@ function SessionCard({
     toast: any;
 }) {
     const typeLabel = session.session_type === 'listen' ? 'Meeting' : 'Question';
-    const typeColor = session.session_type === 'listen' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800';
+    const typeColor = 'bg-gray-100 text-gray-600';
     const [isEditing, setIsEditing] = useState(false);
     const [title, setTitle] = useState(session.title || '');
     const [saving, setSaving] = useState(false);
@@ -403,7 +403,10 @@ function SessionCard({
     }, [isEditing]);
 
     return (
-        <div className="block bg-white rounded-lg p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+        <Link
+            href={`/activity/details?sessionId=${session.id}`}
+            className="relative block bg-white p-6 shadow-sm border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer group"
+        >
             <div className="flex justify-between items-start mb-3">
                 <div className="min-w-0 flex-1">
                     <div className="flex justify-between items-start">
@@ -419,32 +422,65 @@ function SessionCard({
                                         if (e.key === 'Enter') save();
                                         if (e.key === 'Escape') cancelEdit();
                                     }}
+                                    onClick={e => e.preventDefault()}
                                 />
                             ) : (
-                                <Link
-                                    href={`/activity/details?sessionId=${session.id}`}
-                                    className="text-lg font-medium text-gray-900 hover:underline truncate block"
-                                >
+                                <div className="text-lg font-medium text-gray-900 hover:underline truncate block">
                                     {optimisticTitle || `${typeLabel} - ${new Date(session.started_at * 1000).toLocaleDateString()}`}
-                                </Link>
+                                </div>
                             )}
                         </div>
                         <div className="flex items-center gap-2 ml-4 shrink-0">
                             {isEditing ? (
                                 <>
-                                    <Button onClick={save} size="sm" disabled={saving || !title.trim()}>
+                                    <Button
+                                        onClick={e => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            save();
+                                        }}
+                                        size="sm"
+                                        disabled={saving || !title.trim()}
+                                    >
                                         {saving ? 'Saving...' : 'Save'}
                                     </Button>
-                                    <Button onClick={cancelEdit} variant="outline" size="sm" disabled={saving}>
+                                    <Button
+                                        onClick={e => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            cancelEdit();
+                                        }}
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={saving}
+                                    >
                                         Cancel
                                     </Button>
                                 </>
                             ) : (
                                 <>
-                                    <Button onClick={() => setIsEditing(true)} variant="outline" size="sm" disabled={saving}>
+                                    <Button
+                                        onClick={e => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setIsEditing(true);
+                                        }}
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={saving}
+                                    >
                                         Edit
                                     </Button>
-                                    <Button onClick={() => onDelete(session.id)} variant="destructive" size="sm" disabled={deletingId === session.id}>
+                                    <Button
+                                        onClick={e => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            onDelete(session.id);
+                                        }}
+                                        variant="destructive"
+                                        size="sm"
+                                        disabled={deletingId === session.id}
+                                    >
                                         {deletingId === session.id ? 'Deleting...' : 'Delete'}
                                     </Button>
                                 </>
@@ -455,7 +491,10 @@ function SessionCard({
                 </div>
             </div>
             <span className={`capitalize inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${typeColor}`}>{typeLabel}</span>
-        </div>
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <ArrowRight className="h-5 w-5 text-gray-400" />
+            </div>
+        </Link>
     );
 }
 
@@ -488,9 +527,9 @@ function formatDuration(totalSeconds: number) {
 
 function SkeletonStatsCard() {
     return (
-        <div className="bg-white rounded-lg p-5 border border-gray-200 animate-pulse">
-            <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
-            <div className="h-8 bg-gray-100 rounded w-1/3" />
+        <div className="bg-white rounded-lg p-8 border border-gray-200 animate-pulse">
+            <div className="h-6 bg-gray-200 rounded w-1/2 mb-3" />
+            <div className="h-10 bg-gray-100 rounded w-1/3" />
         </div>
     );
 }

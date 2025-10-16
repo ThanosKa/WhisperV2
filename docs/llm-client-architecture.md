@@ -54,10 +54,10 @@ Maps (intent + active preset) to specific server-side profiles:
 
 ```javascript
 const MAP = {
-    default: {
-        next: 'whisper_next',
-        generic_followup: 'whisper_followup',
-        define: 'whisper_define',
+    meeting: {
+        next: 'meeting_next',
+        generic_followup: 'meeting_followup',
+        define: 'meeting_define',
         // ... more mappings
     },
     sales: {
@@ -160,7 +160,7 @@ const payload = {
 
 ```json
 {
-    "profile": "whisper_next",
+    "profile": "meeting_next",
     "userContent": "What should I say next?",
     "context": "me: Hello\n them: Hi there"
 }
@@ -206,14 +206,14 @@ const payload = {
 ### Core Assistant Profiles
 
 - `whisper` - Main multimodal assistant with screen analysis
-- `whisper_question` - Answer user questions from context
-- `whisper_define` - Define terms in user's language
-- `whisper_next` - Suggest natural next statements
-- `whisper_followup` - Generate follow-up questions
-- `whisper_recap` - Create meeting recaps
-- `whisper_actions` - Extract action items
-- `whisper_summary` - Executive meeting summaries
-- `whisper_email` - Draft professional emails
+- `meeting_question` - Answer user questions from context
+- `meeting_define` - Define terms in user's language
+- `meeting_next` - Suggest natural next statements
+- `meeting_followup` - Generate follow-up questions
+- `meeting_recap` - Create meeting recaps
+- `meeting_actions` - Extract action items
+- `meeting_summary` - Executive meeting summaries
+- `meeting_email` - Draft professional emails
 
 ### Sales Profiles
 

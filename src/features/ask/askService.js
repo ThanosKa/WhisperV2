@@ -242,19 +242,19 @@ class AskService {
      * @returns {{ profileToUse: string, useConversationContext: boolean }}
      */
     _resolveProfileForIntent(intent, presetId) {
-        const preset = (presetId || '').trim() || 'default';
+        const preset = (presetId || '').trim() || 'meeting';
         // Centralized, low-risk routing table
         const MAP = {
-            default: {
-                next: 'whisper_next',
-                generic_followup: 'whisper_followup',
-                followup: 'whisper_followup',
-                define: 'whisper_define',
-                question: 'whisper_question',
-                actions: 'whisper_actions',
-                summary: 'whisper_summary',
-                recap: 'whisper_recap',
-                email: 'whisper_email',
+            meeting: {
+                next: 'meeting_next',
+                generic_followup: 'meeting_followup',
+                followup: 'meeting_followup',
+                define: 'meeting_define',
+                question: 'meeting_question',
+                actions: 'meeting_actions',
+                summary: 'meeting_summary',
+                recap: 'meeting_recap',
+                email: 'meeting_email',
             },
             sales: {
                 next: 'sales_next',
@@ -310,8 +310,8 @@ class AskService {
             },
         };
 
-        const table = MAP[preset] || MAP.default;
-        const profileToUse = table[intent] || MAP.default[intent] || 'whisper';
+        const table = MAP[preset] || MAP.meeting;
+        const profileToUse = table[intent] || MAP.meeting[intent] || 'whisper';
 
         // Conversation context policy per intent
         const intentsWithoutContext = new Set(['define']);

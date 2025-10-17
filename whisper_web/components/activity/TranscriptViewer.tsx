@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
 interface TranscriptViewerProps {
     onClick: () => void;
@@ -19,7 +19,7 @@ export function TranscriptViewer({ onClick, transcriptCount = 0, messageCount = 
                 <CardHeader className="pb-3">
                     <CardTitle className="text-lg flex items-center justify-between">
                         Timeline & Usage
-                        <ArrowRight className="h-4 w-4" />
+                        <ChevronRight className="h-4 w-4" />
                     </CardTitle>
                 </CardHeader>
 

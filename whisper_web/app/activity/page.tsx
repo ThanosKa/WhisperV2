@@ -8,7 +8,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { UserProfile, Session, deleteSession, getConversationStats, updateSessionTitle, getMeetingsPage, getQuestionsPage } from '@/utils/api';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, ArrowRight } from 'lucide-react';
+import { Loader2, Mic, MessageSquare, Timer } from 'lucide-react';
 
 export default function ActivityPage() {
     const userInfo = useRedirectIfNotAuth() as UserProfile | null;
@@ -215,11 +215,17 @@ export default function ActivityPage() {
                     ) : (
                         <>
                             <div className="bg-white rounded-lg p-8 border border-gray-200">
-                                <div className="text-lg text-gray-500 mb-2">Total time in meetings</div>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Timer className="h-5 w-5 text-gray-500" />
+                                    <div className="text-lg text-gray-500">Total time in meetings</div>
+                                </div>
                                 <div className="text-3xl text-gray-900">{formatDuration(totalMeetingSeconds)}</div>
                             </div>
                             <div className="bg-white rounded-lg p-8 border border-gray-200">
-                                <div className="text-lg text-gray-500 mb-2">Whisper Uses</div>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <MessageSquare className="h-5 w-5 text-gray-500" />
+                                    <div className="text-lg text-gray-500">Whisper Uses</div>
+                                </div>
                                 <div className="text-3xl text-gray-900">{totalQuestions}</div>
                             </div>
                         </>
@@ -347,7 +353,11 @@ function SessionCard({
     toast: any;
 }) {
     const typeLabel = session.session_type === 'listen' ? 'Meeting' : 'Question';
-    const typeColor = 'bg-gray-100 text-gray-600';
+    const TypeIcon = session.session_type === 'listen' ? Mic : MessageSquare;
+    const typeColor =
+        session.session_type === 'listen'
+            ? 'bg-blue-100 text-blue-800' // Meetings: light blue bg + dark blue text
+            : 'bg-green-100 text-green-800'; // Questions: light green bg + dark green text
     const [isEditing, setIsEditing] = useState(false);
     const [title, setTitle] = useState(session.title || '');
     const [saving, setSaving] = useState(false);
@@ -490,10 +500,10 @@ function SessionCard({
                     <div className="text-sm text-gray-500">{new Date(session.started_at * 1000).toLocaleString()}</div>
                 </div>
             </div>
-            <span className={`capitalize inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${typeColor}`}>{typeLabel}</span>
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ArrowRight className="h-5 w-5 text-gray-400" />
-            </div>
+            <span className={`capitalize inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${typeColor}`}>
+                <TypeIcon className="h-3 w-3" />
+                {typeLabel}
+            </span>
         </Link>
     );
 }

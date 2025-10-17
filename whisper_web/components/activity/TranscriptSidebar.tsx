@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Filter } from 'lucide-react';
+import { SlidersHorizontal } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -59,7 +59,7 @@ export function TranscriptSidebar({ isOpen, onClose, transcripts, aiMessages }: 
                             {speakerOptions.length > 1 && (
                                 <Select value={speakerFilter} onValueChange={setSpeakerFilter}>
                                     <SelectTrigger className="w-[140px] h-8 text-xs border-slate-200">
-                                        <Filter className="h-3.5 w-3.5 mr-1.5" />
+                                        <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -75,7 +75,7 @@ export function TranscriptSidebar({ isOpen, onClose, transcripts, aiMessages }: 
                     </div>
 
                     <div className="flex-1 overflow-y-auto">
-                        <TabsContent value="transcript" className="m-0 p-6 space-y-1">
+                        <TabsContent value="transcript" className="m-0 p-6 space-y-3">
                             {filteredTranscripts.length > 0 ? (
                                 filteredTranscripts.map(item => (
                                     <MessageBubble key={item.id} content={item.text} speaker={item.speaker} timestamp={item.start_at} isTranscript />
@@ -85,7 +85,7 @@ export function TranscriptSidebar({ isOpen, onClose, transcripts, aiMessages }: 
                             )}
                         </TabsContent>
 
-                        <TabsContent value="usage" className="m-0 p-6 space-y-1">
+                        <TabsContent value="usage" className="m-0 p-6 space-y-3">
                             {aiMessages.length > 0 ? (
                                 aiMessages.map(item => (
                                     <MessageBubble key={item.id} content={item.content} role={item.role} timestamp={item.sent_at} />

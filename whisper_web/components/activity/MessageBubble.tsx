@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface MessageBubbleProps {
@@ -19,9 +19,9 @@ export function MessageBubble({ content, role = 'assistant', speaker, timestamp,
 
     const formatTime = (timestamp?: number) => {
         if (!timestamp) return '';
-        return new Date(timestamp * 1000).toLocaleTimeString('en-US', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
+        return new Date(timestamp * 1000).toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
         });
     };
 
@@ -34,24 +34,26 @@ export function MessageBubble({ content, role = 'assistant', speaker, timestamp,
     return (
         <div className={cn('flex gap-3 mb-4 group/msg', isUser ? 'justify-end' : 'justify-start')}>
             <div className={cn('flex items-end gap-2.5', isUser ? 'flex-row-reverse' : 'flex-row')}>
-                <div
-                    className={cn(
-                        'relative max-w-xs rounded-2xl px-4 py-2.5 text-sm leading-relaxed',
-                        isUser
-                            ? 'bg-blue-500 text-white'
-                            : isSpeaker
-                            ? 'bg-gray-300 text-gray-900'
-                            : 'bg-gray-200 text-gray-900'
-                    )}
-                >
-                    {isSpeaker && speaker && speaker.toLowerCase() !== 'me' && (
-                        <p className="mb-1 text-xs font-semibold text-gray-600">{speaker}</p>
-                    )}
-                    <p className="whitespace-pre-wrap break-words">{content}</p>
+                <div className="flex flex-col items-start gap-1">
+                    <div
+                        className={cn(
+                            'relative max-w-xs rounded-2xl px-5 py-3 text-sm leading-relaxed',
+                            isUser ? 'bg-[#007AFF] text-white' : 'bg-[#E5E5EA] text-gray-900'
+                        )}
+                    >
+                        {isSpeaker && speaker && speaker.toLowerCase() !== 'me' && (
+                            <p className="mb-1 text-xs font-semibold text-gray-600">{speaker}</p>
+                        )}
+                        {!isUser && !isSpeaker && (
+                            <div className="mb-1 flex items-center gap-1">
+                                <Bot className="h-3 w-3 text-gray-500" />
+                                <p className="text-xs font-semibold text-gray-600">Whisper AI</p>
+                            </div>
+                        )}
+                        <p className="whitespace-pre-wrap break-words">{content}</p>
+                    </div>
                     {timestamp && (
-                        <p className={cn('mt-1.5 text-xs font-medium', isUser ? 'text-blue-100' : 'text-gray-600')}>
-                            {formatTime(timestamp)}
-                        </p>
+                        <p className={cn('text-xs font-medium text-gray-500', isUser ? 'self-end' : 'self-start')}>{formatTime(timestamp)}</p>
                     )}
                 </div>
 
@@ -64,11 +66,7 @@ export function MessageBubble({ content, role = 'assistant', speaker, timestamp,
                     )}
                     title="Copy message"
                 >
-                    {copied ? (
-                        <Check className="h-4 w-4" />
-                    ) : (
-                        <Copy className="h-4 w-4" />
-                    )}
+                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 </button>
             </div>
         </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { cn } from '@/lib/utils';
 import { useRedirectIfNotAuth } from '@/utils/auth';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { UserProfile, SessionDetails, getSessionDetails, deleteSession, updateSessionTitle } from '@/utils/api';
 import { useToast } from '@/hooks/use-toast';
 import dynamic from 'next/dynamic';
+import { ArrowLeft } from 'lucide-react';
 import { TranscriptViewer } from '@/components/activity/TranscriptViewer';
 import { TranscriptSidebar } from '@/components/activity/TranscriptSidebar';
 
@@ -39,6 +40,7 @@ function SessionDetailsContent() {
     const [newTitle, setNewTitle] = useState('');
     const [copiedMessages, setCopiedMessages] = useState<Set<string>>(new Set());
     const [showTranscriptSidebar, setShowTranscriptSidebar] = useState(false);
+    const titleInputRef = useRef<HTMLInputElement>(null);
     const { toast } = useToast();
 
     useEffect(() => {
@@ -58,6 +60,16 @@ function SessionDetailsContent() {
             fetchDetails();
         }
     }, [userInfo, sessionId]);
+
+    useEffect(() => {
+        if (editingTitle && titleInputRef.current) {
+            titleInputRef.current.focus();
+            // Put cursor at the end of the text
+            const input = titleInputRef.current;
+            const len = input.value.length;
+            input.setSelectionRange(len, len);
+        }
+    }, [editingTitle]);
 
     const handleDelete = async () => {
         if (!sessionId) return;
@@ -173,11 +185,9 @@ function SessionDetailsContent() {
                             href="/activity"
                             className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600 transition hover:bg-slate-50"
                         >
-                            ← Back to activity
+                            <ArrowLeft className="h-4 w-4" />
+                            Back
                         </Link>
-                        <span className="rounded-2xl border border-slate-200/60 bg-white/80 px-3 py-1 text-xs font-medium text-slate-600 shadow-[0_20px_60px_-55px_rgba(15,23,42,0.7)]">
-                            Session details
-                        </span>
                     </div>
 
                     <section className="rounded-lg border border-slate-200 bg-white px-6 py-6">
@@ -186,10 +196,10 @@ function SessionDetailsContent() {
                             <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
                                 <div className="flex-1 space-y-4">
                                     <div>
-                                        <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">Conversation</p>
                                         {editingTitle ? (
                                             <Input
-                                                className="mt-2 w-full border border-transparent bg-transparent p-0 text-3xl font-semibold text-slate-900 focus-visible:outline-none focus-visible:ring-0"
+                                                ref={titleInputRef}
+                                                className="w-full border border-transparent bg-transparent p-0 !text-3xl font-semibold text-slate-900 focus-visible:outline-none focus-visible:ring-0"
                                                 value={newTitle}
                                                 onChange={event => setNewTitle(event.target.value)}
                                                 placeholder="Untitled session"
@@ -200,9 +210,9 @@ function SessionDetailsContent() {
                                                 disabled={savingTitle}
                                             />
                                         ) : (
-                                            <h1 className="mt-2 text-3xl font-semibold leading-tight text-slate-900">
+                                            <h1 className="text-3xl font-semibold leading-tight text-slate-900">
                                                 {sessionDetails.session.title ||
-                                                    `Conversation on ${new Date(sessionDetails.session.started_at * 1000).toLocaleDateString()}`}
+                                                    new Date(sessionDetails.session.started_at * 1000).toLocaleDateString()}
                                             </h1>
                                         )}
                                     </div>
@@ -222,9 +232,7 @@ function SessionDetailsContent() {
                                                 hour12: true,
                                             })}
                                         </span>
-                                        <span className="rounded border border-slate-200 bg-slate-50 px-3 py-1">
-                                            {sessionDetails.session.session_type}
-                                        </span>
+                                        <span className="rounded bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">Meeting</span>
                                     </div>
                                 </div>
 
@@ -266,12 +274,12 @@ function SessionDetailsContent() {
                             {sessionDetails.summary && (
                                 <div className="border-t border-slate-200 pt-6">
                                     <h2 className="text-lg font-medium text-slate-900 mb-4">Summary</h2>
-                                    <p className="leading-7 text-slate-600 mb-6">"{sessionDetails.summary.tldr}"</p>
+                                    <p className="leading-7 text-slate-900 mb-6">"{sessionDetails.summary.tldr}"</p>
 
                                     {sessionDetails.summary.bullet_json && JSON.parse(sessionDetails.summary.bullet_json).length > 0 && (
                                         <div className="mb-6">
                                             <h3 className="text-sm font-semibold text-slate-900 mb-3">Key points</h3>
-                                            <ul className="my-4 ml-6 list-disc space-y-2 text-slate-600 [&>li]:text-muted-foreground">
+                                            <ul className="my-4 ml-6 list-disc space-y-2 text-slate-900">
                                                 {JSON.parse(sessionDetails.summary.bullet_json).map((point: string, index: number) => (
                                                     <li key={index} className="leading-6">
                                                         {point}
@@ -284,7 +292,7 @@ function SessionDetailsContent() {
                                     {sessionDetails.summary.action_json && JSON.parse(sessionDetails.summary.action_json).length > 0 && (
                                         <div>
                                             <h3 className="text-sm font-semibold text-slate-900 mb-3">Action items</h3>
-                                            <ul className="my-4 ml-6 list-disc space-y-2 text-slate-600 [&>li]:text-muted-foreground">
+                                            <ul className="my-4 ml-6 list-disc space-y-2 text-slate-900">
                                                 {JSON.parse(sessionDetails.summary.action_json).map((action: string, index: number) => (
                                                     <li key={index} className="leading-6">
                                                         {action}

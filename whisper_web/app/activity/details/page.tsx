@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useRedirectIfNotAuth } from '@/utils/auth';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -142,15 +141,8 @@ function SessionDetailsContent() {
 
     if (!userInfo || isLoading) {
         return (
-            <div className="min-h-screen bg-[#F4F5FA] flex items-center justify-center">
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="rounded-3xl border border-slate-200/60 bg-white/90 px-10 py-8 text-center shadow-[0_35px_120px_-60px_rgba(15,23,42,0.5)] backdrop-blur-xl"
-                >
-                    <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-transparent" />
-                    <p className="text-sm font-medium text-slate-500">Loading session details…</p>
-                </motion.div>
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-transparent" />
             </div>
         );
     }
@@ -158,17 +150,13 @@ function SessionDetailsContent() {
     if (!sessionDetails) {
         return (
             <div className="min-h-screen bg-[#F4F5FA] flex items-center justify-center">
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="max-w-xl rounded-3xl border border-slate-200/60 bg-white/90 px-8 py-10 text-center shadow-[0_30px_90px_-50px_rgba(15,23,42,0.45)] backdrop-blur-xl"
-                >
+                <div className="max-w-xl rounded-3xl border border-slate-200/60 bg-white/90 px-8 py-10 text-center shadow-[0_30px_90px_-50px_rgba(15,23,42,0.45)] backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <h2 className="text-xl font-semibold text-slate-900">Session not found</h2>
                     <p className="mt-3 text-sm text-slate-500">We couldn’t locate that session, it may have been removed.</p>
                     <Link href="/activity" className="mt-6 inline-block text-sm font-medium text-[#3146FF] hover:text-[#1F2CF3]">
                         Return to activity
                     </Link>
-                </motion.div>
+                </div>
             </div>
         );
     }
@@ -180,12 +168,7 @@ function SessionDetailsContent() {
         <>
             <div className="min-h-screen bg-[#F4F5FA] text-slate-900">
                 <div className="mx-auto flex max-w-4xl flex-col gap-10 px-6 pb-16 pt-12">
-                    <motion.div
-                        initial={{ opacity: 0, y: 18 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.28, ease: 'easeOut' }}
-                        className="flex items-center justify-between text-sm text-slate-500"
-                    >
+                    <div className="flex items-center justify-between text-sm text-slate-500 animate-in fade-in slide-in-from-top-4 duration-300">
                         <Link
                             href="/activity"
                             className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600 transition hover:bg-slate-50"
@@ -195,7 +178,7 @@ function SessionDetailsContent() {
                         <span className="rounded-2xl border border-slate-200/60 bg-white/80 px-3 py-1 text-xs font-medium text-slate-600 shadow-[0_20px_60px_-55px_rgba(15,23,42,0.7)]">
                             Session details
                         </span>
-                    </motion.div>
+                    </div>
 
                     <section className="rounded-lg border border-slate-200 bg-white px-6 py-6">
                         <div className="space-y-8">
@@ -283,16 +266,15 @@ function SessionDetailsContent() {
                             {sessionDetails.summary && (
                                 <div className="border-t border-slate-200 pt-6">
                                     <h2 className="text-lg font-medium text-slate-900 mb-4">Summary</h2>
-                                    <p className="text-base text-slate-600 mb-4">"{sessionDetails.summary.tldr}"</p>
+                                    <p className="leading-7 text-slate-600 mb-6">"{sessionDetails.summary.tldr}"</p>
 
                                     {sessionDetails.summary.bullet_json && JSON.parse(sessionDetails.summary.bullet_json).length > 0 && (
-                                        <div className="mb-4">
-                                            <h3 className="text-sm font-medium text-slate-700 mb-2">Key points</h3>
-                                            <ul className="space-y-1">
+                                        <div className="mb-6">
+                                            <h3 className="text-sm font-semibold text-slate-900 mb-3">Key points</h3>
+                                            <ul className="my-4 ml-6 list-disc space-y-2 text-slate-600 [&>li]:text-muted-foreground">
                                                 {JSON.parse(sessionDetails.summary.bullet_json).map((point: string, index: number) => (
-                                                    <li key={index} className="flex items-start gap-2 text-sm text-slate-600 ml-4">
-                                                        <span className="text-slate-700 font-bold mt-1">•</span>
-                                                        <span>{point}</span>
+                                                    <li key={index} className="leading-6">
+                                                        {point}
                                                     </li>
                                                 ))}
                                             </ul>
@@ -301,12 +283,11 @@ function SessionDetailsContent() {
 
                                     {sessionDetails.summary.action_json && JSON.parse(sessionDetails.summary.action_json).length > 0 && (
                                         <div>
-                                            <h3 className="text-sm font-medium text-slate-700 mb-2">Action items</h3>
-                                            <ul className="space-y-1">
+                                            <h3 className="text-sm font-semibold text-slate-900 mb-3">Action items</h3>
+                                            <ul className="my-4 ml-6 list-disc space-y-2 text-slate-600 [&>li]:text-muted-foreground">
                                                 {JSON.parse(sessionDetails.summary.action_json).map((action: string, index: number) => (
-                                                    <li key={index} className="flex items-start gap-2 text-sm text-slate-600 ml-4">
-                                                        <span className="text-slate-700 font-bold mt-1">•</span>
-                                                        <span>{action}</span>
+                                                    <li key={index} className="leading-6">
+                                                        {action}
                                                     </li>
                                                 ))}
                                             </ul>

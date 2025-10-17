@@ -524,7 +524,6 @@ function formatDuration(totalSeconds: number) {
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     return `${hours}h ${String(minutes).padStart(2, '0')}m`;
 }
-
 function SkeletonStatsCard() {
     return (
         <div className="bg-white rounded-lg p-8 border border-gray-200 animate-pulse">

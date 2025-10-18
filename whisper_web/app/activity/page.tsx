@@ -216,14 +216,12 @@ export default function ActivityPage() {
                         <>
                             <div className="bg-white rounded-lg p-8 border border-gray-200">
                                 <div className="flex items-center gap-2 mb-2">
-                                    <Timer className="h-5 w-5 text-gray-500" />
                                     <div className="text-lg text-gray-500">Total time in meetings</div>
                                 </div>
                                 <div className="text-3xl text-gray-900">{formatDuration(totalMeetingSeconds)}</div>
                             </div>
                             <div className="bg-white rounded-lg p-8 border border-gray-200">
                                 <div className="flex items-center gap-2 mb-2">
-                                    <MessageSquare className="h-5 w-5 text-gray-500" />
                                     <div className="text-lg text-gray-500">Whisper Uses</div>
                                 </div>
                                 <div className="text-3xl text-gray-900">{totalQuestions}</div>
@@ -324,7 +322,7 @@ export default function ActivityPage() {
             <ConfirmDialog
                 open={!!deleteConfirmId}
                 onOpenChange={open => setDeleteConfirmId(open ? deleteConfirmId : null)}
-                title="Delete Activity"
+                title="Delete"
                 description="Are you sure you want to delete this activity? This cannot be undone."
                 confirmLabel={deletingId && deleteConfirmId === deletingId ? 'Deleting...' : 'Delete'}
                 cancelLabel="Cancel"

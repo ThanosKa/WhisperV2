@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Copy, Check, Bot } from 'lucide-react';
+import { Copy, Check, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import Markdown from '@/components/Markdown';
 
 interface MessageBubbleProps {
     content: string;
@@ -46,11 +47,15 @@ export function MessageBubble({ content, role = 'assistant', speaker, timestamp,
                         )}
                         {!isUser && !isSpeaker && (
                             <div className="mb-1 flex items-center gap-1">
-                                <Bot className="h-3 w-3 text-gray-500" />
-                                <p className="text-xs font-semibold text-gray-600">Whisper AI</p>
+                                <Sparkles className="h-3 w-3 text-gray-500" />
+                                <p className="text-xs font-semibold text-gray-600">Whisper</p>
                             </div>
                         )}
-                        <p className="whitespace-pre-wrap break-words">{content}</p>
+                        {role === 'assistant' ? (
+                            <Markdown content={content} className="prose-sm prose-gray max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0" />
+                        ) : (
+                            <p className="whitespace-pre-wrap break-words">{content}</p>
+                        )}
                     </div>
                     {timestamp && (
                         <p className={cn('text-xs font-medium text-gray-500', isUser ? 'self-end' : 'self-start')}>{formatTime(timestamp)}</p>

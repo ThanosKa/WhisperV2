@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { UserProfile, SessionDetails, getSessionDetails, deleteSession, updateSessionTitle } from '@/utils/api';
 import { useToast } from '@/hooks/use-toast';
 import dynamic from 'next/dynamic';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Sparkles, Copy, Check } from 'lucide-react';
 import { TranscriptViewer } from '@/components/activity/TranscriptViewer';
 import { TranscriptSidebar } from '@/components/activity/TranscriptSidebar';
 
@@ -235,7 +235,15 @@ function SessionDetailsContent() {
                                                 hour12: true,
                                             })}
                                         </span>
-                                        <span className="rounded bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">Meeting</span>
+                                        <span
+                                            className={`rounded px-3 py-1 text-xs font-medium ${
+                                                sessionDetails.session.session_type === 'listen'
+                                                    ? 'bg-blue-100 text-blue-800'
+                                                    : 'bg-green-100 text-green-800'
+                                            }`}
+                                        >
+                                            {sessionDetails.session.session_type === 'listen' ? 'Meeting' : 'Question'}
+                                        </span>
                                     </div>
                                 </div>
 
@@ -252,18 +260,18 @@ function SessionDetailsContent() {
                                     ) : (
                                         <>
                                             <Button onClick={() => setEditingTitle(true)} variant="outline" size="sm">
-                                                Edit title
+                                                Edit
                                             </Button>
                                             <Button onClick={() => setShowDeleteConfirm(true)} variant="destructive" size="sm" disabled={deleting}>
-                                                {deleting ? 'Deleting…' : 'Delete activity'}
+                                                {deleting ? 'Deleting…' : 'Delete'}
                                             </Button>
                                         </>
                                     )}
                                 </div>
                             </div>
 
-                            {/* Transcript Viewer */}
-                            {(transcripts.length > 0 || askMessages.length > 0) && (
+                            {/* Transcript Viewer - Only for meetings */}
+                            {sessionDetails.session.session_type === 'listen' && (transcripts.length > 0 || askMessages.length > 0) && (
                                 <div>
                                     <TranscriptViewer
                                         onClick={() => setShowTranscriptSidebar(true)}
@@ -273,8 +281,8 @@ function SessionDetailsContent() {
                                 </div>
                             )}
 
-                            {/* Summary Section */}
-                            {sessionDetails.summary && (
+                            {/* Summary Section - Only for meetings */}
+                            {sessionDetails.session.session_type === 'listen' && sessionDetails.summary && (
                                 <div className="border-t border-slate-200 pt-6">
                                     <h2 className="text-lg font-medium text-slate-900 mb-4">Summary</h2>
                                     <p className="leading-7 text-slate-900 mb-6">"{sessionDetails.summary.tldr}"</p>
@@ -311,40 +319,71 @@ function SessionDetailsContent() {
                             {askMessages.length > 0 && (
                                 <div className="border-t border-slate-200 pt-6">
                                     <h2 className="text-lg font-medium text-slate-900 mb-4">Q&A</h2>
-                                    <div className="space-y-3">
-                                        {askMessages.map(item => (
-                                            <div
-                                                key={item.id}
-                                                className={cn(
-                                                    'rounded border p-3 text-sm',
-                                                    item.role === 'user'
-                                                        ? 'border-slate-200 bg-slate-50 text-slate-700'
-                                                        : 'border-slate-200 bg-white text-slate-700'
-                                                )}
-                                            >
-                                                <div className="flex items-start justify-between mb-2">
-                                                    <p className="text-xs font-medium text-slate-500">{item.role === 'user' ? 'You' : 'Assistant'}</p>
-                                                    <Button
-                                                        onClick={() => handleCopyToClipboard(item.content, item.id)}
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-6 w-6 p-0 text-slate-400 hover:text-slate-600"
-                                                    >
-                                                        {copiedMessages.has(item.id) ? '✓' : '📋'}
-                                                    </Button>
-                                                </div>
-                                                <div>
-                                                    {item.role === 'assistant' ? (
-                                                        <Markdown
-                                                            content={item.content}
-                                                            className="prose prose-sm max-w-none text-slate-700 prose-p:leading-relaxed prose-p:m-0"
-                                                        />
-                                                    ) : (
-                                                        <p className="whitespace-pre-wrap text-slate-700 m-0">{item.content}</p>
+                                    <div className="space-y-4">
+                                        {askMessages.map((item, index) => {
+                                            const nextItem = askMessages[index + 1];
+                                            const isQuestion = item.role === 'user';
+                                            const answer = isQuestion ? nextItem : null;
+
+                                            // Skip if this is an answer (we handle it with the question)
+                                            if (!isQuestion) return null;
+
+                                            return (
+                                                <div key={item.id} className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
+                                                    {/* Question */}
+                                                    <div className="p-4 bg-slate-50 border-b border-slate-200">
+                                                        <div className="flex items-start justify-between mb-2">
+                                                            <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                                                                Your Question
+                                                            </p>
+                                                            <Button
+                                                                onClick={() => handleCopyToClipboard(item.content, item.id)}
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-6 w-6 p-0 text-slate-400 hover:text-slate-600"
+                                                            >
+                                                                {copiedMessages.has(item.id) ? (
+                                                                    <Check className="h-4 w-4" />
+                                                                ) : (
+                                                                    <Copy className="h-4 w-4" />
+                                                                )}
+                                                            </Button>
+                                                        </div>
+                                                        <p className="text-slate-700 font-medium text-sm">{item.content}</p>
+                                                    </div>
+
+                                                    {/* Answer */}
+                                                    {answer && (
+                                                        <div className="p-4">
+                                                            <div className="flex items-start justify-between mb-3">
+                                                                <div className="flex items-center gap-2">
+                                                                    <Sparkles className="h-4 w-4 text-blue-500" />
+                                                                    <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                                                                        AI Response
+                                                                    </p>
+                                                                </div>
+                                                                <Button
+                                                                    onClick={() => handleCopyToClipboard(answer.content, answer.id)}
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-6 w-6 p-0 text-slate-400 hover:text-slate-600"
+                                                                >
+                                                                    {copiedMessages.has(answer.id) ? (
+                                                                        <Check className="h-4 w-4" />
+                                                                    ) : (
+                                                                        <Copy className="h-4 w-4" />
+                                                                    )}
+                                                                </Button>
+                                                            </div>
+                                                            <Markdown
+                                                                content={answer.content}
+                                                                className="prose prose-sm max-w-none text-slate-700 prose-p:leading-relaxed prose-p:m-0"
+                                                            />
+                                                        </div>
                                                     )}
                                                 </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}
@@ -365,7 +404,7 @@ function SessionDetailsContent() {
             <ConfirmDialog
                 open={showDeleteConfirm}
                 onOpenChange={setShowDeleteConfirm}
-                title="Delete Activity"
+                title="Delete"
                 description="Are you sure you want to delete this activity? This cannot be undone."
                 confirmLabel={deleting ? 'Deleting...' : 'Delete'}
                 cancelLabel="Cancel"

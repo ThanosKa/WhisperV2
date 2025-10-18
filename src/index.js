@@ -14,6 +14,9 @@ if (require('electron-squirrel-startup')) {
 const { app, BrowserWindow, shell, ipcMain, dialog, desktopCapturer, session } = require('electron');
 const path = require('node:path');
 
+// Ensure consistent app name so protocol prompts say "Open Whisper" even in dev
+app.setName('Whisper');
+
 // -------------------------------------------------
 //  auto-register protocol for dev (Windows only)
 // -------------------------------------------------

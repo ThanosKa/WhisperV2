@@ -153,8 +153,11 @@ function SessionDetailsContent() {
 
     if (!userInfo || isLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-transparent" />
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Loading...</p>
+                </div>
             </div>
         );
     }

@@ -51,7 +51,7 @@ export function MessageBubble({ content, role = 'assistant', speaker, timestamp,
                                 <p className="text-xs font-semibold text-gray-600">Whisper</p>
                             </div>
                         )}
-                        {role === 'assistant' ? (
+                        {role === 'assistant' && !isTranscript ? (
                             <Markdown content={content} className="prose-sm prose-gray max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0" />
                         ) : (
                             <p className="whitespace-pre-wrap break-words">{content}</p>

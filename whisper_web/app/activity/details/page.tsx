@@ -239,7 +239,7 @@ function SessionDetailsContent() {
                                             })}
                                         </span>
                                         <span
-                                            className={`rounded px-3 py-1 text-xs font-medium ${
+                                            className={`rounded border border-slate-200 bg-[#f2f2f2] px-3 py-1 flex items-center gap-2 ${
                                                 sessionDetails.session.session_type === 'listen'
                                                     ? 'bg-blue-100 text-blue-800'
                                                     : 'bg-green-100 text-green-800'

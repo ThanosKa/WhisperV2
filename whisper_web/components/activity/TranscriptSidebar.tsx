@@ -8,6 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { MessageBubble } from './MessageBubble';
 import { Transcript, AiMessage } from '@/utils/api';
 
+interface UsageEntry {
+    question: AiMessage;
+    answer?: AiMessage;
+}
+
 interface TranscriptSidebarProps {
     isOpen: boolean;
     onClose: () => void;
@@ -22,6 +27,20 @@ export function TranscriptSidebar({ isOpen, onClose, transcripts, aiMessages }: 
         const uniqueSpeakers = Array.from(new Set(transcripts.map(t => t.speaker).filter(Boolean)));
         return ['all', ...uniqueSpeakers] as string[];
     }, [transcripts]);
+
+    const usageEntries = useMemo<UsageEntry[]>(() => {
+        const entries: UsageEntry[] = [];
+        for (let index = 0; index < aiMessages.length; index += 1) {
+            const current = aiMessages[index];
+            if (current.role !== 'user') continue;
+
+            const nextMessage = aiMessages[index + 1];
+            const answer = nextMessage?.role === 'assistant' ? nextMessage : undefined;
+
+            entries.push({ question: current, answer });
+        }
+        return entries;
+    }, [aiMessages]);
 
     const filteredTranscripts = useMemo(() => {
         if (speakerFilter === 'all') return transcripts;
@@ -51,7 +70,7 @@ export function TranscriptSidebar({ isOpen, onClose, transcripts, aiMessages }: 
                                 value="usage"
                                 className="rounded-none px-0 py-3 text-sm font-medium text-slate-600 data-[state=active]:text-slate-900 data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-slate-900 border-b-2 border-transparent"
                             >
-                                Usage ({aiMessages.length})
+                                Usage ({usageEntries.length})
                             </TabsTrigger>
                         </TabsList>
 
@@ -85,10 +104,19 @@ export function TranscriptSidebar({ isOpen, onClose, transcripts, aiMessages }: 
                             )}
                         </TabsContent>
 
-                        <TabsContent value="usage" className="m-0 p-6 space-y-3">
-                            {aiMessages.length > 0 ? (
-                                aiMessages.map(item => (
-                                    <MessageBubble key={item.id} content={item.content} role={item.role} timestamp={item.sent_at} />
+                        <TabsContent value="usage" className="m-0 p-6 space-y-4">
+                            {usageEntries.length > 0 ? (
+                                usageEntries.map(entry => (
+                                    <div key={entry.question.id} className="space-y-3">
+                                        <MessageBubble
+                                            content={entry.question.content}
+                                            role={entry.question.role}
+                                            timestamp={entry.question.sent_at}
+                                        />
+                                        {entry.answer && (
+                                            <MessageBubble content={entry.answer.content} role={entry.answer.role} timestamp={entry.answer.sent_at} />
+                                        )}
+                                    </div>
                                 ))
                             ) : (
                                 <p className="text-center text-sm text-slate-400 py-8">No usage events recorded.</p>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { useRedirectIfNotAuth } from '@/utils/auth';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { UserProfile, SessionDetails, getSessionDetails, deleteSession, updateSessionTitle } from '@/utils/api';
 import { useToast } from '@/hooks/use-toast';
 import dynamic from 'next/dynamic';
-import { ArrowLeft, Sparkles, Copy, Check } from 'lucide-react';
+import { ArrowLeft, Sparkles, Copy, Check, Calendar, Timer } from 'lucide-react';
 import { TranscriptViewer } from '@/components/activity/TranscriptViewer';
 import { TranscriptSidebar } from '@/components/activity/TranscriptSidebar';
 
@@ -151,6 +151,10 @@ function SessionDetailsContent() {
         }
     };
 
+    const askMessages = sessionDetails?.ai_messages ?? [];
+    const transcripts = sessionDetails?.transcripts ?? [];
+    const userAskMessages = useMemo(() => askMessages.filter(message => message.role === 'user'), [askMessages]);
+
     if (!userInfo || isLoading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -175,9 +179,6 @@ function SessionDetailsContent() {
             </div>
         );
     }
-
-    const askMessages = sessionDetails.ai_messages || [];
-    const transcripts = sessionDetails.transcripts || [];
 
     return (
         <>
@@ -221,14 +222,16 @@ function SessionDetailsContent() {
                                     </div>
 
                                     <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
-                                        <span className="rounded border border-slate-200 bg-white px-3 py-1">
+                                        <span className="rounded border border-slate-200 bg-[#f2f2f2] px-3 py-1 flex items-center gap-2">
+                                            <Calendar className="h-3.5 w-3.5" />
                                             {new Date(sessionDetails.session.started_at * 1000).toLocaleDateString('en-US', {
                                                 month: 'long',
                                                 day: 'numeric',
                                                 year: 'numeric',
                                             })}
                                         </span>
-                                        <span className="rounded border border-slate-200 bg-white px-3 py-1">
+                                        <span className="rounded border border-slate-200 bg-[#f2f2f2] px-3 py-1 flex items-center gap-2">
+                                            <Timer className="h-3.5 w-3.5" />
                                             {new Date(sessionDetails.session.started_at * 1000).toLocaleTimeString('en-US', {
                                                 hour: 'numeric',
                                                 minute: '2-digit',
@@ -276,7 +279,7 @@ function SessionDetailsContent() {
                                     <TranscriptViewer
                                         onClick={() => setShowTranscriptSidebar(true)}
                                         transcriptCount={transcripts.length}
-                                        messageCount={askMessages.length}
+                                        messageCount={userAskMessages.length}
                                     />
                                 </div>
                             )}
@@ -285,7 +288,7 @@ function SessionDetailsContent() {
                             {sessionDetails.session.session_type === 'listen' && sessionDetails.summary && (
                                 <div className="border-t border-slate-200 pt-6">
                                     <h2 className="text-lg font-medium text-slate-900 mb-4">Summary</h2>
-                                    <p className="leading-7 text-slate-900 mb-6">"{sessionDetails.summary.tldr}"</p>
+                                    <p className="leading-7 text-slate-900 mb-6">{sessionDetails.summary.tldr}</p>
 
                                     {sessionDetails.summary.bullet_json && JSON.parse(sessionDetails.summary.bullet_json).length > 0 && (
                                         <div className="mb-6">

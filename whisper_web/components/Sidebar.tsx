@@ -61,6 +61,13 @@ interface SidebarProps {
     onSearchClick?: () => void;
 }
 
+interface BottomNavigationItem {
+    href: string;
+    icon: string;
+    text: string;
+    ariaLabel: string;
+}
+
 interface AnimationStyles {
     text: React.CSSProperties;
     submenu: React.CSSProperties;
@@ -234,17 +241,7 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
         }));
     }, []);
 
-    const bottomItems = useMemo(
-        () => [
-            {
-                href: 'https://discord.gg/UCZH5B5Hpd',
-                icon: '/linkout.svg',
-                text: 'Join Discord',
-                ariaLabel: 'Help Center (new window)',
-            },
-        ],
-        []
-    );
+    const bottomItems = useMemo<BottomNavigationItem[]>(() => [], []);
 
     const toggleSidebar = useCallback(() => {
         onToggle(!isCollapsed);

@@ -38,7 +38,7 @@ export default function PrivacySettingsPage() {
                         </CardHeader>
                         <CardContent className="pt-0">
                             <Button
-                                onClick={() => window.open('https://whisper.ai/privacy-policy', '_blank')}
+                                onClick={() => window.open('https://www.app-whisper.com/privacy', '_blank')}
                                 variant="outline"
                                 className="w-full"
                                 rel="noopener noreferrer"
@@ -56,7 +56,7 @@ export default function PrivacySettingsPage() {
                         </CardHeader>
                         <CardContent className="pt-0">
                             <Button
-                                onClick={() => window.open('https://whisper.ai/terms-of-service', '_blank')}
+                                onClick={() => window.open('https://www.app-whisper.com/terms', '_blank')}
                                 variant="outline"
                                 className="w-full"
                                 rel="noopener noreferrer"

@@ -425,7 +425,7 @@ export class SettingsView extends LitElement {
                     <button class="settings-button full-width" @click=${this.handlePersonalize}>
                         <span>Personalize / Meeting Notes</span>
                     </button>
-                    <div class="toggle-container auto-update-toggle ${this.autoUpdateEnabled ? 'on' : 'off'}">
+                    <!-- <div class="toggle-container auto-update-toggle ${this.autoUpdateEnabled ? 'on' : 'off'}">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
                             width="14"
@@ -447,7 +447,7 @@ export class SettingsView extends LitElement {
                         <div class="toggle-switch ${this.autoUpdateEnabled ? 'active' : ''}" @click=${this.handleToggleAutoUpdate}>
                             <div class="toggle-knob"></div>
                         </div>
-                    </div>
+                    </div> -->
 
                     <div class="move-buttons">
                         <button class="settings-button half-width" @click=${this.handleMoveLeft}>
@@ -492,7 +492,7 @@ export class SettingsView extends LitElement {
 
                     <div class="move-buttons">
                         <button class="settings-button full-width" @click=${this.handleOpenDbPath}>
-                            <span>Open DB Folder</span>
+                            <span>Open Whisper Storage</span>
                         </button>
                     </div>
                 </div>

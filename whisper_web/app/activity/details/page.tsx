@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { UserProfile, SessionDetails, getSessionDetails, deleteSession, updateSessionTitle } from '@/utils/api';
 import { useToast } from '@/hooks/use-toast';
 import dynamic from 'next/dynamic';
-import { ArrowLeft, Sparkles, Copy, Check, Calendar, Timer } from 'lucide-react';
+import { Sparkles, Copy, Check, Calendar, Timer } from 'lucide-react';
 import { TranscriptViewer } from '@/components/activity/TranscriptViewer';
 import { TranscriptSidebar } from '@/components/activity/TranscriptSidebar';
 
@@ -182,18 +182,8 @@ function SessionDetailsContent() {
 
     return (
         <>
-            <div className="min-h-screen bg-[#F4F5FA] text-slate-900">
-                <div className="mx-auto flex max-w-4xl flex-col gap-10 px-6 pb-16 pt-12">
-                    <div className="flex items-center justify-between text-sm text-slate-500 animate-in fade-in slide-in-from-top-4 duration-300">
-                        <Link
-                            href="/activity"
-                            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-600 transition hover:bg-slate-50"
-                        >
-                            <ArrowLeft className="h-4 w-4" />
-                            Back
-                        </Link>
-                    </div>
-
+            <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-100 text-slate-900">
+                <div className="mx-auto flex max-w-4xl flex-col gap-10 px-6 pb-16 pt-8">
                     <section className="rounded-lg border border-slate-200 bg-white px-6 py-6">
                         <div className="space-y-8">
                             {/* Session Header */}

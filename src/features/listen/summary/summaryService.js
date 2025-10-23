@@ -2,6 +2,8 @@ const llmClient = require('../../common/ai/llmClient');
 const sessionRepository = require('../../common/repositories/session');
 const summaryRepository = require('./repositories');
 const config = require('../../common/config/config');
+const fs = require('fs');
+const path = require('path');
 // const { getSystemPrompt } = require('../../common/prompts/promptBuilder'); // Deprecated - using server-side prompt construction
 
 class SummaryService {
@@ -17,6 +19,7 @@ class SummaryService {
         this.mockMode = true; // New: Mock STT mode flag (enabled for testing)
         console.log('[SummaryService] Mock STT mode enabled by default for testing');
         this.mockDataMap = null; // Will load mock convo data
+        this.analysisRound = 0; // Track analysis rounds for debugging
 
         // Phase 1: Analysis preset selection state
         this.selectedPresetId = null;
@@ -41,6 +44,21 @@ class SummaryService {
         } catch (err) {
             console.warn('[SummaryService] Failed to load mock STT data:', err.message);
             this.mockDataMap = {};
+        }
+    }
+
+    /**
+     * Write debug log to response.txt file
+     * @param {string} message - Log message to append
+     */
+    writeDebugLog(message) {
+        try {
+            const logPath = path.join(process.cwd(), 'response.txt');
+            const timestamp = new Date().toISOString();
+            const logEntry = `[${timestamp}] ${message}\n`;
+            fs.appendFileSync(logPath, logEntry);
+        } catch (err) {
+            console.warn('[SummaryService] Failed to write debug log:', err.message);
         }
     }
 
@@ -446,14 +464,30 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
             }
         }
 
-        // Use new XML structure for analysis profiles - include ALL previous LLM items
+        // SIMPLE DEBUG: Log round start
+        this.analysisRound++;
+        const prevActions = this.previousAnalysisResult?.actions?.length || 0;
+        const prevTerms = this.definedTerms.size;
+        const prevQuestionsCount = this.detectedQuestions.size;
+        const totalSending = prevActions + prevTerms + prevQuestionsCount;
+        const roundLog = `=== ROUND ${this.analysisRound} ===
+PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (actions:${prevActions} + terms:${prevTerms} + questions:${prevQuestionsCount})`;
+
+        console.log(`[SummaryService] ${roundLog.replace(/\n/g, ' | ')}`);
+        this.writeDebugLog(roundLog);
+
+        // Accumulate ALL actions from analysis history (all previous rounds combined)
         const allPreviousItems = [];
-        if (this.previousAnalysisResult && this.previousAnalysisResult.actions) {
-            allPreviousItems.push(...this.previousAnalysisResult.actions);
-        }
-        // Also include any accumulated terms/questions from history
-        Array.from(this.definedTerms).forEach(term => allPreviousItems.push(`📘 Define ${term}`));
-        Array.from(this.detectedQuestions).forEach(question => allPreviousItems.push(`❓ ${question}`));
+        this.analysisHistory.forEach(historyEntry => {
+            if (historyEntry.data && historyEntry.data.actions) {
+                allPreviousItems.push(...historyEntry.data.actions);
+            }
+        });
+
+        // SIMPLE DEBUG: Log what we're actually sending to LLM
+        const sendLog = `SENDING TO LLM (${allPreviousItems.length} items):\n${allPreviousItems.map((item, i) => `  ${i + 1}. ${item}`).join('\n')}`;
+        console.log(`[SummaryService] ${sendLog.replace(/\n/g, ' | ')}`);
+        this.writeDebugLog(sendLog);
 
         const contextData = {
             previousItems: allPreviousItems,
@@ -487,8 +521,11 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
 
             const structuredData = this.parseResponseText(responseText, this.previousAnalysisResult);
 
-            // Populate definedTerms and detectedQuestions Sets from LLM response
-            this._populateContextFromLLMResponse(structuredData);
+            // SIMPLE DEBUG: Log what LLM created this round
+            const newActions = structuredData.actions?.length || 0;
+            const responseLog = `LLM CREATED: ${newActions} actions`;
+            console.log(`[SummaryService] ${responseLog}`);
+            this.writeDebugLog(responseLog);
 
             if (this.currentSessionId) {
                 try {
@@ -507,6 +544,11 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
 
             // Save analysis results
             this.previousAnalysisResult = structuredData;
+
+            // SIMPLE DEBUG: Log round end
+            const saveLog = `=== END ROUND ${this.analysisRound} ===`;
+            console.log(`[SummaryService] ${saveLog}`);
+            this.writeDebugLog(saveLog);
             this.analysisHistory.push({
                 timestamp: Date.now(),
                 data: structuredData,
@@ -874,6 +916,11 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
         const textsToAnalyze = this.conversationHistory.slice(this.lastAnalyzedIndex);
         console.log(`📝 Analyzing ${textsToAnalyze.length} new utterances (from index ${this.lastAnalyzedIndex})${this.mockMode ? ' [MOCK]' : ''}`);
 
+        // FIX: Update lastAnalyzedIndex BEFORE async call so concurrent triggers see updated index
+        // This prevents duplicate analysis and ensures previousAnalysisResult state is available
+        this.lastAnalyzedIndex = this.conversationHistory.length;
+        console.log(`[SummaryTrigger] ✅ Updated lastAnalyzedIndex to ${this.lastAnalyzedIndex} to mark these utterances as analyzed`);
+
         const data = await this.makeOutlineAndRequests(textsToAnalyze);
         if (data) {
             data.actions = Array.isArray(data.actions) ? data.actions : [];
@@ -888,9 +935,6 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
 
             console.log('Sending structured data to renderer');
             this.sendToRenderer('summary-update', { ...data, presetId: this.selectedPresetId });
-
-            // Update tracking
-            this.lastAnalyzedIndex = this.conversationHistory.length;
 
             if (this.onAnalysisComplete) {
                 this.onAnalysisComplete(data);

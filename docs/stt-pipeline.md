@@ -10,9 +10,9 @@ Key goals: Low-latency partials for UI, final utterances for analysis/DB, platfo
 
 1. **User Triggers Listen**: Header UI (`MainHeader.js`) sends IPC `listen:changeSession` ("Listen").
 2. **Session Init**: `listenService.js` creates DB session, initializes `sttService.js` with language (default 'en').
-3. **Relay Connect**: WebSocket to relay with `X-Session-UUID` header; sends `OPEN {sessionId, language, streams: ['me','them']}`; waits for `CONNECTED`.
+3. **Relay Connect**: WebSocket to relay with `X-Session-UUID` header; sends `OPEN {sessionId, streams: ['me','them']}`; waits for `CONNECTED`.
 4. **Audio Capture Starts**: Main signals renderer (`change-listen-capture-state: 'start'`) to begin mic/system audio.
-5. **Streaming**: Renderer captures 24kHz PCM chunks (~0.1s), base64-encodes, sends via IPC (`listen:sendMicAudio`/`sendSystemAudio`); main forwards as `AUDIO {stream, data, mimeType: 'audio/pcm;rate=24000'}`.
+5. **Streaming**: Renderer captures 16kHz PCM chunks (~0.1s), base64-encodes, sends via IPC (`listen:sendMicAudio`/`sendSystemAudio`); main forwards as `AUDIO {stream, data, mimeType: 'audio/pcm;rate=16000'}`.
 6. **Transcription**: Relay proxies to Gemini, streams `PARTIAL {text}` and `TURN_COMPLETE`; client debounces finals, emits `stt-update {speaker, text, isPartial/isFinal}` to UI (`SttView.js`).
 7. **Processing**: Finals (>3 chars, noise-filtered) saved to `transcripts` table; forwarded to `summaryService.addConversationTurn` for batched LLM analysis.
 8. **Pause/Resume**: "Stop" pauses capture (keeps relay active, maintains session); "Resume" restarts capture with existing session.
@@ -74,12 +74,12 @@ The listen service supports four session states: `beforeSession`, `inSession`, `
 
 - **Connection**: `_openRelayConnection` creates authenticated WebSocket with `X-Session-UUID` header; handles connection lifecycle ('open'/'message'/'close'/'error'); supports reconnection with state cleanup.
 - **Sessions**: Post-`CONNECTED`, installs wrappers: `meSttSession.sendRealtimeInput(payload)` → `AUDIO 'me'`.
-- **Handlers**: `handleMeMessage`/`handleThemMessage` parse Gemini events (e.g., `inputTranscription.text`); debounces finals (800ms), filters noise (exact `<noise>` pattern only), emits `stt-update`.
+- **Handlers**: `handleMeMessage`/`handleThemMessage` parse Gemini events (e.g., `inputTranscription.text`); debounces finals (1200ms), filters noise (exact `<noise>` pattern only), emits `stt-update`.
 - **macOS Helper**: `startMacOSAudioCapture` spawns/reads from `SystemAudioDump`, sends chunks directly.
 
 #### Relay Connection Lifecycle
 
-- **Initialization**: Creates WebSocket with session authentication; sends `OPEN {sessionId, language, streams: ['me','them']}`; waits for `CONNECTED` response.
+- **Initialization**: Creates WebSocket with session authentication; sends `OPEN {sessionId, streams: ['me','them']}`; waits for `CONNECTED` response.
 - **State Management**: Tracks `relaySocket`, `relaySessionId`, `relayReady` flags; installs session wrappers on successful connection.
 - **Teardown**: Graceful close with `CLOSE` message; kills existing SystemAudioDump processes; cleans up timers and state.
 - **Reconnection**: Supports connection restart with state cleanup; prevents multiple concurrent connections.
@@ -122,8 +122,8 @@ Client-relay WebSocket (`ws://localhost:8080`); JSON messages.
 
 ### Client → Relay
 
-- `OPEN {type: 'OPEN', sessionId: UUID, language: 'en-US', streams: ['me','them']}`: Initialize session with language and requested streams.
-- `AUDIO {type: 'AUDIO', sessionId, stream: 'me'|'them', mimeType: 'audio/pcm;rate=24000', data: base64}`: Send base64-encoded PCM audio chunk for specified stream.
+- `OPEN {type: 'OPEN', sessionId: UUID, streams: ['me','them']}`: Initialize session with requested streams.
+- `AUDIO {type: 'AUDIO', sessionId, stream: 'me'|'them', mimeType: 'audio/pcm;rate=16000', data: base64}`: Send base64-encoded PCM audio chunk for specified stream.
 - `CLOSE {type: 'CLOSE', sessionId}`: Gracefully close session and clean up resources.
 
 ### Relay → Client
@@ -160,30 +160,6 @@ Server setup: `npm start` with `GEMINI_API_KEY` env; handles upstream Gemini ses
 
 **Note:** No `language` parameter is sent as Gemini 2.5 Flash Native Audio automatically detects and handles multiple languages.
 
-## **🚨 Server-Side Changes Required**
-
-**Due to Gemini 2.5 Flash Native Audio optimization, the following client-side changes require server updates:**
-
-### **1. Sample Rate Change: 24kHz → 16kHz**
-
-- **Client now sends:** `audio/pcm;rate=16000` (16-bit PCM at 16kHz)
-- **Server must expect:** 16kHz sample rate instead of 24kHz
-- **Impact:** ~33% less bandwidth, better model performance
-
-### **2. Language Parameter Removed**
-
-- **Client no longer sends:** `language` field in OPEN payload
-- **Server should not require:** Language specification (Gemini auto-detects)
-- **Impact:** Simpler payload, automatic multilingual support
-
-### **3. Chunk Size Adjustment**
-
-- **Mic chunks:** 1600 samples (was 2400) per 0.1s at 16kHz
-- **System audio:** 6400 bytes (was 9600) per chunk on macOS
-- **Server processing:** Must handle smaller chunks efficiently
-
-**Server Error Fix:** Update mimeType validation from `'audio/pcm;rate=24000'` to `'audio/pcm;rate=16000'`
-
 #### **Audio data messages**
 
 ```json
@@ -191,7 +167,7 @@ Server setup: `npm start` with `GEMINI_API_KEY` env; handles upstream Gemini ses
   "type": "AUDIO",
   "sessionId": "<session-uuid>",
   "stream": "me" | "them",
-  "mimeType": "audio/pcm;rate=24000",
+  "mimeType": "audio/pcm;rate=16000",
   "data": "<base64-encoded-pcm-audio>"
 }
 ```
@@ -268,10 +244,10 @@ Server setup: `npm start` with `GEMINI_API_KEY` env; handles upstream Gemini ses
 
 ### **Audio Format Specifications:**
 
-- **Sample Rate:** 24kHz
+- **Sample Rate:** 16kHz
 - **Bit Depth:** 16-bit PCM
 - **Channels:** Mono
-- **Chunk Duration:** 0.1 seconds (2400 samples)
+- **Chunk Duration:** 0.1 seconds (1600 samples)
 - **Encoding:** Base64
 
 **Note:** Session UUID is sent in WebSocket headers (`X-Session-UUID`), not in JSON payload messages.
@@ -279,7 +255,7 @@ Server setup: `npm start` with `GEMINI_API_KEY` env; handles upstream Gemini ses
 ## Response Handling & Integration
 
 - **Partials**: Append to buffer, emit immediately for UI streaming.
-- **Finals**: Debounce on `TURN_COMPLETE` or silence (800ms); noise filter (exact `<noise>` pattern); if valid (>3 chars), persist to SQLite (`transcripts: id, session_id, speaker, text, start_at`).
+- **Finals**: Debounce on `TURN_COMPLETE` or silence (1200ms); noise filter (exact `<noise>` pattern); if valid (>3 chars), persist to SQLite (`transcripts: id, session_id, speaker, text, start_at`).
 - **Analysis Trigger**: `summaryService.addConversationTurn()` accumulates utterances in `conversationHistory`; triggers analysis when meeting smart batching criteria (3-5 utterances with >=80 chars or 12 tokens; max 6 utterances or 120s timeout); builds context-aware prompts, calls LLM via `/api/llm/chat`.
 - **Database Persistence**: Transcripts saved to `transcripts` table with `session_id`, `speaker`, `text`, `start_at` timestamp; sessions managed via `sessionRepository` with start/end lifecycle; pause maintains active session for resume capability.
 - **Errors**: Log/surface (e.g., "Connection failed"); retry init; fallback to prev results in analysis.
@@ -315,7 +291,7 @@ Server setup: `npm start` with `GEMINI_API_KEY` env; handles upstream Gemini ses
 
 ## Configuration
 
-- **Env/Config**: `STT_RELAY_URL=ws://localhost:8080`, `utteranceSilenceMs=800`, `OPENAI_TRANSCRIBE_LANG=en`.
+- **Env/Config**: `STT_RELAY_URL=ws://localhost:8080`, `utteranceSilenceMs=1200`, `OPENAI_TRANSCRIBE_LANG=en`.
 - **Language**: Uses `process.env.OPENAI_TRANSCRIBE_LANG` as fallback if language parameter not provided (defaults to 'en').
 - **Models**: Gemini default (`gemini-live-2.5-flash-preview`); select via `settingsService` (providerSettingsRepository).
 - **Auth**: Requires valid `sessionUuid` from webapp authentication (`authService.sessionUuid`); blocks relay connection without authenticated session, preventing unauthorized STT usage.
@@ -327,7 +303,7 @@ Server setup: `npm start` with `GEMINI_API_KEY` env; handles upstream Gemini ses
 **Audio Processing:**
 
 - **Chunk Duration**: 100ms (0.1 seconds) for real-time streaming
-- **Sample Rate**: 24kHz provides optimal balance of quality vs bandwidth
+- **Sample Rate**: 16kHz provides optimal balance of quality vs bandwidth
 - **Latency**: <500ms end-to-end from audio capture to UI display
 - **Memory Usage**: <50MB additional during active listening sessions
 

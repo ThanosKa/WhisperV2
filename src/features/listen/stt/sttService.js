@@ -225,7 +225,7 @@ class SttService {
         if (!this.meSttSession) {
             throw new Error('User STT session not active');
         }
-        const payload = { audio: { data, mimeType: mimeType || 'audio/pcm;rate=16000' } };
+        const payload = { audio: { data, mimeType: mimeType || 'audio/pcm;rate=24000' } };
         await this.meSttSession.sendRealtimeInput(payload);
     }
 
@@ -233,7 +233,7 @@ class SttService {
         if (!this.themSttSession) {
             throw new Error('Them STT session not active');
         }
-        const payload = { audio: { data, mimeType: mimeType || 'audio/pcm;rate=16000' } };
+        const payload = { audio: { data, mimeType: mimeType || 'audio/pcm;rate=24000' } };
         await this.themSttSession.sendRealtimeInput(payload);
         return { success: true };
     }
@@ -426,7 +426,7 @@ class SttService {
             type: 'AUDIO',
             sessionId: this.relaySessionId,
             stream,
-            mimeType: audioPayload.mimeType || payload?.mimeType || 'audio/pcm;rate=16000',
+            mimeType: audioPayload.mimeType || payload?.mimeType || 'audio/pcm;rate=24000',
             data,
         };
 
@@ -523,7 +523,7 @@ class SttService {
         console.log('SystemAudioDump started with PID:', this.systemAudioProc.pid);
 
         const CHUNK_DURATION = 0.1;
-        const SAMPLE_RATE = 16000;
+        const SAMPLE_RATE = 24000;
         const BYTES_PER_SAMPLE = 2;
         const CHANNELS = 2;
         const CHUNK_SIZE = SAMPLE_RATE * BYTES_PER_SAMPLE * CHANNELS * CHUNK_DURATION;
@@ -546,7 +546,7 @@ class SttService {
 
                 if (this.themSttSession) {
                     try {
-                        const payload = { audio: { data: base64Data, mimeType: 'audio/pcm;rate=16000' } };
+                        const payload = { audio: { data: base64Data, mimeType: 'audio/pcm;rate=24000' } };
                         await this.themSttSession.sendRealtimeInput(payload);
                     } catch (err) {
                         console.error('Error sending system audio:', err.message);

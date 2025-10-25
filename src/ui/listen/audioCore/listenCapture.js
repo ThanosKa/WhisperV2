@@ -27,7 +27,7 @@ async function getAec() {
 // ---------------------------
 // Constants & Globals
 // ---------------------------
-const SAMPLE_RATE = 16000;
+const SAMPLE_RATE = 24000;
 const AUDIO_CHUNK_DURATION = 0.1;
 const BUFFER_SIZE = 4096;
 
@@ -290,7 +290,7 @@ setInterval(() => {
 async function setupMicProcessing(micStream) {
     /* ── Load WASM first ───────────────────────── */
     const mod = await getAec();
-    if (!aecPtr) aecPtr = mod.newPtr(160, 1600, 16000, 1);
+    if (!aecPtr) aecPtr = mod.newPtr(160, 1600, 24000, 1);
 
     const micAudioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
     await micAudioContext.resume();
@@ -327,7 +327,7 @@ async function setupMicProcessing(micStream) {
 
             window.api.listenCapture.sendMicAudioContent({
                 data: b64,
-                mimeType: 'audio/pcm;rate=16000',
+                mimeType: 'audio/pcm;rate=24000',
             });
         }
     };
@@ -360,7 +360,7 @@ function setupLinuxMicProcessing(micStream) {
 
             await window.api.listenCapture.sendMicAudioContent({
                 data: base64Data,
-                mimeType: 'audio/pcm;rate=16000',
+                mimeType: 'audio/pcm;rate=24000',
             });
         }
     };
@@ -394,7 +394,7 @@ function setupSystemAudioProcessing(systemStream) {
             try {
                 await window.api.listenCapture.sendSystemAudioContent({
                     data: base64Data,
-                    mimeType: 'audio/pcm;rate=16000',
+                    mimeType: 'audio/pcm;rate=24000',
                 });
             } catch (error) {
                 console.error('Failed to send system audio:', error);

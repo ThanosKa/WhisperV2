@@ -39,6 +39,9 @@ export class ListenView extends LitElement {
         // Analysis presets state
         this.presets = [];
         this.selectedPresetId = null;
+
+        // Scroll position preservation
+        this.transcriptScrollTop = 0;
     }
 
     async connectedCallback() {
@@ -183,6 +186,17 @@ export class ListenView extends LitElement {
     }
 
     toggleViewMode() {
+        // Save scroll position when leaving transcript view
+        if (this.viewMode === 'transcript') {
+            const sttView = this.shadowRoot.querySelector('stt-view');
+            if (sttView && sttView.shadowRoot) {
+                const scrollContainer = sttView.shadowRoot.querySelector('.transcription-container');
+                if (scrollContainer) {
+                    this.transcriptScrollTop = scrollContainer.scrollTop;
+                }
+            }
+        }
+
         this.viewMode = this.viewMode === 'insights' ? 'transcript' : 'insights';
         this.requestUpdate();
     }
@@ -261,6 +275,21 @@ export class ListenView extends LitElement {
         // Re-enabled: Window now grows dynamically from 250px to 500px based on content
         if (changedProperties.has('viewMode')) {
             this.adjustWindowHeight();
+
+            // Restore scroll position when switching to transcript view
+            if (this.viewMode === 'transcript' && this.transcriptScrollTop > 0) {
+                this.updateComplete.then(() => {
+                    setTimeout(() => {
+                        const sttView = this.shadowRoot.querySelector('stt-view');
+                        if (sttView && sttView.shadowRoot) {
+                            const scrollContainer = sttView.shadowRoot.querySelector('.transcription-container');
+                            if (scrollContainer) {
+                                scrollContainer.scrollTop = this.transcriptScrollTop;
+                            }
+                        }
+                    }, 10); // Small delay to ensure DOM is fully rendered
+                });
+            }
         }
     }
 

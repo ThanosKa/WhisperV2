@@ -31,7 +31,7 @@ ENV:
 - Build Tools for Visual Studio (Windows only)
   Security:
 - JWT authentication for web app
-- Secure key storage via keytar
+- Local database storage (SQLite)
 - TLS 1.3 for production deployments
 - OAuth 2.0 integration
 

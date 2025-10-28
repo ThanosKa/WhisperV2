@@ -44,7 +44,6 @@ contextBridge.exposeInMainWorld('api', {
 
         // Permissions
         checkSystemPermissions: () => ipcRenderer.invoke('check-system-permissions'),
-        checkPermissionsCompleted: () => ipcRenderer.invoke('check-permissions-completed'),
 
         // Listeners
         onUserStateChanged: callback => ipcRenderer.on('user-state-changed', callback),
@@ -102,9 +101,6 @@ contextBridge.exposeInMainWorld('api', {
         checkSystemPermissions: () => ipcRenderer.invoke('check-system-permissions'),
         requestMicrophonePermission: () => ipcRenderer.invoke('request-microphone-permission'),
         openSystemPreferences: preference => ipcRenderer.invoke('open-system-preferences', preference),
-        markKeychainCompleted: () => ipcRenderer.invoke('mark-keychain-completed'),
-        checkKeychainCompleted: uid => ipcRenderer.invoke('check-keychain-completed', uid),
-        initializeEncryptionKey: () => ipcRenderer.invoke('initialize-encryption-key'), // New for keychain
     },
 
     // src/ui/app/WhisperApp.js

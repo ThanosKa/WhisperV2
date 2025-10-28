@@ -15,7 +15,6 @@ export class PermissionHeader extends LitElement {
     static properties = {
         microphoneGranted: { type: String },
         screenGranted: { type: String },
-        keychainGranted: { type: String },
         isChecking: { type: String },
         continueCallback: { type: Function },
         userMode: { type: String }, // 'local' or 'firebase'
@@ -28,7 +27,6 @@ export class PermissionHeader extends LitElement {
         super();
         this.microphoneGranted = 'unknown';
         this.screenGranted = 'unknown';
-        this.keychainGranted = 'unknown';
         this.isChecking = false;
         this.continueCallback = null;
         this.userMode = 'local'; // Default to local
@@ -127,23 +125,17 @@ export class PermissionHeader extends LitElement {
 
             const prevMic = this.microphoneGranted;
             const prevScreen = this.screenGranted;
-            const prevKeychain = this.keychainGranted;
-
             this.microphoneGranted = permissions.microphone;
             this.screenGranted = permissions.screen;
-            this.keychainGranted = permissions.keychain;
 
             // if permissions changed == UI update
-            if (prevMic !== this.microphoneGranted || prevScreen !== this.screenGranted || prevKeychain !== this.keychainGranted) {
+            if (prevMic !== this.microphoneGranted || prevScreen !== this.screenGranted) {
                 console.log('[PermissionHeader] Permission status changed, updating UI');
                 this.requestUpdate();
             }
 
-            const isKeychainRequired = this.isLoggedIn;
-            const keychainOk = !isKeychainRequired || this.keychainGranted === 'granted';
-
             // if all permissions granted and on step 0 == show continue button
-            if (this.microphoneGranted === 'granted' && this.screenGranted === 'granted' && keychainOk && this.currentStep === 0) {
+            if (this.microphoneGranted === 'granted' && this.screenGranted === 'granted' && this.currentStep === 0) {
                 console.log('[PermissionHeader] All permissions granted, showing continue state');
                 this.requestUpdate();
             }
@@ -222,24 +214,6 @@ export class PermissionHeader extends LitElement {
         }
     }
 
-    async handleKeychainClick() {
-        if (!window.api || this.keychainGranted === 'granted') return;
-
-        console.log('[PermissionHeader] Requesting keychain permission...');
-
-        try {
-            // Trigger initializeKey to prompt for keychain access
-            // Assuming encryptionService is accessible or via API
-            await window.api.permissionHeader.initializeEncryptionKey(); // New IPC handler needed
-
-            // After success, update status
-            this.keychainGranted = 'granted';
-            this.requestUpdate();
-        } catch (error) {
-            console.error('[PermissionHeader] Error requesting keychain permission:', error);
-        }
-    }
-
     async handleNext() {
         if (this.isTransitioning || this.currentStep >= 1) return;
 
@@ -287,28 +261,13 @@ export class PermissionHeader extends LitElement {
     }
 
     async handleContinue() {
-        const isKeychainRequired = this.isLoggedIn;
-        const keychainOk = !isKeychainRequired || this.keychainGranted === 'granted';
-
-        if (this.continueCallback && this.microphoneGranted === 'granted' && this.screenGranted === 'granted' && keychainOk) {
-            // Mark permissions as completed
-            if (window.api && isKeychainRequired) {
-                try {
-                    await window.api.permissionHeader.markKeychainCompleted();
-                    console.log('[PermissionHeader] Marked keychain as completed');
-                } catch (error) {
-                    console.error('[PermissionHeader] Error marking keychain as completed:', error);
-                }
-            }
-
+        if (this.continueCallback && this.microphoneGranted === 'granted' && this.screenGranted === 'granted') {
             this.continueCallback();
         }
     }
 
     async handleCommandsPrimaryAction() {
-        const isKeychainRequired = this.isLoggedIn;
-        const keychainOk = !isKeychainRequired || this.keychainGranted === 'granted';
-        const allGranted = this.microphoneGranted === 'granted' && this.screenGranted === 'granted' && keychainOk;
+        const allGranted = this.microphoneGranted === 'granted' && this.screenGranted === 'granted';
 
         if (!this.isLoggedIn) {
             this.dispatchEvent(
@@ -338,9 +297,7 @@ export class PermissionHeader extends LitElement {
     }
 
     renderPermissionsStep() {
-        const isKeychainRequired = this.isLoggedIn;
-        const keychainOk = !isKeychainRequired || this.keychainGranted === 'granted';
-        const allGranted = this.microphoneGranted === 'granted' && this.screenGranted === 'granted' && keychainOk;
+        const allGranted = this.microphoneGranted === 'granted' && this.screenGranted === 'granted';
 
         return html`
             ${!allGranted
@@ -430,56 +387,7 @@ export class PermissionHeader extends LitElement {
                                   </button>
                               </div>
                           </div>
-
-                          ${isKeychainRequired
-                              ? html`
-                                    <div class="perm-row">
-                                        <div class="perm-left">
-                                            <svg
-                                                class="permission-icon"
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                width="24"
-                                                height="24"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="white"
-                                                stroke-width="2"
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                            >
-                                                <ellipse cx="12" cy="5" rx="9" ry="3" />
-                                                <path d="M3 5V19A9 3 0 0 0 21 19V5" />
-                                                <path d="M3 12A9 3 0 0 0 21 12" />
-                                            </svg>
-                                            <div class="perm-text">
-                                                <div class="perm-title">Data Encryption</div>
-                                                <div class="perm-desc">Secure your data with Keychain.</div>
-                                            </div>
-                                        </div>
-                                        <div class="perm-right">
-                                            ${this.keychainGranted === 'granted'
-                                                ? html`<svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
-                                                      <path
-                                                          fill-rule="evenodd"
-                                                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                                                          clip-rule="evenodd"
-                                                      />
-                                                  </svg>`
-                                                : ''}
-                                            <button
-                                                class="cta-btn"
-                                                @click=${this.handleKeychainClick}
-                                                ?disabled=${this.keychainGranted === 'granted'}
-                                            >
-                                                ${this.keychainGranted === 'granted' ? 'Enabled' : 'Enable'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                `
-                              : ''}
                       </div>
-
-                      ${isKeychainRequired ? html` <div class="footnote">If prompted, press "Always Allow" in the Keychain dialog.</div> ` : ''}
                   `
                 : html`
                       <div class="logo-medallion">
@@ -557,45 +465,6 @@ export class PermissionHeader extends LitElement {
                                   <button class="cta-btn" disabled>Granted</button>
                               </div>
                           </div>
-
-                          ${isKeychainRequired
-                              ? html`
-                                    <div class="perm-row">
-                                        <div class="perm-left">
-                                            <svg
-                                                class="permission-icon"
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                width="24"
-                                                height="24"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="white"
-                                                stroke-width="2"
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                            >
-                                                <ellipse cx="12" cy="5" rx="9" ry="3" />
-                                                <path d="M3 5V19A9 3 0 0 0 21 19V5" />
-                                                <path d="M3 12A9 3 0 0 0 21 12" />
-                                            </svg>
-                                            <div class="perm-text">
-                                                <div class="perm-title">Data Encryption</div>
-                                                <div class="perm-desc">Enabled</div>
-                                            </div>
-                                        </div>
-                                        <div class="perm-right">
-                                            <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
-                                                <path
-                                                    fill-rule="evenodd"
-                                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                                                    clip-rule="evenodd"
-                                                />
-                                            </svg>
-                                            <button class="cta-btn" disabled>Enabled</button>
-                                        </div>
-                                    </div>
-                                `
-                              : ''}
                       </div>
                   `}
         `;
@@ -625,9 +494,7 @@ export class PermissionHeader extends LitElement {
     }
 
     render() {
-        const isKeychainRequired = this.isLoggedIn;
-        const keychainOk = !isKeychainRequired || this.keychainGranted === 'granted';
-        const allGranted = this.microphoneGranted === 'granted' && this.screenGranted === 'granted' && keychainOk;
+        const allGranted = this.microphoneGranted === 'granted' && this.screenGranted === 'granted';
 
         const rightButtonLabel = this.currentStep === 1 ? (this.isLoggedIn ? 'Continue' : 'Login') : 'Next';
         const rightButtonDisabled = this.currentStep === 1 ? (this.isLoggedIn ? !allGranted : false) : false;

@@ -8,7 +8,6 @@ const presetRepository = require('../features/common/repositories/preset');
 const askService = require('../features/ask/askService');
 const listenService = require('../features/listen/listenService');
 const permissionService = require('../features/common/services/permissionService');
-const encryptionService = require('../features/common/services/encryptionService');
 
 module.exports = {
     // Receive requests from renderer and forward to services
@@ -41,17 +40,6 @@ module.exports = {
         ipcMain.handle('check-system-permissions', async () => await permissionService.checkSystemPermissions());
         ipcMain.handle('request-microphone-permission', async () => await permissionService.requestMicrophonePermission());
         ipcMain.handle('open-system-preferences', async (event, section) => await permissionService.openSystemPreferences(section));
-        ipcMain.handle('mark-keychain-completed', async () => await permissionService.markKeychainCompleted());
-        ipcMain.handle('check-keychain-completed', async () => await permissionService.checkKeychainCompleted());
-        ipcMain.handle('initialize-encryption-key', async () => {
-            const userId = authService.getCurrentUserId();
-            if (!userId) {
-                console.log('[FeatureBridge] Cannot initialize encryption key: user not authenticated');
-                return { success: false, error: 'User not authenticated' };
-            }
-            await encryptionService.initializeKey(userId);
-            return { success: true };
-        });
 
         // User/Auth
         ipcMain.handle('get-current-user', () => authService.getCurrentUser());

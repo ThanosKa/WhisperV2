@@ -1,10 +1,8 @@
 const { BrowserWindow, shell } = require('electron');
 const fetch = require('node-fetch');
 const Store = require('electron-store');
-const encryptionService = require('./encryptionService');
 const sessionRepository = require('../repositories/session');
 const providerSettingsRepository = require('../repositories/providerSettings');
-const permissionService = require('./permissionService');
 
 // Webapp configuration
 const WEBAPP_CONFIG = {
@@ -143,13 +141,6 @@ class AuthService {
         // Clean up any zombie sessions from a previous run for this user.
         await sessionRepository.endAllActiveSessions();
 
-        // Initialize encryption key for the logged-in user if permissions are already granted
-        if (process.platform === 'darwin' && !(await permissionService.checkKeychainCompleted(this.currentUserId))) {
-            console.warn('[AuthService] Keychain permission not yet completed for this user. Deferring key initialization.');
-        } else {
-            await encryptionService.initializeKey(userProfile.uid);
-        }
-
         // Check for and run data migration for the user
         // Migration service disabled - using local-first data strategy with webapp authentication
 
@@ -189,8 +180,6 @@ class AuthService {
 
         // End active sessions for the unauthenticated state
         sessionRepository.endAllActiveSessions();
-
-        encryptionService.resetSessionKey();
     }
 
     async startWebappAuthFlow() {

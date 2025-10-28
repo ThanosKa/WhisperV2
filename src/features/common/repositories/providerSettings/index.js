@@ -7,11 +7,6 @@ function getBaseRepository() {
 
 const providerSettingsRepositoryAdapter = {
     // Core CRUD operations
-    async getByProvider(provider) {
-        const repo = getBaseRepository();
-        return await repo.getByProvider(provider);
-    },
-
     async getAll() {
         const repo = getBaseRepository();
         return await repo.getAll();
@@ -29,22 +24,6 @@ const providerSettingsRepositoryAdapter = {
         };
 
         return await repo.upsert(provider, settingsWithMeta);
-    },
-
-    async remove(provider) {
-        const repo = getBaseRepository();
-        return await repo.remove(provider);
-    },
-
-    async removeAll() {
-        const repo = getBaseRepository();
-        return await repo.removeAll();
-    },
-
-    async getRawApiKeys() {
-        // This function should always target the local sqlite DB,
-        // as it's part of the local-first boot sequence.
-        return await sqliteRepository.getRawApiKeys();
     },
 
     async getActiveProvider(type) {

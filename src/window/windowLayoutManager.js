@@ -157,8 +157,29 @@ class WindowLayoutManager {
         if (maxHeight > 0) {
             adjustedHeight = Math.min(maxHeight, adjustedHeight);
         }
-        // console.log(`[Layout Debug] calculateWindowHeightAdjustment: targetHeight=${targetHeight}`);
-        return { ...currentBounds, height: adjustedHeight };
+
+        const display = getCurrentDisplay(senderWindow);
+        const { y: workAreaY, height: workAreaHeight } = display.workArea;
+
+        const header = this.windowPool.get('header');
+        const headerBounds = header ? header.getBounds() : null;
+        const MIN_HEADER_GAP = 8;
+        const minY = headerBounds ? headerBounds.y + headerBounds.height + MIN_HEADER_GAP : workAreaY;
+
+        let newY = currentBounds.y;
+        const newBottomEdge = currentBounds.y + adjustedHeight;
+        const maxBottomEdge = workAreaY + workAreaHeight - 10;
+
+        if (newBottomEdge > maxBottomEdge) {
+            newY = Math.max(minY, maxBottomEdge - adjustedHeight);
+        }
+
+        return {
+            x: currentBounds.x,
+            y: Math.round(newY),
+            width: currentBounds.width,
+            height: adjustedHeight,
+        };
     }
 
     // Replace the existing getTargetBoundsForFeatureWindows with this function.

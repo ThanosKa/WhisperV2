@@ -28,12 +28,10 @@ ENV:
   Dependencies:
 - Electron 30.x.x
 - Better SQLite3 9.x.x
-- Keytar 7.x.x (secure credential storage)
 - Sharp 0.34.x (image processing)
 - WS 8.x.x (WebSocket communication)
   Security:
-- Secure key storage via OS keychain
-- Encrypted database storage
+- Local database storage (SQLite)
 - Secure IPC communication
 - Audio permission management
 
@@ -263,8 +261,7 @@ Key Components:
 
 ```javascript
 // Secure key storage
-const keytar = require('keytar');
-await keytar.setPassword('whisper', 'openai_key', apiKey);
+// Legacy keychain integration removed in v2.1. Whisper now stores configuration in local SQLite only.
 
 // Settings persistence
 const settingsRepo = require('./repositories');

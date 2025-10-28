@@ -186,27 +186,6 @@ class HeaderTransitionManager {
         }
 
         // Check if permissions were previously completed
-        if (window.api) {
-            try {
-                const permissionsCompleted = await window.api.headerController.checkPermissionsCompleted();
-                if (permissionsCompleted) {
-                    console.log('[HeaderController] Permissions were previously completed, checking current status...');
-
-                    // Double check current permission status
-                    const permissionResult = await this.checkPermissions();
-                    if (permissionResult.success) {
-                        // Skip permission setup if already granted
-                        this.transitionToMainHeader();
-                        return;
-                    }
-
-                    console.log('[HeaderController] Permissions were revoked, showing setup again');
-                }
-            } catch (error) {
-                console.error('[HeaderController] Error checking permissions completed status:', error);
-            }
-        }
-
         const initialHeight = APP_CONTENT_HEIGHT;
         await this._resizeForPermissionHeader(initialHeight);
         this.ensureHeader('permission');

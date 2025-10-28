@@ -84,7 +84,6 @@ const LATEST_SCHEMA = {
     provider_settings: {
         columns: [
             { name: 'provider', type: 'TEXT NOT NULL' },
-            { name: 'api_key', type: 'TEXT' },
             { name: 'selected_llm_model', type: 'TEXT' },
             { name: 'selected_stt_model', type: 'TEXT' },
             { name: 'is_active_llm', type: 'INTEGER DEFAULT 0' },
@@ -102,10 +101,7 @@ const LATEST_SCHEMA = {
         ],
     },
     permissions: {
-        columns: [
-            { name: 'uid', type: 'TEXT PRIMARY KEY' },
-            { name: 'keychain_completed', type: 'INTEGER DEFAULT 0' },
-        ],
+        columns: [{ name: 'uid', type: 'TEXT PRIMARY KEY' }],
     },
 };
 

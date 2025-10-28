@@ -5,7 +5,6 @@ const path = require('node:path');
 const os = require('os');
 const shortcutsService = require('../features/shortcuts/shortcutsService');
 const internalBridge = require('../bridge/internalBridge');
-const permissionRepository = require('../features/common/repositories/permission');
 
 /* ────────────────[ UNIFIED CROSS-PLATFORM DESIGN ]─────────────── */
 // Liquid glass disabled for consistent cross-platform performance

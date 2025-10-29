@@ -1,0 +1,139 @@
+[2025-10-29T21:08:05.110Z] === ROUND 1 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:08:05.111Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:08:15.246Z] === ROUND 2 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:08:15.246Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:08:28.244Z] === ROUND 3 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:08:28.245Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:08:45.788Z] === ROUND 4 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:08:45.789Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:08:56.753Z] === ROUND 5 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:08:56.754Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:12:05.786Z] === ROUND 1 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:12:05.787Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:12:10.781Z] === ROUND 2 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:12:10.781Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:12:16.712Z] === ROUND 3 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:12:16.713Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:12:24.933Z] === ROUND 4 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:12:24.933Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:14:03.059Z] === ROUND 1 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:14:03.060Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:14:04.890Z] LLM CREATED: 0 actions
+[2025-10-29T21:14:04.890Z] === END ROUND 1 ===
+[2025-10-29T21:14:08.463Z] === ROUND 2 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:14:08.463Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:14:09.420Z] LLM CREATED: 2 actions
+[2025-10-29T21:14:09.421Z] === END ROUND 2 ===
+[2025-10-29T21:14:13.780Z] === ROUND 3 ===
+PREV ROUND ACTIONS: 2 | TOTAL SENDING TO LLM: 2 (actions:2 + terms:0 + questions:0)
+[2025-10-29T21:14:13.780Z] SENDING TO LLM (2 items):
+  1. ❓ What about resource allocation?
+  2. 📘 Define testing phase
+[2025-10-29T21:14:14.817Z] LLM CREATED: 1 actions
+[2025-10-29T21:14:14.819Z] === END ROUND 3 ===
+[2025-10-29T21:14:20.716Z] === ROUND 4 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:14:20.717Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:14:22.250Z] LLM CREATED: 2 actions
+[2025-10-29T21:14:22.251Z] === END ROUND 4 ===
+[2025-10-29T21:14:59.170Z] === ROUND 1 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:14:59.170Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:15:06.531Z] === ROUND 2 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:15:06.531Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:31:12.719Z] === ROUND 1 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:31:12.721Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:31:18.544Z] === ROUND 2 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:31:18.544Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:31:23.662Z] === ROUND 3 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:31:23.662Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:31:30.005Z] === ROUND 4 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:31:30.005Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:31:49.108Z] === ROUND 1 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:31:49.110Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:31:50.795Z] LLM CREATED: 0 actions
+[2025-10-29T21:31:50.796Z] === END ROUND 1 ===
+[2025-10-29T21:31:54.523Z] === ROUND 2 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:31:54.523Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:31:55.407Z] LLM CREATED: 1 actions
+[2025-10-29T21:31:55.408Z] === END ROUND 2 ===
+[2025-10-29T21:32:00.688Z] === ROUND 3 ===
+PREV ROUND ACTIONS: 1 | TOTAL SENDING TO LLM: 1 (actions:1 + terms:0 + questions:0)
+[2025-10-29T21:32:00.690Z] SENDING TO LLM (1 items):
+  1. ❓ What about resource allocation?
+[2025-10-29T21:32:01.762Z] LLM CREATED: 1 actions
+[2025-10-29T21:32:01.762Z] === END ROUND 3 ===
+[2025-10-29T21:32:12.472Z] === ROUND 4 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:32:12.473Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:32:13.558Z] LLM CREATED: 1 actions
+[2025-10-29T21:32:13.558Z] === END ROUND 4 ===
+[2025-10-29T21:56:47.129Z] === ROUND 1 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:56:47.130Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:56:49.197Z] LLM CREATED: 0 actions
+[2025-10-29T21:56:49.198Z] === END ROUND 1 ===
+[2025-10-29T21:56:50.583Z] === ROUND 2 ===
+PREV ROUND ACTIONS: 0 | TOTAL SENDING TO LLM: 0 (actions:0 + terms:0 + questions:0)
+[2025-10-29T21:56:50.583Z] SENDING TO LLM (0 items):
+
+[2025-10-29T21:56:51.868Z] LLM CREATED: 3 actions
+[2025-10-29T21:56:51.868Z] === END ROUND 2 ===
+[2025-10-29T21:56:57.210Z] === ROUND 3 ===
+PREV ROUND ACTIONS: 3 | TOTAL SENDING TO LLM: 3 (actions:3 + terms:0 + questions:0)
+[2025-10-29T21:56:57.211Z] SENDING TO LLM (3 items):
+  1. ❓ What about resource allocation?
+  2. 📘 Define φάση δοκιμών
+  3. 📘 Define κατανομή πόρων
+[2025-10-29T21:56:58.527Z] LLM CREATED: 2 actions
+[2025-10-29T21:56:58.527Z] === END ROUND 3 ===
+[2025-10-29T21:57:01.532Z] === ROUND 4 ===
+PREV ROUND ACTIONS: 2 | TOTAL SENDING TO LLM: 2 (actions:2 + terms:0 + questions:0)
+[2025-10-29T21:57:01.533Z] SENDING TO LLM (5 items):
+  1. ❓ What about resource allocation?
+  2. 📘 Define φάση δοκιμών
+  3. 📘 Define κατανομή πόρων
+  4. ❓ Is the design phase fully completed?
+  5. 📘 Define φάση σχεδιασμού
+[2025-10-29T21:57:02.853Z] LLM CREATED: 1 actions
+[2025-10-29T21:57:02.854Z] === END ROUND 4 ===

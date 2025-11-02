@@ -222,13 +222,13 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
         const iconById: Record<string, string> = {
             profile: '/user.svg',
             privacy: '/privacy.svg',
-            billing: '/credit-card.svg',
+            // billing: '/credit-card.svg',
         };
 
         const ariaById: Record<string, string> = {
             profile: 'Personal profile settings',
             privacy: 'Data and privacy settings',
-            billing: 'Billing settings',
+            // billing: 'Billing settings',
         };
 
         return SETTINGS_TABS.map(tab => ({

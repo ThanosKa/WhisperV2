@@ -16,6 +16,7 @@ export interface UserProfile {
     uid: string;
     display_name: string;
     email: string;
+    plan?: string;
 }
 
 export interface Session {

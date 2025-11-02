@@ -102,10 +102,14 @@ export default function SettingsPage() {
     const modeDetails = isWebappMode
         ? `All activity and settings sync with ${userInfo.email}.`
         : 'Everything stays on this device. Add a personal API key if you prefer using your own provider.';
-    const profileDetails: Array<{ label: string; value: string }> = [
+    const pricingUrl = 'https://www.app-whisper.com/pricing';
+    const planValue = (userInfo.plan || 'free').toLowerCase();
+    const normalizedPlan = planValue.slice(0, 1).toUpperCase() + planValue.slice(1);
+    const profileDetails: Array<{ label: string; value: string; href?: string }> = [
         { label: 'Display Name', value: profileName },
         { label: 'Primary Email', value: userInfo.email },
         { label: 'Account ID', value: userInfo.uid },
+        { label: 'Current Plan', value: normalizedPlan, href: pricingUrl },
         { label: 'Sign-in Method', value: isWebappMode ? 'Whisper web account' : 'Local desktop session' },
         { label: 'Data Storage', value: isWebappMode ? 'Synced securely with Whisper services' : 'Stored locally on this device' },
     ];
@@ -158,12 +162,26 @@ export default function SettingsPage() {
                         </CardHeader>
                         <CardContent className="pt-0">
                             <div className="grid gap-6 border-t border-border pt-6 sm:grid-cols-2">
-                                {profileDetails.map(detail => (
-                                    <div key={detail.label} className="space-y-1">
-                                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{detail.label}</p>
-                                        <p className="text-sm font-medium text-foreground break-all">{detail.value}</p>
-                                    </div>
-                                ))}
+                                {profileDetails.map(detail => {
+                                    const isPlanDetail = detail.label === 'Current Plan' && detail.href;
+                                    return (
+                                        <div key={detail.label} className="space-y-1">
+                                            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{detail.label}</p>
+                                            {isPlanDetail ? (
+                                                <a
+                                                    href={detail.href}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-sm font-medium text-primary break-all cursor-pointer hover:underline"
+                                                >
+                                                    {detail.value}
+                                                </a>
+                                            ) : (
+                                                <p className="text-sm font-medium text-foreground break-all">{detail.value}</p>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </CardContent>
                     </Card>

@@ -20,7 +20,7 @@ const withTrailingSlash = (href: string) => (href.endsWith('/') ? href : `${href
 export const SETTINGS_TABS: SettingsTab[] = [
     { id: 'profile', name: 'Personal Profile', href: '/settings', matchStrategy: 'exact' },
     { id: 'privacy', name: 'Data & Privacy', href: '/settings/privacy' },
-    { id: 'billing', name: 'Billing', href: '/settings/billing' },
+    // { id: 'billing', name: 'Billing', href: '/settings/billing' },
 ];
 
 export default function SettingsTabs({ className }: { className?: string }) {

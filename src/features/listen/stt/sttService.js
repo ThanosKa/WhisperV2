@@ -115,16 +115,16 @@ class SttService {
     }
 
     debounceMeCompletion(text) {
-        // Relay emits provider-normalized partials; concatenate as-is (no extra spacing)
-        this.meCompletionBuffer += text;
+        // Soniox sends full rewrites - replace buffer instead of concatenating
+        this.meCompletionBuffer = text;
 
         if (this.meCompletionTimer) clearTimeout(this.meCompletionTimer);
         this.meCompletionTimer = setTimeout(() => this.flushMeCompletion(), COMPLETION_DEBOUNCE_MS);
     }
 
     debounceThemCompletion(text) {
-        // Relay emits provider-normalized partials; concatenate as-is (no extra spacing)
-        this.themCompletionBuffer += text;
+        // Soniox sends full rewrites - replace buffer instead of concatenating
+        this.themCompletionBuffer = text;
 
         if (this.themCompletionTimer) clearTimeout(this.themCompletionTimer);
         this.themCompletionTimer = setTimeout(() => this.flushThemCompletion(), COMPLETION_DEBOUNCE_MS);
@@ -149,17 +149,20 @@ class SttService {
 
             const transcription = message.serverContent?.inputTranscription;
             const textChunk = transcription?.text || '';
-            if (!transcription || !textChunk.trim() || textChunk.trim() === '<noise>') return;
+            const trimmed = textChunk.trim();
+            if (!transcription || !trimmed || trimmed === '<noise>' || trimmed === '<end>') return;
 
-            this.debounceMeCompletion(textChunk);
-
+            // Send server text directly (Soniox already sends full rewrites)
             this.sendToRenderer('stt-update', {
                 speaker: 'Me',
-                text: this.meCompletionBuffer,
+                text: textChunk,
                 isPartial: true,
                 isFinal: false,
                 timestamp: Date.now(),
             });
+
+            // Debounce for final flush timing only
+            this.debounceMeCompletion(textChunk);
 
             if (message?.serverContent?.usageMetadata) {
                 console.log('[STT - Me] Tokens In:', message.serverContent.usageMetadata.promptTokenCount);
@@ -189,17 +192,20 @@ class SttService {
 
             const transcription = message.serverContent?.inputTranscription;
             const textChunk = transcription?.text || '';
-            if (!transcription || !textChunk.trim() || textChunk.trim() === '<noise>') return;
+            const trimmed = textChunk.trim();
+            if (!transcription || !trimmed || trimmed === '<noise>' || trimmed === '<end>') return;
 
-            this.debounceThemCompletion(textChunk);
-
+            // Send server text directly (Soniox already sends full rewrites)
             this.sendToRenderer('stt-update', {
                 speaker: 'Them',
-                text: this.themCompletionBuffer,
+                text: textChunk,
                 isPartial: true,
                 isFinal: false,
                 timestamp: Date.now(),
             });
+
+            // Debounce for final flush timing only
+            this.debounceThemCompletion(textChunk);
 
             if (message.error) {
                 console.error('[Them] STT Session Error:', message.error);

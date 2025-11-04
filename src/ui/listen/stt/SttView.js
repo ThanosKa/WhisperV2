@@ -45,6 +45,16 @@ export class SttView extends LitElement {
     handleSttUpdate(event, { speaker, text, isFinal, isPartial }) {
         if (text === undefined) return;
 
+        // Filter Soniox artifacts and unwanted transcription markers
+        text = text
+            .replace(/<end>/gi, '')
+            .replace(/<noise>/gi, '')
+            .replace(/^\s*<[^>]*>\s*$/gm, '') // Remove lines that are only <tags>
+            .trim();
+
+        // Skip empty messages after filtering
+        if (!text) return;
+
         const container = this.shadowRoot.querySelector('.transcription-container');
         this._shouldScrollAfterUpdate = container ? container.scrollTop + container.clientHeight >= container.scrollHeight - 10 : false;
 
@@ -120,7 +130,10 @@ export class SttView extends LitElement {
     }
 
     getTranscriptText() {
-        return this.sttMessages.map(msg => `${msg.speaker}: ${msg.text}`).join('\n');
+        return this.sttMessages
+            .filter(msg => msg.text && msg.text.trim()) // Filter out empty messages
+            .map(msg => `${msg.speaker}: ${msg.text}`)
+            .join('\n');
     }
 
     async handleCopyMessage(event, messageId, messageText) {

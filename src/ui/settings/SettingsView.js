@@ -18,6 +18,7 @@ export class SettingsView extends LitElement {
         currentDisplayId: { type: Number, state: true },
         showMonitors: { type: Boolean, state: true },
         isLoggingOut: { type: Boolean, state: true },
+        appVersion: { type: String, state: true },
     };
     //////// after_modelStateService ////////
 
@@ -49,6 +50,18 @@ export class SettingsView extends LitElement {
             this.autoUpdateEnabled = true; // fallback
         }
         this.autoUpdateLoading = false;
+        this.requestUpdate();
+    }
+
+    async loadAppVersion() {
+        if (!window.api) return;
+        try {
+            const version = await window.api.settingsView.getAppVersion();
+            this.appVersion = version;
+        } catch (e) {
+            console.error('Error loading app version:', e);
+            this.appVersion = 'Unknown';
+        }
         this.requestUpdate();
     }
 
@@ -115,6 +128,7 @@ export class SettingsView extends LitElement {
         this.setupIpcListeners();
         this.setupWindowResize();
         this.loadAutoUpdateSetting();
+        this.loadAppVersion();
         this.loadDisplays();
         // Force one height calculation immediately (innerHeight may be 0 at first)
         setTimeout(() => this.updateScrollHeight(), 0);
@@ -494,6 +508,10 @@ export class SettingsView extends LitElement {
                         <button class="settings-button full-width" @click=${this.handleOpenDbPath}>
                             <span>Open Whisper Storage</span>
                         </button>
+                    </div>
+
+                    <div class="version-info">
+                        Version ${this.appVersion || 'Loading...'}
                     </div>
                 </div>
             </div>

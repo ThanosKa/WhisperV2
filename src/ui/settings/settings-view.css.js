@@ -182,6 +182,14 @@ export const settingsViewStyles = css`
         margin: 0;
     }
 
+    .version-info {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.7);
+        margin: 0;
+        text-align: center;
+        margin-top: 16px;
+    }
+
     .invisibility-icon {
         padding-top: 2px;
         opacity: 0;

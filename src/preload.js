@@ -191,6 +191,7 @@ contextBridge.exposeInMainWorld('api', {
         // Auto Update
         getAutoUpdate: () => ipcRenderer.invoke('settings:get-auto-update'),
         setAutoUpdate: isEnabled => ipcRenderer.invoke('settings:set-auto-update', isEnabled),
+        getAppVersion: () => ipcRenderer.invoke('settings:get-app-version'),
 
         // Content Protection
         getContentProtectionStatus: () => ipcRenderer.invoke('get-content-protection-status'),

@@ -16,6 +16,10 @@ module.exports = {
         ipcMain.handle('settings:getPresets', async () => await settingsService.getPresets());
         ipcMain.handle('settings:get-auto-update', async () => await settingsService.getAutoUpdateSetting());
         ipcMain.handle('settings:set-auto-update', async (event, isEnabled) => await settingsService.setAutoUpdateSetting(isEnabled));
+        ipcMain.handle('settings:get-app-version', async () => {
+            const { app } = require('electron');
+            return app.getVersion();
+        });
         // Removed legacy provider-model settings IPC
 
         // Add new handler for opening DB path

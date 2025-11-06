@@ -9,8 +9,8 @@ productName: Whisper
 # Publish configuration for GitHub releases
 publish:
     provider: github
-    owner: whisper-app
-    repo: whisper
+    owner: ThanosKa
+    repo: whisper-desktop
     releaseType: draft
 
 # Protocols configuration for deep linking

@@ -1,8 +1,6 @@
 import { html, LitElement } from '../assets/lit-core-2.7.4.min.js';
 import { settingsViewStyles } from './settings-view.css.js';
 
-// import { getOllamaProgressTracker } from '../../features/common/services/localProgressTracker.js'; // removed
-
 export class SettingsView extends LitElement {
     static styles = settingsViewStyles;
 
@@ -510,9 +508,7 @@ export class SettingsView extends LitElement {
                         </button>
                     </div>
 
-                    <div class="version-info">
-                        Version ${this.appVersion || 'Loading...'}
-                    </div>
+                    <div class="version-info">Version ${this.appVersion || 'Loading...'}</div>
                 </div>
             </div>
         `;

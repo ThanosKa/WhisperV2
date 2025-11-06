@@ -5,7 +5,7 @@ const authService = require('../../common/services/authService');
 const config = require('../../common/config/config');
 
 const COMPLETION_DEBOUNCE_MS = config.get('utteranceSilenceMs') || 1200;
-const DEFAULT_RELAY_URL = process.env.STT_RELAY_URL || config.get('sttRelayUrl') || 'ws://localhost:8080';
+const DEFAULT_RELAY_URL = process.env.STT_RELAY_URL || config.get('sttRelayUrl') || 'wss://websocket-production-395f.up.railway.app';
 
 class SttService {
     constructor() {

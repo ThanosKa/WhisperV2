@@ -12,7 +12,7 @@ class Config {
 
             webUrl: process.env.whisper_WEB_URL || 'http://localhost:3000',
 
-            sttRelayUrl: process.env.STT_RELAY_URL || 'ws://localhost:8080',
+            sttRelayUrl: process.env.STT_RELAY_URL || 'wss://websocket-production-395f.up.railway.app',
 
             enableJWT: false,
             fallbackToHeaderAuth: false,

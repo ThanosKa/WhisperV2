@@ -6,10 +6,10 @@ const providerSettingsRepository = require('../repositories/providerSettings');
 
 // Webapp configuration
 const WEBAPP_CONFIG = {
-    domain: process.env.API_BASE_URL || 'http://localhost:3000',
-    sessionInitUrl: `${process.env.API_BASE_URL || 'http://localhost:3000'}/api/auth/session/init`,
-    sessionStatusUrl: `${process.env.API_BASE_URL || 'http://localhost:3000'}/api/auth/session`,
-    sessionPageUrl: `${process.env.API_BASE_URL || 'http://localhost:3000'}/session`,
+    domain: process.env.API_BASE_URL || 'https://app-whisper.com',
+    sessionInitUrl: `${process.env.API_BASE_URL || 'https://app-whisper.com'}/api/auth/session/init`,
+    sessionStatusUrl: `${process.env.API_BASE_URL || 'https://app-whisper.com'}/api/auth/session`,
+    sessionPageUrl: `${process.env.API_BASE_URL || 'https://app-whisper.com'}/session`,
 };
 
 // Session storage using electron-store

@@ -2,10 +2,10 @@ const authService = require('../services/authService');
 
 function getBaseUrl() {
     try {
-        const raw = process.env.API_BASE_URL || 'http://localhost:3000';
+        const raw = process.env.API_BASE_URL || 'https://app-whisper.com';
         return raw.replace(/\/$/, '');
     } catch (_) {
-        return 'http://localhost:3000';
+        return 'https://app-whisper.com';
     }
 }
 

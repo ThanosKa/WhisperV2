@@ -1,0 +1,12 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+Never explain me in detail. Always be short on your responses.
+Be extremely concise. Sacrifice grammar for the sake of concision
+Never run the server
+
+suggest a commit message wit this format only if requested:
+<type>(<scope>): <short summary>

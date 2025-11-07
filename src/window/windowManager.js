@@ -5,6 +5,7 @@ const path = require('node:path');
 const os = require('os');
 const shortcutsService = require('../features/shortcuts/shortcutsService');
 const internalBridge = require('../bridge/internalBridge');
+const askService = require('../features/ask/askService');
 
 /* ────────────────[ UNIFIED CROSS-PLATFORM DESIGN ]─────────────── */
 // Liquid glass disabled for consistent cross-platform performance
@@ -681,6 +682,23 @@ function createFeatureWindows(header, namesToCreate) {
                     ask.webContents.openDevTools({ mode: 'detach' });
                 }
                 windowPool.set('ask', ask);
+
+                // Handle blur event: close ask window when clicking outside if no content
+                ask.on('blur', () => {
+                    const focusedWindow = BrowserWindow.getFocusedWindow();
+                    const isFocusInApp = focusedWindow && Array.from(windowPool.values()).includes(focusedWindow);
+
+                    // If focus moved outside app windows (clicked outside)
+                    if (!isFocusInApp) {
+                        const state = askService.state;
+                        const hasNoContent = !state.currentResponse && !state.isLoading && !state.isStreaming;
+
+                        if (hasNoContent) {
+                            askService.closeAskWindow();
+                        }
+                    }
+                });
+
                 break;
             }
 

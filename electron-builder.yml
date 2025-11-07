@@ -71,8 +71,13 @@ mac:
     hardenedRuntime: true
     entitlements: entitlements.plist
     entitlementsInherit: entitlements.plist
+    # Code signing identity
+    identity: 'Thanos Kazakis (GJ3U78VY54)'
     target:
         - target: dmg
           arch: universal
         - target: zip
           arch: universal
+
+# Hook to run after signing (for notarization)
+afterSign: notarize.js

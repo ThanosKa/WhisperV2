@@ -3,6 +3,7 @@ import { SettingsView } from '../settings/SettingsView.js';
 import { ListenView } from '../listen/ListenView.js';
 import { AskView } from '../ask/AskView.js';
 import { PlanView } from '../plan/PlanView.js';
+import { ScreenshotView } from '../screenshot/ScreenshotView.js';
 
 import '../listen/audioCore/renderer.js';
 
@@ -26,6 +27,7 @@ export class WhisperApp extends LitElement {
         ask-view,
         plan-view,
         settings-view,
+        screenshot-view,
         history-view,
         help-view,
         setup-view {
@@ -146,6 +148,8 @@ export class WhisperApp extends LitElement {
                 ></settings-view>`;
             case 'plan':
                 return html`<plan-view></plan-view>`;
+            case 'screenshot':
+                return html`<screenshot-view></screenshot-view>`;
             case 'history':
                 return html`<history-view></history-view>`;
             case 'help':

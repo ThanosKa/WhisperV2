@@ -19,6 +19,8 @@ let currentHeaderState = 'apikey';
 const windowPool = new Map();
 
 let settingsHideTimer = null;
+let screenshotHideTimer = null;
+let planHideTimer = null;
 
 let layoutManager = null;
 let movementManager = null;
@@ -52,6 +54,116 @@ const hideSettingsWindow = () => {
 
 const cancelHideSettingsWindow = () => {
     internalBridge.emit('window:requestVisibility', { name: 'settings', visible: true });
+};
+
+const showScreenshotWindow = (base64Data, position) => {
+    const screenshotWin = windowPool.get('screenshot');
+    if (!screenshotWin || screenshotWin.isDestroyed()) {
+        // Create window if it doesn't exist
+        const header = windowPool.get('header');
+        if (header) {
+            createFeatureWindows(header, ['screenshot']);
+            // Wait a bit for window to be created, then show
+            setTimeout(() => {
+                const newWin = windowPool.get('screenshot');
+                if (newWin && !newWin.isDestroyed()) {
+                    newWin.webContents.send('screenshot:data', base64Data);
+                    if (position) {
+                        newWin.setBounds({
+                            x: position.x,
+                            y: position.y,
+                            width: 400,
+                            height: 300,
+                        });
+                    }
+                    newWin.show();
+                    newWin.setAlwaysOnTop(true);
+                    newWin.moveTop();
+                }
+            }, 100);
+        }
+        return;
+    }
+    
+    // Cancel any pending hide operations
+    if (screenshotHideTimer) {
+        clearTimeout(screenshotHideTimer);
+        screenshotHideTimer = null;
+    }
+    
+    // Send screenshot data to window
+    screenshotWin.webContents.send('screenshot:data', base64Data);
+    
+    // Position window near indicator
+    if (position) {
+        screenshotWin.setBounds({
+            x: position.x,
+            y: position.y,
+            width: 400,
+            height: 300,
+        });
+    }
+    
+    screenshotWin.show();
+    screenshotWin.setAlwaysOnTop(true);
+    screenshotWin.moveTop();
+};
+
+const hideScreenshotWindow = () => {
+    const screenshotWin = windowPool.get('screenshot');
+    if (!screenshotWin || screenshotWin.isDestroyed()) return;
+    
+    // Hide after a delay
+    if (screenshotHideTimer) {
+        clearTimeout(screenshotHideTimer);
+    }
+    screenshotHideTimer = setTimeout(() => {
+        if (screenshotWin && !screenshotWin.isDestroyed()) {
+            screenshotWin.setAlwaysOnTop(false);
+            screenshotWin.hide();
+            screenshotHideTimer = null;
+        }
+    }, 200);
+};
+
+const cancelHideScreenshotWindow = () => {
+    if (screenshotHideTimer) {
+        clearTimeout(screenshotHideTimer);
+        screenshotHideTimer = null;
+    }
+};
+
+const hidePlanWindow = () => {
+    const planWin = windowPool.get('plan');
+    if (!planWin || planWin.isDestroyed()) return;
+    
+    console.log('[WindowManager] hidePlanWindow called at', Date.now());
+    
+    // Hide after a delay
+    if (planHideTimer) {
+        console.log('[WindowManager] Clearing existing planHideTimer');
+        clearTimeout(planHideTimer);
+    }
+    console.log('[WindowManager] Setting planHideTimer (200ms delay)');
+    planHideTimer = setTimeout(() => {
+        if (planWin && !planWin.isDestroyed()) {
+            console.log('[WindowManager] planHideTimer fired - hiding window at', Date.now());
+            planWin.setAlwaysOnTop(false);
+            planWin.hide();
+            planHideTimer = null;
+        }
+    }, 200);
+};
+
+const cancelHidePlanWindow = () => {
+    console.log('[WindowManager] cancelHidePlanWindow called at', Date.now());
+    if (planHideTimer) {
+        console.log('[WindowManager] Cancelling planHideTimer');
+        clearTimeout(planHideTimer);
+        planHideTimer = null;
+    } else {
+        console.log('[WindowManager] No planHideTimer to cancel');
+    }
 };
 
 // Plan tooltip window show/hide via external IPC
@@ -228,6 +340,13 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
         }
 
         if (visible) {
+            // Cancel any pending hide operations
+            if (planHideTimer) {
+                console.log('[WindowManager] Cancelling pending planHideTimer on show');
+                clearTimeout(planHideTimer);
+                planHideTimer = null;
+            }
+            
             const pos = layoutManager.calculatePlanWindowPosition();
             if (pos) {
                 console.log(`[WindowManager] Showing plan window at position:`, pos);
@@ -236,8 +355,8 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
 
                 plan.setPosition(pos.x, pos.y);
                 plan.showInactive();
-                plan.moveTop();
                 plan.setAlwaysOnTop(true);
+                plan.moveTop();
 
                 // Log bounds after setting
                 const newBounds = plan.getBounds();
@@ -246,10 +365,8 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
                 console.warn('[WindowManager] Could not calculate plan window position.');
             }
         } else {
-            console.log(`[WindowManager] Hiding plan window`);
-            plan.setAlwaysOnTop(false);
-            plan.hide();
-            console.log(`[WindowManager] Plan window hidden`);
+            // Use hidePlanWindow which has delay
+            hidePlanWindow();
         }
     });
 }
@@ -343,8 +460,8 @@ async function handleWindowVisibilityRequest(windowPool, layoutManager, movement
                 win.setBounds(position);
                 win.__lockedByButton = true;
                 win.show();
-                win.moveTop();
                 win.setAlwaysOnTop(true);
+                win.moveTop();
 
                 // Log bounds after setting
                 const newBounds = win.getBounds();
@@ -617,6 +734,34 @@ function createFeatureWindows(header, namesToCreate) {
                 console.log(`[WindowManager] Plan window created with dimensions: ${plan.getBounds().width}x${plan.getBounds().height}`);
                 break;
             }
+            
+            // screenshot viewer (popup window)
+            case 'screenshot': {
+                const screenshot = new BrowserWindow({
+                    ...commonChildOptions,
+                    width: 400,
+                    height: 300,
+                    minWidth: 250,
+                    minHeight: 150,
+                    parent: undefined,
+                    alwaysOnTop: true, // Ensure it's always on top
+                });
+                screenshot.setContentProtection(isContentProtectionOn);
+                screenshot.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+                if (process.platform === 'darwin') {
+                    screenshot.setWindowButtonVisibility(false);
+                }
+                const screenshotLoadOptions = { query: { view: 'screenshot' } };
+                screenshot.loadFile(path.join(__dirname, '../ui/app/content.html'), screenshotLoadOptions).catch(console.error);
+                windowPool.set('screenshot', screenshot);
+
+                if (!app.isPackaged) {
+                    screenshot.webContents.openDevTools({ mode: 'detach' });
+                }
+
+                console.log(`[WindowManager] Screenshot window created`);
+                break;
+            }
         }
     };
 
@@ -633,10 +778,14 @@ function createFeatureWindows(header, namesToCreate) {
 }
 
 function destroyFeatureWindows() {
-    const featureWindows = ['listen', 'ask', 'settings', 'plan'];
+    const featureWindows = ['listen', 'ask', 'settings', 'plan', 'screenshot'];
     if (settingsHideTimer) {
         clearTimeout(settingsHideTimer);
         settingsHideTimer = null;
+    }
+    if (screenshotHideTimer) {
+        clearTimeout(screenshotHideTimer);
+        screenshotHideTimer = null;
     }
     featureWindows.forEach(name => {
         const win = windowPool.get(name);
@@ -816,7 +965,12 @@ module.exports = {
     showSettingsWindow,
     hideSettingsWindow,
     cancelHideSettingsWindow,
+    showScreenshotWindow,
+    hideScreenshotWindow,
+    cancelHideScreenshotWindow,
     showPlanWindow,
+    hidePlanWindow,
+    cancelHidePlanWindow,
     openLoginPage,
     moveWindowStep,
     handleHeaderStateChanged,

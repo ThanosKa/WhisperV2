@@ -88,6 +88,12 @@ export class AskView extends LitElement {
         this._autoScroll = true; // keep scrolled to bottom while streaming
         this._scrollHandlerAttached = false;
         this._onResponseScroll = null;
+
+        // Screenshot window management
+        this._screenshotHideTimer = null;
+
+        // Track last screenshot data to detect changes
+        this._lastScreenshotData = null;
     }
 
     connectedCallback() {
@@ -160,11 +166,38 @@ export class AskView extends LitElement {
                 // If a new request started from backend (no local append), add user bubble
                 if (newState.isLoading && !wasLoading && newState.currentQuestion) {
                     if (this._appendedCurrentQuestion) {
-                        // We already appended locally for this question; reset flag to avoid duplicates
+                        // We already appended locally for this question; check if screenshot data is available
                         this._appendedCurrentQuestion = false;
+                        // Update existing message with screenshot indicator if available
+                        if (newState.screenshotData && newState.screenshotData.base64) {
+                            this.addScreenshotIndicatorToLastUserMessage(newState.screenshotData);
+                            this._lastScreenshotData = newState.screenshotData;
+                        }
                     } else {
-                        this.appendUserMessage(newState.currentQuestion);
+                        // Pass screenshot data if available
+                        this.appendUserMessage(newState.currentQuestion, newState.screenshotData);
+                        if (newState.screenshotData) {
+                            this._lastScreenshotData = newState.screenshotData;
+                        }
                     }
+                }
+
+                // Check if screenshot data arrived for an existing message
+                if (
+                    newState.screenshotData &&
+                    newState.screenshotData.base64 &&
+                    (!this._lastScreenshotData || this._lastScreenshotData.timestamp !== newState.screenshotData.timestamp)
+                ) {
+                    // Screenshot data is new, add indicator to last user message if it doesn't have one
+                    const responseContainer = this.shadowRoot?.getElementById('responseContainer');
+                    if (responseContainer) {
+                        const userMessages = responseContainer.querySelectorAll('.msg-user');
+                        const lastUserMessage = userMessages[userMessages.length - 1];
+                        if (lastUserMessage && !lastUserMessage.querySelector('.screenshot-indicator')) {
+                            this.addScreenshotIndicatorToLastUserMessage(newState.screenshotData);
+                        }
+                    }
+                    this._lastScreenshotData = newState.screenshotData;
                 }
             };
             window.api.askView.onAskStateUpdate(this._onAskStateUpdateFn);
@@ -339,6 +372,7 @@ export class AskView extends LitElement {
         this.wordCount = 0;
         this.interrupted = false;
         this._appendedCurrentQuestion = false;
+        this._lastScreenshotData = null; // Reset screenshot tracking
 
         // Clear analyze timeout
         if (this.analyzeTimeout) {
@@ -675,7 +709,7 @@ export class AskView extends LitElement {
         return inner;
     }
 
-    appendUserMessage(text) {
+    appendUserMessage(text, screenshotData = null) {
         const responseContainer = this.shadowRoot.getElementById('responseContainer');
         if (!responseContainer) return;
         const msg = document.createElement('div');
@@ -683,6 +717,11 @@ export class AskView extends LitElement {
         const inner = document.createElement('div');
         inner.className = 'msg-content msg-user-bubble';
         inner.textContent = text; // plain text to avoid injection
+
+        // Create wrapper for bubble and screenshot indicator
+        const wrapper = document.createElement('div');
+        wrapper.className = 'msg-user-wrapper';
+        wrapper.appendChild(inner);
 
         // Add copy button for user messages
         const copyButton = document.createElement('button');
@@ -698,8 +737,31 @@ export class AskView extends LitElement {
         `;
         copyButton.addEventListener('click', () => this.handleMessageCopy(inner));
 
-        msg.appendChild(inner);
+        msg.appendChild(wrapper);
         msg.appendChild(copyButton);
+
+        // Add screenshot indicator if screenshot exists
+        if (screenshotData && screenshotData.base64) {
+            const screenshotIndicator = document.createElement('div');
+            screenshotIndicator.className = 'screenshot-indicator';
+            const timestamp = new Date(screenshotData.timestamp);
+            const formattedDate = timestamp.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const formattedTime = timestamp.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+            screenshotIndicator.textContent = `Screenshot • ${formattedDate} ${formattedTime}`;
+            screenshotIndicator.dataset.screenshotBase64 = screenshotData.base64;
+            screenshotIndicator.dataset.timestamp = screenshotData.timestamp;
+
+            // Add hover handlers
+            screenshotIndicator.addEventListener('mouseenter', () => {
+                this.showScreenshotWindow(screenshotData.base64, screenshotIndicator);
+            });
+            screenshotIndicator.addEventListener('mouseleave', () => {
+                this.hideScreenshotWindow();
+            });
+
+            wrapper.appendChild(screenshotIndicator);
+        }
+
         responseContainer.appendChild(msg);
 
         requestAnimationFrame(() => {
@@ -707,6 +769,57 @@ export class AskView extends LitElement {
                 responseContainer.scrollTop = responseContainer.scrollHeight;
             } catch (_) {}
         });
+        this.adjustWindowHeightThrottled();
+    }
+
+    addScreenshotIndicatorToLastUserMessage(screenshotData) {
+        const responseContainer = this.shadowRoot.getElementById('responseContainer');
+        if (!responseContainer) return;
+
+        // Find the last user message
+        const userMessages = responseContainer.querySelectorAll('.msg-user');
+        const lastUserMessage = userMessages[userMessages.length - 1];
+        if (!lastUserMessage) return;
+
+        // Check if screenshot indicator already exists
+        if (lastUserMessage.querySelector('.screenshot-indicator')) return;
+
+        // Find or create wrapper
+        let wrapper = lastUserMessage.querySelector('.msg-user-wrapper');
+        if (!wrapper) {
+            // Create wrapper and move existing bubble into it
+            wrapper = document.createElement('div');
+            wrapper.className = 'msg-user-wrapper';
+            const bubble = lastUserMessage.querySelector('.msg-user-bubble');
+            if (bubble) {
+                // Move bubble into wrapper
+                bubble.parentNode.insertBefore(wrapper, bubble);
+                wrapper.appendChild(bubble);
+            } else {
+                // If no bubble found, just append wrapper
+                lastUserMessage.insertBefore(wrapper, lastUserMessage.firstChild);
+            }
+        }
+
+        // Create and add screenshot indicator
+        const screenshotIndicator = document.createElement('div');
+        screenshotIndicator.className = 'screenshot-indicator';
+        const timestamp = new Date(screenshotData.timestamp);
+        const formattedDate = timestamp.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const formattedTime = timestamp.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        screenshotIndicator.textContent = `Screenshot • ${formattedDate} ${formattedTime}`;
+        screenshotIndicator.dataset.screenshotBase64 = screenshotData.base64;
+        screenshotIndicator.dataset.timestamp = screenshotData.timestamp;
+
+        // Add hover handlers
+        screenshotIndicator.addEventListener('mouseenter', () => {
+            this.showScreenshotWindow(screenshotData.base64, screenshotIndicator);
+        });
+        screenshotIndicator.addEventListener('mouseleave', () => {
+            this.hideScreenshotWindow();
+        });
+
+        wrapper.appendChild(screenshotIndicator);
         this.adjustWindowHeightThrottled();
     }
 
@@ -1212,6 +1325,48 @@ export class AskView extends LitElement {
     }
 
     // Throttled wrapper to avoid excessive IPC spam (executes at most once per animation frame)
+    showScreenshotWindow(base64Data, indicatorElement) {
+        if (!window.api) return;
+
+        // Cancel any pending hide operations
+        if (this._screenshotHideTimer) {
+            clearTimeout(this._screenshotHideTimer);
+            this._screenshotHideTimer = null;
+        }
+
+        // Get indicator position for window positioning
+        const rect = indicatorElement.getBoundingClientRect();
+        const position = {
+            x: Math.round(rect.left + window.screenX),
+            y: Math.round(rect.bottom + window.screenY + 4), // 4px gap right below indicator text
+        };
+
+        // Show screenshot window via IPC
+        console.log('[AskView] showScreenshotWindow called at', Date.now());
+        window.api.askView.showScreenshotWindow(base64Data, position);
+    }
+
+    hideScreenshotWindow() {
+        if (!window.api) return;
+
+        // Cancel any pending timer (cleanup)
+        if (this._screenshotHideTimer) {
+            clearTimeout(this._screenshotHideTimer);
+            this._screenshotHideTimer = null;
+        }
+
+        // Let windowManager handle the delay - just call hide immediately
+        // windowManager will add the 200ms delay and ScreenshotView can cancel it
+        console.log('[AskView] hideScreenshotWindow called - delegating to windowManager');
+        window.api.askView.hideScreenshotWindow();
+    }
+
+    cancelHideScreenshotWindow() {
+        // Timer removed - windowManager handles all timing now
+        // This method kept for API compatibility but no longer needed
+        console.log('[AskView] cancelHideScreenshotWindow called (no-op, timer moved to windowManager)');
+    }
+
     adjustWindowHeightThrottled() {
         if (this.isThrottled) return;
 

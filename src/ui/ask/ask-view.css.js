@@ -543,6 +543,7 @@ export const styles = css`
         align-items: flex-start;
         animation: messageSlideIn 0.4s cubic-bezier(0.25, 1, 0.5, 1);
         position: relative;
+        padding-bottom: 28px;
     }
     
     /* Hover state for messages to show copy button */
@@ -554,8 +555,8 @@ export const styles = css`
     /* Per-message copy button */
     .msg-copy-button {
         position: absolute;
-        top: 8px;
-        right: 8px;
+        bottom: 0;
+        left: 0;
         background: rgba(0, 0, 0, 0.8);
         border: 1px solid rgba(255, 255, 255, 0.3);
         border-radius: 4px;
@@ -570,6 +571,13 @@ export const styles = css`
         width: 24px;
         height: 24px;
         z-index: 10;
+    }
+    
+    /* Align copy button below message, on left side for both user and assistant */
+    .response-container .msg-user .msg-copy-button,
+    .response-container .msg-assistant .msg-copy-button {
+        bottom: 0;
+        left: 0;
     }
     
     .msg-copy-button:hover {
@@ -619,21 +627,42 @@ export const styles = css`
     .response-container .msg-content { overflow: hidden; margin: 6px 0; }
     
     .response-container .msg-assistant .msg-content {
-        /* Reserve space on the right for the copy button to avoid overlap */
-        padding-right: 36px;
         box-sizing: border-box;
     }
 
+    /* User message wrapper - flex column container */
+    .response-container .msg-user-wrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+    }
+    
     /* User message bubble styling */
     .response-container .msg-user-bubble {
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(255, 255, 255, 0.15);
         border-radius: 12px;
-        /* Reserve space on the right for the copy button to avoid overlap */
-        padding: 8px 36px 8px 12px;
+        padding: 8px 12px;
         max-width: 300px;
         word-wrap: break-word;
         color: rgba(255, 255, 255, 0.95);
+    }
+    
+    /* Screenshot indicator below user messages */
+    .screenshot-indicator {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.6);
+        margin-top: 4px;
+        padding: 2px 0;
+        cursor: pointer;
+        transition: color 0.15s ease;
+        user-select: none;
+        display: block;
+        text-align: right;
+    }
+    
+    .screenshot-indicator:hover {
+        color: rgba(255, 255, 255, 0.9);
     }
     
     /* AI loading indicator */

@@ -121,6 +121,10 @@ contextBridge.exposeInMainWorld('api', {
         sendMessage: text => ipcRenderer.invoke('ask:sendQuestionFromAsk', text),
         interruptStream: () => ipcRenderer.invoke('ask:interruptStream'),
 
+        // Screenshot window management
+        showScreenshotWindow: (base64Data, position) => ipcRenderer.send('show-screenshot-window', { base64Data, position }),
+        hideScreenshotWindow: () => ipcRenderer.send('hide-screenshot-window'),
+
         // Listeners
         onAskStateUpdate: callback => ipcRenderer.on('ask:stateUpdate', callback),
         removeOnAskStateUpdate: callback => ipcRenderer.removeListener('ask:stateUpdate', callback),
@@ -221,6 +225,24 @@ contextBridge.exposeInMainWorld('api', {
         removeOnSettingsUpdated: callback => ipcRenderer.removeListener('settings-updated', callback),
         onPresetsUpdated: callback => ipcRenderer.on('presets-updated', callback),
         removeOnPresetsUpdated: callback => ipcRenderer.removeListener('presets-updated', callback),
+    },
+
+    // src/ui/screenshot/ScreenshotView.js
+    screenshotView: {
+        // Screenshot window management
+        cancelHideScreenshotWindow: () => ipcRenderer.send('cancel-hide-screenshot-window'),
+        hideScreenshotWindow: () => ipcRenderer.send('hide-screenshot-window'),
+
+        // Listeners
+        onScreenshotData: callback => ipcRenderer.on('screenshot:data', callback),
+        removeOnScreenshotData: callback => ipcRenderer.removeListener('screenshot:data', callback),
+    },
+
+    // src/ui/plan/PlanView.js
+    planView: {
+        // Plan window management
+        cancelHidePlanWindow: () => ipcRenderer.send('cancel-hide-plan-window'),
+        hidePlanWindow: () => ipcRenderer.send('hide-plan-window'),
     },
 
     // src/ui/app/content.html inline scripts

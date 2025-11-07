@@ -578,4 +578,3 @@ Desktop Update Checklist:
 | 2025-04-01 | v1.2.0  | Desktop Team | Cross-platform improvements                                           |
 | 2025-03-01 | v1.1.0  | Desktop Team | Enhanced AI context processing                                        |
 | 2025-01-15 | v1.0.0  | Desktop Team | Initial desktop app release                                           |
-

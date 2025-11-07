@@ -168,17 +168,23 @@ export class PlanView extends LitElement {
     }
 
     handleMouseEnter() {
-        // Keep the tooltip visible when hovering over it
-        if (this.isVisible) {
-            clearTimeout(this._hideTimeout);
+        console.log('[PlanView] handleMouseEnter fired at', Date.now());
+        if (window.api) {
+            console.log('[PlanView] Calling cancelHidePlanWindow');
+            window.api.planView.cancelHidePlanWindow();
+        } else {
+            console.warn('[PlanView] window.api not available');
         }
     }
 
     handleMouseLeave() {
-        // Hide after a small delay to allow moving between elements
-        this._hideTimeout = setTimeout(() => {
-            this.hide();
-        }, 100);
+        console.log('[PlanView] handleMouseLeave fired at', Date.now());
+        if (window.api) {
+            console.log('[PlanView] Calling hidePlanWindow');
+            window.api.planView.hidePlanWindow();
+        } else {
+            console.warn('[PlanView] window.api not available');
+        }
     }
 
     _getPrimaryText() {

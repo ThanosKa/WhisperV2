@@ -184,6 +184,7 @@ class AskService {
             currentResponse: '',
             showTextInput: true,
             interrupted: false,
+            screenshotData: null, // Store screenshot data for current message
         };
         this._forceDefaultProfileOnce = false;
         console.log('[AskService] Service instance created.');
@@ -442,8 +443,9 @@ class AskService {
                 ...this.state,
                 isLoading: false,
                 isStreaming: false,
-                showTextInput: false,
+                showTextInput: true,
                 interrupted: true,
+                screenshotData: null, // Clear screenshot on interrupt
             };
             this._broadcastState();
         }
@@ -503,6 +505,7 @@ class AskService {
             currentResponse: '',
             showTextInput: true,
             interrupted: false,
+            screenshotData: null,
         };
         this._broadcastState();
 
@@ -550,6 +553,7 @@ class AskService {
             currentResponse: '',
             showTextInput: false,
             interrupted: false,
+            screenshotData: null, // Reset screenshot data, will be set after capture
         };
         this._broadcastState();
 
@@ -605,6 +609,16 @@ class AskService {
                 screenshotBase64 = screenshotResult.success ? screenshotResult.base64 : null;
             }
             const screenshotTaken = Boolean(screenshotBase64);
+            
+            // Store screenshot data in state for frontend display
+            const screenshotData = screenshotBase64 ? {
+                base64: screenshotBase64,
+                timestamp: Date.now(),
+            } : null;
+            
+            // Update state with screenshot data
+            this.state.screenshotData = screenshotData;
+            this._broadcastState();
 
             const conversationHistory = this._formatConversationForPrompt(conversationHistoryRaw);
             console.log(

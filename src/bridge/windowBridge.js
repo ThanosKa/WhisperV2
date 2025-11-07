@@ -14,8 +14,14 @@ module.exports = {
         ipcMain.on('show-settings-window', () => windowManager.showSettingsWindow());
         ipcMain.on('hide-settings-window', () => windowManager.hideSettingsWindow());
         ipcMain.on('cancel-hide-settings-window', () => windowManager.cancelHideSettingsWindow());
+        // Screenshot window show/hide
+        ipcMain.on('show-screenshot-window', (event, { base64Data, position }) => windowManager.showScreenshotWindow(base64Data, position));
+        ipcMain.on('hide-screenshot-window', () => windowManager.hideScreenshotWindow());
+        ipcMain.on('cancel-hide-screenshot-window', () => windowManager.cancelHideScreenshotWindow());
         // Plan tooltip show/hide
         ipcMain.on('window:showPlanWindow', (event, { visible }) => windowManager.showPlanWindow(visible));
+        ipcMain.on('hide-plan-window', () => windowManager.hidePlanWindow());
+        ipcMain.on('cancel-hide-plan-window', () => windowManager.cancelHidePlanWindow());
 
         ipcMain.handle('open-login-page', () => windowManager.openLoginPage());
         ipcMain.handle('open-personalize-page', () => windowManager.openLoginPage());

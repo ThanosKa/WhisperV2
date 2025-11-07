@@ -3,11 +3,11 @@
 ## Header
 
 Title: WhisperV2 Desktop App Agent Manifest
-Version: v2.0.0
+Version: 0.2.5
 Author: Desktop Team <desktop@whisper.com>
 Maintainer: Electron Team <electron@whisper.com>
 Created: 2025-01-15
-Last Updated: 2025-10-14
+Last Updated: 2025-01-27
 
 ## Overview
 
@@ -22,29 +22,99 @@ ENV:
 - NODE_ENV (development/production)
 - OPENAI_API_KEY (optional)
 - GEMINI_API_KEY (optional)
-- WHISPER_WEB_URL (for backend sync)
-- DATABASE_PATH (SQLite location)
+- whisper_API_URL (default: http://localhost:9001)
+- whisper_API_PORT (auto-allocated if not set)
+- whisper_WEB_URL (default: http://localhost:3000)
+- whisper_WEB_PORT (auto-allocated if not set)
+- STT_RELAY_URL (default: wss://websocket-production-395f.up.railway.app)
+- whisper_API_TIMEOUT (default: 10000)
+- whisper_ENABLE_JWT (default: false)
+- whisper_CACHE_TIMEOUT (default: 300000)
+- whisper_LOG_LEVEL (default: info, options: debug/info/warn/error)
+- whisper_DEBUG (default: false)
+- DATABASE_PATH (SQLite file location, platform-specific)
 - AUDIO_DEVICE_ID (optional microphone selection)
   Dependencies:
-- Electron 30.x.x
-- Better SQLite3 9.x.x
-- Sharp 0.34.x (image processing)
-- WS 8.x.x (WebSocket communication)
+- Node.js 20.x.x (required)
+- Electron 30.5.1
+- Better SQLite3 9.6.0
+- Sharp 0.34.2 (image processing)
+- WS 8.18.0 (WebSocket communication)
+- ESBuild 0.25.5 (renderer bundling)
+- Jest 29.7.0 (testing)
+- Playwright 1.49.0 (E2E testing)
+- Electron Builder 26.0.12 (packaging)
+- Python 3.8+ (for local LLMs, optional)
+- SQLite 3.x
+- Build Tools for Visual Studio (Windows only)
   Security:
 - Local database storage (SQLite)
 - Secure IPC communication
 - Audio permission management
+- Session-based authentication via web app backend
+
+## Code Style and Conventions
+
+Language Standards:
+
+- JavaScript: ES6+ (ECMAScript 2018+)
+- Node.js: 20.x.x
+- Electron: 30.5.1
+
+Formatting Rules (Prettier):
+
+- Indentation: 4 spaces (tabWidth: 4)
+- Quotes: Single quotes for strings
+- Semicolons: Required
+- Print Width: 150 characters per line
+- Trailing Commas: ES5 style
+- Arrow Parens: Avoid parentheses when possible
+- End of Line: LF (Unix-style)
+
+Linting Rules:
+
+- Root: ESLint checks .ts, .tsx, .js files
+- Run linting: `npm run lint` (root)
+
+Naming Conventions:
+
+- Components: PascalCase (e.g., `ListenView.js`, `AskView.js`)
+- Files: camelCase for utilities, PascalCase for components
+- Variables/Functions: camelCase
+- Constants: UPPER_SNAKE_CASE
+
+Code Organization:
+
+- UI Components: `src/ui/` directory
+- Services: Feature-based organization in `src/features/`
+- Bridges: `src/bridge/` for IPC communication
+- Window Management: `src/window/` for window lifecycle
+- Build Output: `public/build/` for renderer bundles
+
+Commit Messages:
+
+- Format: `<type>(<scope>): <short summary>`
+- Types: feat, fix, docs, style, refactor, test, chore
+- Scope: Optional component/feature name
+- Example: `feat(listen): add real-time transcription`
+
+Development Guidelines:
+
+- Use Windows PowerShell commands (not Unix/Mac commands)
+- Write complete implementations (no placeholder code)
+- Keep responses concise and actionable
+- Use TODO lists for complex multi-step tasks
 
 ## Capabilities
 
 Tools:
 
-- Build System: ESBuild for renderer bundling
-- Testing: Jest for service unit tests
+- Build System: ESBuild 0.25.5 for renderer bundling
+- Testing: Jest 29.7.0 for unit/integration tests, Playwright 1.49.0 for E2E tests
 - Linting: ESLint for code quality
 - Debugging: Electron DevTools, Chrome Inspector
 - Profiling: Electron performance monitoring
-- Packaging: Electron Builder for distribution
+- Packaging: Electron Builder 26.0.12 for distribution
 
 Functions:
 
@@ -91,94 +161,158 @@ Paths:
 - Bridges: src/bridge/
 - Window Management: src/window/
 - Build Output: public/build/
+- Test Directories: tests/unit/, tests/integration/, tests/e2e/, tests/setup/, tests/mocks/
+- Database: User data directory (platform-specific)
 
 Integration:
 
-- Web App Backend: IPC communication via WebSocket/EventEmitter
+- Web App Backend: IPC communication via EventEmitter (eventBridge)
 - Database: SQLite with repository pattern (src/features/common/repositories/)
-- AI Clients: Modular LLM client (src/features/common/ai/llmClient.js)
+- AI Clients: Server-side LLM client (src/features/common/ai/llmClient.js)
 - Window System: Multi-window management (src/window/windowManager.js)
-- IPC Bridges: Internal and window bridges for secure communication
+- IPC Bridges: Internal, window, and feature bridges for secure communication
+
+### Build Configuration
+
+ESBuild (build.js):
+
+- Bundle: true
+- Platform: browser
+- Format: ESM
+- Entry Points: src/ui/app/HeaderController.js, src/ui/app/WhisperApp.js
+- Output: public/build/header.js, public/build/content.js
+- External: electron
+- Sourcemaps: enabled
+
+Electron Builder (electron-builder.yml):
+
+- appId: com.whisper.app
+- productName: Whisper
+- Files: src/**/\*, whisper_web/backend_node/dist/**/_, public/build/\*\*/_
+- Extra Resources: whisper_web/out → resources/out
+- ASAR Unpack: SystemAudioDump, sharp, @img modules
+- Windows: NSIS installer, x64 arch, icon: src/ui/assets/wlogo.ico
+- macOS: DMG/ZIP targets, universal arch, category: utilities, entitlements.plist
+
+Jest Configuration (jest.config.js):
+
+- Test Environment: Node.js
+- Test Match: tests/unit/**/\*.test.js, tests/integration/**/\*.test.js
+- Coverage: src/features/**/\*.js, src/bridge/**/\*.js (excludes repositories and UI)
+- Setup: tests/setup/jest.setup.js
+- Timeout: 10000ms
+
+Playwright Configuration (playwright.config.js):
+
+- Test Directory: tests/e2e/
+- Timeout: 60000ms
+- Workers: 1 (not fully parallel)
+- Retries: 2 in CI, 0 locally
+- Reporter: HTML and list
+- Trace: on-first-retry
+- Screenshot: only-on-failure
+- Video: retain-on-failure
 
 Testing:
 
-- Unit Tests: Service layer testing with mocked dependencies
-- Integration Tests: IPC communication and window management
-- Audio Tests: Microphone access and transcription accuracy
-- AI Tests: LLM client responses and error handling
-- Performance Tests: Memory usage and response times
+- Unit Tests: npm test (Jest - tests/unit/\*_/_.test.js)
+- Integration Tests: npm run test:integration (Jest - tests/integration/\*_/_.test.js)
+- E2E Tests: npm run test:e2e (Playwright - tests/e2e/)
+- Test Coverage: npm run test:coverage (Jest coverage reports)
+- Test Setup: tests/setup/jest.setup.js, tests/setup/electronHelper.js
+- Test Mocks: tests/mocks/ (database.mock.js, llmClient.mock.js)
 
 ## Usage
 
-### Development Workflow
+### Development Setup
 
-```bash
-# Start development mode
-npm start
+```powershell
+# Full project setup (recommended)
+npm run setup
 
-# Build renderer only
-npm run build:renderer
-
-# Watch mode for UI changes
-npm run watch:renderer
+# Individual component development
+npm run build:renderer    # Build desktop UI
+npm start                 # Start desktop app (builds renderer first)
+npm run watch:renderer    # Watch mode for UI changes
 ```
 
-### Service Development
+### Testing Commands
 
-```javascript
-// Example: Testing Listen Service
-const listenService = require('./features/listen/listenService');
-// Initialize and test STT functionality
-await listenService.initializeSTT();
+```powershell
+# Run all tests
+npm test                  # Jest unit and integration tests
 
-// Example: Testing Ask Service
-const askService = require('./features/ask/askService');
-// Test AI query with context
-const response = await askService.processQuery('What was discussed in the meeting?');
+# Jest test commands
+npm run test:watch        # Watch mode
+npm run test:coverage     # Coverage reports
+npm run test:unit         # Unit tests only
+npm run test:integration  # Integration tests only
+
+# Playwright E2E tests
+npm run test:e2e          # Run E2E tests
+npm run test:e2e:headed   # Run with browser UI
+npm run test:e2e:ui       # Playwright UI mode
+npm run test:e2e:debug    # Debug mode (Windows: $env:PWDEBUG=1; npm run test:e2e)
 ```
 
-### Window Management
+### Build Commands
 
-```javascript
-// Access window pool
-const { windowPool } = require('./window/windowManager');
-const mainWindow = windowPool.get('main');
+```powershell
+# Development builds
+npm run build:renderer    # Build desktop UI only
+npm run watch:renderer    # Watch desktop UI changes
+npm start                 # Full development build
 
-// IPC communication
-const internalBridge = require('./bridge/internalBridge');
-internalBridge.send('update-status', { status: 'ready' });
+# Production builds
+npm run build             # Full production build with electron-builder
+npm run build:win         # Windows 64-bit build
+npm run package           # Create distributable packages (--dir)
+npm run make              # Create platform-specific installers
+npm run publish           # Publish to distribution channels (GitHub)
 ```
 
-### Database Operations
+### Cross-Platform Builds
 
-```javascript
-// Repository pattern usage
-const sessionRepo = require('./features/common/repositories/session');
-const sessions = await sessionRepo.getRecentSessions();
+```powershell
+# Windows (64-bit)
+npm run build:win
 
-// Migration management
-const migrationService = require('./features/common/services/migrationService');
-await migrationService.runMigrations();
+# macOS (Intel/Apple Silicon - Universal)
+npm run build
+# Creates DMG and ZIP targets with universal architecture
+
+# Build Configuration
+# See electron-builder.yml for platform-specific settings:
+# - Windows: NSIS installer, x64 arch
+# - macOS: DMG/ZIP, universal arch, entitlements.plist
+# - Publish: GitHub releases (draft)
 ```
 
-### Debugging Commands
+### Environment Management
 
-```bash
-# Enable debug logging
-export DEBUG=whisper:*
+```powershell
+# Set API keys (Windows PowerShell)
+$env:OPENAI_API_KEY="your_key_here"
+$env:GEMINI_API_KEY="your_key_here"
 
-# Test audio devices
-const { getAudioDevices } = require('./features/listen/stt/audioCore');
-const devices = await getAudioDevices();
+# Configure API and web URLs
+$env:whisper_API_URL="http://localhost:9001"
+$env:whisper_WEB_URL="http://localhost:3000"
+$env:STT_RELAY_URL="wss://your-relay-url.com"
 
-# Validate API keys
-const authService = require('./features/common/services/authService');
-const isValid = await authService.validateAPIKeys();
+# Configure advanced settings
+$env:whisper_API_TIMEOUT="10000"
+$env:whisper_ENABLE_JWT="true"
+$env:whisper_LOG_LEVEL="debug"
+$env:whisper_DEBUG="true"
+
+# Database location (optional, uses platform-specific default if not set)
+$env:DATABASE_PATH=".\data\whisper.db"
 ```
 
 ### Troubleshooting
 
-Common Desktop Issues:
+Common Issues:
 
 - Audio not working: Check microphone permissions and device selection
 - AI responses failing: Validate API keys and network connectivity
@@ -200,6 +334,23 @@ Build Issues:
 - Dependencies missing: Run `npm install` and check node-gyp
 - Bundle size large: Optimize imports and tree-shaking
 
+Debug Commands:
+
+```powershell
+# Check Node version (Windows PowerShell)
+node --version
+
+# Validate dependencies
+npm ls --depth=0
+
+# Check build outputs
+Get-ChildItem public\build\
+
+# Enable debug logging
+$env:whisper_DEBUG="true"
+$env:whisper_LOG_LEVEL="debug"
+```
+
 ## Service Architecture
 
 ### Listen Service (Real-time Audio Processing)
@@ -217,12 +368,14 @@ Key Components:
 // STT Service integration
 this.sttService = new SttService();
 this.sttService.setCallbacks({
-    onTranscriptionComplete: (speaker, text) => this.handleTranscription(speaker, text),
+    onTranscriptionComplete: (speaker, text) => this.handleTranscriptionComplete(speaker, text),
+    onStatusUpdate: status => this.sendToRenderer('update-status', status),
 });
 
 // Summary Service integration
 this.summaryService.setCallbacks({
     onAnalysisComplete: data => this.handleAnalysis(data),
+    onStatusUpdate: status => this.sendToRenderer('update-status', status),
 });
 ```
 
@@ -232,27 +385,25 @@ Responsibilities:
 
 - Screen capture and OCR processing
 - Audio context retrieval and analysis
-- AI query processing with multiple providers
+- AI query processing via server-side LLM client
 - Response formatting and delivery
 
 Key Components:
 
 ```javascript
-// LLM Client integration
+// LLM Client integration (server-side)
 const llmClient = require('../common/ai/llmClient');
-const response = await llmClient.query({
-    provider: 'openai',
-    model: 'gpt-4',
-    prompt: builtPrompt,
-    context: { screenshots, audioHistory },
-});
+const response = await llmClient.stream(payload, { signal });
+
+// Screen capture
+const screenshot = await captureScreenshot();
 ```
 
 ### Settings Service (Configuration Management)
 
 Responsibilities:
 
-- Provider API key management
+- Provider API key management (server-side)
 - Model selection and preferences
 - UI customization settings
 - Shortcut configuration
@@ -260,9 +411,6 @@ Responsibilities:
 Key Components:
 
 ```javascript
-// Secure key storage
-// Legacy keychain integration removed in v2.1. Whisper now stores configuration in local SQLite only.
-
 // Settings persistence
 const settingsRepo = require('./repositories');
 await settingsRepo.saveSettings(updatedSettings);
@@ -272,10 +420,11 @@ await settingsRepo.saveSettings(updatedSettings);
 
 ### Window Types
 
-- **Main Window**: Primary UI with header controls and navigation
-- **Listen Window**: Audio transcription interface and controls
-- **Ask Window**: AI query input and response display
-- **Settings Window**: Configuration and preferences management
+- **header**: Primary UI with header controls and navigation
+- **listen**: Audio transcription interface and controls
+- **ask**: AI query input and response display
+- **settings**: Configuration and preferences management
+- **plan**: Planning and organization interface
 
 ### IPC Communication
 
@@ -321,16 +470,13 @@ describe('IPC Bridges', () => {
 });
 ```
 
-### Audio Testing
+### E2E Testing
 
 ```javascript
-// Example: Testing audio capture
-describe('Audio Core', () => {
-    test('should list available devices', async () => {
-        const devices = await getAudioDevices();
-        expect(Array.isArray(devices)).toBe(true);
-        expect(devices.length).toBeGreaterThan(0);
-    });
+// Example: Testing window interactions
+test('should open listen window', async ({ page }) => {
+    await page.click('[data-testid="listen-button"]');
+    await expect(page.locator('[data-testid="listen-window"]')).toBeVisible();
 });
 ```
 
@@ -338,7 +484,7 @@ describe('Audio Core', () => {
 
 ### Development Builds
 
-```bash
+```powershell
 # Quick rebuild for development
 npm run build:renderer
 
@@ -348,7 +494,7 @@ npm run start
 
 ### Production Builds
 
-```bash
+```powershell
 # Package for current platform
 npm run package
 
@@ -362,28 +508,28 @@ npm run build      # macOS/Linux
 
 ### Build Configuration
 
-```javascript
-// electron-builder.yml key settings
-appId: com.whisper.desktop
+```yaml
+# electron-builder.yml key settings
+appId: com.whisper.app
 productName: Whisper
-directories:
-  output: dist/
 files:
-  - src/
-  - public/
-  - node_modules/
+    - src/**/*
+    - whisper_web/backend_node/dist/**/*
+    - public/build/**/*
 mac:
-  category: public.app-category.productivity
-  target: dmg
+    category: public.app-category.utilities
+    target: [dmg, zip]
+    arch: universal
 win:
-  target: nsis
+    target: nsis
+    arch: x64
 ```
 
 ## Maintenance
 
 ### Version Control
 
-- Follow semantic versioning aligned with root project
+- Follow semantic versioning aligned with root project (currently 0.2.5)
 - Tag desktop-specific releases when UI or Electron changes occur
 - Maintain separate changelog for desktop-specific features
 
@@ -391,13 +537,13 @@ win:
 
 Desktop Update Checklist:
 
-- [ ] Test all window types open/close correctly
+- [ ] Test all window types open/close correctly (header, listen, ask, settings, plan)
 - [ ] Verify IPC communication works across all services
 - [ ] Test audio capture and processing on target platforms
-- [ ] Validate AI provider integrations
+- [ ] Validate AI provider integrations via server-side LLM client
 - [ ] Check database migrations work correctly
 - [ ] Test keyboard shortcuts functionality
-- [ ] Verify secure key storage operations
+- [ ] Verify secure key storage operations (server-side)
 - [ ] Test cross-platform builds succeed
 - [ ] Validate memory usage and performance metrics
 
@@ -411,7 +557,7 @@ Desktop Update Checklist:
 
 ### Security Updates
 
-- API key rotation in secure storage
+- API key rotation (server-side management)
 - Electron security updates and vulnerability patches
 - Dependency security scanning
 - Code signing certificate renewal
@@ -419,15 +565,16 @@ Desktop Update Checklist:
 
 ## Update History
 
-| Date       | Version | Author       | Description                                      |
-| ---------- | ------- | ------------ | ------------------------------------------------ |
-| 2025-10-14 | v2.0.0  | Desktop Team | Major refactor: modular services, improved IPC   |
-| 2025-09-15 | v1.8.0  | Desktop Team | Local LLM integration, enhanced audio processing |
-| 2025-08-01 | v1.7.0  | Desktop Team | Gemini API support, improved error handling      |
-| 2025-07-15 | v1.6.0  | Desktop Team | Windows support, shortcut customization          |
-| 2025-07-01 | v1.5.0  | Desktop Team | Liquid Glass UI, improved AEC                    |
-| 2025-06-15 | v1.4.0  | Desktop Team | Claude integration, enhanced meeting features    |
-| 2025-05-01 | v1.3.0  | Desktop Team | Full service modularization                      |
-| 2025-04-01 | v1.2.0  | Desktop Team | Cross-platform improvements                      |
-| 2025-03-01 | v1.1.0  | Desktop Team | Enhanced AI context processing                   |
-| 2025-01-15 | v1.0.0  | Desktop Team | Initial desktop app release                      |
+| Date       | Version | Author       | Description                                                           |
+| ---------- | ------- | ------------ | --------------------------------------------------------------------- |
+| 2025-01-27 | 0.2.5   | Desktop Team | Updated AGENTS.md: sync versions, fix window names, PowerShell syntax |
+| 2025-10-14 | v2.0.0  | Desktop Team | Major refactor: modular services, improved IPC                        |
+| 2025-09-15 | v1.8.0  | Desktop Team | Local LLM integration, enhanced audio processing                      |
+| 2025-08-01 | v1.7.0  | Desktop Team | Gemini API support, improved error handling                           |
+| 2025-07-15 | v1.6.0  | Desktop Team | Windows support, shortcut customization                               |
+| 2025-07-01 | v1.5.0  | Desktop Team | Liquid Glass UI, improved AEC                                         |
+| 2025-06-15 | v1.4.0  | Desktop Team | Claude integration, enhanced meeting features                         |
+| 2025-05-01 | v1.3.0  | Desktop Team | Full service modularization                                           |
+| 2025-04-01 | v1.2.0  | Desktop Team | Cross-platform improvements                                           |
+| 2025-03-01 | v1.1.0  | Desktop Team | Enhanced AI context processing                                        |
+| 2025-01-15 | v1.0.0  | Desktop Team | Initial desktop app release                                           |

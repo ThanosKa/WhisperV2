@@ -60,7 +60,7 @@ export class MainHeader extends LitElement {
     }
 
     async handleMouseDown(e) {
-        // Draggable behavior disabled
+        // Draggable behavior handled by drag-handle component
         return;
     }
 

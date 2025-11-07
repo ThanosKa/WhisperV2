@@ -85,16 +85,16 @@ const showScreenshotWindow = (base64Data, position) => {
         }
         return;
     }
-    
+
     // Cancel any pending hide operations
     if (screenshotHideTimer) {
         clearTimeout(screenshotHideTimer);
         screenshotHideTimer = null;
     }
-    
+
     // Send screenshot data to window
     screenshotWin.webContents.send('screenshot:data', base64Data);
-    
+
     // Position window near indicator
     if (position) {
         screenshotWin.setBounds({
@@ -104,7 +104,7 @@ const showScreenshotWindow = (base64Data, position) => {
             height: 300,
         });
     }
-    
+
     screenshotWin.show();
     screenshotWin.setAlwaysOnTop(true);
     screenshotWin.moveTop();
@@ -113,7 +113,7 @@ const showScreenshotWindow = (base64Data, position) => {
 const hideScreenshotWindow = () => {
     const screenshotWin = windowPool.get('screenshot');
     if (!screenshotWin || screenshotWin.isDestroyed()) return;
-    
+
     // Hide after a delay
     if (screenshotHideTimer) {
         clearTimeout(screenshotHideTimer);
@@ -137,9 +137,9 @@ const cancelHideScreenshotWindow = () => {
 const hidePlanWindow = () => {
     const planWin = windowPool.get('plan');
     if (!planWin || planWin.isDestroyed()) return;
-    
+
     console.log('[WindowManager] hidePlanWindow called at', Date.now());
-    
+
     // Hide after a delay
     if (planHideTimer) {
         console.log('[WindowManager] Clearing existing planHideTimer');
@@ -347,7 +347,7 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
                 clearTimeout(planHideTimer);
                 planHideTimer = null;
             }
-            
+
             const pos = layoutManager.calculatePlanWindowPosition();
             if (pos) {
                 console.log(`[WindowManager] Showing plan window at position:`, pos);
@@ -752,7 +752,7 @@ function createFeatureWindows(header, namesToCreate) {
                 console.log(`[WindowManager] Plan window created with dimensions: ${plan.getBounds().width}x${plan.getBounds().height}`);
                 break;
             }
-            
+
             // screenshot viewer (popup window)
             case 'screenshot': {
                 const screenshot = new BrowserWindow({

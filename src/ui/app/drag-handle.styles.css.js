@@ -1,6 +1,6 @@
 import { css } from '../assets/lit-core-2.7.4.min.js';
 
-export const authRefreshButtonStyles = css`
+export const dragHandleStyles = css`
     :host {
         display: flex;
         align-items: center;
@@ -16,16 +16,16 @@ export const authRefreshButtonStyles = css`
         user-select: none;
     }
 
-    /* Auth Refresh Button */
-    .auth-refresh-button {
-        -webkit-app-region: no-drag;
+    /* Drag Handle Button */
+    .drag-handle-button {
+        -webkit-app-region: drag;
         width: 24px;
         height: 24px;
         padding: 0;
         background: transparent;
         border: none;
         border-radius: 50%;
-        cursor: pointer;
+        cursor: move;
         position: relative;
         display: flex;
         align-items: center;
@@ -34,11 +34,11 @@ export const authRefreshButtonStyles = css`
         transition: background 0.15s ease;
     }
 
-    .auth-refresh-button:hover {
+    .drag-handle-button:hover {
         background: transparent;
     }
 
-    .auth-refresh-button::before {
+    .drag-handle-button::before {
         content: '';
         position: absolute;
         top: 0;
@@ -51,11 +51,11 @@ export const authRefreshButtonStyles = css`
         transition: background 0.15s ease;
     }
 
-    .auth-refresh-button:hover::before {
+    .drag-handle-button:hover::before {
         background: rgba(11, 11, 11, 0.75);
     }
 
-    .auth-refresh-icon {
+    .lucide-move {
         width: 16px;
         height: 16px;
         color: #fff;
@@ -66,20 +66,21 @@ export const authRefreshButtonStyles = css`
     }
 
     /* ────────────────[ GLASS BYPASS ]─────────────── */
-    :host-context(body.has-glass) .auth-refresh-button {
+    :host-context(body.has-glass) .drag-handle-button {
         background: transparent !important;
         filter: none !important;
         box-shadow: none !important;
         backdrop-filter: none !important;
     }
 
-    :host-context(body.has-glass) .auth-refresh-button::before {
+    :host-context(body.has-glass) .drag-handle-button::before {
         display: none !important;
     }
 
-    :host-context(body.has-glass) .auth-refresh-button:hover::before {
+    :host-context(body.has-glass) .drag-handle-button:hover::before {
         background: transparent !important;
     }
+
     :host-context(body.has-glass) * {
         animation: none !important;
         transition: none !important;

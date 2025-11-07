@@ -1,6 +1,7 @@
 import './MainHeader.js';
 import './AuthHeader.js';
 import './AuthRefreshButton.js';
+import './DragHandle.js';
 import './PermissionHeader.js';
 // import './WelcomeHeader.js';
 
@@ -44,6 +45,7 @@ class HeaderTransitionManager {
             this.permissionHeader = null;
             this.authHeader = null;
             this.authRefreshButton = null;
+            this.dragHandle = null;
 
             // Create new header element
             if (type === 'auth') {
@@ -85,6 +87,9 @@ class HeaderTransitionManager {
                 this.mainHeader = document.createElement('main-header');
                 this.headerContainer.appendChild(this.mainHeader);
                 this.mainHeader.startSlideInAnimation?.();
+
+                this.dragHandle = document.createElement('drag-handle');
+                this.headerContainer.appendChild(this.dragHandle);
             }
 
             this.currentHeaderType = type;

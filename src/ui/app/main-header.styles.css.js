@@ -316,6 +316,7 @@ export const mainHeaderStyles = css`
         background: rgba(128, 128, 128, 0.2);
     }
     .left-label {
+        -webkit-app-region: no-drag;
         background-color: rgba(59, 130, 246, 0.5);
         color: rgb(255, 255, 255);
         font-size: 13px;

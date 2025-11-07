@@ -773,6 +773,9 @@ export class AskView extends LitElement {
     }
 
     addScreenshotIndicatorToLastUserMessage(screenshotData) {
+        // Only render if screenshot data exists and has base64
+        if (!screenshotData || !screenshotData.base64) return;
+
         const responseContainer = this.shadowRoot.getElementById('responseContainer');
         if (!responseContainer) return;
 

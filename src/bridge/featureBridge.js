@@ -48,6 +48,11 @@ module.exports = {
         // User/Auth
         ipcMain.handle('get-current-user', () => authService.getCurrentUser());
         ipcMain.handle('start-webapp-auth', async () => await authService.startWebappAuthFlow());
+        ipcMain.handle('reset-auth-state', async () => {
+            // Reset auth state - this is a no-op on the backend
+            // The actual state reset happens in the renderer
+            return { success: true };
+        });
 
         // New logout handler
         ipcMain.handle('sign-out', async () => {

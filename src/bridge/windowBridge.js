@@ -45,6 +45,16 @@ module.exports = {
 
         // Force show permission onboarding
         ipcMain.handle('header:force-show-permission', () => windowManager.forceShowPermissionOnboarding());
+
+        // Auth events
+        ipcMain.on('auth-started', event => {
+            const { BrowserWindow } = require('electron');
+            BrowserWindow.getAllWindows().forEach(win => {
+                if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
+                    win.webContents.send('auth-started');
+                }
+            });
+        });
     },
 
     notifyFocusChange(win, isFocused) {

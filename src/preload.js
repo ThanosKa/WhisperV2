@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('api', {
         // User & Auth
         getCurrentUser: () => ipcRenderer.invoke('get-current-user'),
         startWebappAuth: () => ipcRenderer.invoke('start-webapp-auth'),
+        resetAuthState: () => ipcRenderer.invoke('reset-auth-state'),
         // firebaseLogout: () => ipcRenderer.invoke('firebase-logout'),  // Removed: Firebase deprecated
 
         // App Control
@@ -50,6 +51,9 @@ contextBridge.exposeInMainWorld('api', {
         removeOnUserStateChanged: callback => ipcRenderer.removeListener('user-state-changed', callback),
         onAuthFailed: callback => ipcRenderer.on('auth-failed', callback),
         removeOnAuthFailed: callback => ipcRenderer.removeListener('auth-failed', callback),
+        onAuthStarted: callback => ipcRenderer.on('auth-started', callback),
+        removeOnAuthStarted: callback => ipcRenderer.removeListener('auth-started', callback),
+        sendAuthStarted: () => ipcRenderer.send('auth-started'),
         // Removed ApiKey header force-show in SaaS mode
 
         // Force show onboarding (permission header) commands from main

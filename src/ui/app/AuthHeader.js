@@ -25,6 +25,9 @@ export class AuthHeader extends LitElement {
     async startLogin({ ignoreDrag = false } = {}) {
         if ((!ignoreDrag && this.wasJustDragged) || this.isLoggingIn) return;
         this.isLoggingIn = true;
+        if (window.api?.headerController) {
+            window.api.headerController.sendAuthStarted?.();
+        }
         try {
             if (window.api?.common) {
                 await window.api.common.startWebappAuth();

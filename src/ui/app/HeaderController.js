@@ -1,5 +1,6 @@
 import './MainHeader.js';
 import './AuthHeader.js';
+import './AuthRefreshButton.js';
 import './PermissionHeader.js';
 // import './WelcomeHeader.js';
 
@@ -42,12 +43,17 @@ class HeaderTransitionManager {
             this.mainHeader = null;
             this.permissionHeader = null;
             this.authHeader = null;
+            this.authRefreshButton = null;
 
             // Create new header element
             if (type === 'auth') {
                 this.authHeader = document.createElement('auth-header');
                 this.headerContainer.appendChild(this.authHeader);
                 this.authHeader.startSlideInAnimation?.();
+
+                this.authRefreshButton = document.createElement('auth-refresh-button');
+                this.headerContainer.appendChild(this.authRefreshButton);
+
                 console.log('[HeaderController] ensureHeader: Header of type:', type, 'created.');
             } else if (type === 'permission') {
                 this.permissionHeader = document.createElement('permission-setup');
@@ -104,6 +110,13 @@ class HeaderTransitionManager {
 
             window.api.headerController.onAuthFailed((event, { message }) => {
                 console.error('[HeaderController] Received auth failure from main process:', message);
+            });
+
+            window.api.headerController.onAuthStarted(() => {
+                if (this.authRefreshButton) {
+                    this.authRefreshButton.isLoggingIn = true;
+                    this.authRefreshButton.requestUpdate();
+                }
             });
 
             // Allow main process to force-show the permission onboarding
@@ -208,6 +221,9 @@ class HeaderTransitionManager {
         if (!this.authHeader) {
             this.authHeader = this.headerContainer.querySelector('auth-header');
         }
+        if (!this.authRefreshButton) {
+            this.authRefreshButton = this.headerContainer.querySelector('auth-refresh-button');
+        }
 
         if (startLogin && this.authHeader?.startLogin) {
             try {
@@ -218,6 +234,10 @@ class HeaderTransitionManager {
                 console.warn('[HeaderController] Auth header updateComplete rejected:', error);
             }
             this.authHeader.startLogin({ ignoreDrag: true });
+            if (this.authRefreshButton) {
+                this.authRefreshButton.isLoggingIn = true;
+                this.authRefreshButton.requestUpdate();
+            }
         }
     }
 
@@ -253,8 +273,8 @@ class HeaderTransitionManager {
 
     async _resizeForAuth(height = 50) {
         if (!window.api) return;
-        console.log(`[HeaderController] _resizeForAuth: Resizing window to 220x${height}`);
-        return window.api.headerController.resizeHeaderWindow({ width: 220, height }).catch(() => {});
+        console.log(`[HeaderController] _resizeForAuth: Resizing window to 260x${height}`);
+        return window.api.headerController.resizeHeaderWindow({ width: 260, height }).catch(() => {});
     }
 
     async _resizeForPermissionHeader(height) {

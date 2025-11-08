@@ -352,19 +352,9 @@ export class SummaryView extends LitElement {
         super.updated(changedProperties);
         this.renderMarkdownContent();
 
-        // Log when Follow-ups appear and trigger height adjustment
+        // Log when Follow-ups appear (ResizeObserver in parent handles height adjustment)
         if (changedProperties.has('hasCompletedRecording') && this.hasCompletedRecording) {
-            console.log('[SummaryView] Follow-ups now available - triggering window height adjustment');
-
-            // Trigger parent height adjustment for Follow-ups content
-            setTimeout(() => {
-                this.dispatchEvent(
-                    new CustomEvent('content-updated', {
-                        bubbles: true,
-                        detail: { contentType: 'followups', trigger: 'height-adjustment' },
-                    })
-                );
-            }, 100);
+            console.log('[SummaryView] Follow-ups now available');
 
             // Auto-scroll to follow-ups section smoothly
             setTimeout(() => {

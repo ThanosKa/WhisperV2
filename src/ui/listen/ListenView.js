@@ -42,6 +42,9 @@ export class ListenView extends LitElement {
 
         // Scroll position preservation
         this.transcriptScrollTop = 0;
+
+        // ResizeObserver for automatic height adjustment (eliminates race conditions)
+        this.resizeObserver = null;
     }
 
     async connectedCallback() {
@@ -53,11 +56,24 @@ export class ListenView extends LitElement {
 
         // Simplified - no profile selection needed for meeting copilot
 
-        // Listen for content updates from child components
-        this.addEventListener('content-updated', event => {
-            console.log('[ListenView] Content updated:', event.detail);
-            if (event.detail.trigger === 'height-adjustment') {
-                this.adjustWindowHeightThrottled();
+        // ResizeObserver pattern from AskView - eliminates race conditions
+        this.updateComplete.then(() => {
+            this.resizeObserver = new ResizeObserver(entries => {
+                for (const entry of entries) {
+                    const contentHeight = entry.contentRect.height;
+                    const borderPadding = 10;
+                    const targetHeight = Math.min(500, Math.max(250, contentHeight + borderPadding));
+
+                    // Only resize if needed
+                    if (Math.abs(window.innerHeight - targetHeight) > 5) {
+                        this.adjustWindowHeightThrottled();
+                    }
+                }
+            });
+
+            const container = this.shadowRoot?.querySelector('.assistant-container');
+            if (container) {
+                this.resizeObserver.observe(container);
             }
         });
 
@@ -128,6 +144,11 @@ export class ListenView extends LitElement {
         }
         if (this.copyTimeout) {
             clearTimeout(this.copyTimeout);
+        }
+
+        if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+            this.resizeObserver = null;
         }
 
         if (window.api && this._onPresetsUpdated) {

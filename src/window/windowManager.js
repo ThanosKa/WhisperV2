@@ -70,12 +70,17 @@ const showScreenshotWindow = (base64Data, position) => {
                 if (newWin && !newWin.isDestroyed()) {
                     newWin.webContents.send('screenshot:data', base64Data);
                     if (position) {
+                        console.log('[WindowManager] Showing screenshot window at position:', position);
+                        const currentBounds = newWin.getBounds();
+                        console.log('[WindowManager] Screenshot current bounds:', currentBounds);
                         newWin.setBounds({
                             x: position.x,
                             y: position.y,
                             width: 400,
                             height: 300,
                         });
+                        const newBounds = newWin.getBounds();
+                        console.log('[WindowManager] Screenshot bounds after setBounds:', newBounds);
                     }
                     newWin.show();
                     newWin.setAlwaysOnTop(true);
@@ -97,12 +102,17 @@ const showScreenshotWindow = (base64Data, position) => {
 
     // Position window near indicator
     if (position) {
+        console.log('[WindowManager] Showing screenshot window at position:', position);
+        const currentBounds = screenshotWin.getBounds();
+        console.log('[WindowManager] Screenshot current bounds:', currentBounds);
         screenshotWin.setBounds({
             x: position.x,
             y: position.y,
             width: 400,
             height: 300,
         });
+        const newBounds = screenshotWin.getBounds();
+        console.log('[WindowManager] Screenshot bounds after setBounds:', newBounds);
     }
 
     screenshotWin.show();

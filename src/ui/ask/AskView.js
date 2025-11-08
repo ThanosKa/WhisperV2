@@ -1340,12 +1340,13 @@ export class AskView extends LitElement {
         // Get indicator position for window positioning
         const rect = indicatorElement.getBoundingClientRect();
         const position = {
-            x: Math.round(rect.left + window.screenX),
+            x: Math.round(rect.left + window.screenX - 100), // Offset left by 100px
             y: Math.round(rect.bottom + window.screenY + 4), // 4px gap right below indicator text
         };
 
         // Show screenshot window via IPC
         console.log('[AskView] showScreenshotWindow called at', Date.now());
+        console.log('[AskView] Screenshot window position:', position);
         window.api.askView.showScreenshotWindow(base64Data, position);
     }
 

@@ -122,7 +122,8 @@ contextBridge.exposeInMainWorld('api', {
         adjustWindowHeight: (winName, height) => ipcRenderer.invoke('adjust-window-height', { winName, height }),
 
         // Message Handling
-        sendMessage: text => ipcRenderer.invoke('ask:sendQuestionFromAsk', text),
+        sendMessage: (text, useScreenCapture = true) => ipcRenderer.invoke('ask:sendQuestionFromAsk', text, useScreenCapture),
+        setUseScreenCapture: (value) => ipcRenderer.invoke('ask:setUseScreenCapture', value),
         interruptStream: () => ipcRenderer.invoke('ask:interruptStream'),
 
         // Screenshot window management
@@ -192,6 +193,8 @@ contextBridge.exposeInMainWorld('api', {
 
         // Settings Management
         getPresets: () => ipcRenderer.invoke('settings:getPresets'),
+        getSettings: () => ipcRenderer.invoke('settings:getSettings'),
+        saveSettings: settings => ipcRenderer.invoke('settings:saveSettings', settings),
 
         // New method for opening DB path
         openDbPath: () => ipcRenderer.invoke('settings:open-db-path'),

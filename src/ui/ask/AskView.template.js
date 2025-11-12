@@ -148,6 +148,9 @@ export const renderTemplate = self => {
                     @keydown=${self.handleTextKeydown}
                     @focus=${self.handleInputFocus}
                 />
+                <button class="use-screen-btn ${self.useScreenCapture ? 'active' : 'inactive'}" @click=${self.handleToggleScreenCapture}>
+                    Use Screen
+                </button>
                 <button class="submit-btn" @click=${self.handleSendText}>
                     <span class="btn-label">Submit</span>
                     <span class="btn-icon"> ↵ </span>

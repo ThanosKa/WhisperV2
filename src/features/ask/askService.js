@@ -185,6 +185,7 @@ class AskService {
             showTextInput: true,
             interrupted: false,
             screenshotData: null, // Store screenshot data for current message
+            useScreenCapture: true, // Default enabled, session-only (resets on app restart)
         };
         this._forceDefaultProfileOnce = false;
         console.log('[AskService] Service instance created.');
@@ -466,7 +467,7 @@ class AskService {
             shouldSendScreenOnly = true;
             const listenService = require('../listen/listenService');
             const conversationHistory = listenService.getConversationHistory();
-            await this.sendMessage('Assist me', conversationHistory);
+            await this.sendMessage('Assist me', conversationHistory, null, this.state.useScreenCapture);
             return;
         }
 
@@ -531,9 +532,12 @@ class AskService {
     /**
      *
      * @param {string} userPrompt
+     * @param {string[]} conversationHistoryRaw
+     * @param {string|null} presetId
+     * @param {boolean} useScreenCapture
      * @returns {Promise<{success: boolean, response?: string, error?: string}>}
      */
-    async sendMessage(userPrompt, conversationHistoryRaw = [], presetId = null) {
+    async sendMessage(userPrompt, conversationHistoryRaw = [], presetId = null, useScreenCapture = true) {
         // Normalize and fallback to default help text when empty
         try {
             userPrompt = ((userPrompt ?? '') + '').trim();
@@ -599,23 +603,25 @@ class AskService {
             // LLM is server-backed only; no client-side provider/model
             console.log('[AskService] model: provider=server, model=remote-default');
 
-            // Capture screenshot for manual Ask (sendMessageManual) OR when prompt equals 'Assist me'
+            // Capture screenshot when useScreenCapture is enabled AND (manual Ask OR prompt equals 'Assist me')
             // 'Assist me' is the Ask template's empty-input fallback and should include a screenshot
             const isAssistMe = (userPrompt || '').trim().toLowerCase() === 'assist me';
-            const shouldCaptureScreenshot = this._forceDefaultProfileOnce === true || isAssistMe;
+            const shouldCaptureScreenshot = useScreenCapture && (this._forceDefaultProfileOnce === true || isAssistMe);
             let screenshotBase64 = null;
             if (shouldCaptureScreenshot) {
                 const screenshotResult = await captureScreenshot({ quality: 'medium' });
                 screenshotBase64 = screenshotResult.success ? screenshotResult.base64 : null;
             }
             const screenshotTaken = Boolean(screenshotBase64);
-            
+
             // Store screenshot data in state for frontend display
-            const screenshotData = screenshotBase64 ? {
-                base64: screenshotBase64,
-                timestamp: Date.now(),
-            } : null;
-            
+            const screenshotData = screenshotBase64
+                ? {
+                      base64: screenshotBase64,
+                      timestamp: Date.now(),
+                  }
+                : null;
+
             // Update state with screenshot data
             this.state.screenshotData = screenshotData;
             this._broadcastState();
@@ -915,10 +921,10 @@ class AskService {
         );
     }
 
-    async sendMessageManual(userPrompt, conversationHistoryRaw = []) {
+    async sendMessageManual(userPrompt, conversationHistoryRaw = [], useScreenCapture = true) {
         this._forceDefaultProfileOnce = true;
         try {
-            return await this.sendMessage(userPrompt, conversationHistoryRaw);
+            return await this.sendMessage(userPrompt, conversationHistoryRaw, null, useScreenCapture);
         } finally {
             this._forceDefaultProfileOnce = false;
         }

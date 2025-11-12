@@ -14,6 +14,8 @@ module.exports = {
     initialize() {
         // Settings Service
         ipcMain.handle('settings:getPresets', async () => await settingsService.getPresets());
+        ipcMain.handle('settings:getSettings', async () => await settingsService.getSettings());
+        ipcMain.handle('settings:saveSettings', async (event, settings) => await settingsService.saveSettings(settings));
         ipcMain.handle('settings:get-auto-update', async () => await settingsService.getAutoUpdateSetting());
         ipcMain.handle('settings:set-auto-update', async (event, isEnabled) => await settingsService.setAutoUpdateSetting(isEnabled));
         ipcMain.handle('settings:get-app-version', async () => {
@@ -68,15 +70,15 @@ module.exports = {
         ipcMain.handle('get-web-url', () => process.env.whisper_WEB_URL || 'http://localhost:3000');
 
         // Ask
-        ipcMain.handle('ask:sendQuestionFromAsk', async (event, userPrompt) => {
+        ipcMain.handle('ask:sendQuestionFromAsk', async (event, userPrompt, useScreenCapture = true) => {
             // Get conversation history from listenService and pass it to askService
             const conversationHistory = listenService.getConversationHistory();
-            console.log(`[FeatureBridge] ask:sendQuestionFromAsk: clickLen=${userPrompt?.length || 0}, historyItems=${conversationHistory.length}`);
+            console.log(`[FeatureBridge] ask:sendQuestionFromAsk: clickLen=${userPrompt?.length || 0}, historyItems=${conversationHistory.length}, useScreenCapture=${useScreenCapture}`);
             if (Array.isArray(conversationHistory)) {
                 const preview = conversationHistory.slice(-2);
                 console.log('[FeatureBridge] history preview:', JSON.stringify(preview));
             }
-            return await askService.sendMessageManual(userPrompt, conversationHistory);
+            return await askService.sendMessageManual(userPrompt, conversationHistory, useScreenCapture);
         });
         ipcMain.handle('ask:sendQuestionFromSummary', async (event, userPrompt) => {
             // Get conversation history from listenService and pass it to askService
@@ -92,6 +94,9 @@ module.exports = {
             return await askService.sendMessage(userPrompt, conversationHistory, presetId);
         });
         ipcMain.handle('ask:toggleAskButton', async () => await askService.toggleAskButton());
+        ipcMain.handle('ask:setUseScreenCapture', async (event, value) => {
+            askService.state.useScreenCapture = value;
+        });
         ipcMain.handle('ask:closeAskWindow', async () => await askService.closeAskWindow());
         ipcMain.handle('ask:interruptStream', () => {
             askService.interruptStream();

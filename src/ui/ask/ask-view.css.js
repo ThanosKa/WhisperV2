@@ -1048,6 +1048,54 @@ export const styles = css`
         background: transparent !important;
     }
 
+    .use-screen-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(102, 102, 102, 0.3);
+        color: #CCC;
+        border: 2px solid #666;
+        border-radius: 24px;
+        font-size: 13px;
+        font-family: 'Helvetica Neue', sans-serif;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        padding: 0 8px;
+        height: 32px;
+        user-select: none;
+        box-shadow: none;
+    }
+
+    .use-screen-btn.active {
+        background: rgba(74, 158, 255, 0.1);
+        border: 2px solid #4A9EFF;
+        color: #6BB6FF;
+        box-shadow: 0 0 20px rgba(74, 158, 255, 0.3);
+    }
+
+    .use-screen-btn.inactive {
+        background: rgba(102, 102, 102, 0.3);
+        border: 2px solid #666;
+        color: #CCC;
+        box-shadow: none;
+        opacity: 0.5;
+    }
+
+    .use-screen-btn.active:hover {
+        background: rgba(74, 158, 255, 0.15);
+        border-color: #5AAFFF;
+        color: #7BC5FF;
+        box-shadow: 0 0 25px rgba(74, 158, 255, 0.4);
+    }
+
+    .use-screen-btn.inactive:hover {
+        background: rgba(102, 102, 102, 0.4);
+        border-color: #777;
+        color: #DDD;
+        opacity: 0.7;
+    }
+
     .submit-btn,
     .clear-btn {
         display: flex;

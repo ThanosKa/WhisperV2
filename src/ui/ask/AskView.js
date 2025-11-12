@@ -27,6 +27,7 @@ export class AskView extends LitElement {
         windowHeight: { type: Number },
         interrupted: { type: Boolean },
         isAnalyzing: { type: Boolean },
+        useScreenCapture: { type: Boolean },
     };
 
     static styles = styles;
@@ -44,6 +45,7 @@ export class AskView extends LitElement {
         this.windowHeight = window.innerHeight;
         this.interrupted = false;
         this.isAnalyzing = false;
+        this.useScreenCapture = true; // Default to enabled
 
         this.isAnimating = false; // Tracks typewriter animation state
 
@@ -72,6 +74,7 @@ export class AskView extends LitElement {
         this.handleEscKey = this.handleEscKey.bind(this);
         this.handleCloseAskWindow = this.handleCloseAskWindow.bind(this);
         this.handleCloseIfNoContent = this.handleCloseIfNoContent.bind(this);
+        this.handleToggleScreenCapture = this.handleToggleScreenCapture.bind(this);
 
         // Analyze timeout reference
         this.analyzeTimeout = null;
@@ -128,6 +131,9 @@ export class AskView extends LitElement {
         };
 
         if (window.api) {
+            // Sync initial useScreenCapture state to backend
+            window.api.askView.setUseScreenCapture(this.useScreenCapture);
+
             this._onShowTextInputFn = () => {
                 console.log('Show text input signal received');
                 if (!this.showTextInput) {
@@ -1254,10 +1260,19 @@ export class AskView extends LitElement {
         this._appendedCurrentQuestion = true;
 
         if (window.api) {
-            window.api.askView.sendMessage(text).catch(error => {
+            window.api.askView.sendMessage(text, this.useScreenCapture).catch(error => {
                 console.error('Error sending text:', error);
             });
         }
+    }
+
+    handleToggleScreenCapture() {
+        this.useScreenCapture = !this.useScreenCapture;
+        // Sync state to backend
+        if (window.api) {
+            window.api.askView.setUseScreenCapture(this.useScreenCapture);
+        }
+        this.requestUpdate();
     }
 
     handleTextKeydown(e) {

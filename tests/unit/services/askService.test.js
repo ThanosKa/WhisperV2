@@ -4,6 +4,12 @@ jest.mock('../../../src/features/common/ai/llmClient', () => require('../../mock
 jest.mock('../../../src/features/common/repositories/session', () => require('../../mocks/database.mock').sessionRepository);
 jest.mock('../../../src/features/ask/repositories', () => require('../../mocks/database.mock').askRepository);
 
+// Mock listenService for toggleAskButton tests
+jest.mock('../../../src/features/listen/listenService', () => ({
+    getConversationHistory: jest.fn(() => []),
+    getCurrentSessionData: jest.fn(() => ({ sessionId: 'test-session-id' })),
+}));
+
 jest.mock('../../../src/window/windowManager', () => {
     const createMockWindow = () => ({
         isDestroyed: jest.fn(() => false),
@@ -101,6 +107,245 @@ describe('AskService', () => {
             expect(abortSpy).toHaveBeenCalledWith('User interrupted');
             expect(askService.state.isStreaming).toBe(false);
             expect(askService.state.interrupted).toBe(true);
+        });
+    });
+
+    describe('useScreenCapture', () => {
+        let mockDesktopCapturer;
+        let mockExecFile;
+        let originalPlatform;
+
+        beforeEach(() => {
+            jest.clearAllMocks();
+            // Mock desktopCapturer for non-darwin platforms
+            const { desktopCapturer } = require('electron');
+            mockDesktopCapturer = desktopCapturer;
+            mockDesktopCapturer.getSources = jest.fn(async () => [
+                {
+                    id: 'screen:0:0',
+                    name: 'Screen 1',
+                    display_id: '0',
+                    thumbnail: {
+                        toJPEG: jest.fn(() => Buffer.from('mock-image-data')),
+                        getSize: jest.fn(() => ({ width: 1920, height: 1080 })),
+                    },
+                },
+            ]);
+
+            // Mock execFile for darwin platform
+            const childProcess = require('child_process');
+            const util = require('util');
+            mockExecFile = jest.fn(async () => ({ stdout: '', stderr: '' }));
+            jest.spyOn(util, 'promisify').mockImplementation((fn) => {
+                if (fn === childProcess.execFile) {
+                    return mockExecFile;
+                }
+                return fn;
+            });
+
+            // Mock fs.promises for darwin screenshot path
+            const fs = require('fs');
+            jest.spyOn(fs.promises, 'readFile').mockResolvedValue(Buffer.from('mock-image-data'));
+            jest.spyOn(fs.promises, 'unlink').mockResolvedValue();
+
+            // Store original platform
+            originalPlatform = process.platform;
+        });
+
+        afterEach(() => {
+            Object.defineProperty(process, 'platform', {
+                value: originalPlatform,
+                writable: true,
+            });
+            jest.restoreAllMocks();
+        });
+
+        test('defaults to true on initialization', () => {
+            expect(askService.state.useScreenCapture).toBe(true);
+        });
+
+        test('state can be updated directly', () => {
+            askService.state.useScreenCapture = false;
+            expect(askService.state.useScreenCapture).toBe(false);
+
+            askService.state.useScreenCapture = true;
+            expect(askService.state.useScreenCapture).toBe(true);
+        });
+
+        test('sendMessage captures screenshot when useScreenCapture=true and forceDefaultProfileOnce=true', async () => {
+            // Set platform to non-darwin to use desktopCapturer path
+            Object.defineProperty(process, 'platform', {
+                value: 'linux',
+                writable: true,
+            });
+
+            askService._forceDefaultProfileOnce = true;
+            askService.state.useScreenCapture = true;
+
+            // Mock llmClient.stream to avoid actual API call
+            const llmClient = require('../../../src/features/common/ai/llmClient');
+            llmClient.stream.mockResolvedValueOnce({
+                headers: new Map(),
+                body: {
+                    getReader: () => ({
+                        read: async () => ({ done: true, value: undefined }),
+                    }),
+                },
+            });
+
+            await askService.sendMessage('Test prompt', [], null, true);
+
+            expect(mockDesktopCapturer.getSources).toHaveBeenCalled();
+        });
+
+        test('sendMessage captures screenshot when useScreenCapture=true and prompt is "Assist me"', async () => {
+            Object.defineProperty(process, 'platform', {
+                value: 'linux',
+                writable: true,
+            });
+
+            askService._forceDefaultProfileOnce = false;
+            askService.state.useScreenCapture = true;
+
+            const llmClient = require('../../../src/features/common/ai/llmClient');
+            llmClient.stream.mockResolvedValueOnce({
+                headers: new Map(),
+                body: {
+                    getReader: () => ({
+                        read: async () => ({ done: true, value: undefined }),
+                    }),
+                },
+            });
+
+            await askService.sendMessage('Assist me', [], null, true);
+
+            expect(mockDesktopCapturer.getSources).toHaveBeenCalled();
+        });
+
+        test('sendMessage does not capture screenshot when useScreenCapture=false even with "Assist me"', async () => {
+            Object.defineProperty(process, 'platform', {
+                value: 'linux',
+                writable: true,
+            });
+
+            askService._forceDefaultProfileOnce = false;
+            askService.state.useScreenCapture = false;
+
+            const llmClient = require('../../../src/features/common/ai/llmClient');
+            llmClient.stream.mockResolvedValueOnce({
+                headers: new Map(),
+                body: {
+                    getReader: () => ({
+                        read: async () => ({ done: true, value: undefined }),
+                    }),
+                },
+            });
+
+            await askService.sendMessage('Assist me', [], null, false);
+
+            expect(mockDesktopCapturer.getSources).not.toHaveBeenCalled();
+        });
+
+        test('sendMessage does not capture screenshot when useScreenCapture=false even with forceDefaultProfileOnce=true', async () => {
+            Object.defineProperty(process, 'platform', {
+                value: 'linux',
+                writable: true,
+            });
+
+            askService._forceDefaultProfileOnce = true;
+            askService.state.useScreenCapture = false;
+
+            const llmClient = require('../../../src/features/common/ai/llmClient');
+            llmClient.stream.mockResolvedValueOnce({
+                headers: new Map(),
+                body: {
+                    getReader: () => ({
+                        read: async () => ({ done: true, value: undefined }),
+                    }),
+                },
+            });
+
+            await askService.sendMessage('Test prompt', [], null, false);
+
+            expect(mockDesktopCapturer.getSources).not.toHaveBeenCalled();
+        });
+
+        test('sendMessage does not capture screenshot for regular prompts when useScreenCapture=false', async () => {
+            Object.defineProperty(process, 'platform', {
+                value: 'linux',
+                writable: true,
+            });
+
+            askService._forceDefaultProfileOnce = false;
+            askService.state.useScreenCapture = false;
+
+            const llmClient = require('../../../src/features/common/ai/llmClient');
+            llmClient.stream.mockResolvedValueOnce({
+                headers: new Map(),
+                body: {
+                    getReader: () => ({
+                        read: async () => ({ done: true, value: undefined }),
+                    }),
+                },
+            });
+
+            await askService.sendMessage('What is the weather?', [], null, false);
+
+            expect(mockDesktopCapturer.getSources).not.toHaveBeenCalled();
+        });
+
+        test('toggleAskButton respects state.useScreenCapture when sending "Assist me"', async () => {
+            Object.defineProperty(process, 'platform', {
+                value: 'linux',
+                writable: true,
+            });
+
+            const listenService = require('../../../src/features/listen/listenService');
+            listenService.getConversationHistory.mockReturnValue([]);
+
+            askService.state.useScreenCapture = false;
+            askService.state.showTextInput = true;
+
+            const llmClient = require('../../../src/features/common/ai/llmClient');
+            llmClient.stream.mockResolvedValueOnce({
+                headers: new Map(),
+                body: {
+                    getReader: () => ({
+                        read: async () => ({ done: true, value: undefined }),
+                    }),
+                },
+            });
+
+            await askService.toggleAskButton(true);
+
+            expect(mockDesktopCapturer.getSources).not.toHaveBeenCalled();
+        });
+
+        test('toggleAskButton captures screenshot when state.useScreenCapture=true', async () => {
+            Object.defineProperty(process, 'platform', {
+                value: 'linux',
+                writable: true,
+            });
+
+            const listenService = require('../../../src/features/listen/listenService');
+            listenService.getConversationHistory.mockReturnValue([]);
+
+            askService.state.useScreenCapture = true;
+            askService.state.showTextInput = true;
+
+            const llmClient = require('../../../src/features/common/ai/llmClient');
+            llmClient.stream.mockResolvedValueOnce({
+                headers: new Map(),
+                body: {
+                    getReader: () => ({
+                        read: async () => ({ done: true, value: undefined }),
+                    }),
+                },
+            });
+
+            await askService.toggleAskButton(true);
+
+            expect(mockDesktopCapturer.getSources).toHaveBeenCalled();
         });
     });
 });

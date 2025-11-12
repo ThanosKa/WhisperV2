@@ -4,7 +4,12 @@ const WebSocket = require('ws');
 const authService = require('../../common/services/authService');
 const config = require('../../common/config/config');
 
-const COMPLETION_DEBOUNCE_MS = config.get('utteranceSilenceMs') || 1200;
+const COMPLETION_DEBOUNCE_MS = config.get('utteranceSilenceMs') ?? 800;
+const MAX_UTTERANCE_CHARS = (() => {
+    const value = Number(config.get('maxUtteranceChars'));
+    return Number.isFinite(value) && value > 0 ? value : 0;
+})();
+const DB_FALLBACK_MS = 3000;
 const DEFAULT_RELAY_URL = process.env.STT_RELAY_URL || config.get('sttRelayUrl') || 'wss://websocket-production-395f.up.railway.app';
 
 class SttService {
@@ -18,6 +23,8 @@ class SttService {
         this.themCompletionBuffer = '';
         this.meCompletionTimer = null;
         this.themCompletionTimer = null;
+        this.meCommittedLength = 0;
+        this.themCommittedLength = 0;
 
         // System audio capture
         this.systemAudioProc = null;
@@ -61,27 +68,16 @@ class SttService {
     }
 
     flushMeCompletion(sendToUI = true) {
-        const finalText = (this.meCompletionBuffer || '').trim();
+        const rawText = this.meCompletionBuffer || '';
+        const uncommitted = rawText.slice(this.meCommittedLength).trim();
+        const finalText = uncommitted;
         if (!finalText) return;
 
-        // Notify completion callback (DB persistence)
-        if (this.onTranscriptionComplete) {
-            this.onTranscriptionComplete('Me', finalText);
-        }
-
-        // Only send FINAL to renderer on explicit TURN_COMPLETE, not on timeout
-        if (sendToUI) {
-            this.sendToRenderer('stt-update', {
-                speaker: 'Me',
-                text: finalText,
-                isPartial: false,
-                isFinal: true,
-                timestamp: Date.now(),
-            });
-        }
+        this._emitFinalUtterance('Me', finalText, sendToUI);
 
         this.meCompletionBuffer = '';
         this.meCompletionTimer = null;
+        this.meCommittedLength = 0;
         // Reset state
 
         if (this.onStatusUpdate) {
@@ -90,31 +86,90 @@ class SttService {
     }
 
     flushThemCompletion(sendToUI = true) {
-        const finalText = (this.themCompletionBuffer || '').trim();
+        const rawText = this.themCompletionBuffer || '';
+        const uncommitted = rawText.slice(this.themCommittedLength).trim();
+        const finalText = uncommitted;
         if (!finalText) return;
 
-        // Notify completion callback (DB persistence)
-        if (this.onTranscriptionComplete) {
-            this.onTranscriptionComplete('Them', finalText);
+        this._emitFinalUtterance('Them', finalText, sendToUI);
+
+        this.themCompletionBuffer = '';
+        this.themCompletionTimer = null;
+        this.themCommittedLength = 0;
+        // Reset state
+
+        if (this.onStatusUpdate) {
+            this.onStatusUpdate('Listening...');
+        }
+    }
+
+    _handlePartialSegmentation({ speakerLabel, textChunk, committedKey }) {
+        if (!textChunk) return '';
+        if (!MAX_UTTERANCE_CHARS) {
+            this[committedKey] = 0;
+            return textChunk;
         }
 
-        // Only send FINAL to renderer on explicit TURN_COMPLETE, not on timeout
+        let committedLength = this[committedKey] || 0;
+        committedLength = Math.max(0, Math.min(committedLength, textChunk.length));
+
+        while (textChunk.length - committedLength > MAX_UTTERANCE_CHARS) {
+            const splitIndex = this._findSplitIndex(textChunk, committedLength);
+            if (splitIndex <= committedLength) {
+                // Safety: avoid infinite loops by hard-advancing at least the limit
+                committedLength = Math.min(textChunk.length, committedLength + MAX_UTTERANCE_CHARS);
+            } else {
+                const segment = textChunk.slice(committedLength, splitIndex).trim();
+                committedLength = splitIndex;
+                if (segment) {
+                    console.log(
+                        `[SttService] Forced utterance split (${speakerLabel}) - ${segment.length} chars (limit ${MAX_UTTERANCE_CHARS})`
+                    );
+                    this._emitFinalUtterance(speakerLabel, segment, true);
+                }
+            }
+        }
+
+        this[committedKey] = committedLength;
+        return textChunk.slice(committedLength);
+    }
+
+    _findSplitIndex(text, startIdx) {
+        const hardLimit = Math.min(text.length, startIdx + MAX_UTTERANCE_CHARS);
+        if (hardLimit <= startIdx) {
+            return startIdx;
+        }
+
+        const window = text.slice(startIdx, hardLimit);
+        const preferredMarkers = ['\n', '. ', '? ', '! ', '; ', ': ', ', ', ' '];
+        const minSplitOffset = Math.floor(MAX_UTTERANCE_CHARS * 0.3);
+
+        for (const marker of preferredMarkers) {
+            const relativeIdx = window.lastIndexOf(marker);
+            if (relativeIdx !== -1 && relativeIdx >= minSplitOffset) {
+                return startIdx + relativeIdx + marker.length;
+            }
+        }
+
+        return hardLimit;
+    }
+
+    _emitFinalUtterance(speaker, text, sendToUI = true) {
+        const finalText = (text || '').trim();
+        if (!finalText) return;
+
+        if (this.onTranscriptionComplete) {
+            this.onTranscriptionComplete(speaker, finalText);
+        }
+
         if (sendToUI) {
             this.sendToRenderer('stt-update', {
-                speaker: 'Them',
+                speaker,
                 text: finalText,
                 isPartial: false,
                 isFinal: true,
                 timestamp: Date.now(),
             });
-        }
-
-        this.themCompletionBuffer = '';
-        this.themCompletionTimer = null;
-        // Reset state
-
-        if (this.onStatusUpdate) {
-            this.onStatusUpdate('Listening...');
         }
     }
 
@@ -156,23 +211,30 @@ class SttService {
             const trimmed = textChunk.trim();
             if (!transcription || !trimmed || trimmed === '<noise>' || trimmed === '<end>') return;
 
-            // Send server text directly (Soniox already sends full rewrites)
-            this.sendToRenderer('stt-update', {
-                speaker: 'Me',
-                text: textChunk,
-                isPartial: true,
-                isFinal: false,
-                timestamp: Date.now(),
+            this.meCompletionBuffer = textChunk;
+
+            const remainder = this._handlePartialSegmentation({
+                speakerLabel: 'Me',
+                textChunk,
+                committedKey: 'meCommittedLength',
             });
 
-            // Update buffer for DB persistence on TURN_COMPLETE only
-            this.meCompletionBuffer = textChunk;
+            if (remainder) {
+                this.sendToRenderer('stt-update', {
+                    speaker: 'Me',
+                    text: remainder,
+                    isPartial: true,
+                    isFinal: false,
+                    timestamp: Date.now(),
+                });
+            }
+
             // Clear and reset debounce timer for DB persistence
             if (this.meCompletionTimer) clearTimeout(this.meCompletionTimer);
             this.meCompletionTimer = setTimeout(() => {
                 // Fallback: Save to DB if no TURN_COMPLETE received after long pause
                 this.flushMeCompletion(false); // Save to DB but don't send FINAL to UI
-            }, 3000); // 3 second fallback for DB save only
+            }, DB_FALLBACK_MS); // 3 second fallback for DB save only
 
             if (message?.serverContent?.usageMetadata) {
                 console.log('[STT - Me] Tokens In:', message.serverContent.usageMetadata.promptTokenCount);
@@ -205,23 +267,30 @@ class SttService {
             const trimmed = textChunk.trim();
             if (!transcription || !trimmed || trimmed === '<noise>' || trimmed === '<end>') return;
 
-            // Send server text directly (Soniox already sends full rewrites)
-            this.sendToRenderer('stt-update', {
-                speaker: 'Them',
-                text: textChunk,
-                isPartial: true,
-                isFinal: false,
-                timestamp: Date.now(),
+            this.themCompletionBuffer = textChunk;
+
+            const remainder = this._handlePartialSegmentation({
+                speakerLabel: 'Them',
+                textChunk,
+                committedKey: 'themCommittedLength',
             });
 
-            // Update buffer for DB persistence on TURN_COMPLETE only
-            this.themCompletionBuffer = textChunk;
+            if (remainder) {
+                this.sendToRenderer('stt-update', {
+                    speaker: 'Them',
+                    text: remainder,
+                    isPartial: true,
+                    isFinal: false,
+                    timestamp: Date.now(),
+                });
+            }
+
             // Clear and reset debounce timer for DB persistence
             if (this.themCompletionTimer) clearTimeout(this.themCompletionTimer);
             this.themCompletionTimer = setTimeout(() => {
                 // Fallback: Save to DB if no TURN_COMPLETE received after long pause
                 this.flushThemCompletion(false); // Save to DB but don't send FINAL to UI
-            }, 3000); // 3 second fallback for DB save only
+            }, DB_FALLBACK_MS); // 3 second fallback for DB save only
 
             if (message.error) {
                 console.error('[Them] STT Session Error:', message.error);
@@ -486,6 +555,8 @@ class SttService {
         this.relaySocket = null;
         this.relaySessionId = null;
         this.relayReady = false;
+        this.meCommittedLength = 0;
+        this.themCommittedLength = 0;
         this.meSttSession = null;
         this.themSttSession = null;
     }
@@ -647,6 +718,8 @@ class SttService {
         // Reset state
         this.meCompletionBuffer = '';
         this.themCompletionBuffer = '';
+        this.meCommittedLength = 0;
+        this.themCommittedLength = 0;
     }
 }
 

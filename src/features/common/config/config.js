@@ -36,6 +36,7 @@ class Config {
             // Listen feature settings
             analysisStep: 1, // Trigger analysis every N utterances - more responsive for real-time
             utteranceSilenceMs: 800, // Silence debounce time for utterance completion (ms)
+            maxUtteranceChars: 200, // Hard split threshold for a single utterance bubble
             recapStep: 15, // Show recap button after N utterances
             // Smart-trigger for meeting analysis (optional)
             smartTrigger: {

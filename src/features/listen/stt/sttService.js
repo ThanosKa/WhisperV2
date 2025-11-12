@@ -60,23 +60,25 @@ class SttService {
         }
     }
 
-    flushMeCompletion() {
+    flushMeCompletion(sendToUI = true) {
         const finalText = (this.meCompletionBuffer || '').trim();
         if (!finalText) return;
 
-        // Notify completion callback
+        // Notify completion callback (DB persistence)
         if (this.onTranscriptionComplete) {
             this.onTranscriptionComplete('Me', finalText);
         }
 
-        // Send to renderer as final
-        this.sendToRenderer('stt-update', {
-            speaker: 'Me',
-            text: finalText,
-            isPartial: false,
-            isFinal: true,
-            timestamp: Date.now(),
-        });
+        // Only send FINAL to renderer on explicit TURN_COMPLETE, not on timeout
+        if (sendToUI) {
+            this.sendToRenderer('stt-update', {
+                speaker: 'Me',
+                text: finalText,
+                isPartial: false,
+                isFinal: true,
+                timestamp: Date.now(),
+            });
+        }
 
         this.meCompletionBuffer = '';
         this.meCompletionTimer = null;
@@ -87,23 +89,25 @@ class SttService {
         }
     }
 
-    flushThemCompletion() {
+    flushThemCompletion(sendToUI = true) {
         const finalText = (this.themCompletionBuffer || '').trim();
         if (!finalText) return;
 
-        // Notify completion callback
+        // Notify completion callback (DB persistence)
         if (this.onTranscriptionComplete) {
             this.onTranscriptionComplete('Them', finalText);
         }
 
-        // Send to renderer as final
-        this.sendToRenderer('stt-update', {
-            speaker: 'Them',
-            text: finalText,
-            isPartial: false,
-            isFinal: true,
-            timestamp: Date.now(),
-        });
+        // Only send FINAL to renderer on explicit TURN_COMPLETE, not on timeout
+        if (sendToUI) {
+            this.sendToRenderer('stt-update', {
+                speaker: 'Them',
+                text: finalText,
+                isPartial: false,
+                isFinal: true,
+                timestamp: Date.now(),
+            });
+        }
 
         this.themCompletionBuffer = '';
         this.themCompletionTimer = null;
@@ -161,8 +165,14 @@ class SttService {
                 timestamp: Date.now(),
             });
 
-            // Debounce for final flush timing only
-            this.debounceMeCompletion(textChunk);
+            // Update buffer for DB persistence on TURN_COMPLETE only
+            this.meCompletionBuffer = textChunk;
+            // Clear and reset debounce timer for DB persistence
+            if (this.meCompletionTimer) clearTimeout(this.meCompletionTimer);
+            this.meCompletionTimer = setTimeout(() => {
+                // Fallback: Save to DB if no TURN_COMPLETE received after long pause
+                this.flushMeCompletion(false); // Save to DB but don't send FINAL to UI
+            }, 3000); // 3 second fallback for DB save only
 
             if (message?.serverContent?.usageMetadata) {
                 console.log('[STT - Me] Tokens In:', message.serverContent.usageMetadata.promptTokenCount);
@@ -204,8 +214,14 @@ class SttService {
                 timestamp: Date.now(),
             });
 
-            // Debounce for final flush timing only
-            this.debounceThemCompletion(textChunk);
+            // Update buffer for DB persistence on TURN_COMPLETE only
+            this.themCompletionBuffer = textChunk;
+            // Clear and reset debounce timer for DB persistence
+            if (this.themCompletionTimer) clearTimeout(this.themCompletionTimer);
+            this.themCompletionTimer = setTimeout(() => {
+                // Fallback: Save to DB if no TURN_COMPLETE received after long pause
+                this.flushThemCompletion(false); // Save to DB but don't send FINAL to UI
+            }, 3000); // 3 second fallback for DB save only
 
             if (message.error) {
                 console.error('[Them] STT Session Error:', message.error);

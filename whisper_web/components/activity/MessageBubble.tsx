@@ -18,6 +18,16 @@ export function MessageBubble({ content, role = 'assistant', speaker, timestamp,
     const isSpeaker = isTranscript && speaker;
     const [copied, setCopied] = useState(false);
 
+    const filterSonioxTags = (text: string) => {
+        if (!isTranscript) return text;
+        return text
+            .replace(/<end>/gi, '')
+            .replace(/<noise>/gi, '')
+            .trim();
+    };
+
+    const filteredContent = filterSonioxTags(content);
+
     const formatTime = (timestamp?: number) => {
         if (!timestamp) return '';
         return new Date(timestamp * 1000).toLocaleTimeString('en-US', {
@@ -27,7 +37,7 @@ export function MessageBubble({ content, role = 'assistant', speaker, timestamp,
     };
 
     const handleCopy = async () => {
-        await navigator.clipboard.writeText(content);
+        await navigator.clipboard.writeText(filteredContent);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
@@ -54,7 +64,7 @@ export function MessageBubble({ content, role = 'assistant', speaker, timestamp,
                         {role === 'assistant' && !isTranscript ? (
                             <Markdown content={content} className="prose-sm prose-gray max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0" />
                         ) : (
-                            <p className="whitespace-pre-wrap break-words">{content}</p>
+                            <p className="whitespace-pre-wrap break-words">{filteredContent}</p>
                         )}
                     </div>
                     {timestamp && (

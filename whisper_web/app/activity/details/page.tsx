@@ -165,15 +165,11 @@ function SessionDetailsContent() {
         }
         
         const actions = new Set<string>();
-        const followUps = new Set<string>();
         const summaryBullets = new Set<string>();
         
         sessionDetails.insights.forEach(insight => {
             if (insight.payload?.actions && Array.isArray(insight.payload.actions)) {
                 insight.payload.actions.forEach((action: string) => actions.add(action));
-            }
-            if (insight.payload?.followUps && Array.isArray(insight.payload.followUps)) {
-                insight.payload.followUps.forEach((followUp: string) => followUps.add(followUp));
             }
             if (insight.payload?.summary && Array.isArray(insight.payload.summary)) {
                 insight.payload.summary.forEach((bullet: string) => summaryBullets.add(bullet));
@@ -182,7 +178,6 @@ function SessionDetailsContent() {
         
         return {
             actions: Array.from(actions).reverse(),
-            followUps: Array.from(followUps).reverse(),
             summary: Array.from(summaryBullets).reverse(),
         };
     }, [isActiveSession, sessionDetails?.insights]);
@@ -329,25 +324,12 @@ function SessionDetailsContent() {
                                                 )}
                                                 
                                                 {flattenedInsights.actions.length > 0 && (
-                                                    <div className="mb-6">
+                                                    <div>
                                                         <h3 className="text-sm font-semibold text-slate-900 mb-3">Action items</h3>
                                                         <ul className="my-4 ml-6 list-disc space-y-2 text-slate-900">
                                                             {flattenedInsights.actions.map((action: string, index: number) => (
                                                                 <li key={index} className="leading-6">
                                                                     {action}
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                )}
-                                                
-                                                {flattenedInsights.followUps.length > 0 && (
-                                                    <div>
-                                                        <h3 className="text-sm font-semibold text-slate-900 mb-3">Follow-up questions</h3>
-                                                        <ul className="my-4 ml-6 list-disc space-y-2 text-slate-900">
-                                                            {flattenedInsights.followUps.map((followUp: string, index: number) => (
-                                                                <li key={index} className="leading-6">
-                                                                    {followUp}
                                                                 </li>
                                                             ))}
                                                         </ul>

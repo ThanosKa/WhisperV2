@@ -253,6 +253,32 @@ describe('Crash Recovery - Edge Cases', () => {
         expect(mockSessionRepo.end).toHaveBeenCalledWith('session-123');
     });
 
+    test('should clear stranded session immediately after finalize action', async () => {
+        const session = {
+            id: 'session-123',
+            uid: 'test-user-id',
+            session_type: 'listen',
+            started_at: Date.now(),
+            ended_at: null,
+        };
+
+        const transcripts = [{ id: 1, speaker: 'User', text: 'Partial', timestamp: 1000 }];
+
+        mockSessionRepo.findLatestUnfinishedListen.mockReturnValue(session);
+        mockTranscriptRepo.getAllTranscriptsBySessionId.mockResolvedValue(transcripts);
+        mockInsightsRepo.getAllInsightsBySessionId.mockReturnValue([]);
+
+        listenService.strandedSession = await listenService.findStrandedSession();
+
+        const result = await listenService.handleRecoveryAction('finalize', 'session-123');
+
+        expect(result.success).toBe(true);
+        expect(listenService.strandedSession).toBeNull();
+
+        await new Promise(setImmediate);
+        expect(mockSessionRepo.end).toHaveBeenCalledWith('session-123');
+    });
+
     test('should handle resume with STT initialization failure', async () => {
         const session = {
             id: 'session-123',

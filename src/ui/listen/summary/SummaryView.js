@@ -12,11 +12,11 @@ export class SummaryView extends LitElement {
         hasCompletedRecording: { type: Boolean },
         insightHistory: { type: Array },
         allActions: { type: Array },
-        allFollowUps: { type: Array },
         allSummary: { type: Array },
         fixedActions: { type: Array },
         scrollableActions: { type: Array },
         presetId: { type: String },
+        isRecoveryMode: { type: Boolean },
     };
 
     constructor() {
@@ -24,18 +24,18 @@ export class SummaryView extends LitElement {
         this.structuredData = {
             summary: [],
             actions: [],
-            followUps: [],
         };
         this.isVisible = true;
         this.hasCompletedRecording = false;
         this.insightHistory = []; // Array of all analysis results
         this.allActions = []; // Flattened, persistent actions
-        this.allFollowUps = []; // Flattened, persistent follow-ups
         this.allSummary = []; // Flattened, persistent summary bullets
         this.fixedActions = [];
         this.scrollableActions = [];
         this.hasReceivedFirstText = false; // Track if any text has been received
         this.placeholderTimer = null;
+        this.isRecoveryMode = false; // Track if we're receiving recovery insights (newest-first)
+        this.recoveryUpdateTimer = null; // Timer to detect rapid sequential updates
 
         // 마크다운 라이브러리 초기화
         this.marked = null;
@@ -52,6 +52,21 @@ export class SummaryView extends LitElement {
         if (window.api) {
             window.api.summaryView.onSummaryUpdate((event, data) => {
                 this.clearPlaceholderTimer();
+                
+                // Detect recovery mode: if we receive multiple insights rapidly (within 500ms), it's recovery
+                // Recovery sends newest-first, so we need to skip reverse in buildFlattenedLists
+                if (this.recoveryUpdateTimer) {
+                    // We're receiving rapid sequential updates - this is recovery
+                    this.isRecoveryMode = true;
+                    clearTimeout(this.recoveryUpdateTimer);
+                }
+                // Set timer to detect if another update comes soon
+                this.recoveryUpdateTimer = setTimeout(() => {
+                    this.recoveryUpdateTimer = null;
+                    // After 500ms of no updates, reset recovery mode for next batch
+                    this.isRecoveryMode = false;
+                }, 500);
+                
                 // Append to history instead of overwriting
                 this.insightHistory.push(data);
                 this.structuredData = data; // Keep current for display
@@ -85,16 +100,12 @@ export class SummaryView extends LitElement {
 
     buildFlattenedLists() {
         const actions = new Set();
-        const followUps = new Set();
         const summaryBullets = new Set();
 
-        // Collect all actions, followUps, and summary bullets from insight history
+        // Collect all actions and summary bullets from insight history
         this.insightHistory.forEach(insight => {
             if (Array.isArray(insight.actions)) {
                 insight.actions.forEach(action => actions.add(action));
-            }
-            if (Array.isArray(insight.followUps)) {
-                insight.followUps.forEach(followUp => followUps.add(followUp));
             }
             if (Array.isArray(insight.summary)) {
                 insight.summary.forEach(bullet => summaryBullets.add(bullet));
@@ -107,7 +118,6 @@ export class SummaryView extends LitElement {
         }
 
         this.allActions = Array.from(actions).reverse();
-        this.allFollowUps = Array.from(followUps).reverse();
         this.allSummary = Array.from(summaryBullets).reverse();
     }
 
@@ -133,11 +143,9 @@ export class SummaryView extends LitElement {
         this.structuredData = {
             summary: [],
             actions: [],
-            followUps: [],
         };
         this.insightHistory = [];
         this.allActions = [];
-        this.allFollowUps = [];
         this.allSummary = [];
         this.fixedActions = [];
         this.scrollableActions = [];
@@ -251,31 +259,6 @@ export class SummaryView extends LitElement {
         this.handleRequestClick(originalText);
     }
 
-    scrollToFollowUps() {
-        const container = this.shadowRoot.querySelector('.insights-container');
-        if (container && this.allFollowUps.length > 0) {
-            // Find the Follow-Ups title element using data attribute
-            const followUpsTitle = this.shadowRoot.querySelector('insights-title[data-section="followups"]');
-            if (followUpsTitle) {
-                // Get the position of the Follow-Ups title relative to the container
-                const titleRect = followUpsTitle.getBoundingClientRect();
-                const containerRect = container.getBoundingClientRect();
-
-                // Calculate the scroll position to center the Follow-Ups section
-                const titleTop = titleRect.top - containerRect.top;
-                const containerHeight = containerRect.height;
-                const scrollTo = titleTop - containerHeight / 2 + titleRect.height / 2;
-
-                // Smooth scroll to the Follow-Ups section
-                container.scrollTo({
-                    top: Math.max(0, scrollTo),
-                    behavior: 'smooth',
-                });
-
-                console.log('[SummaryView] Auto-scrolled to Follow-Ups section');
-            }
-        }
-    }
 
     renderMarkdownContent() {
         if (!this.isLibrariesLoaded || !this.marked) {
@@ -341,10 +324,6 @@ export class SummaryView extends LitElement {
             sections.push(`\nActions:\n${data.actions.map(a => `▸ ${a}`).join('\n')}`);
         }
 
-        if (data.followUps && data.followUps.length > 0) {
-            sections.push(`\nFollow-Ups:\n${data.followUps.map(f => `▸ ${f}`).join('\n')}`);
-        }
-
         return sections.join('\n\n').trim();
     }
 
@@ -352,25 +331,9 @@ export class SummaryView extends LitElement {
         super.updated(changedProperties);
         this.renderMarkdownContent();
 
-        // Log when Follow-ups appear (ResizeObserver in parent handles height adjustment)
+        // Log when recording completes (ResizeObserver in parent handles height adjustment)
         if (changedProperties.has('hasCompletedRecording') && this.hasCompletedRecording) {
-            console.log('[SummaryView] Follow-ups now available');
-
-            // Auto-scroll to follow-ups section smoothly
-            setTimeout(() => {
-                this.scrollToFollowUps();
-            }, 200);
-
-            // Debug container dimensions
-            setTimeout(() => {
-                const container = this.shadowRoot.querySelector('.insights-container');
-                if (container && this.structuredData?.followUps?.length > 0) {
-                    console.log(
-                        `[SummaryView] Container dimensions: scrollHeight=${container.scrollHeight}px, clientHeight=${container.clientHeight}px, offsetHeight=${container.offsetHeight}px`
-                    );
-                    console.log(`[SummaryView] Scrollable: ${container.scrollHeight > container.clientHeight ? 'YES' : 'NO'}`);
-                }
-            }, 150);
+            console.log('[SummaryView] Recording completed');
         }
 
         // Always log container dimensions when content changes
@@ -499,25 +462,6 @@ export class SummaryView extends LitElement {
                                             `
                                         )}
                                     </div>
-                                `
-                              : ''}
-
-                          <!-- Follow-Ups Section (no border, as before) -->
-                          ${this.hasCompletedRecording && this.allFollowUps.length > 0
-                              ? html`
-                                    <insights-title data-section="followups">Follow-Ups</insights-title>
-                                    ${this.allFollowUps.map(
-                                        (followUp, index) => html`
-                                            <div
-                                                class="markdown-content followup-item"
-                                                data-markdown-id="persistent-followup-${index}"
-                                                data-original-text="${followUp}"
-                                                @click=${() => this.handleMarkdownClick(followUp)}
-                                            >
-                                                ${followUp}
-                                            </div>
-                                        `
-                                    )}
                                 `
                               : ''}
 

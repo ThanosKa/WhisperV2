@@ -83,7 +83,7 @@ export interface SessionDetails {
     transcripts: Transcript[];
     ai_messages: AiMessage[];
     summary: Summary | null;
-    insights?: Array<{ analysis_round: number; payload: { summary?: string[]; actions?: string[]; followUps?: string[] } }> | null;
+    insights?: Array<{ analysis_round: number; payload: { summary?: string[]; actions?: string[] } }> | null;
 }
 
 const isFirebaseMode = (): boolean => {

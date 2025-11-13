@@ -186,8 +186,8 @@ describe('Crash Recovery - Insights Recovery', () => {
 
         const summaryCalls = mockWindow.webContents.send.mock.calls.filter(call => call[0] === 'summary-update');
         expect(summaryCalls).toHaveLength(2);
-        expect(summaryCalls[0][1]).toMatchObject({ summary: ['First'] });
-        expect(summaryCalls[1][1]).toMatchObject({ summary: ['Second'] });
+        expect(summaryCalls[0][1]).toMatchObject({ summary: ['Second'] });
+        expect(summaryCalls[1][1]).toMatchObject({ summary: ['First'] });
     });
 
     test('should hydrate insights in backend (summaryService state)', async () => {
@@ -316,9 +316,9 @@ describe('Crash Recovery - Insights Recovery', () => {
 
         const summaryCalls = mockWindow.webContents.send.mock.calls.filter(call => call[0] === 'summary-update');
         expect(summaryCalls).toHaveLength(3);
-        expect(summaryCalls[0][1]).toMatchObject({ summary: ['A'] });
+        expect(summaryCalls[0][1]).toMatchObject({ summary: ['C'] });
         expect(summaryCalls[1][1]).toMatchObject({ summary: ['B'] });
-        expect(summaryCalls[2][1]).toMatchObject({ summary: ['C'] });
+        expect(summaryCalls[2][1]).toMatchObject({ summary: ['A'] });
     });
 
     test('should recover all insights after 2nd crash including all rounds', async () => {

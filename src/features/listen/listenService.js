@@ -693,7 +693,8 @@ class ListenService {
         const listenWindow = require('../../window/windowManager').windowPool?.get('listen');
         if (Array.isArray(insights) && insights.length > 0 && listenWindow && !listenWindow.isDestroyed()) {
             console.log(`[Recovery] Sending ${insights.length} insight rounds to UI`);
-            insights.forEach(insight => {
+            // Reverse so newest arrives first (matches normal operation)
+            [...insights].reverse().forEach(insight => {
                 listenWindow.webContents.send('summary-update', {
                     ...insight.payload,
                     presetId: this.summaryService.selectedPresetId || null,

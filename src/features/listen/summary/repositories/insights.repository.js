@@ -17,17 +17,6 @@ function saveInsight({ sessionId, analysisRound, payload }) {
     }
 }
 
-function getLatestInsightBySessionId(sessionId) {
-    const db = sqliteClient.getDb();
-    const query = `SELECT * FROM session_insights WHERE session_id = ? ORDER BY created_at DESC LIMIT 1`;
-    const row = db.prepare(query).get(sessionId);
-    if (!row) return null;
-    return {
-        ...row,
-        payload: JSON.parse(row.payload_json)
-    };
-}
-
 function getAllInsightsBySessionId(sessionId) {
     const db = sqliteClient.getDb();
     const query = `SELECT * FROM session_insights WHERE session_id = ? ORDER BY analysis_round ASC`;
@@ -38,5 +27,5 @@ function getAllInsightsBySessionId(sessionId) {
     }));
 }
 
-module.exports = { saveInsight, getLatestInsightBySessionId, getAllInsightsBySessionId };
+module.exports = { saveInsight, getAllInsightsBySessionId };
 

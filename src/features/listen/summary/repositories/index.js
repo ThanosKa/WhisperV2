@@ -18,7 +18,6 @@ const summaryRepositoryAdapter = {
     },
     // Insights methods
     saveInsight: insightsRepository.saveInsight,
-    getLatestInsightBySessionId: insightsRepository.getLatestInsightBySessionId,
     getAllInsightsBySessionId: insightsRepository.getAllInsightsBySessionId,
 };
 

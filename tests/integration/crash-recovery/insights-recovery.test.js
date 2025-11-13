@@ -10,7 +10,6 @@ const mockTranscriptRepo = {
 
 const mockInsightsRepo = {
     getAllInsightsBySessionId: jestModule.fn(),
-    getLatestInsightBySessionId: jestModule.fn(),
 };
 
 const mockAuthService = {
@@ -29,7 +28,6 @@ jestModule.mock('../../../src/features/listen/stt/repositories', () => ({
 
 jestModule.mock('../../../src/features/listen/summary/repositories', () => ({
     getAllInsightsBySessionId: sessionId => mockInsightsRepo.getAllInsightsBySessionId(sessionId),
-    getLatestInsightBySessionId: sessionId => mockInsightsRepo.getLatestInsightBySessionId(sessionId),
 }));
 
 jestModule.mock('../../../src/features/listen/stt/sttService', () =>

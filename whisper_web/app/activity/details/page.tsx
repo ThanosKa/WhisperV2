@@ -154,6 +154,38 @@ function SessionDetailsContent() {
     const askMessages = sessionDetails?.ai_messages ?? [];
     const transcripts = sessionDetails?.transcripts ?? [];
     const userAskMessages = useMemo(() => askMessages.filter(message => message.role === 'user'), [askMessages]);
+    
+    // Check if session is active (not finished)
+    const isActiveSession = sessionDetails?.session && !sessionDetails.session.ended_at;
+    
+    // Flatten insights for active sessions (like desktop SummaryView does)
+    const flattenedInsights = useMemo(() => {
+        if (!isActiveSession || !sessionDetails?.insights || sessionDetails.insights.length === 0) {
+            return null;
+        }
+        
+        const actions = new Set<string>();
+        const followUps = new Set<string>();
+        const summaryBullets = new Set<string>();
+        
+        sessionDetails.insights.forEach(insight => {
+            if (insight.payload?.actions && Array.isArray(insight.payload.actions)) {
+                insight.payload.actions.forEach((action: string) => actions.add(action));
+            }
+            if (insight.payload?.followUps && Array.isArray(insight.payload.followUps)) {
+                insight.payload.followUps.forEach((followUp: string) => followUps.add(followUp));
+            }
+            if (insight.payload?.summary && Array.isArray(insight.payload.summary)) {
+                insight.payload.summary.forEach((bullet: string) => summaryBullets.add(bullet));
+            }
+        });
+        
+        return {
+            actions: Array.from(actions).reverse(),
+            followUps: Array.from(followUps).reverse(),
+            summary: Array.from(summaryBullets).reverse(),
+        };
+    }, [isActiveSession, sessionDetails?.insights]);
 
     if (!userInfo || isLoading) {
         return (
@@ -275,35 +307,89 @@ function SessionDetailsContent() {
                             )}
 
                             {/* Summary Section - Only for meetings */}
-                            {sessionDetails.session.session_type === 'listen' && sessionDetails.summary && (
+                            {sessionDetails.session.session_type === 'listen' && (
                                 <div className="border-t border-slate-200 pt-6">
                                     <h2 className="text-lg font-medium text-slate-900 mb-4">Summary</h2>
-                                    <p className="leading-7 text-slate-900 mb-6">{sessionDetails.summary.tldr}</p>
+                                    
+                                    {/* Active session: show insights or placeholder */}
+                                    {isActiveSession ? (
+                                        flattenedInsights ? (
+                                            <>
+                                                {flattenedInsights.summary.length > 0 && (
+                                                    <div className="mb-6">
+                                                        <h3 className="text-sm font-semibold text-slate-900 mb-3">Key points</h3>
+                                                        <ul className="my-4 ml-6 list-disc space-y-2 text-slate-900">
+                                                            {flattenedInsights.summary.map((point: string, index: number) => (
+                                                                <li key={index} className="leading-6">
+                                                                    {point}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                                
+                                                {flattenedInsights.actions.length > 0 && (
+                                                    <div className="mb-6">
+                                                        <h3 className="text-sm font-semibold text-slate-900 mb-3">Action items</h3>
+                                                        <ul className="my-4 ml-6 list-disc space-y-2 text-slate-900">
+                                                            {flattenedInsights.actions.map((action: string, index: number) => (
+                                                                <li key={index} className="leading-6">
+                                                                    {action}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                                
+                                                {flattenedInsights.followUps.length > 0 && (
+                                                    <div>
+                                                        <h3 className="text-sm font-semibold text-slate-900 mb-3">Follow-up questions</h3>
+                                                        <ul className="my-4 ml-6 list-disc space-y-2 text-slate-900">
+                                                            {flattenedInsights.followUps.map((followUp: string, index: number) => (
+                                                                <li key={index} className="leading-6">
+                                                                    {followUp}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <p className="text-slate-500 italic">Summary will appear here once the session is complete.</p>
+                                        )
+                                    ) : (
+                                        /* Finished session: show final summary */
+                                        sessionDetails.summary && (
+                                            <>
+                                                <p className="leading-7 text-slate-900 mb-6">{sessionDetails.summary.tldr}</p>
 
-                                    {sessionDetails.summary.bullet_json && JSON.parse(sessionDetails.summary.bullet_json).length > 0 && (
-                                        <div className="mb-6">
-                                            <h3 className="text-sm font-semibold text-slate-900 mb-3">Key points</h3>
-                                            <ul className="my-4 ml-6 list-disc space-y-2 text-slate-900">
-                                                {JSON.parse(sessionDetails.summary.bullet_json).map((point: string, index: number) => (
-                                                    <li key={index} className="leading-6">
-                                                        {point}
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
+                                                {sessionDetails.summary.bullet_json && JSON.parse(sessionDetails.summary.bullet_json).length > 0 && (
+                                                    <div className="mb-6">
+                                                        <h3 className="text-sm font-semibold text-slate-900 mb-3">Key points</h3>
+                                                        <ul className="my-4 ml-6 list-disc space-y-2 text-slate-900">
+                                                            {JSON.parse(sessionDetails.summary.bullet_json).map((point: string, index: number) => (
+                                                                <li key={index} className="leading-6">
+                                                                    {point}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
 
-                                    {sessionDetails.summary.action_json && JSON.parse(sessionDetails.summary.action_json).length > 0 && (
-                                        <div>
-                                            <h3 className="text-sm font-semibold text-slate-900 mb-3">Action items</h3>
-                                            <ul className="my-4 ml-6 list-disc space-y-2 text-slate-900">
-                                                {JSON.parse(sessionDetails.summary.action_json).map((action: string, index: number) => (
-                                                    <li key={index} className="leading-6">
-                                                        {action}
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
+                                                {sessionDetails.summary.action_json && JSON.parse(sessionDetails.summary.action_json).length > 0 && (
+                                                    <div>
+                                                        <h3 className="text-sm font-semibold text-slate-900 mb-3">Action items</h3>
+                                                        <ul className="my-4 ml-6 list-disc space-y-2 text-slate-900">
+                                                            {JSON.parse(sessionDetails.summary.action_json).map((action: string, index: number) => (
+                                                                <li key={index} className="leading-6">
+                                                                    {action}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
+                                            </>
+                                        )
                                     )}
                                 </div>
                             )}

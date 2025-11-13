@@ -409,7 +409,14 @@ function setupWebDataHandlers() {
                         askRepository.getAllAiMessagesBySessionId(payload),
                         summaryRepository.getSummaryBySessionId(payload),
                     ]);
-                    result = { session, transcripts, ai_messages, summary };
+
+                    // For active sessions (ended_at is null), fetch all insights
+                    let insights = null;
+                    if (!session.ended_at) {
+                        insights = summaryRepository.getAllInsightsBySessionId(payload);
+                    }
+
+                    result = { session, transcripts, ai_messages, summary, insights };
                     break;
                 case 'delete-session':
                     // Ensure the session belongs to the current user before deletion

@@ -727,22 +727,41 @@ class ListenService {
     }
 
     async finalizeStrandedSession() {
+        if (!this.strandedSession?.session) {
+            console.warn('[ListenService] finalizeStrandedSession called without stranded session');
+            return { success: false, error: 'No stranded session' };
+        }
+
         const { session } = this.strandedSession;
+        const sessionId = session.id;
 
-        console.log(`[ListenService] Finalizing stranded session ${session.id}`);
+        console.log(`[ListenService] Finalizing stranded session ${sessionId} (background)...`);
 
-        // Run summary/title pipeline
-        await this._generateAndSaveComprehensiveSummary(session.id);
-
-        // Mark session as ended
-        await sessionRepository.end(session.id);
-
-        // Clear stranded state
+        // Clear stranded state immediately so the UI can continue
         this.strandedSession = null;
         this.isRecoveryDismissed = false;
 
-        console.log(`[ListenService] Finalized stranded session ${session.id}`);
+        // Run finalize workflow in the background
+        this._finalizeSessionInBackground(sessionId).catch(err => {
+            console.error(`[ListenService] Background finalize failed for session ${sessionId}:`, err);
+        });
+
         return { success: true };
+    }
+
+    async _finalizeSessionInBackground(sessionId) {
+        try {
+            await this._generateAndSaveComprehensiveSummary(sessionId);
+        } catch (err) {
+            console.warn(`[ListenService] Error generating comprehensive summary for ${sessionId}:`, err.message || err);
+        }
+
+        try {
+            await sessionRepository.end(sessionId);
+            console.log(`[ListenService] Finalized stranded session ${sessionId}`);
+        } catch (err) {
+            console.error(`[ListenService] Failed to mark session ${sessionId} as ended:`, err.message || err);
+        }
     }
 
     _createHandler(asyncFn, successMessage, errorMessage) {

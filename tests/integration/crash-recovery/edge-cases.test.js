@@ -249,6 +249,7 @@ describe('Crash Recovery - Edge Cases', () => {
         const result = await listenService.handleRecoveryAction('finalize', 'session-123');
 
         expect(result.success).toBe(true);
+        await new Promise(setImmediate);
         expect(mockSessionRepo.end).toHaveBeenCalledWith('session-123');
     });
 

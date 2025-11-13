@@ -5,6 +5,7 @@ export class RecoveryToast extends LitElement {
     static properties = {
         sessionInfo: { type: Object, state: true },
         isFadingOut: { type: Boolean, state: true },
+        isResumeLoading: { type: Boolean, state: true },
     };
 
     static styles = recoveryToastStyles;
@@ -13,6 +14,7 @@ export class RecoveryToast extends LitElement {
         super();
         this.sessionInfo = null;
         this.isFadingOut = false;
+        this.isResumeLoading = false;
     }
 
     connectedCallback() {
@@ -21,6 +23,7 @@ export class RecoveryToast extends LitElement {
             window.api.recoveryToast.onShow((event, sessionInfo) => {
                 this.sessionInfo = sessionInfo;
                 this.isFadingOut = false;
+                this.isResumeLoading = false;
             });
             window.api.recoveryToast.onHide(() => {
                 this.hide();
@@ -41,11 +44,13 @@ export class RecoveryToast extends LitElement {
         setTimeout(() => {
             this.sessionInfo = null;
             this.isFadingOut = false;
+            this.isResumeLoading = false;
         }, 300);
     }
 
     async _handleResume(e) {
-        if (!this.sessionInfo || !window.api) return;
+        if (!this.sessionInfo || !window.api || this.isResumeLoading) return;
+        this.isResumeLoading = true;
 
         // Create ripple effect
         const button = e.currentTarget;
@@ -67,6 +72,7 @@ export class RecoveryToast extends LitElement {
             this.hide();
         } else {
             console.error('[RecoveryToast] Resume failed:', result.error);
+            this.isResumeLoading = false;
         }
     }
 
@@ -76,6 +82,7 @@ export class RecoveryToast extends LitElement {
         const sessionId = this.sessionInfo.id;
         this.isFadingOut = true;
         this.sessionInfo = null;
+        this.isResumeLoading = false;
         // Call finalize in background (no waiting)
         window.api.recoveryToast.handleRecoveryAction('finalize', sessionId).catch(err => {
             console.error('[RecoveryToast] Finalize failed:', err);
@@ -105,7 +112,22 @@ export class RecoveryToast extends LitElement {
                     <button class="close-btn" @click=${this._handleDismiss}>×</button>
                 </div>
                 <div class="actions">
-                    <button class="action-btn resume-btn" @click=${this._handleResume} ?disabled=${this.isFadingOut}>Resume</button>
+                    <button
+                        class="action-btn resume-btn ${this.isResumeLoading ? 'loading' : ''}"
+                        @click=${this._handleResume}
+                        ?disabled=${this.isFadingOut || this.isResumeLoading}
+                    >
+                        ${this.isResumeLoading
+                            ? html`
+                                  <div class="resume-spinner">
+                                      <div class="spinner-ring"></div>
+                                      <div class="spinner-ring"></div>
+                                      <div class="spinner-ring"></div>
+                                      <div class="spinner-ring"></div>
+                                  </div>
+                              `
+                            : 'Resume'}
+                    </button>
                     <button class="action-btn finalize-btn" @click=${this._handleFinalize} ?disabled=${this.isFadingOut}>Finalize</button>
                 </div>
             </div>

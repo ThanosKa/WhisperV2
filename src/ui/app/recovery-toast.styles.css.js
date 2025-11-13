@@ -143,6 +143,10 @@ export const recoveryToastStyles = css`
         border: 1px solid rgba(255, 255, 255, 0.2);
     }
 
+    .resume-btn.loading {
+        color: rgba(255, 255, 255, 0.7);
+    }
+
     .resume-btn:hover:not(:disabled) {
         background: rgba(255, 255, 255, 0.2);
         border-color: rgba(255, 255, 255, 0.3);
@@ -172,6 +176,56 @@ export const recoveryToastStyles = css`
         to {
             transform: scale(4);
             opacity: 0;
+        }
+    }
+
+    .resume-spinner {
+        width: 16px;
+        height: 16px;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .resume-spinner .spinner-ring {
+        position: absolute;
+        border: 2px solid rgba(255, 255, 255, 0.9);
+        border-radius: 50%;
+        animation: resume-spinner-pulse 2.5s infinite ease-out;
+    }
+
+    .resume-spinner .spinner-ring:nth-child(1) {
+        animation-delay: 0s;
+    }
+    .resume-spinner .spinner-ring:nth-child(2) {
+        animation-delay: 0.6s;
+    }
+    .resume-spinner .spinner-ring:nth-child(3) {
+        animation-delay: 1.2s;
+    }
+    .resume-spinner .spinner-ring:nth-child(4) {
+        animation-delay: 1.8s;
+    }
+
+    @keyframes resume-spinner-pulse {
+        0% {
+            width: 4px;
+            height: 4px;
+            opacity: 1;
+            border-width: 1.5px;
+        }
+        70% {
+            width: 20px;
+            height: 20px;
+            opacity: 0.6;
+            border-width: 1px;
+        }
+        100% {
+            width: 30px;
+            height: 30px;
+            opacity: 0;
+            border-width: 0.5px;
         }
     }
 

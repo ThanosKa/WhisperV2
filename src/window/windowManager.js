@@ -193,6 +193,66 @@ const showPlanWindow = visible => {
     internalBridge.emit('window:showPlanWindow', { visible });
 };
 
+const showRecoveryToast = (sessionInfo, headerBounds) => {
+    const toastWin = windowPool.get('recoveryToast');
+    if (!toastWin || toastWin.isDestroyed()) {
+        const header = windowPool.get('header');
+        if (header) {
+            createFeatureWindows(header, ['recoveryToast']);
+            setTimeout(() => {
+                const newWin = windowPool.get('recoveryToast');
+                if (newWin && !newWin.isDestroyed()) {
+                    positionRecoveryToast(newWin, headerBounds);
+                    newWin.webContents.send('recovery-toast:show', sessionInfo);
+                    newWin.show();
+                    newWin.setAlwaysOnTop(true);
+                    newWin.moveTop();
+                }
+            }, 100);
+        }
+        return;
+    }
+
+    positionRecoveryToast(toastWin, headerBounds);
+    toastWin.webContents.send('recovery-toast:show', sessionInfo);
+    toastWin.show();
+    toastWin.setAlwaysOnTop(true);
+    toastWin.moveTop();
+};
+
+const hideRecoveryToast = () => {
+    const toastWin = windowPool.get('recoveryToast');
+    if (!toastWin || toastWin.isDestroyed()) return;
+    toastWin.webContents.send('recovery-toast:hide');
+    toastWin.hide();
+};
+
+const positionRecoveryToast = (toastWin, headerBounds) => {
+    if (!headerBounds) {
+        const header = windowPool.get('header');
+        if (header && !header.isDestroyed()) {
+            headerBounds = header.getBounds();
+        } else {
+            return;
+        }
+    }
+
+    // Position toast below Listen button (center of header, offset down)
+    const toastWidth = 220;
+    const toastHeight = 90;
+    const offsetY = 10; // Gap below header
+
+    const x = headerBounds.x + headerBounds.width / 2 - toastWidth / 2;
+    const y = headerBounds.y + headerBounds.height + offsetY;
+
+    toastWin.setBounds({
+        x: Math.round(x),
+        y: Math.round(y),
+        width: toastWidth,
+        height: toastHeight,
+    });
+};
+
 const moveWindowStep = direction => {
     internalBridge.emit('window:moveStep', { direction });
 };
@@ -818,6 +878,36 @@ function createFeatureWindows(header, namesToCreate) {
                 console.log(`[WindowManager] Screenshot window created`);
                 break;
             }
+
+            // recovery toast (small ephemeral window)
+            case 'recoveryToast': {
+                const recoveryToast = new BrowserWindow({
+                    ...commonChildOptions,
+                    width: 220,
+                    height: 90,
+                    parent: undefined,
+                    alwaysOnTop: true,
+                });
+                recoveryToast.setContentProtection(isContentProtectionOn);
+                recoveryToast.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+                if (process.platform === 'darwin') {
+                    recoveryToast.setWindowButtonVisibility(false);
+                }
+                recoveryToast.loadFile(path.join(__dirname, '../ui/app/recovery-toast.html')).catch(console.error);
+                windowPool.set('recoveryToast', recoveryToast);
+
+                // Auto-hide on blur
+                recoveryToast.on('blur', () => {
+                    const focusedWindow = BrowserWindow.getFocusedWindow();
+                    const isFocusInApp = focusedWindow && Array.from(windowPool.values()).includes(focusedWindow);
+                    if (!isFocusInApp) {
+                        recoveryToast.hide();
+                    }
+                });
+
+                console.log(`[WindowManager] Recovery toast window created`);
+                break;
+            }
         }
     };
 
@@ -834,7 +924,7 @@ function createFeatureWindows(header, namesToCreate) {
 }
 
 function destroyFeatureWindows() {
-    const featureWindows = ['listen', 'ask', 'settings', 'plan', 'screenshot'];
+    const featureWindows = ['listen', 'ask', 'settings', 'plan', 'screenshot', 'recoveryToast'];
     if (settingsHideTimer) {
         clearTimeout(settingsHideTimer);
         settingsHideTimer = null;
@@ -926,7 +1016,7 @@ function createWindows() {
     setupWindowController(windowPool, layoutManager, movementManager);
 
     if (currentHeaderState === 'main') {
-        createFeatureWindows(header, ['listen', 'ask', 'settings', 'plan']);
+        createFeatureWindows(header, ['listen', 'ask', 'settings', 'plan', 'recoveryToast']);
     }
 
     header.setContentProtection(isContentProtectionOn);
@@ -1027,6 +1117,8 @@ module.exports = {
     showPlanWindow,
     hidePlanWindow,
     cancelHidePlanWindow,
+    showRecoveryToast,
+    hideRecoveryToast,
     openLoginPage,
     moveWindowStep,
     handleHeaderStateChanged,

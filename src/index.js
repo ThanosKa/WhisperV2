@@ -274,6 +274,15 @@ app.whenReady().then(async () => {
 
         createWindows();
 
+        // Open dev tools for recovery toast window on app launch (dev mode only)
+        if (!app.isPackaged) {
+            const { windowPool } = require('./window/windowManager');
+            const recoveryToastWin = windowPool.get('recoveryToast');
+            if (recoveryToastWin && !recoveryToastWin.isDestroyed()) {
+                recoveryToastWin.webContents.openDevTools({ mode: 'detach' });
+            }
+        }
+
         // Bootstrap recovery check AFTER windows are created (so header can receive notification)
         (async () => {
             try {

@@ -107,6 +107,11 @@ export class ListenView extends LitElement {
                 }
             });
 
+            // Force height recalculation trigger (for recovery resume)
+            window.api?.listenView?.onForceHeightRecalc?.(() => {
+                this.adjustWindowHeightThrottled();
+            });
+
             // Initialize presets selection on attach
             try {
                 const [{ presetId }, presets] = await Promise.all([

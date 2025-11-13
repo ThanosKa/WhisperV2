@@ -73,9 +73,7 @@ class ListenService {
             const insightsRepo = require('./summary/repositories');
             const allInsights = insightsRepo.getAllInsightsBySessionId(session.id);
 
-            console.log(
-                `[Recovery] Found: ${transcripts.length} transcripts, ${allInsights?.length || 0} insight rounds`
-            );
+            console.log(`[Recovery] Found: ${transcripts.length} transcripts, ${allInsights?.length || 0} insight rounds`);
             return { session, transcripts, insights: allInsights };
         } catch (err) {
             console.error('[Recovery] Error:', err);
@@ -636,6 +634,13 @@ class ListenService {
                         isPartial: false,
                     });
                 });
+                // Force height recalculation after transcripts load (fixes cut-off issue)
+                setTimeout(() => {
+                    if (listenWindow && !listenWindow.isDestroyed()) {
+                        // Trigger manual height adjustment to force ResizeObserver update
+                        listenWindow.webContents.send('force-height-recalc');
+                    }
+                }, 200);
             }
         }
 
@@ -683,9 +688,7 @@ class ListenService {
                 });
             });
         } else {
-            console.log(
-                `[Recovery] NOT sending insights - count: ${Array.isArray(insights) ? insights.length : 0}, window: ${!!listenWindow}`
-            );
+            console.log(`[Recovery] NOT sending insights - count: ${Array.isArray(insights) ? insights.length : 0}, window: ${!!listenWindow}`);
         }
 
         this.sendToRenderer('update-status', 'Session resumed. Ready to listen.');

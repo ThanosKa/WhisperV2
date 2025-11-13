@@ -16,6 +16,7 @@ const baseConfig = {
 const entryPoints = [
     { in: 'src/ui/app/HeaderController.js', out: 'public/build/header' },
     { in: 'src/ui/app/WhisperApp.js', out: 'public/build/content' },
+    { in: 'src/ui/app/RecoveryToast.js', out: 'public/build/recovery-toast' },
 ];
 
 async function build() {

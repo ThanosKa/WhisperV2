@@ -97,6 +97,17 @@ contextBridge.exposeInMainWorld('api', {
         handleRecoveryAction: (action, sessionId) => ipcRenderer.invoke('listen:handleRecoveryAction', action, sessionId),
         onStrandedSessionDetected: callback => ipcRenderer.on('listen:stranded-session-detected', callback),
         removeOnStrandedSessionDetected: callback => ipcRenderer.removeListener('listen:stranded-session-detected', callback),
+        showRecoveryToast: (sessionInfo, headerBounds) => ipcRenderer.invoke('recovery-toast:show', sessionInfo, headerBounds),
+        hideRecoveryToast: () => ipcRenderer.invoke('recovery-toast:hide'),
+    },
+
+    // src/ui/app/RecoveryToast.js
+    recoveryToast: {
+        onShow: callback => ipcRenderer.on('recovery-toast:show', callback),
+        removeOnShow: () => ipcRenderer.removeAllListeners('recovery-toast:show'),
+        onHide: callback => ipcRenderer.on('recovery-toast:hide', callback),
+        removeOnHide: () => ipcRenderer.removeAllListeners('recovery-toast:hide'),
+        handleRecoveryAction: (action, sessionId) => ipcRenderer.invoke('listen:handleRecoveryAction', action, sessionId),
     },
 
     // Quota/usage updates broadcast from main process
@@ -130,7 +141,7 @@ contextBridge.exposeInMainWorld('api', {
 
         // Message Handling
         sendMessage: (text, useScreenCapture = true) => ipcRenderer.invoke('ask:sendQuestionFromAsk', text, useScreenCapture),
-        setUseScreenCapture: (value) => ipcRenderer.invoke('ask:setUseScreenCapture', value),
+        setUseScreenCapture: value => ipcRenderer.invoke('ask:setUseScreenCapture', value),
         interruptStream: () => ipcRenderer.invoke('ask:interruptStream'),
 
         // Screenshot window management
@@ -153,6 +164,7 @@ contextBridge.exposeInMainWorld('api', {
     listenView: {
         // Window Management
         adjustWindowHeight: (winName, height) => ipcRenderer.invoke('adjust-window-height', { winName, height }),
+        onForceHeightRecalc: callback => ipcRenderer.on('force-height-recalc', callback),
 
         // Analysis Preset Management (Phase 1)
         listAnalysisPresets: () => ipcRenderer.invoke('listen:listAnalysisPresets'),

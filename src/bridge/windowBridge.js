@@ -23,6 +23,16 @@ module.exports = {
         ipcMain.on('hide-plan-window', () => windowManager.hidePlanWindow());
         ipcMain.on('cancel-hide-plan-window', () => windowManager.cancelHidePlanWindow());
 
+        // Recovery toast show/hide
+        ipcMain.handle('recovery-toast:show', (event, sessionInfo, headerBounds) => {
+            windowManager.showRecoveryToast(sessionInfo, headerBounds);
+            return { success: true };
+        });
+        ipcMain.handle('recovery-toast:hide', () => {
+            windowManager.hideRecoveryToast();
+            return { success: true };
+        });
+
         ipcMain.handle('open-login-page', () => windowManager.openLoginPage());
         ipcMain.handle('open-personalize-page', () => windowManager.openLoginPage());
         ipcMain.handle('move-window-step', (event, direction) => windowManager.moveWindowStep(direction));

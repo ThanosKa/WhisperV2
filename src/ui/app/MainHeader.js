@@ -200,9 +200,18 @@ export class MainHeader extends LitElement {
             window.api.headerController.onUserStateChanged(this._userStateListener);
 
             // Recovery listener
-        this._strandedSessionListener = (event, sessionInfo) => {
+        this._strandedSessionListener = async (event, sessionInfo) => {
             console.log('[Recovery] Header received prompt');
             this.strandedSession = sessionInfo;
+            // Show recovery toast window below Listen button
+            if (window.api && this.listenSessionStatus === 'beforeSession') {
+                try {
+                    const headerBounds = await window.api.mainHeader.getHeaderPosition();
+                    await window.api.mainHeader.showRecoveryToast(sessionInfo, headerBounds);
+                } catch (error) {
+                    console.error('[MainHeader] Failed to show recovery toast:', error);
+                }
+            }
         };
             window.api.mainHeader.onStrandedSessionDetected(this._strandedSessionListener);
 
@@ -428,31 +437,6 @@ export class MainHeader extends LitElement {
         }
     }
 
-    async _handleRecoveryResume() {
-        if (!this.strandedSession || !window.api) return;
-        const result = await window.api.mainHeader.handleRecoveryAction('resume', this.strandedSession.id);
-        if (result.success) {
-            this.strandedSession = null;
-        } else {
-            console.error('[MainHeader] Resume failed:', result.error);
-        }
-    }
-
-    async _handleRecoveryFinalize() {
-        if (!this.strandedSession || !window.api) return;
-        const result = await window.api.mainHeader.handleRecoveryAction('finalize', this.strandedSession.id);
-        if (result.success) {
-            this.strandedSession = null;
-        } else {
-            console.error('[MainHeader] Finalize failed:', result.error);
-        }
-    }
-
-    async _handleRecoveryDismiss() {
-        if (!this.strandedSession || !window.api) return;
-        await window.api.mainHeader.handleRecoveryAction('dismiss', this.strandedSession.id);
-        this.strandedSession = null;
-    }
 
     render() {
         const listenButtonText = this._getListenButtonText(this.listenSessionStatus);
@@ -479,16 +463,6 @@ export class MainHeader extends LitElement {
                 >
                     ${this._getPlanLabel()}
                 </button>
-                ${this.strandedSession && this.listenSessionStatus === 'beforeSession'
-                    ? html`
-                          <div class="recovery-prompt">
-                              <span class="recovery-text">Resume ${this.strandedSession.title}?</span>
-                              <button class="recovery-action" @click=${this._handleRecoveryResume}>Resume</button>
-                              <button class="recovery-action" @click=${this._handleRecoveryFinalize}>Finalize</button>
-                              <button class="recovery-dismiss" @click=${this._handleRecoveryDismiss}>×</button>
-                          </div>
-                      `
-                    : ''}
                 <button
                     class="listen-button ${Object.keys(buttonClasses)
                         .filter(k => buttonClasses[k])

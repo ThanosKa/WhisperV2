@@ -12,7 +12,7 @@ function create(uid, type = 'ask') {
     const query = `INSERT INTO sessions (id, uid, title, session_type, started_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`;
 
     try {
-        db.prepare(query).run(sessionId, uid, `Session @ ${new Date().toLocaleTimeString()}`, type, now, now);
+        db.prepare(query).run(sessionId, uid, `Session @ ${new Date().toLocaleTimeString('en-US')}`, type, now, now);
         console.log(`SQLite: Created session ${sessionId} for user ${uid} (type: ${type})`);
         return sessionId;
     } catch (err) {

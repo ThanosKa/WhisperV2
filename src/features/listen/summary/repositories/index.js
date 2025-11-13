@@ -1,4 +1,5 @@
 const sqliteRepository = require('./sqlite.repository');
+const insightsRepository = require('./insights.repository');
 const authService = require('../../../common/services/authService');
 
 function getBaseRepository() {
@@ -15,6 +16,11 @@ const summaryRepositoryAdapter = {
     getSummaryBySessionId: sessionId => {
         return getBaseRepository().getSummaryBySessionId(sessionId);
     },
+    // Insights methods
+    saveInsight: insightsRepository.saveInsight,
+    getLatestInsightBySessionId: insightsRepository.getLatestInsightBySessionId,
+    getAllInsightsBySessionId: insightsRepository.getAllInsightsBySessionId,
 };
 
 module.exports = summaryRepositoryAdapter;
+

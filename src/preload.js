@@ -92,6 +92,11 @@ contextBridge.exposeInMainWorld('api', {
         isListenWindowVisible: () => ipcRenderer.invoke('window:is-visible', 'listen'),
         onListenWindowVisibilityChanged: callback => ipcRenderer.on('listen-window-visibility', callback),
         removeOnListenWindowVisibilityChanged: callback => ipcRenderer.removeListener('listen-window-visibility', callback),
+
+        // Recovery actions
+        handleRecoveryAction: (action, sessionId) => ipcRenderer.invoke('listen:handleRecoveryAction', action, sessionId),
+        onStrandedSessionDetected: callback => ipcRenderer.on('listen:stranded-session-detected', callback),
+        removeOnStrandedSessionDetected: callback => ipcRenderer.removeListener('listen:stranded-session-detected', callback),
     },
 
     // Quota/usage updates broadcast from main process

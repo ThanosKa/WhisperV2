@@ -139,7 +139,10 @@ class AuthService {
         sessionStore.set('userProfile', userProfile);
 
         // Clean up any zombie sessions from a previous run for this user.
-        await sessionRepository.endAllActiveSessions();
+        // await sessionRepository.endAllActiveSessions();
+
+        // NOTE: Don't end sessions here - we want to preserve unfinished sessions for crash recovery
+        // Sessions are only ended on explicit sign-out (see signOut() and handleUserSignOut())
 
         // Check for and run data migration for the user
         // Migration service disabled - using local-first data strategy with webapp authentication

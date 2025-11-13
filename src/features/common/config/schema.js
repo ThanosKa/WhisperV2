@@ -103,6 +103,18 @@ const LATEST_SCHEMA = {
     permissions: {
         columns: [{ name: 'uid', type: 'TEXT PRIMARY KEY' }],
     },
+    session_insights: {
+        columns: [
+            { name: 'id', type: 'TEXT PRIMARY KEY' },
+            { name: 'session_id', type: 'TEXT NOT NULL' },
+            { name: 'analysis_round', type: 'INTEGER NOT NULL' },
+            { name: 'payload_json', type: 'TEXT NOT NULL' },
+            { name: 'created_at', type: 'INTEGER NOT NULL' },
+        ],
+        indexes: [
+            { name: 'idx_session_insights_session', columns: ['session_id', 'analysis_round'] }
+        ]
+    },
 };
 
 module.exports = LATEST_SCHEMA;

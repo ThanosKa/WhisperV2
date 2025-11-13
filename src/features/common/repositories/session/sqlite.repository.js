@@ -125,6 +125,19 @@ function endAllActiveSessions(uid) {
     }
 }
 
+function findLatestUnfinishedListen(uid) {
+    const db = sqliteClient.getDb();
+    const query = `
+        SELECT * FROM sessions 
+        WHERE uid = ? 
+          AND session_type = 'listen' 
+          AND ended_at IS NULL
+        ORDER BY started_at DESC 
+        LIMIT 1
+    `;
+    return db.prepare(query).get(uid);
+}
+
 module.exports = {
     getById,
     create,
@@ -136,4 +149,5 @@ module.exports = {
     touch,
     getOrCreateActive,
     endAllActiveSessions,
+    findLatestUnfinishedListen,
 };

@@ -265,11 +265,25 @@ app.whenReady().then(async () => {
         windowBridge.initialize();
         setupWebDataHandlers();
 
+        // Initialize listen service
+        listenService.initialize();
+
         // Start web server and create windows ONLY after all initializations are successful
         WEB_PORT = await startWebStack();
         console.log('Web front-end listening on', WEB_PORT);
 
         createWindows();
+
+        // Bootstrap recovery check AFTER windows are created (so header can receive notification)
+        (async () => {
+            try {
+                console.log('[Main] Starting recovery bootstrap...');
+                await listenService.bootstrapRecovery();
+                console.log('[Main] Recovery bootstrap complete');
+            } catch (err) {
+                console.error('[Main] Recovery bootstrap failed:', err);
+            }
+        })();
     } catch (err) {
         console.error('>>> [index.js] Database initialization failed - some features may not work', err);
         // Optionally, show an error dialog to the user
@@ -306,17 +320,12 @@ app.on('before-quit', async event => {
     event.preventDefault();
 
     try {
-        // 1. Stop audio capture first (immediate)
-        await listenService.closeSession();
+        // 1. Stop audio capture first (immediate) - don't end session, preserve for recovery
+        await listenService.stopAudioCapture();
         console.log('[Shutdown] Audio capture stopped');
 
-        // 2. End all active sessions (database operations) - with error handling
-        try {
-            await sessionRepository.endAllActiveSessions();
-            console.log('[Shutdown] Active sessions ended');
-        } catch (dbError) {
-            console.warn('[Shutdown] Could not end active sessions (database may be closed):', dbError.message);
-        }
+        // NOTE: Don't end sessions on app close - preserve them for crash recovery
+        // Sessions are only ended when user explicitly clicks "Done" or signs out
 
         // 4. Close database connections (final cleanup)
         try {

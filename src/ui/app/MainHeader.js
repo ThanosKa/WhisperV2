@@ -10,6 +10,7 @@ export class MainHeader extends LitElement {
         apiQuota: { type: Object, state: true },
         isLoadingPlan: { type: Boolean, state: true },
         isListenWindowVisible: { type: Boolean, state: true },
+        strandedSession: { type: Object, state: true },
     };
 
     static styles = mainHeaderStyles;
@@ -36,6 +37,7 @@ export class MainHeader extends LitElement {
         this.userPlan = 'free';
         this.apiQuota = null; // { daily, used, remaining }
         this.isLoadingPlan = false;
+        this.strandedSession = null;
     }
 
     async loadShortcuts() {
@@ -197,6 +199,13 @@ export class MainHeader extends LitElement {
             };
             window.api.headerController.onUserStateChanged(this._userStateListener);
 
+            // Recovery listener
+        this._strandedSessionListener = (event, sessionInfo) => {
+            console.log('[Recovery] Header received prompt');
+            this.strandedSession = sessionInfo;
+        };
+            window.api.mainHeader.onStrandedSessionDetected(this._strandedSessionListener);
+
             this._listenVisibilityListener = (event, visible) => {
                 this.isListenWindowVisible = !!visible;
             };
@@ -235,6 +244,10 @@ export class MainHeader extends LitElement {
             if (this._listenVisibilityListener) {
                 window.api.mainHeader.removeOnListenWindowVisibilityChanged(this._listenVisibilityListener);
                 this._listenVisibilityListener = null;
+            }
+            if (this._strandedSessionListener) {
+                window.api.mainHeader.removeOnStrandedSessionDetected(this._strandedSessionListener);
+                this._strandedSessionListener = null;
             }
         }
     }
@@ -415,6 +428,32 @@ export class MainHeader extends LitElement {
         }
     }
 
+    async _handleRecoveryResume() {
+        if (!this.strandedSession || !window.api) return;
+        const result = await window.api.mainHeader.handleRecoveryAction('resume', this.strandedSession.id);
+        if (result.success) {
+            this.strandedSession = null;
+        } else {
+            console.error('[MainHeader] Resume failed:', result.error);
+        }
+    }
+
+    async _handleRecoveryFinalize() {
+        if (!this.strandedSession || !window.api) return;
+        const result = await window.api.mainHeader.handleRecoveryAction('finalize', this.strandedSession.id);
+        if (result.success) {
+            this.strandedSession = null;
+        } else {
+            console.error('[MainHeader] Finalize failed:', result.error);
+        }
+    }
+
+    async _handleRecoveryDismiss() {
+        if (!this.strandedSession || !window.api) return;
+        await window.api.mainHeader.handleRecoveryAction('dismiss', this.strandedSession.id);
+        this.strandedSession = null;
+    }
+
     render() {
         const listenButtonText = this._getListenButtonText(this.listenSessionStatus);
 
@@ -440,6 +479,16 @@ export class MainHeader extends LitElement {
                 >
                     ${this._getPlanLabel()}
                 </button>
+                ${this.strandedSession && this.listenSessionStatus === 'beforeSession'
+                    ? html`
+                          <div class="recovery-prompt">
+                              <span class="recovery-text">Resume ${this.strandedSession.title}?</span>
+                              <button class="recovery-action" @click=${this._handleRecoveryResume}>Resume</button>
+                              <button class="recovery-action" @click=${this._handleRecoveryFinalize}>Finalize</button>
+                              <button class="recovery-dismiss" @click=${this._handleRecoveryDismiss}>×</button>
+                          </div>
+                      `
+                    : ''}
                 <button
                     class="listen-button ${Object.keys(buttonClasses)
                         .filter(k => buttonClasses[k])

@@ -31,6 +31,9 @@ class SummaryService {
         this.onStatusUpdate = null;
         this.batchTimer = null; // For time fallback
 
+        // Insights repository for crash recovery
+        this.insightsRepo = require('./repositories');
+
         // Load mock convo data if needed (for mock STT)
         this.loadMockData();
     }
@@ -264,6 +267,43 @@ class SummaryService {
             this.customSystemPrompt = null;
             return { success: false, error: err.message };
         }
+    }
+
+    hydrateConversation(transcripts) {
+        if (!Array.isArray(transcripts)) return;
+
+        console.log(`[SummaryService] Hydrating ${transcripts.length} transcripts WITHOUT triggering analysis`);
+
+        // Reset state
+        this.conversationHistory = [];
+        this.lastAnalyzedIndex = 0;
+
+        // Populate history without calling addConversationTurn (which triggers analysis)
+        transcripts.forEach(t => {
+            const conversationText = `${t.speaker.toLowerCase()}: ${t.text.trim()}`;
+            this.conversationHistory.push(conversationText);
+        });
+
+        // Update lastAnalyzedIndex to prevent immediate re-analysis
+        this.lastAnalyzedIndex = this.conversationHistory.length;
+
+        console.log(`[SummaryService] Hydrated ${this.conversationHistory.length} turns, lastAnalyzedIndex=${this.lastAnalyzedIndex}`);
+    }
+
+    hydrateInsights(insightPayload) {
+        if (!insightPayload) return;
+
+        console.log('[SummaryService] Hydrating insights from persisted data');
+
+        // Restore previousAnalysisResult so context continuity works
+        this.previousAnalysisResult = insightPayload;
+
+        // Add to history for audit trail
+        this.analysisHistory.push(insightPayload);
+
+        console.log(
+            `[SummaryService] Restored ${insightPayload.summary?.length || 0} summary points, ${insightPayload.actions?.length || 0} actions`
+        );
     }
 
     simulateMockAnalysis() {
@@ -924,6 +964,25 @@ PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (acti
         const data = await this.makeOutlineAndRequests(textsToAnalyze);
         if (data) {
             data.actions = Array.isArray(data.actions) ? data.actions : [];
+
+            // Persist insights to SQLite
+            if (this.currentSessionId) {
+                try {
+                    this.insightsRepo.saveInsight({
+                        sessionId: this.currentSessionId,
+                        analysisRound: this.analysisRound,
+                        payload: {
+                            summary: data.summary || [],
+                            actions: data.actions,
+                            followUps: data.followUps || [],
+                            sections: data.sections || [],
+                        },
+                    });
+                    console.log(`[SummaryService] Persisted insights round ${this.analysisRound} for session ${this.currentSessionId}`);
+                } catch (err) {
+                    console.error('[SummaryService] Failed to persist insights:', err);
+                }
+            }
 
             // Add recap button if conversation is long enough
             if (this.conversationHistory.length >= recapStep) {

@@ -146,6 +146,16 @@ module.exports = {
             }
         });
 
+        // Recovery actions
+        ipcMain.handle('listen:handleRecoveryAction', async (event, action, sessionId) => {
+            try {
+                return await listenService.handleRecoveryAction(action, sessionId);
+            } catch (error) {
+                console.error('[FeatureBridge] Recovery action failed:', error);
+                return { success: false, error: error.message };
+            }
+        });
+
         // Model provider IPC removed; keep a no-op re-initialize for header compat
         ipcMain.handle('model:re-initialize-state', async () => ({ success: true }));
         // Removed broadcasting model-state/settings-updated from modelStateService

@@ -12,6 +12,8 @@ class ListenService {
         this.summaryService = summaryService;
         this.currentSessionId = null;
         this.isInitializingSession = false;
+        this.strandedSession = null; // { session, transcripts, insights }
+        this.isRecoveryDismissed = false;
 
         this.setupServiceCallbacks();
         console.log('[ListenService] Service instance created.');
@@ -48,8 +50,62 @@ class ListenService {
         }
     }
 
+    async findStrandedSession() {
+        try {
+            const uid = authService.getCurrentUserId();
+            if (!uid) {
+                console.log('[Recovery] No user - skipping check');
+                return null;
+            }
+
+            const session = sessionRepository.findLatestUnfinishedListen();
+            if (!session) {
+                console.log('[Recovery] No unfinished sessions');
+                return null;
+            }
+
+            const transcripts = await sttRepository.getAllTranscriptsBySessionId(session.id);
+            if (!transcripts || transcripts.length === 0) {
+                console.log('[Recovery] Session found but no transcripts');
+                return null;
+            }
+
+            const insightsRepo = require('./summary/repositories');
+            const allInsights = insightsRepo.getAllInsightsBySessionId(session.id);
+
+            console.log(
+                `[Recovery] Found: ${transcripts.length} transcripts, ${allInsights?.length || 0} insight rounds`
+            );
+            return { session, transcripts, insights: allInsights };
+        } catch (err) {
+            console.error('[Recovery] Error:', err);
+            return null;
+        }
+    }
+
+    async bootstrapRecovery() {
+        console.log('[Recovery] Bootstrap starting...');
+        this.strandedSession = await this.findStrandedSession();
+        if (this.strandedSession && !this.isRecoveryDismissed) {
+            console.log('[Recovery] Notifying header...');
+            this.notifyHeaderOfStrandedSession(this.strandedSession.session);
+        }
+    }
+
+    notifyHeaderOfStrandedSession(session) {
+        const { windowPool } = require('../../window/windowManager');
+        const header = windowPool?.get('header');
+        if (header && !header.isDestroyed()) {
+            header.webContents.send('listen:stranded-session-detected', {
+                id: session.id,
+                title: session.title || 'Untitled Session',
+                started_at: session.started_at,
+            });
+        }
+    }
+
     initialize() {
-        this.setupIpcHandlers();
+        // IPC handlers are set up in featureBridge.js
         console.log('[ListenService] Initialized and ready.');
     }
 
@@ -63,6 +119,16 @@ class ListenService {
             switch (listenButtonText) {
                 case 'Listen':
                     console.log('[ListenService] changeSession to "Listen"');
+
+                    // Guard: Block if stranded session exists and not dismissed
+                    if (this.strandedSession && !this.isRecoveryDismissed) {
+                        console.log('[ListenService] Blocking Listen - stranded session must be resolved');
+                        this.notifyHeaderOfStrandedSession(this.strandedSession.session);
+                        nextStatus = 'beforeSession';
+                        header.webContents.send('listen:changeSessionResult', { success: false, nextStatus });
+                        return;
+                    }
+
                     if (this.isSessionActive()) {
                         internalBridge.emit('window:requestVisibility', { name: 'listen', visible: true });
                         setTimeout(() => {
@@ -279,6 +345,17 @@ class ListenService {
 
     isSessionActive() {
         return this.sttService.isSessionActive();
+    }
+
+    async stopAudioCapture() {
+        // Stop audio without ending session (for app shutdown/crash recovery)
+        try {
+            this.sendToRenderer('change-listen-capture-state', { status: 'stop' });
+            await this.sttService.closeSessions();
+            await this.stopMacOSAudioCapture();
+        } catch (err) {
+            console.error('[ListenService] Error stopping audio capture:', err);
+        }
     }
 
     async closeSession() {
@@ -500,6 +577,157 @@ class ListenService {
         } catch (err) {
             console.warn('[ListenService] Error in _generateAndSaveComprehensiveSummary:', err.message);
         }
+    }
+
+    async handleRecoveryAction(action, sessionId) {
+        if (!this.strandedSession || this.strandedSession.session.id !== sessionId) {
+            console.warn(`[ListenService] Recovery action mismatch: expected ${this.strandedSession?.session.id}, got ${sessionId}`);
+            return { success: false, error: 'Session mismatch' };
+        }
+
+        try {
+            if (action === 'resume') {
+                return await this.resumeStrandedSession();
+            } else if (action === 'finalize') {
+                return await this.finalizeStrandedSession();
+            } else if (action === 'dismiss') {
+                this.isRecoveryDismissed = true;
+                this.strandedSession = null;
+                return { success: true };
+            }
+            return { success: false, error: 'Unknown action' };
+        } catch (err) {
+            console.error(`[ListenService] Recovery action '${action}' failed:`, err);
+            return { success: false, error: err.message };
+        }
+    }
+
+    async resumeStrandedSession() {
+        const { session, transcripts, insights } = this.strandedSession;
+
+        // Set as current session (DON'T create new one)
+        this.currentSessionId = session.id;
+        this.summaryService.setSessionId(session.id);
+
+        // Hydrate transcripts WITHOUT triggering analysis
+        this.summaryService.hydrateConversation(transcripts);
+
+        // Hydrate insights if they exist
+        if (Array.isArray(insights) && insights.length > 0) {
+            const latestInsight = insights[insights.length - 1];
+            console.log(
+                `[Recovery] Hydrating insights: ${latestInsight.payload?.summary?.length || 0} summary, ${latestInsight.payload?.actions?.length || 0} actions`
+            );
+            this.summaryService.hydrateInsights(latestInsight.payload);
+        } else {
+            console.log('[Recovery] No insights to hydrate');
+        }
+
+        // Send recovered transcripts to UI
+        if (transcripts && transcripts.length > 0) {
+            const listenWindow = require('../../window/windowManager').windowPool?.get('listen');
+            if (listenWindow && !listenWindow.isDestroyed()) {
+                console.log(`[Recovery] Sending ${transcripts.length} transcripts to UI`);
+                transcripts.forEach(t => {
+                    listenWindow.webContents.send('stt-update', {
+                        speaker: t.speaker,
+                        text: t.text,
+                        isFinal: true,
+                        isPartial: false,
+                    });
+                });
+            }
+        }
+
+        // Notify SummaryView about existing transcripts (fixes "Insights will appear here" placeholder)
+        if (transcripts && transcripts.length > 0) {
+            const history = transcripts.map(t => ({ speaker: t.speaker, text: t.text }));
+            this.sendToRenderer('listen:sync-conversation-history', history);
+        }
+
+        console.log(`[ListenService] Resumed session ${session.id}: ${transcripts.length} transcripts, insights: ${!!insights}`);
+
+        // Clear stranded state
+        this.strandedSession = null;
+        this.isRecoveryDismissed = false;
+
+        // Re-initialize STT
+        this.sendToRenderer('session-initializing', true);
+        this.sendToRenderer('update-status', 'Resuming session...');
+
+        const MAX_RETRY = 10;
+        const RETRY_DELAY_MS = 300;
+        let sttReady = false;
+        for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+            try {
+                await this.sttService.initializeSttSessions('en');
+                sttReady = true;
+                break;
+            } catch (err) {
+                console.warn(`[ListenService] STT resume attempt ${attempt} failed: ${err.message}`);
+                if (attempt < MAX_RETRY) {
+                    await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+                }
+            }
+        }
+        if (!sttReady) throw new Error('STT resume failed after retries');
+
+        // Send restored insights to renderer
+        const listenWindow = require('../../window/windowManager').windowPool?.get('listen');
+        if (Array.isArray(insights) && insights.length > 0 && listenWindow && !listenWindow.isDestroyed()) {
+            console.log(`[Recovery] Sending ${insights.length} insight rounds to UI`);
+            insights.forEach(insight => {
+                listenWindow.webContents.send('summary-update', {
+                    ...insight.payload,
+                    presetId: this.summaryService.selectedPresetId || null,
+                });
+            });
+        } else {
+            console.log(
+                `[Recovery] NOT sending insights - count: ${Array.isArray(insights) ? insights.length : 0}, window: ${!!listenWindow}`
+            );
+        }
+
+        this.sendToRenderer('update-status', 'Session resumed. Ready to listen.');
+        this.sendToRenderer('session-initializing', false);
+        this.sendToRenderer('change-listen-capture-state', { status: 'start' });
+
+        // Notify Listen window that session is active (enables transcription)
+        if (listenWindow && !listenWindow.isDestroyed()) {
+            listenWindow.webContents.send('session-state-changed', { isActive: true, mode: 'resume' });
+        }
+
+        // Show listen window
+        const internalBridge = require('../../bridge/internalBridge');
+        internalBridge.emit('window:requestVisibility', { name: 'listen', visible: true });
+
+        // Notify header to transition to inSession
+        const { windowPool } = require('../../window/windowManager');
+        const header = windowPool.get('header');
+        if (header) {
+            header.webContents.send('listen:changeSessionResult', { success: true, nextStatus: 'inSession' });
+        }
+
+        return { success: true };
+    }
+
+    async finalizeStrandedSession() {
+        const { session } = this.strandedSession;
+
+        console.log(`[ListenService] Finalizing stranded session ${session.id}`);
+
+        // Run summary/title pipeline
+        await this._generateAndSaveComprehensiveSummary(session.id);
+
+        // Mark session as ended
+        await sessionRepository.end(session.id);
+
+        // Clear stranded state
+        this.strandedSession = null;
+        this.isRecoveryDismissed = false;
+
+        console.log(`[ListenService] Finalized stranded session ${session.id}`);
+        return { success: true };
     }
 
     _createHandler(asyncFn, successMessage, errorMessage) {

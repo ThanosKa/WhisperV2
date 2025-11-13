@@ -186,6 +186,18 @@ class SQLiteClient {
             stmt.run(preset[0], '', preset[1], preset[2], preset[3], now, null);
         }
 
+        // Create session_insights table if it doesn't exist (fallback for schema sync)
+        this.db.exec(`
+            CREATE TABLE IF NOT EXISTS session_insights (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                analysis_round INTEGER NOT NULL,
+                payload_json TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            )
+        `);
+        this.db.exec(`CREATE INDEX IF NOT EXISTS idx_session_insights_session ON session_insights (session_id, analysis_round)`);
+
         console.log('Default data initialized.');
     }
 

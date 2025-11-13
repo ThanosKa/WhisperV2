@@ -68,6 +68,12 @@ const sessionRepositoryAdapter = {
         }
         return getBaseRepository().endAllActiveSessions(uid);
     },
+
+    findLatestUnfinishedListen: () => {
+        const uid = authService.getCurrentUserId();
+        if (!uid) return null;
+        return getBaseRepository().findLatestUnfinishedListen(uid);
+    },
 };
 
 module.exports = sessionRepositoryAdapter;

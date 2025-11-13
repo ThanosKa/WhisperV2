@@ -19,6 +19,17 @@ let lastVisibleWindows = new Set(['header']);
 let currentHeaderState = 'apikey';
 const windowPool = new Map();
 
+function notifyWindowVisibility(name, visible) {
+    if (name !== 'listen') return;
+    const header = windowPool.get('header');
+    if (!header || header.isDestroyed()) return;
+    try {
+        header.webContents.send('listen-window-visibility', !!visible);
+    } catch (e) {
+        console.warn(`[WindowManager] Failed to notify visibility for '${name}':`, e?.message || e);
+    }
+}
+
 let settingsHideTimer = null;
 let screenshotHideTimer = null;
 let planHideTimer = null;
@@ -402,7 +413,10 @@ function changeAllWindowsVisibility(windowPool, targetVisibility) {
         lastVisibleWindows.forEach(name => {
             if (name === 'header') return;
             const win = windowPool.get(name);
-            if (win && !win.isDestroyed()) win.hide();
+            if (win && !win.isDestroyed()) {
+                win.hide();
+                notifyWindowVisibility(name, false);
+            }
         });
         header.hide();
 
@@ -411,7 +425,10 @@ function changeAllWindowsVisibility(windowPool, targetVisibility) {
 
     lastVisibleWindows.forEach(name => {
         const win = windowPool.get(name);
-        if (win && !win.isDestroyed()) win.show();
+        if (win && !win.isDestroyed()) {
+            win.show();
+            notifyWindowVisibility(name, true);
+        }
     });
 }
 
@@ -436,6 +453,7 @@ async function handleWindowVisibilityRequest(windowPool, layoutManager, movement
         const isCurrentlyVisible = win.isVisible();
         if (isCurrentlyVisible === shouldBeVisible) {
             console.log(`[WindowManager] Window '${name}' is already in the desired state.`);
+            notifyWindowVisibility(name, isCurrentlyVisible);
             return;
         }
     }
@@ -534,15 +552,25 @@ async function handleWindowVisibilityRequest(windowPool, layoutManager, movement
 
             movementManager.fade(win, { to: 1 });
             movementManager.animateLayout(targetLayout);
+            notifyWindowVisibility(name, true);
         } else {
-            if (!win || !win.isVisible()) return;
+            if (!win || !win.isVisible()) {
+                notifyWindowVisibility(name, false);
+                return;
+            }
 
             const currentBounds = win.getBounds();
             const targetPos = { ...currentBounds };
             if (name === 'listen') targetPos.x -= ANIM_OFFSET_X;
             else if (name === 'ask') targetPos.y -= ANIM_OFFSET_Y;
 
-            movementManager.fade(win, { to: 0, onComplete: () => win.hide() });
+            movementManager.fade(win, {
+                to: 0,
+                onComplete: () => {
+                    win.hide();
+                    notifyWindowVisibility(name, false);
+                },
+            });
             movementManager.animateWindowPosition(win, targetPos);
 
             // Animate other windows to new layout

@@ -90,6 +90,8 @@ contextBridge.exposeInMainWorld('api', {
         // Listen window visibility
         setListenWindowVisibility: visible => ipcRenderer.invoke('window:set-visibility', { name: 'listen', visible }),
         isListenWindowVisible: () => ipcRenderer.invoke('window:is-visible', 'listen'),
+        onListenWindowVisibilityChanged: callback => ipcRenderer.on('listen-window-visibility', callback),
+        removeOnListenWindowVisibilityChanged: callback => ipcRenderer.removeListener('listen-window-visibility', callback),
     },
 
     // Quota/usage updates broadcast from main process

@@ -30,6 +30,7 @@ export class MainHeader extends LitElement {
         this.dragState = null;
         this.wasJustDragged = false;
         this.isListenWindowVisible = false;
+        this._listenVisibilityListener = null;
 
         // Plan / quota state
         this.userPlan = 'free';
@@ -196,6 +197,11 @@ export class MainHeader extends LitElement {
             };
             window.api.headerController.onUserStateChanged(this._userStateListener);
 
+            this._listenVisibilityListener = (event, visible) => {
+                this.isListenWindowVisible = !!visible;
+            };
+            window.api.mainHeader.onListenWindowVisibilityChanged(this._listenVisibilityListener);
+
             // Initialize listen window visibility state (non-blocking)
             try {
                 window.api.mainHeader
@@ -220,9 +226,15 @@ export class MainHeader extends LitElement {
         if (window.api) {
             if (this._sessionStateTextListener) {
                 window.api.mainHeader.removeOnListenChangeSessionResult(this._sessionStateTextListener);
+                this._sessionStateTextListener = null;
             }
             if (this._userStateListener) {
                 window.api.headerController.removeOnUserStateChanged(this._userStateListener);
+                this._userStateListener = null;
+            }
+            if (this._listenVisibilityListener) {
+                window.api.mainHeader.removeOnListenWindowVisibilityChanged(this._listenVisibilityListener);
+                this._listenVisibilityListener = null;
             }
         }
     }

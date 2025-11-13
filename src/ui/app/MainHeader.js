@@ -203,17 +203,10 @@ export class MainHeader extends LitElement {
         this._strandedSessionListener = async (event, sessionInfo) => {
             console.log('[Recovery] Header received prompt');
             this.strandedSession = sessionInfo;
-            // Show recovery toast window below Listen button
-            if (window.api && this.listenSessionStatus === 'beforeSession') {
-                try {
-                    const headerBounds = await window.api.mainHeader.getHeaderPosition();
-                    await window.api.mainHeader.showRecoveryToast(sessionInfo, headerBounds);
-                } catch (error) {
-                    console.error('[MainHeader] Failed to show recovery toast:', error);
-                }
-            }
+            await this._maybeShowRecoveryToast(sessionInfo);
         };
-            window.api.mainHeader.onStrandedSessionDetected(this._strandedSessionListener);
+        window.api.mainHeader.onStrandedSessionDetected(this._strandedSessionListener);
+        this._hydrateStrandedSessionState();
 
             this._listenVisibilityListener = (event, visible) => {
                 this.isListenWindowVisible = !!visible;
@@ -349,6 +342,34 @@ export class MainHeader extends LitElement {
             }
         } catch (error) {
             console.error('IPC invoke for all windows visibility button failed:', error);
+        }
+    }
+
+    async _maybeShowRecoveryToast(sessionInfo) {
+        if (!window.api || this.listenSessionStatus !== 'beforeSession' || !sessionInfo) {
+            return;
+        }
+        try {
+            const headerBounds = await window.api.mainHeader.getHeaderPosition();
+            await window.api.mainHeader.showRecoveryToast(sessionInfo, headerBounds);
+        } catch (error) {
+            console.error('[MainHeader] Failed to show recovery toast:', error);
+        }
+    }
+
+    async _hydrateStrandedSessionState() {
+        if (!window.api?.mainHeader?.getStrandedSession) {
+            return;
+        }
+        try {
+            const sessionInfo = await window.api.mainHeader.getStrandedSession();
+            if (!sessionInfo) {
+                return;
+            }
+            this.strandedSession = sessionInfo;
+            await this._maybeShowRecoveryToast(sessionInfo);
+        } catch (error) {
+            console.error('[MainHeader] Failed to hydrate stranded session state:', error);
         }
     }
 

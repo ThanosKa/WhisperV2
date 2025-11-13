@@ -102,6 +102,18 @@ class ListenService {
         }
     }
 
+    getStrandedSessionInfo() {
+        if (!this.strandedSession?.session) {
+            return null;
+        }
+        const { id, title, started_at } = this.strandedSession.session;
+        return {
+            id,
+            title: title || 'Untitled Session',
+            started_at,
+        };
+    }
+
     initialize() {
         // IPC handlers are set up in featureBridge.js
         console.log('[ListenService] Initialized and ready.');

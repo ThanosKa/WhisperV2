@@ -5,7 +5,6 @@ export class RecoveryToast extends LitElement {
     static properties = {
         sessionInfo: { type: Object, state: true },
         isFadingOut: { type: Boolean, state: true },
-        showRipple: { type: Boolean, state: true },
     };
 
     static styles = recoveryToastStyles;
@@ -14,7 +13,6 @@ export class RecoveryToast extends LitElement {
         super();
         this.sessionInfo = null;
         this.isFadingOut = false;
-        this.showRipple = false;
     }
 
     connectedCallback() {
@@ -23,7 +21,6 @@ export class RecoveryToast extends LitElement {
             window.api.recoveryToast.onShow((event, sessionInfo) => {
                 this.sessionInfo = sessionInfo;
                 this.isFadingOut = false;
-                this.showRipple = false;
             });
             window.api.recoveryToast.onHide(() => {
                 this.hide();
@@ -47,15 +44,29 @@ export class RecoveryToast extends LitElement {
         }, 300);
     }
 
-    async _handleResume() {
+    async _handleResume(e) {
         if (!this.sessionInfo || !window.api) return;
-        this.showRipple = true;
+
+        // Create ripple effect
+        const button = e.currentTarget;
+        const ripple = document.createElement('div');
+        ripple.classList.add('ripple');
+        const rect = button.getBoundingClientRect();
+        const size = Math.max(rect.width, rect.height);
+        const x = e.clientX - rect.left - size / 2;
+        const y = e.clientY - rect.top - size / 2;
+        ripple.style.width = ripple.style.height = size + 'px';
+        ripple.style.left = x + 'px';
+        ripple.style.top = y + 'px';
+        button.appendChild(ripple);
+
+        setTimeout(() => ripple.remove(), 600);
+
         const result = await window.api.recoveryToast.handleRecoveryAction('resume', this.sessionInfo.id);
         if (result.success) {
             this.hide();
         } else {
             console.error('[RecoveryToast] Resume failed:', result.error);
-            this.showRipple = false;
         }
     }
 
@@ -82,35 +93,20 @@ export class RecoveryToast extends LitElement {
         }
 
         return html`
-            <div class="toast-container ${this.isFadingOut ? 'fading-out' : ''}">
-                <div class="toast-content">
-                    <div class="toast-header">
-                        <span class="toast-text">Resume ${this.sessionInfo.title || 'session'}?</span>
-                        <button class="dismiss-button" @click=${this._handleDismiss}>×</button>
+            <div class="recovery-toast ${this.isFadingOut ? 'fade-out' : ''}">
+                <div class="header">
+                    <div class="header-content">
+                        <div class="status-dot"></div>
+                        <div class="text-group">
+                            <div class="title">Resume session?</div>
+                            <div class="session-name">"${this.sessionInfo.title || 'Session'}"</div>
+                        </div>
                     </div>
-                    <div class="toast-actions">
-                        <button 
-                            class="resume-button ${this.showRipple ? 'with-ripple' : ''}" 
-                            @click=${this._handleResume}
-                            ?disabled=${this.isFadingOut}
-                        >
-                            ${this.showRipple ? html`
-                                <div class="water-drop-ripple">
-                                    <div class="ripple-ring"></div>
-                                    <div class="ripple-ring"></div>
-                                    <div class="ripple-ring"></div>
-                                    <div class="ripple-ring"></div>
-                                </div>
-                            ` : 'Resume'}
-                        </button>
-                        <button 
-                            class="finalize-button" 
-                            @click=${this._handleFinalize}
-                            ?disabled=${this.isFadingOut}
-                        >
-                            Finalize
-                        </button>
-                    </div>
+                    <button class="close-btn" @click=${this._handleDismiss}>×</button>
+                </div>
+                <div class="actions">
+                    <button class="action-btn resume-btn" @click=${this._handleResume} ?disabled=${this.isFadingOut}>Resume</button>
+                    <button class="action-btn finalize-btn" @click=${this._handleFinalize} ?disabled=${this.isFadingOut}>Finalize</button>
                 </div>
             </div>
         `;
@@ -118,4 +114,3 @@ export class RecoveryToast extends LitElement {
 }
 
 customElements.define('recovery-toast', RecoveryToast);
-

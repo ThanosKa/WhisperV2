@@ -238,8 +238,8 @@ const positionRecoveryToast = (toastWin, headerBounds) => {
     }
 
     // Position toast below Listen button (center of header, offset down)
-    const toastWidth = 220;
-    const toastHeight = 90;
+    const toastWidth = 270;
+    const toastHeight = 125;
     const offsetY = 10; // Gap below header
 
     const x = headerBounds.x + headerBounds.width / 2 - toastWidth / 2;
@@ -883,8 +883,8 @@ function createFeatureWindows(header, namesToCreate) {
             case 'recoveryToast': {
                 const recoveryToast = new BrowserWindow({
                     ...commonChildOptions,
-                    width: 220,
-                    height: 90,
+                    width: 270,
+                    height: 125,
                     parent: undefined,
                     alwaysOnTop: true,
                 });
@@ -895,15 +895,6 @@ function createFeatureWindows(header, namesToCreate) {
                 }
                 recoveryToast.loadFile(path.join(__dirname, '../ui/app/recovery-toast.html')).catch(console.error);
                 windowPool.set('recoveryToast', recoveryToast);
-
-                // Auto-hide on blur
-                recoveryToast.on('blur', () => {
-                    const focusedWindow = BrowserWindow.getFocusedWindow();
-                    const isFocusInApp = focusedWindow && Array.from(windowPool.values()).includes(focusedWindow);
-                    if (!isFocusInApp) {
-                        recoveryToast.hide();
-                    }
-                });
 
                 console.log(`[WindowManager] Recovery toast window created`);
                 break;

@@ -155,6 +155,14 @@ module.exports = {
                 return { success: false, error: error.message };
             }
         });
+        ipcMain.handle('listen:getStrandedSession', async () => {
+            try {
+                return listenService.getStrandedSessionInfo();
+            } catch (error) {
+                console.error('[FeatureBridge] listen:getStrandedSession failed:', error);
+                return null;
+            }
+        });
 
         // Model provider IPC removed; keep a no-op re-initialize for header compat
         ipcMain.handle('model:re-initialize-state', async () => ({ success: true }));

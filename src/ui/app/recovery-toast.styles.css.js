@@ -7,178 +7,171 @@ export const recoveryToastStyles = css`
         height: 100%;
     }
 
-    .toast-container {
-        display: flex;
-        align-items: center;
-        justify-content: center;
+    .recovery-toast {
         width: 100%;
         height: 100%;
-        padding: 12px;
-        box-sizing: border-box;
-    }
-
-    .toast-content {
+        background: rgba(18, 18, 18, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 10px;
+        padding: 16px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 1px 4px rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(10px);
         display: flex;
         flex-direction: column;
-        gap: 8px;
-        padding: 10px 12px;
-        background: rgba(11, 11, 11, 0.66);
-        border: 1px solid rgba(255, 255, 255, 0.4);
-        border-radius: 12px;
-        box-shadow:
-            0 4px 12px rgba(0, 0, 0, 0.3),
-            0 2px 6px rgba(0, 0, 0, 0.2);
-        animation: slideInUp 0.3s ease-out;
-        width: 100%;
-        max-width: 220px;
-    }
-
-    .toast-header {
-        display: flex;
-        align-items: center;
         justify-content: space-between;
-        width: 100%;
+        font-family: system-ui, -apple-system, sans-serif;
+        box-sizing: border-box;
+        animation: slideInUp 0.3s ease-out;
     }
 
-    .toast-container.fading-out .toast-content {
+    .recovery-toast.fade-out {
         animation: fadeOut 0.3s ease-out forwards;
     }
 
-    .toast-text {
-        color: rgba(255, 255, 255, 0.95);
-        font-size: 11px;
-        font-weight: 500;
-        white-space: nowrap;
-        font-family: system-ui, -apple-system, sans-serif;
+    .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .header-content {
+        display: flex;
+        align-items: center;
         flex: 1;
+        min-width: 0;
+    }
+
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        background: #ffaa00;
+        border-radius: 50%;
+        margin-right: 10px;
+        flex-shrink: 0;
+        animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0.5;
+        }
+    }
+
+    .text-group {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .title {
+        color: rgba(255, 255, 255, 0.95);
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1.2;
+    }
+
+    .session-name {
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 12px;
+        margin-top: 2px;
+        white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
 
-    .toast-actions {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        width: 100%;
-    }
-
-    .resume-button,
-    .finalize-button {
-        padding: 4px 8px;
-        background: rgba(128, 128, 128, 0.3);
+    .close-btn {
+        background: rgba(255, 255, 255, 0.05);
         border: none;
-        border-radius: 6px;
-        color: white;
-        font-size: 10px;
-        font-weight: 600;
+        color: rgba(255, 255, 255, 0.4);
         cursor: pointer;
-        transition: all 0.2s;
-        white-space: nowrap;
-        font-family: system-ui, -apple-system, sans-serif;
-        position: relative;
-        min-width: 55px;
+        padding: 0;
+        width: 22px;
         height: 22px;
         display: flex;
         align-items: center;
         justify-content: center;
+        border-radius: 6px;
+        transition: all 0.2s;
+        font-family: system-ui, -apple-system, sans-serif;
+        font-size: 18px;
+        line-height: 1;
+        flex-shrink: 0;
     }
 
-    .resume-button:hover:not(:disabled),
-    .finalize-button:hover:not(:disabled) {
-        background: rgba(128, 128, 128, 0.5);
-        transform: translateY(-1px);
+    .close-btn:hover {
+        color: white;
+        background: rgba(255, 255, 255, 0.12);
     }
 
-    .resume-button:active:not(:disabled),
-    .finalize-button:active:not(:disabled) {
-        transform: translateY(0);
+    .actions {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
     }
 
-    .resume-button:disabled,
-    .finalize-button:disabled {
+    .action-btn {
+        flex: 0 0 auto;
+        min-width: 80px;
+        height: 28px;
+        padding: 0 16px;
+        border-radius: 7px;
+        border: none;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        font-family: system-ui, -apple-system, sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .action-btn:disabled {
         opacity: 0.6;
         cursor: not-allowed;
     }
 
-    .resume-button.with-ripple {
+    .resume-btn {
+        background: rgba(255, 255, 255, 0.12);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .resume-btn:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.2);
+        border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .finalize-btn {
         background: transparent;
+        color: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.15);
     }
 
-    .dismiss-button {
-        padding: 0;
-        background: transparent;
-        border: none;
-        color: rgba(255, 255, 255, 0.6);
-        font-size: 16px;
-        line-height: 1;
-        cursor: pointer;
-        transition: color 0.2s;
-        font-family: system-ui, -apple-system, sans-serif;
-        width: 18px;
-        height: 18px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
+    .finalize-btn:hover:not(:disabled) {
+        color: rgba(255, 255, 255, 0.9);
+        border-color: rgba(255, 255, 255, 0.25);
     }
 
-    .dismiss-button:hover {
-        color: rgba(255, 255, 255, 1);
-    }
-
-    /* Water Drop Ripple Effect */
-    .water-drop-ripple {
-        width: 12px;
-        height: 11px;
-        position: relative;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: visible;
-    }
-
-    .ripple-ring {
+    .ripple {
         position: absolute;
-        border: 2px solid rgba(255, 255, 255, 0.9);
         border-radius: 50%;
-        animation: water-ripple-pulse 2.5s infinite ease-out;
+        background: rgba(255, 255, 255, 0.5);
+        transform: scale(0);
+        animation: ripple-animation 0.6s ease-out;
+        pointer-events: none;
     }
 
-    .ripple-ring:nth-child(1) {
-        animation-delay: 0s;
-    }
-
-    .ripple-ring:nth-child(2) {
-        animation-delay: 0.8s;
-    }
-
-    .ripple-ring:nth-child(3) {
-        animation-delay: 1.6s;
-    }
-
-    .ripple-ring:nth-child(4) {
-        animation-delay: 2.4s;
-    }
-
-    @keyframes water-ripple-pulse {
-        0% {
-            width: 4px;
-            height: 4px;
-            opacity: 1;
-            border-width: 1.5px;
-        }
-        70% {
-            width: 24px;
-            height: 24px;
-            opacity: 0.6;
-            border-width: 1px;
-        }
-        100% {
-            width: 36px;
-            height: 36px;
+    @keyframes ripple-animation {
+        to {
+            transform: scale(4);
             opacity: 0;
-            border-width: 0.5px;
         }
     }
 
@@ -194,14 +187,9 @@ export const recoveryToastStyles = css`
     }
 
     @keyframes fadeOut {
-        from {
-            opacity: 1;
-            transform: translateY(0);
-        }
         to {
             opacity: 0;
-            transform: translateY(-10px);
+            transform: scale(0.95);
         }
     }
 `;
-

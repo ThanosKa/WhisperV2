@@ -97,6 +97,7 @@ contextBridge.exposeInMainWorld('api', {
         handleRecoveryAction: (action, sessionId) => ipcRenderer.invoke('listen:handleRecoveryAction', action, sessionId),
         onStrandedSessionDetected: callback => ipcRenderer.on('listen:stranded-session-detected', callback),
         removeOnStrandedSessionDetected: callback => ipcRenderer.removeListener('listen:stranded-session-detected', callback),
+        getStrandedSession: () => ipcRenderer.invoke('listen:getStrandedSession'),
         showRecoveryToast: (sessionInfo, headerBounds) => ipcRenderer.invoke('recovery-toast:show', sessionInfo, headerBounds),
         hideRecoveryToast: () => ipcRenderer.invoke('recovery-toast:hide'),
     },

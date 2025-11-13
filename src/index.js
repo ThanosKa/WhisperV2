@@ -279,7 +279,9 @@ app.whenReady().then(async () => {
             const { windowPool } = require('./window/windowManager');
             const recoveryToastWin = windowPool.get('recoveryToast');
             if (recoveryToastWin && !recoveryToastWin.isDestroyed()) {
-                recoveryToastWin.webContents.openDevTools({ mode: 'detach' });
+                recoveryToastWin.webContents.once('dom-ready', () => {
+                    recoveryToastWin.webContents.openDevTools({ mode: 'detach' });
+                });
             }
         }
 

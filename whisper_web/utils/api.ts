@@ -555,29 +555,6 @@ export const findOrCreateUser = async (user: UserProfile): Promise<UserProfile> 
     return response.json();
 };
 
-export const saveApiKey = async (apiKey: string): Promise<void> => {
-    if (isDevMockEnabled()) {
-        if (typeof window !== 'undefined') localStorage.setItem('dev_mock_api_key', apiKey);
-        return;
-    }
-    const response = await apiCall(`/api/user/api-key`, {
-        method: 'POST',
-        body: JSON.stringify({ apiKey }),
-    });
-    if (!response.ok) throw new Error('Failed to save API key');
-};
-
-export const checkApiKeyStatus = async (): Promise<{ hasApiKey: boolean }> => {
-    if (isDevMockEnabled()) {
-        if (typeof window === 'undefined') return { hasApiKey: true };
-        const hasKey = !!localStorage.getItem('dev_mock_api_key');
-        return { hasApiKey: hasKey };
-    }
-    const response = await apiCall(`/api/user/api-key-status`, { method: 'GET' });
-    if (!response.ok) throw new Error('Failed to check API key status');
-    return response.json();
-};
-
 export const deleteAccount = async (): Promise<void> => {
     const response = await apiCall(`/api/user/profile`, { method: 'DELETE' });
     if (!response.ok) throw new Error('Failed to delete account');

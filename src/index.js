@@ -528,14 +528,6 @@ function setupWebDataHandlers() {
                     result = batchResult;
                     break;
 
-                case 'save-api-key':
-                    // Server-only; accept and no-op
-                    result = { success: true };
-                    break;
-                case 'check-api-key-status':
-                    // Always report configured in server-only mode
-                    result = { hasApiKey: true };
-                    break;
                 default:
                     throw new Error(`Unknown web data channel: ${channel}`);
             }

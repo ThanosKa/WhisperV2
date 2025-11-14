@@ -37,7 +37,7 @@ test.describe('Listen window', () => {
 - Header window navigation + auth gating.
 - Listen flow: STT status indicator, insights list, stranded session recovery.
 - Ask flow: context capture, AI response rendering, error retry.
-- Settings: API key form, shortcuts list, plan switcher.
+- Settings: shortcuts list, plan switcher, authenticated user details.
 - Crash recovery: force crash via helper and assert toasts + session reconciliation.
 
 Run via:

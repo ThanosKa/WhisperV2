@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useState, createElement, useEffect, useMemo, useCallback, memo } from 'react';
 import { Search, Activity, HelpCircle, Download, ChevronDown, User, Shield, Database, CreditCard, LogOut, LucideIcon } from 'lucide-react';
-import { UserProfile, checkApiKeyStatus } from '@/utils/api';
+import { UserProfile } from '@/utils/api';
 import { useAuth } from '@/utils/auth';
 import { normalizePathname } from '@/utils/path';
 import { MatchStrategy, SETTINGS_TABS } from '@/components/settings/SettingsTabs';
@@ -163,19 +163,8 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
     const router = useRouter();
     const [isSettingsExpanded, setIsSettingsExpanded] = useState(pathname.startsWith('/settings'));
     const { user: userInfo, isLoading: authLoading } = useAuth();
-    const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
-
     const { isAnimating, getTextAnimationStyle, getSubmenuAnimationStyle, sidebarContainerStyle, getTextContainerStyle, getUniformTextStyle } =
         useAnimationStyles(isCollapsed);
-
-    useEffect(() => {
-        checkApiKeyStatus()
-            .then(status => setHasApiKey(status.hasApiKey))
-            .catch(err => {
-                console.error('Failed to check API key status:', err);
-                setHasApiKey(null); // Set to null on error
-            });
-    }, []);
 
     useEffect(() => {
         if (pathname.startsWith('/settings')) {
@@ -520,13 +509,6 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
                     </div>
                 </button>
 
-                {!isCollapsed && hasApiKey !== null && (
-                    <div className="px-2.5 py-2 text-center">
-                        <span className={`text-xs px-2 py-1 rounded-full ${hasApiKey ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
-                            {hasApiKey ? 'Local running' : 'Whisper Free System'}
-                        </span>
-                    </div>
-                )}
 
                 <div className="mt-auto space-y-[0px]" role="navigation" aria-label="Additional links">
                     {bottomItems.map((item, index) => (

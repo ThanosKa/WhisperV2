@@ -22,7 +22,7 @@ This enables working on the Next.js UI with `npm run dev` (no Electron, no IPC, 
     - Seeds mock user, presets, sessions, and per-session details to `localStorage`.
     - Helpers to get/set presets, sessions, and session details.
     - Keys used:
-        - `dev_mock_presets`, `dev_mock_sessions`, `dev_mock_session_details_<id>`, `dev_mock_api_key`, `dev_mock_init`.
+        - `dev_mock_presets`, `dev_mock_sessions`, `dev_mock_session_details_<id>`, `dev_mock_init`.
 
 - `whisper_web/utils/auth.ts`
     - If dev mode is enabled, short-circuits auth:
@@ -32,7 +32,7 @@ This enables working on the Next.js UI with `npm run dev` (no Electron, no IPC, 
 - `whisper_web/utils/api.ts`
     - If dev mode is enabled:
         - Never calls network. `apiCall()` throws to guard accidental fetches.
-        - All data methods return local mock data (sessions, presets, stats, details, CRUD, search, API key status/save, batch).
+        - All data methods return local mock data (sessions, presets, stats, details, CRUD, search, batch).
         - Emits `window` events like `sessionUpdated` and `presetUpdated` for UI refreshes.
         - Skips trying to read `/runtime-config.json`.
 

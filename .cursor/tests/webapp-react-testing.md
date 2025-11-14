@@ -45,7 +45,7 @@ describe('ActivityPage', () => {
 ## Targets
 - `app/activity/page.tsx` infinite scrolling + delete confirmations.
 - `app/login/page.tsx` sync button states + dev-mock detection.
-- `app/settings/page.tsx` API key form, `deriveInitials`, IPC event cleanup.
+- `app/settings/page.tsx` profile summary card (avatar initials, plan links, auth modes).
 - Hooks: `useAuth`, `useRedirectIfNotAuth`, `useToast`.
 - Utilities: `utils/api.ts` fallback-to-mock logic, `utils/devMock.ts`.
 

@@ -1,57 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Cloud, HardDrive } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/utils/auth';
-import { checkApiKeyStatus, saveApiKey } from '@/utils/api';
 import SettingsTabs from '@/components/settings/SettingsTabs';
 import { useRouter } from 'next/navigation';
 
-declare global {
-    interface Window {
-        ipcRenderer?: any;
-    }
-}
-
 export default function SettingsPage() {
     const { user: userInfo, isLoading, mode } = useAuth();
-    const [hasApiKey, setHasApiKey] = useState(false);
-    const [apiKeyInput, setApiKeyInput] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
     const router = useRouter();
-
-    const fetchApiKeyStatus = async () => {
-        try {
-            const apiKeyStatus = await checkApiKeyStatus();
-            setHasApiKey(apiKeyStatus.hasApiKey);
-        } catch (error) {
-            console.error('Failed to fetch API key status:', error);
-        }
-    };
-
-    useEffect(() => {
-        if (!userInfo) return;
-
-        fetchApiKeyStatus();
-
-        if (window.ipcRenderer) {
-            window.ipcRenderer.on('api-key-updated', () => {
-                console.log('Received api-key-updated event from main process.');
-                fetchApiKeyStatus();
-            });
-        }
-
-        return () => {
-            if (window.ipcRenderer) {
-                window.ipcRenderer.removeAllListeners('api-key-updated');
-            }
-        };
-    }, [userInfo]);
 
     if (isLoading) {
         return (
@@ -99,9 +57,6 @@ export default function SettingsPage() {
     const profileInitials = deriveInitials(profileName);
     const modeBadgeLabel = isWebappMode ? 'Cloud authenticated' : 'Local mode';
     const modeSummary = isWebappMode ? 'Signed in with your Whisper web account.' : 'Running locally without cloud authentication.';
-    const modeDetails = isWebappMode
-        ? `All activity and settings sync with ${userInfo.email}.`
-        : 'Everything stays on this device. Add a personal API key if you prefer using your own provider.';
     const pricingUrl = 'https://www.app-whisper.com/pricing';
     const planValue = (userInfo.plan || 'free').toLowerCase();
     const normalizedPlan = planValue.slice(0, 1).toUpperCase() + planValue.slice(1);
@@ -113,22 +68,6 @@ export default function SettingsPage() {
         { label: 'Sign-in Method', value: isWebappMode ? 'Whisper web account' : 'Local desktop session' },
         { label: 'Data Storage', value: isWebappMode ? 'Synced securely with Whisper services' : 'Stored locally on this device' },
     ];
-
-    const handleSaveApiKey = async () => {
-        setIsSaving(true);
-        try {
-            await saveApiKey(apiKeyInput);
-            setHasApiKey(true);
-            setApiKeyInput('');
-            if (window.ipcRenderer) {
-                window.ipcRenderer.invoke('save-api-key', apiKeyInput);
-            }
-        } catch (error) {
-            console.error('Failed to save API key:', error);
-        } finally {
-            setIsSaving(false);
-        }
-    };
 
     // Display name and account deletion are disabled in the localhost webapp
 

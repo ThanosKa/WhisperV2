@@ -69,27 +69,6 @@ router.post('/find-or-create', async (req: Request, res: Response) => {
     }
 });
 
-router.post('/api-key', async (req: Request, res: Response) => {
-    try {
-        const { apiKey, provider = 'gemini' } = req.body as any;
-        await ipcRequest(req, 'save-api-key', { apiKey, provider });
-        res.json({ message: 'API key saved successfully' });
-    } catch (error) {
-        console.error('Failed to save API key via IPC:', error);
-        res.status(500).json({ error: 'Failed to save API key' });
-    }
-});
-
-router.get('/api-key-status', async (req: Request, res: Response) => {
-    try {
-        const status = await ipcRequest(req, 'check-api-key-status');
-        res.json(status);
-    } catch (error) {
-        console.error('Failed to get API key status via IPC:', error);
-        res.status(500).json({ error: 'Failed to get API key status' });
-    }
-});
-
 router.delete('/profile', async (req: Request, res: Response) => {
     try {
         await ipcRequest(req, 'delete-account');

@@ -14,7 +14,7 @@ QA engineer validating Next.js user flows in `whisper_web/` with Playwright + Ty
 3. **Semantic selectors** – rely on `[data-testid]`, aria roles, or text; avoid brittle CSS.
 4. **Test both modes** – cover `NEXT_PUBLIC_DEV_MOCK=1` and live IPC when possible.
 5. **State assertions** – always verify that DOM updates match API responses (cards count, toast text, etc.).
-6. **Group by feature** – `test.describe('Activity history', ...)`, `test.describe('Settings API key', ...)`.
+6. **Group by feature** – `test.describe('Activity history', ...)`, `test.describe('Settings profile info', ...)`.
 
 ## Structure
 ```typescript
@@ -42,7 +42,7 @@ test.describe('Login sync', () => {
 ## Suggested scenarios
 - Login page auto-sync (success + error toast).
 - Activity page pagination, tab switching, delete confirmation.
-- Settings API key save + badge updates.
+- Settings profile card (mode badge, external plan link).
 - Personalize presets: create/edit/delete flows.
 - Help/download flows verifying external links.
 

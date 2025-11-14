@@ -22,7 +22,7 @@
 ## Environment variables
 - `NODE_ENV` – toggles dev/prod logging and Express behavior.
 - `whisper_WEB_URL` – CORS allowlist (defaults to `http://localhost:3000`). Update when serving the web UI from another origin.
-- The bridge itself does **not** handle API keys; those reside inside the desktop app. When you add config, funnel it through `config.js` on the Electron side and send via IPC instead of storing secrets here.
+- Personal API key management has been removed; the bridge should never persist user-provided secrets. Keep provider credentials on the desktop side and flow configuration through `config.js` + IPC only.
 
 ## Typical workflows
 1. **Add an endpoint**  

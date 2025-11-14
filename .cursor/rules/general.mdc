@@ -10,3 +10,10 @@ Never run the server
 
 suggest a commit message wit this format only if requested:
 <type>(<scope>): <short summary>
+
+Follow every explicit user requirement to the letter.
+Before coding non-trivial work, think step-by-step and outline the plan/pseudocode (or use the planning tools) before editing.
+Deliver production-ready code: complete implementations, best practices, bug-free, readable over hyper-optimized.
+Never leave TODOs, placeholders, or missing imports; ensure everything builds/tests.
+If unsure or no correct answer exists, say so plainly instead of guessing.
+Never install new dependencies without getting explicit user approval.

@@ -280,7 +280,7 @@ export default function ActivityPage() {
                                             </div>
                                         )}
                                         {hasMoreMeetings ? (
-                                            <div ref={meetingsSentinelRef} />
+                                            <div data-testid="meetings-sentinel" ref={meetingsSentinelRef} />
                                         ) : (
                                             <div className="text-center py-8 text-gray-500 text-sm">End.</div>
                                         )}
@@ -306,9 +306,9 @@ export default function ActivityPage() {
                                         </div>
                                     )}
                                     {hasMoreQuestions ? (
-                                        <div ref={questionsSentinelRef} />
+                                        <div data-testid="questions-sentinel" ref={questionsSentinelRef} />
                                     ) : (
-                                        <div className="text-center py-8 text-gray-500 text-sm">End.</div>
+                                            <div className="text-center py-8 text-gray-500 text-sm">End.</div>
                                     )}
                                 </div>
                             ) : (
@@ -520,7 +520,8 @@ function EmptyState({ type }: { type: 'meetings' | 'questions' }) {
 
     return (
         <div className="text-center bg-white rounded-lg p-12">
-            <p className="text-gray-500 mb-4">{content.description}</p>
+            <h3 className="text-2xl font-semibold text-gray-900 mb-3">{content.title}</h3>
+            <p className="text-gray-500">{content.description}</p>
         </div>
     );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserProfile, setUserInfo, findOrCreateUser, getUserProfile } from './api';
 import { isDevMockEnabled, getMockUser, ensureMockData } from './devMock';
@@ -9,7 +9,7 @@ export const useAuth = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [mode, setMode] = useState<'local' | 'webapp' | null>(null);
     const [retryCount, setRetryCount] = useState(0);
-    const [lastSyncTime, setLastSyncTime] = useState(0); // Debounce mechanism
+    const lastSyncTimeRef = useRef(0); // Debounce mechanism shared across events
 
     useEffect(() => {
         // Dev mock mode: short-circuit auth and return a fake user
@@ -128,11 +128,11 @@ export const useAuth = () => {
         const handleUserInfoChanged = () => {
             const now = Date.now();
             // Debounce: Only trigger if at least 100ms have passed since last sync
-            if (now - lastSyncTime < 100) {
+            if (now - lastSyncTimeRef.current < 100) {
                 console.log('🔄 userInfoChanged debounced (too frequent)');
                 return;
             }
-            setLastSyncTime(now);
+            lastSyncTimeRef.current = now;
             console.log('🔄 userInfoChanged event detected, rechecking auth...');
             setRetryCount(0);
             checkStoredAuth();
@@ -156,7 +156,7 @@ export const useAuth = () => {
             window.removeEventListener('userInfoChanged', handleUserInfoChanged);
             window.removeEventListener('beforeunload', handleBeforeUnload);
         };
-    }, [retryCount, lastSyncTime]);
+    }, [retryCount]);
 
     return { user, isLoading, mode };
 };

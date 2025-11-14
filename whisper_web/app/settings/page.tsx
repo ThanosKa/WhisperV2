@@ -46,7 +46,7 @@ export default function SettingsPage() {
         }
 
         return parts
-            .slice(0, 1)
+            .slice(0, 2)
             .map(part => part.charAt(0))
             .join('')
             .toUpperCase();

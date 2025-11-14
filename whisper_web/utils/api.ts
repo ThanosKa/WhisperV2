@@ -144,6 +144,14 @@ const initDevIfNeeded = () => {
     }
 };
 
+// Testing utility to reset module state between Jest suites
+export const __resetApiTestState = () => {
+    apiUrlInitialized = false;
+    initializationPromise = null;
+    API_ORIGIN = process.env.NODE_ENV === 'development' ? 'http://localhost:9001' : '';
+    devInitialized = false;
+};
+
 const userInfoListeners: Array<(userInfo: UserProfile | null) => void> = [];
 
 export const getUserInfo = (): UserProfile | null => {

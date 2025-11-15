@@ -3,7 +3,7 @@ import '@testing-library/jest-dom';
 // Suppress React act() warnings from Radix UI components
 const originalError = console.error;
 beforeAll(() => {
-    console.error = (...args: any[]) => {
+    console.error = (...args: unknown[]) => {
         if (
             typeof args[0] === 'string' &&
             (args[0].includes('Warning: An update to') ||
@@ -27,27 +27,37 @@ const mockFetch = jest.fn(async () => ({
     json: async () => ({}),
     text: async () => '',
 }));
-(global as any).fetch = mockFetch;
-(window as any).fetch = mockFetch;
+global.fetch = mockFetch as typeof fetch;
+if (typeof window !== 'undefined') {
+    window.fetch = mockFetch as typeof fetch;
+}
 
 // Mock IntersectionObserver with accessible instances for tests
 const intersectionObserverInstances: Array<{ callback: IntersectionObserverCallback }> = [];
-class MockIntersectionObserver {
+class MockIntersectionObserver implements IntersectionObserver {
     callback: IntersectionObserverCallback;
+    root: Element | null = null;
+    rootMargin: string = '';
+    thresholds: ReadonlyArray<number> = [];
     constructor(callback: IntersectionObserverCallback = () => {}) {
         this.callback = callback;
         intersectionObserverInstances.push({ callback: this.callback });
     }
     disconnect() {}
     observe() {}
-    takeRecords() {
+    takeRecords(): IntersectionObserverEntry[] {
         return [];
     }
     unobserve() {}
 }
-(global as any).__intersectionObserverInstances = intersectionObserverInstances;
-(window as any).__intersectionObserverInstances = intersectionObserverInstances;
-global.IntersectionObserver = MockIntersectionObserver as any;
+if (typeof global !== 'undefined') {
+    (global as typeof globalThis).__intersectionObserverInstances = intersectionObserverInstances;
+}
+if (typeof window !== 'undefined') {
+    window.__intersectionObserverInstances = intersectionObserverInstances;
+    window.IntersectionObserver = MockIntersectionObserver as typeof IntersectionObserver;
+}
+global.IntersectionObserver = MockIntersectionObserver as typeof IntersectionObserver;
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {

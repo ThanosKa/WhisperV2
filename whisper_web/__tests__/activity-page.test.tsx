@@ -57,7 +57,7 @@ describe('ActivityPage', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        mockUseRedirectIfNotAuth.mockReturnValue(mockUser as any);
+        mockUseRedirectIfNotAuth.mockReturnValue(mockUser);
         mockGetMeetingsPage.mockResolvedValue({
             items: mockMeetings,
             nextOffset: null,
@@ -227,15 +227,18 @@ describe('ActivityPage', () => {
 
         const originalObserver = window.IntersectionObserver;
         let observerCallback: IntersectionObserverCallback | null = null;
-        (window as any).IntersectionObserver = jest.fn(cb => {
+        window.IntersectionObserver = jest.fn((cb: IntersectionObserverCallback) => {
             observerCallback = cb;
             return {
                 observe: jest.fn(),
                 disconnect: jest.fn(),
                 unobserve: jest.fn(),
                 takeRecords: jest.fn(),
-            };
-        }) as any;
+                root: null,
+                rootMargin: '',
+                thresholds: [],
+            } as IntersectionObserver;
+        }) as unknown as typeof IntersectionObserver;
 
         render(<ActivityPage />);
         await screen.findByText('Team Sync');
@@ -253,7 +256,7 @@ describe('ActivityPage', () => {
             expect(mockGetMeetingsPage).toHaveBeenCalledWith(2, 10);
         }, { timeout: 3000 });
 
-        (window as any).IntersectionObserver = originalObserver;
+        window.IntersectionObserver = originalObserver;
         if (originalImplementation) {
             mockGetMeetingsPage.mockImplementation(originalImplementation);
         } else {

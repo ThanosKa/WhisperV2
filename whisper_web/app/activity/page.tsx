@@ -348,7 +348,7 @@ function SessionCard({
     onDelete: (id: string) => void;
     deletingId: string | null;
     onTitleUpdate?: () => void;
-    toast: any;
+    toast: ReturnType<typeof useToast>['toast'];
 }) {
     const typeLabel = session.session_type === 'listen' ? 'Meeting' : 'Question';
     const TypeIcon = session.session_type === 'listen' ? Mic : MessageSquare;

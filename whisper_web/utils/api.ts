@@ -468,7 +468,7 @@ export const updateSessionTitle = async (sessionId: string, title: string): Prom
         const details = getSessionDetailsMock(sessionId);
         if (details) {
             details.session.title = title;
-            setSessionDetailsMock(sessionId, details as any);
+            setSessionDetailsMock(sessionId, details);
         }
         // announce update for listeners
         if (typeof window !== 'undefined') window.dispatchEvent(new Event('sessionUpdated'));
@@ -498,11 +498,11 @@ export const createSession = async (title?: string): Promise<{ id: string }> => 
             sync_state: 'clean',
             updated_at: now,
         };
-        const list = getSessionsMock() as unknown as Session[];
-        (list as any).unshift(s as any);
-        setSessionsMock(list as any);
+        const list = getSessionsMock();
+        list.unshift(s);
+        setSessionsMock(list);
         const details: SessionDetails = { session: s, transcripts: [], ai_messages: [], summary: null };
-        setSessionDetailsMock(id, details as any);
+        setSessionDetailsMock(id, details);
         if (typeof window !== 'undefined') window.dispatchEvent(new Event('sessionUpdated'));
         return { id };
     }
@@ -584,12 +584,12 @@ export const updatePreset = async (id: string, data: { title?: string; prompt?: 
         const presets = getPresetsMock();
         const idx = presets.findIndex(p => p.id === id);
         if (idx >= 0) {
-            const updated = { ...(presets as any)[idx] };
+            const updated = { ...presets[idx] };
             if (data.title !== undefined) updated.title = data.title;
             if (data.prompt !== undefined) updated.prompt = data.prompt;
             if (data.append_text !== undefined) updated.append_text = data.append_text;
-            (presets as any)[idx] = updated;
-            setPresetsMock(presets as any);
+            presets[idx] = updated;
+            setPresetsMock(presets);
         }
         if (typeof window !== 'undefined') window.dispatchEvent(new Event('presetUpdated'));
         return;
@@ -615,9 +615,9 @@ export const getBatchData = async (includes: ('profile' | 'presets' | 'sessions'
     if (isDevMockEnabled()) {
         initDevIfNeeded();
         const out: BatchData = {};
-        if (includes.includes('profile')) out.profile = getMockUser() as any;
-        if (includes.includes('presets')) out.presets = getPresetsMock() as any as PromptPreset[];
-        if (includes.includes('sessions')) out.sessions = getSessionsMock() as any as Session[];
+        if (includes.includes('profile')) out.profile = getMockUser();
+        if (includes.includes('presets')) out.presets = getPresetsMock() as PromptPreset[];
+        if (includes.includes('sessions')) out.sessions = getSessionsMock() as Session[];
         return out;
     }
     const response = await apiCall(`/api/user/batch?include=${includes.join(',')}`, { method: 'GET' });

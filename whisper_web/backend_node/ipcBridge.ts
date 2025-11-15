@@ -1,9 +1,10 @@
 import crypto from 'crypto';
 import type { Request } from 'express';
+import { EventEmitter } from 'events';
 
-export function ipcRequest<T = any>(req: Request, channel: string, payload?: unknown): Promise<T> {
+export function ipcRequest<T = unknown>(req: Request, channel: string, payload?: unknown): Promise<T> {
     return new Promise((resolve, reject) => {
-        if (!req.bridge || typeof (req.bridge as any).emit !== 'function') {
+        if (!req.bridge || !(req.bridge instanceof EventEmitter) || typeof req.bridge.emit !== 'function') {
             reject(new Error('IPC bridge is not available'));
             return;
         }
@@ -27,9 +28,10 @@ export function ipcRequest<T = any>(req: Request, channel: string, payload?: unk
 
         try {
             req.bridge!.emit('web-data-request', channel, responseChannel, payload);
-        } catch (error: any) {
+        } catch (error) {
             req.bridge!.removeAllListeners(responseChannel);
-            reject(new Error(`Failed to emit IPC request: ${error.message}`));
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            reject(new Error(`Failed to emit IPC request: ${errorMessage}`));
         }
     });
 }

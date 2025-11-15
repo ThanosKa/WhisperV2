@@ -1,11 +1,12 @@
 import express, { Request, Response } from 'express';
 import { ipcRequest } from '../ipcBridge';
+import type { Session, SessionDetails } from '../types/session';
 
 const router = express.Router();
 
 router.get('/', async (req: Request, res: Response) => {
     try {
-        const sessions = await ipcRequest<any[]>(req, 'get-sessions');
+        const sessions = await ipcRequest<Session[]>(req, 'get-sessions');
         res.json(sessions);
     } catch (error) {
         console.error('Failed to get sessions via IPC:', error);
@@ -15,7 +16,7 @@ router.get('/', async (req: Request, res: Response) => {
 
 router.get('/meetings', async (req: Request, res: Response) => {
     try {
-        const sessions = await ipcRequest<any[]>(req, 'get-sessions');
+        const sessions = await ipcRequest<Session[]>(req, 'get-sessions');
         const meetings = (sessions || []).filter(s => s.session_type === 'listen');
 
         const limit = Math.max(1, Math.min(parseInt((req.query.limit as string) || '10', 10), 50));
@@ -35,7 +36,7 @@ router.get('/meetings', async (req: Request, res: Response) => {
 
 router.get('/questions', async (req: Request, res: Response) => {
     try {
-        const sessions = await ipcRequest<any[]>(req, 'get-sessions');
+        const sessions = await ipcRequest<Session[]>(req, 'get-sessions');
         const questions = (sessions || []).filter(s => s.session_type === 'ask');
 
         const limit = Math.max(1, Math.min(parseInt((req.query.limit as string) || '10', 10), 50));
@@ -89,22 +90,22 @@ router.delete('/:session_id', async (req: Request, res: Response) => {
 
 router.get('/stats', async (req: Request, res: Response) => {
     try {
-        const sessions = await ipcRequest<any[]>(req, 'get-sessions');
+        const sessions = await ipcRequest<Session[]>(req, 'get-sessions');
         const meetings = (sessions || []).filter(s => s.session_type === 'listen');
 
         const nowSec = Math.floor(Date.now() / 1000);
-        const totalMeetingSeconds = meetings.reduce((sum: number, s: any) => {
+        const totalMeetingSeconds = meetings.reduce((sum: number, s: Session) => {
             if (!s.started_at) return sum;
             const end = s.ended_at || nowSec;
             const dur = Math.max(0, end - s.started_at);
             return sum + dur;
         }, 0);
 
-        const detailPromises = (sessions || []).map(s => ipcRequest<any>(req, 'get-session-details', s.id).catch(() => null));
+        const detailPromises = (sessions || []).map(s => ipcRequest<SessionDetails | null>(req, 'get-session-details', s.id).catch(() => null));
         const details = await Promise.all(detailPromises);
-        const totalQuestions = details.reduce((acc: number, d: any) => {
+        const totalQuestions = details.reduce((acc: number, d: SessionDetails | null) => {
             if (!d || !Array.isArray(d.ai_messages)) return acc;
-            return acc + d.ai_messages.filter((m: any) => m.role === 'user').length;
+            return acc + d.ai_messages.filter((m: { role: string }) => m.role === 'user').length;
         }, 0);
 
         res.json({ totalMeetingSeconds, totalQuestions });
@@ -120,7 +121,7 @@ router.get('/search', async (req: Request, res: Response) => {
         if (!q) {
             return res.json([]);
         }
-        const sessions = await ipcRequest<any[]>(req, 'get-sessions');
+        const sessions = await ipcRequest<Session[]>(req, 'get-sessions');
         const needle = q.toLowerCase();
         const results = (sessions || []).filter(s => (s.title || '').toLowerCase().includes(needle));
         res.json(results);
@@ -138,10 +139,10 @@ router.get('/search/page', async (req: Request, res: Response) => {
         const limit = Math.max(1, Math.min(parseInt((req.query.limit as string) || '10', 10), 50));
         const offset = Math.max(0, parseInt((req.query.offset as string) || '0', 10));
 
-        const sessions = await ipcRequest<any[]>(req, 'get-sessions');
+        const sessions = await ipcRequest<Session[]>(req, 'get-sessions');
         const ordered = sessions || []; // already ordered DESC by started_at from repository
 
-        let filtered: any[] = [];
+        let filtered: Session[] = [];
 
         if (scope === 'all') {
             if (!q) {
@@ -155,7 +156,7 @@ router.get('/search/page', async (req: Request, res: Response) => {
             // Filter by title for all sessions and by summary for meetings; keep original order
             const titleMatches = new Set(ordered.filter(s => ((s.title || '') as string).toLowerCase().includes(q)).map(s => s.id as string));
             const listenSessions = ordered.filter(s => s.session_type === 'listen');
-            const detailPromises = listenSessions.map(s => ipcRequest<any>(req, 'get-session-details', s.id).catch(() => null));
+            const detailPromises = listenSessions.map(s => ipcRequest<SessionDetails | null>(req, 'get-session-details', s.id).catch(() => null));
             const details = await Promise.all(detailPromises);
             const summaryMatches = new Set<string>();
             details.forEach((d, idx) => {
@@ -188,7 +189,7 @@ router.get('/search/page', async (req: Request, res: Response) => {
             }
 
             // With query, fetch details to access summary and filter
-            const detailPromises = listenSessions.map(s => ipcRequest<any>(req, 'get-session-details', s.id).catch(() => null));
+            const detailPromises = listenSessions.map(s => ipcRequest<SessionDetails | null>(req, 'get-session-details', s.id).catch(() => null));
             const details = await Promise.all(detailPromises);
             const needle = q;
             filtered = listenSessions.filter((s, idx) => {
@@ -221,7 +222,7 @@ router.get('/search/page', async (req: Request, res: Response) => {
 
 router.get('/:session_id', async (req: Request, res: Response) => {
     try {
-        const details = await ipcRequest<any>(req, 'get-session-details', req.params.session_id);
+        const details = await ipcRequest<SessionDetails>(req, 'get-session-details', req.params.session_id);
         if (!details) {
             return res.status(404).json({ error: 'Session not found' });
         }

@@ -3,6 +3,16 @@ import { ipcRequest } from '../ipcBridge';
 
 const router = express.Router();
 
+type FindOrCreateUserBody = {
+    uid: string;
+    display_name?: string;
+    email?: string;
+};
+
+type BatchDataQuery = {
+    include?: string | string[];
+};
+
 router.put('/profile', async (req: Request, res: Response) => {
     try {
         await ipcRequest(req, 'update-user-profile', req.body);
@@ -38,11 +48,12 @@ router.get('/profile', async (req: Request, res: Response) => {
 
         console.log('[API] /profile - Returning user data:', user);
         res.json(user);
-    } catch (error: any) {
+    } catch (error) {
         console.error('Failed to get profile via IPC:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         res.status(500).json({
             error: 'Failed to get profile',
-            details: error.message,
+            details: errorMessage,
             ipcError: true,
         });
     }
@@ -52,19 +63,21 @@ router.post('/find-or-create', async (req: Request, res: Response) => {
     try {
         console.log('[API] find-or-create request received:', req.body);
 
-        if (!req.body || !(req.body as any).uid) {
+        const body = req.body as FindOrCreateUserBody;
+        if (!body || !body.uid) {
             return res.status(400).json({ error: 'User data with uid is required' });
         }
 
         const user = await ipcRequest(req, 'find-or-create-user', req.body);
         console.log('[API] find-or-create response:', user);
         res.status(200).json(user);
-    } catch (error: any) {
+    } catch (error) {
         console.error('Failed to find or create user via IPC:', error);
         console.error('Request body:', req.body);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         res.status(500).json({
             error: 'Failed to find or create user',
-            details: error.message,
+            details: errorMessage,
         });
     }
 });
@@ -81,7 +94,8 @@ router.delete('/profile', async (req: Request, res: Response) => {
 
 router.get('/batch', async (req: Request, res: Response) => {
     try {
-        const result = await ipcRequest(req, 'get-batch-data', (req.query as any).include);
+        const query = req.query as BatchDataQuery;
+        const result = await ipcRequest(req, 'get-batch-data', query.include);
         res.json(result);
     } catch (error) {
         console.error('Failed to get batch data via IPC:', error);

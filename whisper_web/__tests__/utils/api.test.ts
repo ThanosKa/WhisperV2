@@ -34,10 +34,10 @@ describe('api utilities', () => {
                     title: 'Meeting 1',
                     session_type: 'listen',
                     started_at: Math.floor(Date.now() / 1000),
-                    sync_state: 'clean',
+                    sync_state: 'clean' as const,
                     updated_at: Math.floor(Date.now() / 1000),
                 },
-            ] as any);
+            ]);
 
             const result = await api.getMeetingsPage(0, 10);
 
@@ -76,7 +76,7 @@ describe('api utilities', () => {
                 sync_state: 'clean' as const,
                 updated_at: Math.floor(Date.now() / 1000) - i * 3600,
             }));
-            mockGetSessionsMock.mockReturnValue(sessions as any);
+            mockGetSessionsMock.mockReturnValue(sessions);
 
             const result = await api.getMeetingsPage(0, 10);
 
@@ -96,10 +96,10 @@ describe('api utilities', () => {
                     title: 'Question 1',
                     session_type: 'ask',
                     started_at: Math.floor(Date.now() / 1000),
-                    sync_state: 'clean',
+                    sync_state: 'clean' as const,
                     updated_at: Math.floor(Date.now() / 1000),
                 },
-            ] as any);
+            ]);
 
             const result = await api.getQuestionsPage(0, 10);
 
@@ -120,10 +120,10 @@ describe('api utilities', () => {
                     session_type: 'listen',
                     started_at: Math.floor(Date.now() / 1000) - 3600,
                     ended_at: Math.floor(Date.now() / 1000) - 1800,
-                    sync_state: 'clean',
+                    sync_state: 'clean' as const,
                     updated_at: Math.floor(Date.now() / 1000) - 1800,
                 },
-            ] as any);
+            ]);
 
             const result = await api.getConversationStats();
 
@@ -237,7 +237,7 @@ describe('api utilities', () => {
                     updated_at: Math.floor(Date.now() / 1000),
                 },
             ];
-            mockGetSessionsMock.mockReturnValue(sessions as any);
+            mockGetSessionsMock.mockReturnValue(sessions);
 
             await api.deleteSession('sess-1');
 

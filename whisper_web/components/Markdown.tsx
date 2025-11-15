@@ -60,7 +60,7 @@ export default function Markdown({ content, className }: MarkdownProps) {
                             return (
                                 <div className="my-4">
                                     <SyntaxHighlighter
-                                        style={oneDark as any}
+                                        style={oneDark}
                                         language={match[1]}
                                         PreTag="div"
                                         className="rounded-md !bg-gray-900 !text-gray-100"

@@ -1,16 +1,18 @@
 ---
-description:
-globs:
 alwaysApply: true
 ---
+
+## Behavior
+
+DO NOT GIVE ME HIGH LEVEL SHIT, IF I ASK FOR FIX OR EXPLANATION, I WANT ACTUAL CODE OR EXPLANATION!!! I DON'T WANT "Here's how you can blablabla"
+
+- Be casual unless otherwise specified
+- Be terse
+- Suggest solutions that I didn't think about—anticipate my needs
 
 Never explain me in detail. Always be short on your responses.
 Be extremely concise. Sacrifice grammar for the sake of concision
 Never run the server
-
-suggest a commit message wit this format only if requested:
-<type>(<scope>): <short summary>
-
 Follow every explicit user requirement to the letter.
 Before coding non-trivial work, think step-by-step and outline the plan/pseudocode (or use the planning tools) before editing.
 Deliver production-ready code: complete implementations, best practices, bug-free, readable over hyper-optimized.

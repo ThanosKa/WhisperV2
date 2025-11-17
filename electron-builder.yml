@@ -1,5 +1,4 @@
 # electron-builder.yml
-
 # The unique application ID
 appId: com.whisper.app
 
@@ -78,9 +77,8 @@ mac:
           arch: universal
         - target: zip
           arch: universal
-
-# Hook to run after signing (for notarization)
-afterSign: notarize.js
+    # Hook to run after signing (for notarization)
+    afterSign: notarize.js
 
 # Linux configuration
 linux:
@@ -88,6 +86,12 @@ linux:
     category: AudioVideo
     # Path to the icon file
     icon: src/ui/assets/wlogo.png
+    # Desktop entry configuration (updated for electron-builder v26)
+    desktop:
+        entry:
+            Name: Whisper
+            Comment: Audio recording and transcription application
+            Categories: AudioVideo;Audio;Utility;
     # Package targets
     target:
         - target: AppImage
@@ -96,8 +100,3 @@ linux:
           arch: [x64, arm64]
         - target: rpm
           arch: [x64, arm64]
-    # Desktop file configuration
-    desktop:
-        Name: Whisper
-        Comment: AI-powered meeting assistant
-        Categories: AudioVideo;Office;

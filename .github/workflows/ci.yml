@@ -1,4 +1,4 @@
-name: CI Tests
+name: Tests
 
 on:
     push:
@@ -8,6 +8,7 @@ on:
 
 jobs:
     test:
+        name: Run Unit Tests
         runs-on: macos-latest
 
         steps:
@@ -30,9 +31,9 @@ jobs:
               working-directory: whisper_web
               run: npm ci
 
-            - name: Run desktop tests
+            - name: Test desktop app
               run: npm test
 
-            - name: Run web tests
+            - name: Test web app
               working-directory: whisper_web
               run: npm test

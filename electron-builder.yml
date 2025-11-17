@@ -37,7 +37,7 @@ asarUnpack:
     - '**/node_modules/@img/**/*'
 
 # Hook to run after signing (for notarization)
-afterSign: notarize.js
+afterSign: ./notarize.js
 
 # Windows configuration
 win:
@@ -73,6 +73,7 @@ mac:
     hardenedRuntime: true
     entitlements: entitlements.plist
     entitlementsInherit: entitlements.plist
+    notarize: false
     # Code signing identity
     identity: 'Thanos Kazakis (GJ3U78VY54)'
     target:

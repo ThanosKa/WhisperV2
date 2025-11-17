@@ -1,0 +1,20 @@
+name: Cleanup Old Artifacts
+
+on:
+    push:
+        tags:
+            - 'v*'
+    workflow_dispatch:
+
+jobs:
+    cleanup:
+        name: Delete Old Artifacts
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Delete artifacts older than 7 days
+              uses: geekyeggo/delete-artifact@v2
+              with:
+                  name: '*'
+                  failOnError: false
+

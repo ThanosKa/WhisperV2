@@ -112,4 +112,6 @@ data/*.db-wal
 # Build output
 out/
 dist/
-build/ 
+build/**
+!build/after-sign.js
+!build/after-sign.js

@@ -200,6 +200,37 @@ if (process.platform === 'win32') {
 // (moved earlier)
 
 app.whenReady().then(async () => {
+    // Initialize auto-updater
+    const { autoUpdater } = require('electron-updater');
+
+    // Configure auto-updater
+    autoUpdater.checkForUpdatesAndNotify();
+
+    // Log update events for debugging
+    autoUpdater.on('checking-for-update', () => {
+        console.log('Checking for update...');
+    });
+
+    autoUpdater.on('update-available', info => {
+        console.log('Update available:', info);
+    });
+
+    autoUpdater.on('update-not-available', info => {
+        console.log('Update not available:', info);
+    });
+
+    autoUpdater.on('error', err => {
+        console.error('Auto-updater error:', err);
+    });
+
+    autoUpdater.on('download-progress', progressObj => {
+        console.log(`Download progress: ${progressObj.percent}%`);
+    });
+
+    autoUpdater.on('update-downloaded', info => {
+        console.log('Update downloaded:', info);
+    });
+
     // Setup native loopback audio capture for Windows
     session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
         try {

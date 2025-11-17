@@ -1,0 +1,70 @@
+name: Build and Release
+
+on:
+    push:
+        tags:
+            - 'v*'
+
+jobs:
+    build:
+        strategy:
+            matrix:
+                os: [macos-latest, windows-latest, ubuntu-latest]
+
+        runs-on: ${{ matrix.os }}
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '20'
+                  cache: 'npm'
+
+            - name: Install dependencies (root)
+              run: npm ci
+
+            - name: Install dependencies (web)
+              run: |
+                  cd whisper_web
+                  npm ci
+                  cd ..
+
+            - name: Build desktop app
+              run: npm run dist:all
+              env:
+                  # macOS notarization (only used on macOS runner)
+                  APPLE_ID: ${{ secrets.APPLE_ID }}
+                  APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+                  APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+            - name: Upload artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ${{ matrix.os }}-build
+                  path: dist/
+                  retention-days: 7
+
+    create-release:
+        needs: build
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Download all artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  path: artifacts/
+
+            - name: Create Release
+              uses: softprops/action-gh-release@v1
+              with:
+                  draft: true
+                  generate_release_notes: true
+                  files: artifacts/**/*
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

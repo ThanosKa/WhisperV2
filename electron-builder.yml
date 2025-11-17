@@ -81,3 +81,23 @@ mac:
 
 # Hook to run after signing (for notarization)
 afterSign: notarize.js
+
+# Linux configuration
+linux:
+    # The application category
+    category: AudioVideo
+    # Path to the icon file
+    icon: src/ui/assets/wlogo.png
+    # Package targets
+    target:
+        - target: AppImage
+          arch: [x64, arm64]
+        - target: deb
+          arch: [x64, arm64]
+        - target: rpm
+          arch: [x64, arm64]
+    # Desktop file configuration
+    desktop:
+        Name: Whisper
+        Comment: AI-powered meeting assistant
+        Categories: AudioVideo;Office;

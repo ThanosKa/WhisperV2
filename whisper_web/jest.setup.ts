@@ -1,5 +1,15 @@
 import '@testing-library/jest-dom';
 
+type IntersectionObserverStore = Array<{ callback: IntersectionObserverCallback }>;
+
+declare global {
+    interface Window {
+        __intersectionObserverInstances?: IntersectionObserverStore;
+    }
+    // eslint-disable-next-line no-var
+    var __intersectionObserverInstances: IntersectionObserverStore | undefined;
+}
+
 // Suppress React act() warnings from Radix UI components
 const originalError = console.error;
 beforeAll(() => {
@@ -21,19 +31,16 @@ afterAll(() => {
 });
 
 // Provide a default fetch mock so runtime-config requests don't blow up in node
-const mockFetch = jest.fn(async () => ({
-    ok: true,
-    status: 200,
-    json: async () => ({}),
-    text: async () => '',
-}));
-global.fetch = mockFetch as typeof fetch;
+const mockFetch = jest
+    .fn<ReturnType<typeof fetch>, Parameters<typeof fetch>>()
+    .mockImplementation(async () => new Response('{}', { status: 200 }));
+globalThis.fetch = mockFetch;
 if (typeof window !== 'undefined') {
-    window.fetch = mockFetch as typeof fetch;
+    window.fetch = mockFetch;
 }
 
 // Mock IntersectionObserver with accessible instances for tests
-const intersectionObserverInstances: Array<{ callback: IntersectionObserverCallback }> = [];
+const intersectionObserverInstances: IntersectionObserverStore = [];
 class MockIntersectionObserver implements IntersectionObserver {
     callback: IntersectionObserverCallback;
     root: Element | null = null;
@@ -50,14 +57,14 @@ class MockIntersectionObserver implements IntersectionObserver {
     }
     unobserve() {}
 }
-if (typeof global !== 'undefined') {
-    (global as typeof globalThis).__intersectionObserverInstances = intersectionObserverInstances;
+if (typeof globalThis !== 'undefined') {
+    globalThis.__intersectionObserverInstances = intersectionObserverInstances;
 }
 if (typeof window !== 'undefined') {
     window.__intersectionObserverInstances = intersectionObserverInstances;
     window.IntersectionObserver = MockIntersectionObserver as typeof IntersectionObserver;
 }
-global.IntersectionObserver = MockIntersectionObserver as typeof IntersectionObserver;
+globalThis.IntersectionObserver = MockIntersectionObserver as typeof IntersectionObserver;
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {

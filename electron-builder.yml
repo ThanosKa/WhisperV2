@@ -36,6 +36,9 @@ asarUnpack:
     - '**/node_modules/sharp/**/*'
     - '**/node_modules/@img/**/*'
 
+# Hook to run after signing (for notarization)
+afterSign: notarize.js
+
 # Windows configuration
 win:
     icon: src/ui/assets/wlogo.ico
@@ -77,8 +80,6 @@ mac:
           arch: universal
         - target: zip
           arch: universal
-    # Hook to run after signing (for notarization)
-    afterSign: notarize.js
 
 # Linux configuration
 linux:

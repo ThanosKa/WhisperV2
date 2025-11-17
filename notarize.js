@@ -11,10 +11,9 @@ module.exports = async function notarizeApp(context) {
 
     // Debug: Log full context
     console.log('=== Notarization Debug ===');
-    console.log('Full context:', JSON.stringify(context, null, 2));
     console.log('appOutDir:', appOutDir);
     console.log('appName:', appName);
-    console.log('packager.appInfo:', context.packager?.appInfo);
+    console.log('Platform:', context.electronPlatformName);
     console.log('========================');
 
     // For universal builds, afterSign runs multiple times - only notarize the final universal app

@@ -40,7 +40,8 @@
         "contextual ai"
     ],
     "author": {
-        "name": "Whisper Team"
+        "name": "Whisper Team",
+        "email": "support@whisper.app"
     },
     "license": "GPL-3.0",
     "dependencies": {

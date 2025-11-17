@@ -24,6 +24,18 @@ jobs:
                   npm ci
                   cd whisper_web && npm ci && cd ..
 
+            - name: Install macOS certificate
+              env:
+                  MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+                  MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+              run: |
+                  echo "$MACOS_CERTIFICATE" | base64 --decode > cert.p12
+                  security create-keychain -p "temp" build.keychain
+                  security unlock-keychain -p "temp" build.keychain
+                  security import cert.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+                  security set-key-partition-list -S apple-tool:,apple: -k "temp" build.keychain
+                  security default-keychain -s build.keychain
+
             - name: Build macOS App
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -38,6 +50,7 @@ jobs:
               with:
                   name: mac-build
                   path: dist/*
+                  retention-days: 7
 
     windows:
         name: Build Windows
@@ -68,6 +81,7 @@ jobs:
               with:
                   name: windows-build
                   path: dist/*
+                  retention-days: 7
 
     linux:
         name: Build Linux
@@ -98,3 +112,4 @@ jobs:
               with:
                   name: linux-build
                   path: dist/*
+                  retention-days: 7

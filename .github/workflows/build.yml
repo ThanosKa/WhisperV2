@@ -1,4 +1,4 @@
-name: Build and Release
+name: Release
 
 on:
     push:
@@ -6,12 +6,9 @@ on:
             - 'v*'
 
 jobs:
-    build:
-        strategy:
-            matrix:
-                os: [macos-latest, windows-latest, ubuntu-latest]
-
-        runs-on: ${{ matrix.os }}
+    mac:
+        name: Build macOS
+        runs-on: macos-latest
 
         steps:
             - name: Checkout code
@@ -20,51 +17,86 @@ jobs:
             - name: Setup Node.js
               uses: actions/setup-node@v4
               with:
-                  node-version: '20'
-                  cache: 'npm'
+                  node-version: '20.x'
 
-            - name: Install dependencies (root)
-              run: npm ci
-
-            - name: Install dependencies (web)
+            - name: Install dependencies
               run: |
-                  cd whisper_web
                   npm ci
-                  cd ..
+                  cd whisper_web && npm ci && cd ..
 
-            - name: Build desktop app
-              run: npm run dist:all
+            - name: Build macOS App
               env:
-                  # macOS notarization (only used on macOS runner)
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   APPLE_ID: ${{ secrets.APPLE_ID }}
                   APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
                   APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+                  CSC_LINK: ${{ secrets.CSC_LINK }}
+                  CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+              run: |
+                  npm run dist:mac
 
-            - name: Upload artifacts
+            - name: Upload macOS build artifacts
               uses: actions/upload-artifact@v4
               with:
-                  name: ${{ matrix.os }}-build
-                  path: dist/
-                  retention-days: 7
+                  name: mac-build
+                  path: dist/*
 
-    create-release:
-        needs: build
+    windows:
+        name: Build Windows
+        runs-on: windows-latest
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '20.x'
+
+            - name: Install dependencies
+              run: |
+                  npm ci
+                  cd whisper_web && npm ci && cd ..
+
+            - name: Build Windows App
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  npm run dist:win
+
+            - name: Upload Windows build artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: windows-build
+                  path: dist/*
+
+    linux:
+        name: Build Linux
         runs-on: ubuntu-latest
 
         steps:
             - name: Checkout code
               uses: actions/checkout@v4
 
-            - name: Download all artifacts
-              uses: actions/download-artifact@v4
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
               with:
-                  path: artifacts/
+                  node-version: '20.x'
 
-            - name: Create Release
-              uses: softprops/action-gh-release@v1
-              with:
-                  draft: true
-                  generate_release_notes: true
-                  files: artifacts/**/*
+            - name: Install dependencies
+              run: |
+                  npm ci
+                  cd whisper_web && npm ci && cd ..
+
+            - name: Build Linux App
               env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  npm run dist:linux
+
+            - name: Upload Linux build artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: linux-build
+                  path: dist/*

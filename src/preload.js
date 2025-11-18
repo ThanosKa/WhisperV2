@@ -223,6 +223,18 @@ contextBridge.exposeInMainWorld('api', {
         getAutoUpdate: () => ipcRenderer.invoke('settings:get-auto-update'),
         setAutoUpdate: isEnabled => ipcRenderer.invoke('settings:set-auto-update', isEnabled),
         getAppVersion: () => ipcRenderer.invoke('settings:get-app-version'),
+        checkForUpdates: () => ipcRenderer.invoke('app:check-for-updates'),
+        installUpdate: () => ipcRenderer.invoke('app:install-update'),
+        onUpdateAvailable: callback => {
+            ipcRenderer.on('app:update-available', (event, data) => callback(data));
+        },
+        onUpdateDownloaded: callback => {
+            ipcRenderer.on('app:update-downloaded', (event, data) => callback(data));
+        },
+        removeUpdateListeners: () => {
+            ipcRenderer.removeAllListeners('app:update-available');
+            ipcRenderer.removeAllListeners('app:update-downloaded');
+        },
 
         // Content Protection
         getContentProtectionStatus: () => ipcRenderer.invoke('get-content-protection-status'),

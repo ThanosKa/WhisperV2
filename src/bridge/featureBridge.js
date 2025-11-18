@@ -65,6 +65,35 @@ module.exports = {
         // App
         ipcMain.handle('quit-application', () => app.quit());
 
+        // Auto-update handlers
+        ipcMain.handle('app:check-for-updates', async () => {
+            try {
+                const { autoUpdater } = require('electron-updater');
+                if (process.env.NODE_ENV === 'development') {
+                    return { success: false, error: 'Development mode - updates disabled' };
+                }
+                await autoUpdater.checkForUpdatesAndNotify();
+                return { success: true };
+            } catch (error) {
+                console.error('[FeatureBridge] Error checking for updates:', error);
+                return { success: false, error: error.message };
+            }
+        });
+
+        ipcMain.handle('app:install-update', async () => {
+            try {
+                const { autoUpdater } = require('electron-updater');
+                if (process.env.NODE_ENV === 'development') {
+                    return { success: false, error: 'Development mode - updates disabled' };
+                }
+                autoUpdater.quitAndInstall();
+                return { success: true };
+            } catch (error) {
+                console.error('[FeatureBridge] Error installing update:', error);
+                return { success: false, error: error.message };
+            }
+        });
+
         // General
         ipcMain.handle('get-preset-templates', () => presetRepository.getPresetTemplates());
         ipcMain.handle('get-web-url', () => process.env.whisper_WEB_URL || 'http://localhost:3000');
@@ -73,7 +102,9 @@ module.exports = {
         ipcMain.handle('ask:sendQuestionFromAsk', async (event, userPrompt, useScreenCapture = true) => {
             // Get conversation history from listenService and pass it to askService
             const conversationHistory = listenService.getConversationHistory();
-            console.log(`[FeatureBridge] ask:sendQuestionFromAsk: clickLen=${userPrompt?.length || 0}, historyItems=${conversationHistory.length}, useScreenCapture=${useScreenCapture}`);
+            console.log(
+                `[FeatureBridge] ask:sendQuestionFromAsk: clickLen=${userPrompt?.length || 0}, historyItems=${conversationHistory.length}, useScreenCapture=${useScreenCapture}`
+            );
             if (Array.isArray(conversationHistory)) {
                 const preview = conversationHistory.slice(-2);
                 console.log('[FeatureBridge] history preview:', JSON.stringify(preview));

@@ -213,6 +213,20 @@ app.whenReady().then(async () => {
 
     autoUpdater.on('update-available', info => {
         console.log('Update available:', info);
+        // Broadcast to all windows
+        const { windowPool } = require('./window/windowManager');
+        if (windowPool) {
+            const allWindows = BrowserWindow.getAllWindows();
+            allWindows.forEach(win => {
+                if (win && !win.isDestroyed()) {
+                    win.webContents.send('app:update-available', {
+                        version: info.version,
+                        releaseDate: info.releaseDate,
+                        releaseName: info.releaseName,
+                    });
+                }
+            });
+        }
     });
 
     autoUpdater.on('update-not-available', info => {
@@ -229,6 +243,20 @@ app.whenReady().then(async () => {
 
     autoUpdater.on('update-downloaded', info => {
         console.log('Update downloaded:', info);
+        // Broadcast to all windows
+        const { windowPool } = require('./window/windowManager');
+        if (windowPool) {
+            const allWindows = BrowserWindow.getAllWindows();
+            allWindows.forEach(win => {
+                if (win && !win.isDestroyed()) {
+                    win.webContents.send('app:update-downloaded', {
+                        version: info.version,
+                        releaseDate: info.releaseDate,
+                        releaseName: info.releaseName,
+                    });
+                }
+            });
+        }
     });
 
     // Setup native loopback audio capture for Windows
@@ -810,24 +838,35 @@ async function initAutoUpdater() {
 
     try {
         await autoUpdater.checkForUpdates();
-        autoUpdater.on('update-available', () => {
-            console.log('Update available!');
+        autoUpdater.on('update-available', info => {
+            console.log('Update available!', info);
+            // Broadcast to all windows
+            const allWindows = BrowserWindow.getAllWindows();
+            allWindows.forEach(win => {
+                if (win && !win.isDestroyed()) {
+                    win.webContents.send('app:update-available', {
+                        version: info.version,
+                        releaseDate: info.releaseDate,
+                        releaseName: info.releaseName,
+                    });
+                }
+            });
             autoUpdater.downloadUpdate();
         });
         autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName, date, url) => {
             console.log('Update downloaded:', releaseNotes, releaseName, date, url);
-            dialog
-                .showMessageBox({
-                    type: 'info',
-                    title: 'Application Update',
-                    message: `A new version of Whisper (${releaseName}) has been downloaded. It will be installed the next time you launch the application.`,
-                    buttons: ['Restart', 'Later'],
-                })
-                .then(response => {
-                    if (response.response === 0) {
-                        autoUpdater.quitAndInstall();
-                    }
-                });
+            // Broadcast to all windows
+            const allWindows = BrowserWindow.getAllWindows();
+            allWindows.forEach(win => {
+                if (win && !win.isDestroyed()) {
+                    win.webContents.send('app:update-downloaded', {
+                        version: releaseName,
+                        releaseDate: date,
+                        releaseName: releaseName,
+                    });
+                }
+            });
+            // Don't show dialog automatically - let UI handle it
         });
         autoUpdater.on('error', err => {
             console.error('Error in auto-updater:', err);

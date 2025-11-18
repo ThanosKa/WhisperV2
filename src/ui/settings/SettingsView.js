@@ -17,6 +17,8 @@ export class SettingsView extends LitElement {
         showMonitors: { type: Boolean, state: true },
         isLoggingOut: { type: Boolean, state: true },
         appVersion: { type: String, state: true },
+        updateAvailable: { type: Boolean, state: true },
+        updateVersion: { type: String, state: true },
     };
     //////// after_modelStateService ////////
 
@@ -33,6 +35,8 @@ export class SettingsView extends LitElement {
         this.currentDisplayId = null;
         this.showMonitors = true;
         this.isLoggingOut = false;
+        this.updateAvailable = false;
+        this.updateVersion = null;
         this.loadInitialData();
     }
 
@@ -61,6 +65,15 @@ export class SettingsView extends LitElement {
             this.appVersion = 'Unknown';
         }
         this.requestUpdate();
+    }
+
+    async checkForUpdates() {
+        if (!window.api || !window.api.settingsView) return;
+        try {
+            await window.api.settingsView.checkForUpdates();
+        } catch (e) {
+            console.error('Error checking for updates:', e);
+        }
     }
 
     async handleToggleAutoUpdate() {
@@ -124,10 +137,12 @@ export class SettingsView extends LitElement {
 
         this.setupEventListeners();
         this.setupIpcListeners();
+        this.setupUpdateListeners();
         this.setupWindowResize();
         this.loadAutoUpdateSetting();
         this.loadAppVersion();
         this.loadDisplays();
+        this.checkForUpdates();
         // Force one height calculation immediately (innerHeight may be 0 at first)
         setTimeout(() => this.updateScrollHeight(), 0);
     }
@@ -136,6 +151,7 @@ export class SettingsView extends LitElement {
         super.disconnectedCallback();
         this.cleanupEventListeners();
         this.cleanupIpcListeners();
+        this.cleanupUpdateListeners();
         this.cleanupWindowResize();
     }
 
@@ -183,6 +199,43 @@ export class SettingsView extends LitElement {
         }
         if (this._settingsUpdatedListener) {
             window.api.settingsView.removeOnSettingsUpdated(this._settingsUpdatedListener);
+        }
+    }
+
+    setupUpdateListeners() {
+        if (!window.api || !window.api.settingsView) return;
+
+        this._updateAvailableListener = data => {
+            console.log('[SettingsView] Update available:', data);
+            this.updateAvailable = true;
+            this.updateVersion = data.version || data.releaseName || 'latest';
+            this.requestUpdate();
+        };
+
+        this._updateDownloadedListener = data => {
+            console.log('[SettingsView] Update downloaded:', data);
+            this.updateAvailable = true;
+            this.updateVersion = data.version || data.releaseName || 'latest';
+            this.requestUpdate();
+        };
+
+        window.api.settingsView.onUpdateAvailable(this._updateAvailableListener);
+        window.api.settingsView.onUpdateDownloaded(this._updateDownloadedListener);
+    }
+
+    cleanupUpdateListeners() {
+        if (!window.api || !window.api.settingsView) return;
+        window.api.settingsView.removeUpdateListeners();
+    }
+
+    async handleUpdateAndRestart() {
+        if (!window.api || !window.api.settingsView) return;
+        try {
+            await window.api.settingsView.installUpdate();
+            // App will restart automatically
+        } catch (error) {
+            console.error('Error installing update:', error);
+            alert('Failed to install update. Please try again.');
         }
     }
 
@@ -508,7 +561,13 @@ export class SettingsView extends LitElement {
                         </button>
                     </div>
 
-                    <div class="version-info">Version ${this.appVersion || 'Loading...'}</div>
+                    ${this.updateAvailable
+                        ? html`
+                              <button class="settings-button full-width" @click=${this.handleUpdateAndRestart}>
+                                  <span>Update & Restart</span>
+                              </button>
+                          `
+                        : html` <div class="version-info">Version ${this.appVersion || 'Loading...'}</div> `}
                 </div>
             </div>
         `;

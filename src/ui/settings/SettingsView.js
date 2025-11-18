@@ -137,12 +137,14 @@ export class SettingsView extends LitElement {
 
         this.setupEventListeners();
         this.setupIpcListeners();
+        // Setup update listeners FIRST so they're ready before any checks
         this.setupUpdateListeners();
         this.setupWindowResize();
         this.loadAutoUpdateSetting();
         this.loadAppVersion();
         this.loadDisplays();
-        this.checkForUpdates();
+        // Delay check slightly to ensure listeners are fully registered
+        setTimeout(() => this.checkForUpdates(), 100);
         // Force one height calculation immediately (innerHeight may be 0 at first)
         setTimeout(() => this.updateScrollHeight(), 0);
     }
@@ -203,7 +205,10 @@ export class SettingsView extends LitElement {
     }
 
     setupUpdateListeners() {
-        if (!window.api || !window.api.settingsView) return;
+        if (!window.api || !window.api.settingsView) {
+            console.warn('[SettingsView] API not available for update listeners');
+            return;
+        }
 
         this._updateAvailableListener = data => {
             console.log('[SettingsView] Update available:', data);
@@ -219,8 +224,13 @@ export class SettingsView extends LitElement {
             this.requestUpdate();
         };
 
-        window.api.settingsView.onUpdateAvailable(this._updateAvailableListener);
-        window.api.settingsView.onUpdateDownloaded(this._updateDownloadedListener);
+        try {
+            window.api.settingsView.onUpdateAvailable(this._updateAvailableListener);
+            window.api.settingsView.onUpdateDownloaded(this._updateDownloadedListener);
+            console.log('[SettingsView] Update listeners registered successfully');
+        } catch (err) {
+            console.error('[SettingsView] Failed to register update listeners:', err);
+        }
     }
 
     cleanupUpdateListeners() {

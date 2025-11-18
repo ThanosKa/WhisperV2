@@ -112,6 +112,8 @@ data/*.db-wal
 # Build output
 out/
 dist/
-build/**
-!build/after-sign.js
-!build/after-sign.js
+build/
+public/build/
+whisper_web/out/
+.next/
+content.js

@@ -41,16 +41,18 @@ afterSign: notarize.js
 
 # Windows configuration
 win:
+    executableName: whisper # Creates whisper.exe to fix "Open Electron?" issue
     icon: src/ui/assets/wlogo.ico
     target:
         - target: nsis
           arch: x64
     requestedExecutionLevel: asInvoker
-    signAndEditExecutable: false
-    # cscLink: build\certs\glass-dev.pfx
-    # cscKeyPassword: '${env.CSC_KEY_PASSWORD}'
-    # signtoolOptions:
-    #     certificateSubjectName: 'Whisper Dev Code Signing'
+    signAndEditExecutable:
+        false
+        # cscLink: build\certs\glass-dev.pfx
+        # cscKeyPassword: '${env.CSC_KEY_PASSWORD}'
+        # signtoolOptions:
+        #     certificateSubjectName: 'Whisper Dev Code Signing'
 
 # NSIS installer configuration for Windows
 nsis:

@@ -312,6 +312,18 @@ export const settingsViewStyles = css`
         border-color: rgba(255, 59, 48, 0.4);
     }
 
+    .settings-button.primary {
+        background-color: rgba(59, 130, 246, 0.5);
+        border-color: rgba(59, 130, 246, 0.6);
+        color: rgb(255, 255, 255);
+        font-weight: 600;
+    }
+
+    .settings-button.primary:hover {
+        background-color: rgba(59, 130, 246, 0.65);
+        border-color: rgba(59, 130, 246, 0.75);
+    }
+
     .move-buttons,
     .bottom-buttons {
         display: flex;

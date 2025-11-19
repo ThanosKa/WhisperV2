@@ -625,31 +625,11 @@ export class SettingsView extends LitElement {
                         </button>
                     </div>
 
-                    ${this.updateAvailable
+                    ${this.updateReady
                         ? html`
-                              ${this.isWindows
-                                  ? html`
-                                        <button class="settings-button full-width" @click=${this.handleDownloadUpdate}>
-                                            <span>Download Update</span>
-                                        </button>
-                                    `
-                                  : this.isDownloading
-                                    ? html`
-                                          <button class="settings-button full-width" disabled>
-                                              <span>Downloading Update...</span>
-                                          </button>
-                                      `
-                                    : this.updateReady
-                                      ? html`
-                                            <button class="settings-button full-width" @click=${this.handleUpdateAndRestart}>
-                                                <span>Update & Restart</span>
-                                            </button>
-                                        `
-                                      : html`
-                                            <button class="settings-button full-width" disabled>
-                                                <span>Preparing Update...</span>
-                                            </button>
-                                        `}
+                              <button class="settings-button full-width primary" @click=${this.handleUpdateAndRestart}>
+                                  <span>Update & Restart</span>
+                              </button>
                           `
                         : html` <div class="version-info">Version ${this.appVersion || 'Loading...'}</div> `}
                 </div>

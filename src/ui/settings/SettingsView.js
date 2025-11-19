@@ -19,6 +19,8 @@ export class SettingsView extends LitElement {
         appVersion: { type: String, state: true },
         updateAvailable: { type: Boolean, state: true },
         updateVersion: { type: String, state: true },
+        releaseUrl: { type: String, state: true },
+        isWindows: { type: Boolean, state: true },
     };
     //////// after_modelStateService ////////
 
@@ -37,6 +39,8 @@ export class SettingsView extends LitElement {
         this.isLoggingOut = false;
         this.updateAvailable = false;
         this.updateVersion = null;
+        this.releaseUrl = null;
+        this.isWindows = window.api?.platform?.isWindows || false;
         this.loadInitialData();
     }
 
@@ -214,6 +218,7 @@ export class SettingsView extends LitElement {
             console.log('[SettingsView] Update available:', data);
             this.updateAvailable = true;
             this.updateVersion = data.version || data.releaseName || 'latest';
+            this.releaseUrl = data.releaseUrl || 'https://github.com/ThanosKa/whisper-desktop/releases/latest';
             this.requestUpdate();
         };
 
@@ -221,12 +226,36 @@ export class SettingsView extends LitElement {
             console.log('[SettingsView] Update downloaded:', data);
             this.updateAvailable = true;
             this.updateVersion = data.version || data.releaseName || 'latest';
+            this.releaseUrl = data.releaseUrl || 'https://github.com/ThanosKa/whisper-desktop/releases/latest';
+            this.requestUpdate();
+        };
+
+        this._updateNotAvailableListener = data => {
+            console.log('[SettingsView] Update not available:', data);
+            this.updateAvailable = false;
+            this.requestUpdate();
+        };
+
+        this._updateErrorListener = data => {
+            console.error('[SettingsView] Update error:', data);
+            // On Windows, errors are common due to unsigned builds, so we still show manual download option
+            if (this.isWindows) {
+                this.updateAvailable = true; // Show manual download button
+                this.releaseUrl = 'https://github.com/ThanosKa/whisper-desktop/releases/latest';
+            }
             this.requestUpdate();
         };
 
         try {
             window.api.settingsView.onUpdateAvailable(this._updateAvailableListener);
             window.api.settingsView.onUpdateDownloaded(this._updateDownloadedListener);
+            // Note: preload.js needs to expose these new listeners
+            if (window.api.settingsView.onUpdateNotAvailable) {
+                window.api.settingsView.onUpdateNotAvailable(this._updateNotAvailableListener);
+            }
+            if (window.api.settingsView.onUpdateError) {
+                window.api.settingsView.onUpdateError(this._updateErrorListener);
+            }
             console.log('[SettingsView] Update listeners registered successfully');
         } catch (err) {
             console.error('[SettingsView] Failed to register update listeners:', err);
@@ -246,6 +275,21 @@ export class SettingsView extends LitElement {
         } catch (error) {
             console.error('Error installing update:', error);
             alert('Failed to install update. Please try again.');
+        }
+    }
+
+    async handleDownloadUpdate() {
+        if (!this.releaseUrl) return;
+        try {
+            if (window.api && window.api.common && window.api.common.openExternal) {
+                await window.api.common.openExternal(this.releaseUrl);
+            } else {
+                console.error('openExternal API not available');
+                alert('Please visit: ' + this.releaseUrl);
+            }
+        } catch (error) {
+            console.error('Error opening release URL:', error);
+            alert('Failed to open download page. Please visit: ' + this.releaseUrl);
         }
     }
 
@@ -573,9 +617,17 @@ export class SettingsView extends LitElement {
 
                     ${this.updateAvailable
                         ? html`
-                              <button class="settings-button full-width" @click=${this.handleUpdateAndRestart}>
-                                  <span>Update & Restart</span>
-                              </button>
+                              ${this.isWindows
+                                  ? html`
+                                        <button class="settings-button full-width" @click=${this.handleDownloadUpdate}>
+                                            <span>Download Update</span>
+                                        </button>
+                                    `
+                                  : html`
+                                        <button class="settings-button full-width" @click=${this.handleUpdateAndRestart}>
+                                            <span>Update & Restart</span>
+                                        </button>
+                                    `}
                           `
                         : html` <div class="version-info">Version ${this.appVersion || 'Loading...'}</div> `}
                 </div>

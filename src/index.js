@@ -217,12 +217,14 @@ app.whenReady().then(async () => {
         const { windowPool } = require('./window/windowManager');
         if (windowPool) {
             const allWindows = BrowserWindow.getAllWindows();
+            const releaseUrl = `https://github.com/ThanosKa/whisper-desktop/releases/latest`;
             allWindows.forEach(win => {
                 if (win && !win.isDestroyed()) {
                     win.webContents.send('app:update-available', {
                         version: info.version,
                         releaseDate: info.releaseDate,
                         releaseName: info.releaseName,
+                        releaseUrl: releaseUrl,
                     });
                 }
             });
@@ -231,10 +233,34 @@ app.whenReady().then(async () => {
 
     autoUpdater.on('update-not-available', info => {
         console.log('Update not available:', info);
+        // Broadcast to all windows
+        const { windowPool } = require('./window/windowManager');
+        if (windowPool) {
+            const allWindows = BrowserWindow.getAllWindows();
+            allWindows.forEach(win => {
+                if (win && !win.isDestroyed()) {
+                    win.webContents.send('app:update-not-available', {
+                        currentVersion: app.getVersion(),
+                    });
+                }
+            });
+        }
     });
 
     autoUpdater.on('error', err => {
         console.error('Auto-updater error:', err);
+        // Broadcast to all windows
+        const { windowPool } = require('./window/windowManager');
+        if (windowPool) {
+            const allWindows = BrowserWindow.getAllWindows();
+            allWindows.forEach(win => {
+                if (win && !win.isDestroyed()) {
+                    win.webContents.send('app:update-error', {
+                        error: err.message || 'Unknown update error',
+                    });
+                }
+            });
+        }
     });
 
     autoUpdater.on('download-progress', progressObj => {

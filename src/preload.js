@@ -231,9 +231,17 @@ contextBridge.exposeInMainWorld('api', {
         onUpdateDownloaded: callback => {
             ipcRenderer.on('app:update-downloaded', (event, data) => callback(data));
         },
+        onUpdateNotAvailable: callback => {
+            ipcRenderer.on('app:update-not-available', (event, data) => callback(data));
+        },
+        onUpdateError: callback => {
+            ipcRenderer.on('app:update-error', (event, data) => callback(data));
+        },
         removeUpdateListeners: () => {
             ipcRenderer.removeAllListeners('app:update-available');
             ipcRenderer.removeAllListeners('app:update-downloaded');
+            ipcRenderer.removeAllListeners('app:update-not-available');
+            ipcRenderer.removeAllListeners('app:update-error');
         },
 
         // Content Protection

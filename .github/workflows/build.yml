@@ -33,59 +33,26 @@ jobs:
         npm install
 
 
-    - name: Debug Secrets
-      if: matrix.os == 'macos-latest'
-      run: |
-        echo "Checking secrets..."
-        if [ -n "${{ secrets.CSC_LINK }}" ]; then echo "CSC_LINK is SET (length: ${#CSC_LINK})"; else echo "CSC_LINK is NOT SET"; fi
-        if [ -n "${{ secrets.CSC_KEY_PASSWORD }}" ]; then echo "CSC_KEY_PASSWORD is SET"; else echo "CSC_KEY_PASSWORD is NOT SET"; fi
-        if [ -n "${{ secrets.APPLE_ID }}" ]; then echo "APPLE_ID is SET"; else echo "APPLE_ID is NOT SET"; fi
-      env:
-        CSC_LINK: ${{ secrets.CSC_LINK }}
-        CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-        APPLE_ID: ${{ secrets.APPLE_ID }}
 
-    - name: Debug Secrets
+    - name: Build and Publish Electron App (macOS)
       if: matrix.os == 'macos-latest'
-      run: |
-        echo "Checking secrets..."
-        if [ -n "${{ secrets.CSC_LINK }}" ]; then echo "CSC_LINK is SET"; else echo "CSC_LINK is NOT SET"; fi
-        if [ -n "${{ secrets.CSC_KEY_PASSWORD }}" ]; then echo "CSC_KEY_PASSWORD is SET"; else echo "CSC_KEY_PASSWORD is NOT SET"; fi
-        if [ -n "${{ secrets.APPLE_ID }}" ]; then echo "APPLE_ID is SET"; else echo "APPLE_ID is NOT SET"; fi
-
-    - name: Build Electron App (macOS)
-      if: matrix.os == 'macos-latest'
-      run: npm run dist:mac
+      run: npm run build:all && npx electron-builder --mac --publish always
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         CSC_LINK: ${{ secrets.CSC_LINK }}
         CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
         APPLE_ID: ${{ secrets.APPLE_ID }}
         APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-    - name: Build Electron App (Windows)
+    - name: Build and Publish Electron App (Windows)
       if: matrix.os == 'windows-latest'
-      run: npm run dist:win
+      run: npm run build:all && npx electron-builder --win --publish always
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
-    - name: Build Electron App (Linux)
+    - name: Build and Publish Electron App (Linux)
       if: matrix.os == 'ubuntu-latest'
-      run: npm run dist:linux
+      run: npm run build:all && npx electron-builder --linux --publish always
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Upload Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: release-${{ matrix.os }}
-        path: |
-          dist/*.dmg
-          dist/*.exe
-          dist/*.AppImage
-          dist/*.deb
-          dist/*.rpm
-          dist/*.zip
-          dist/*.yml
-          dist/*.blockmap
+        GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}

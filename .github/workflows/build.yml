@@ -33,6 +33,26 @@ jobs:
         npm install
 
 
+    - name: Debug Secrets
+      if: matrix.os == 'macos-latest'
+      run: |
+        echo "Checking secrets..."
+        if [ -n "${{ secrets.CSC_LINK }}" ]; then echo "CSC_LINK is SET (length: ${#CSC_LINK})"; else echo "CSC_LINK is NOT SET"; fi
+        if [ -n "${{ secrets.CSC_KEY_PASSWORD }}" ]; then echo "CSC_KEY_PASSWORD is SET"; else echo "CSC_KEY_PASSWORD is NOT SET"; fi
+        if [ -n "${{ secrets.APPLE_ID }}" ]; then echo "APPLE_ID is SET"; else echo "APPLE_ID is NOT SET"; fi
+      env:
+        CSC_LINK: ${{ secrets.CSC_LINK }}
+        CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+
+    - name: Debug Secrets
+      if: matrix.os == 'macos-latest'
+      run: |
+        echo "Checking secrets..."
+        if [ -n "${{ secrets.CSC_LINK }}" ]; then echo "CSC_LINK is SET"; else echo "CSC_LINK is NOT SET"; fi
+        if [ -n "${{ secrets.CSC_KEY_PASSWORD }}" ]; then echo "CSC_KEY_PASSWORD is SET"; else echo "CSC_KEY_PASSWORD is NOT SET"; fi
+        if [ -n "${{ secrets.APPLE_ID }}" ]; then echo "APPLE_ID is SET"; else echo "APPLE_ID is NOT SET"; fi
+
     - name: Build Electron App (macOS)
       if: matrix.os == 'macos-latest'
       run: npm run dist:mac

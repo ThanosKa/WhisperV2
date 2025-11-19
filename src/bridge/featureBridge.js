@@ -86,7 +86,26 @@ module.exports = {
                 if (process.env.NODE_ENV === 'development') {
                     return { success: false, error: 'Development mode - updates disabled' };
                 }
-                autoUpdater.quitAndInstall();
+                
+                // Force close all windows to prevent "zombie" processes from blocking quit
+                // Using destroy() bypasses close event listeners that might prevent quit
+                console.log('[FeatureBridge] Force closing all windows before update install...');
+                const allWindows = BrowserWindow.getAllWindows();
+                allWindows.forEach(win => {
+                    if (win && !win.isDestroyed()) {
+                        console.log('[FeatureBridge] Destroying window:', win.id);
+                        win.destroy();
+                    }
+                });
+                
+                // Small delay to ensure windows are fully destroyed
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // quitAndInstall(isSilent=false, isForceRunAfter=true)
+                // isSilent=false: Show normal quit behavior
+                // isForceRunAfter=true: Force launch the updated app immediately
+                console.log('[FeatureBridge] Calling quitAndInstall...');
+                autoUpdater.quitAndInstall(false, true);
                 return { success: true };
             } catch (error) {
                 console.error('[FeatureBridge] Error installing update:', error);

@@ -21,6 +21,8 @@ export class SettingsView extends LitElement {
         updateVersion: { type: String, state: true },
         releaseUrl: { type: String, state: true },
         isWindows: { type: Boolean, state: true },
+        isDownloading: { type: Boolean, state: true },
+        updateReady: { type: Boolean, state: true },
     };
     //////// after_modelStateService ////////
 
@@ -41,6 +43,8 @@ export class SettingsView extends LitElement {
         this.updateVersion = null;
         this.releaseUrl = null;
         this.isWindows = window.api?.platform?.isWindows || false;
+        this.isDownloading = false;
+        this.updateReady = false;
         this.loadInitialData();
     }
 
@@ -217,6 +221,8 @@ export class SettingsView extends LitElement {
         this._updateAvailableListener = data => {
             console.log('[SettingsView] Update available:', data);
             this.updateAvailable = true;
+            this.isDownloading = true;
+            this.updateReady = false;
             this.updateVersion = data.version || data.releaseName || 'latest';
             this.releaseUrl = data.releaseUrl || 'https://github.com/ThanosKa/whisper-desktop/releases/latest';
             this.requestUpdate();
@@ -225,6 +231,8 @@ export class SettingsView extends LitElement {
         this._updateDownloadedListener = data => {
             console.log('[SettingsView] Update downloaded:', data);
             this.updateAvailable = true;
+            this.isDownloading = false;
+            this.updateReady = true;
             this.updateVersion = data.version || data.releaseName || 'latest';
             this.releaseUrl = data.releaseUrl || 'https://github.com/ThanosKa/whisper-desktop/releases/latest';
             this.requestUpdate();
@@ -233,6 +241,8 @@ export class SettingsView extends LitElement {
         this._updateNotAvailableListener = data => {
             console.log('[SettingsView] Update not available:', data);
             this.updateAvailable = false;
+            this.isDownloading = false;
+            this.updateReady = false;
             this.requestUpdate();
         };
 
@@ -623,11 +633,23 @@ export class SettingsView extends LitElement {
                                             <span>Download Update</span>
                                         </button>
                                     `
-                                  : html`
-                                        <button class="settings-button full-width" @click=${this.handleUpdateAndRestart}>
-                                            <span>Update & Restart</span>
-                                        </button>
-                                    `}
+                                  : this.isDownloading
+                                    ? html`
+                                          <button class="settings-button full-width" disabled>
+                                              <span>Downloading Update...</span>
+                                          </button>
+                                      `
+                                    : this.updateReady
+                                      ? html`
+                                            <button class="settings-button full-width" @click=${this.handleUpdateAndRestart}>
+                                                <span>Update & Restart</span>
+                                            </button>
+                                        `
+                                      : html`
+                                            <button class="settings-button full-width" disabled>
+                                                <span>Preparing Update...</span>
+                                            </button>
+                                        `}
                           `
                         : html` <div class="version-info">Version ${this.appVersion || 'Loading...'}</div> `}
                 </div>

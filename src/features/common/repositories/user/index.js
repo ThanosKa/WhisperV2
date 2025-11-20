@@ -32,7 +32,38 @@ const userRepositoryAdapter = {
             console.warn('[UserRepository] Cannot get user: not authenticated');
             return null;
         }
-        return getBaseRepository().getById(uid);
+
+        // Get base data from SQLite
+        const sqliteData = getBaseRepository().getById(uid);
+
+        // Get cloud data from AuthService (plan, apiQuota)
+        const authService = getAuthService();
+        const userState = authService.getCurrentUser();
+        const currentUser = userState?.currentUser;
+
+        if (currentUser && currentUser.plan) {
+            // Merge cloud data into SQLite data
+            // If SQLite data exists, merge plan/apiQuota into it
+            // If SQLite data is null but we have cloud data, return cloud data with SQLite field names
+            if (sqliteData) {
+                return {
+                    ...sqliteData,
+                    plan: currentUser.plan,
+                    apiQuota: currentUser.apiQuota || null,
+                };
+            } else {
+                // No SQLite data yet, but we have cloud data - return cloud data with proper field mapping
+                return {
+                    uid: currentUser.uid,
+                    display_name: currentUser.displayName || '',
+                    email: currentUser.email || '',
+                    plan: currentUser.plan,
+                    apiQuota: currentUser.apiQuota || null,
+                };
+            }
+        }
+
+        return sqliteData;
     },
 
     update: updateData => {

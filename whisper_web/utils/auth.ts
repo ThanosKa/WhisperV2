@@ -63,6 +63,7 @@ export const useAuth = () => {
                                 uid: apiUser.uid,
                                 display_name: apiUser.display_name,
                                 email: apiUser.email,
+                                plan: apiUser.plan,
                             };
                             // Overwrite localStorage to ensure headers match server user
                             setUserInfo(profile, true);

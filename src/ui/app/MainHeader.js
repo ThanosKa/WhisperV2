@@ -162,11 +162,14 @@ export class MainHeader extends LitElement {
             window.api.common
                 .getCurrentUser()
                 .then(user => {
-                    if (user) {
-                        this.userPlan = user.plan || 'free';
-                        if (user.sessionUuid) {
+                    if (user?.currentUser) {
+                        this.userPlan = user.currentUser.plan || 'free';
+                        this.apiQuota = user.currentUser.apiQuota || null;
+                        if (user.currentUser.sessionUuid) {
                             this.isLoadingPlan = true;
-                            this._fetchUserProfile(user.sessionUuid);
+                            this._fetchUserProfile(user.currentUser.sessionUuid);
+                        } else {
+                            this.isLoadingPlan = false;
                         }
                     }
                 })
@@ -184,16 +187,18 @@ export class MainHeader extends LitElement {
 
             // React to auth user state changes
             this._userStateListener = (event, userState) => {
-                if (userState) {
-                    this.userPlan = userState.plan || 'free';
-                    if (userState.sessionUuid) {
+                if (userState?.currentUser) {
+                    this.userPlan = userState.currentUser.plan || 'free';
+                    this.apiQuota = userState.currentUser.apiQuota || null;
+                    if (userState.currentUser.sessionUuid) {
                         this.isLoadingPlan = true;
-                        this._fetchUserProfile(userState.sessionUuid);
+                        this._fetchUserProfile(userState.currentUser.sessionUuid);
                     } else {
-                        this.apiQuota = null;
                         this.isLoadingPlan = false;
                     }
                 } else {
+                    this.userPlan = 'free';
+                    this.apiQuota = null;
                     this.isLoadingPlan = false;
                 }
             };

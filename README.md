@@ -2,7 +2,16 @@ WhisperV2 – Electron + Next.js monorepo for the Whisper assistant.
 
 ## Prereqs
 
-- Node 20.x (native deps fail on older/newer majors): `node --version`.
+- Download & install Python and Node. On Windows also install Build Tools for Visual Studio.
+- Use Node 20.x.x to avoid native build errors:
+
+```
+node --version
+# If you need Node 20 via nvm:
+# curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+# nvm install 20
+# nvm use 20
+```
 
 ## Repo layout
 
@@ -14,8 +23,7 @@ WhisperV2 – Electron + Next.js monorepo for the Whisper assistant.
 ## Install
 
 ```bash
-npm install
-cd whisper_web && npm install && cd ..
+npm run setup
 ```
 
 ## Dev

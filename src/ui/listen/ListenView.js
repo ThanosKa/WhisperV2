@@ -303,15 +303,13 @@ export class ListenView extends LitElement {
             this.adjustWindowHeight();
 
             // Restore scroll position when switching to transcript view
-            if (this.viewMode === 'transcript' && this.transcriptScrollTop > 0) {
+            if (this.viewMode === 'transcript') {
                 this.updateComplete.then(() => {
                     setTimeout(() => {
                         const sttView = this.shadowRoot.querySelector('stt-view');
-                        if (sttView && sttView.shadowRoot) {
-                            const scrollContainer = sttView.shadowRoot.querySelector('.transcription-container');
-                            if (scrollContainer) {
-                                scrollContainer.scrollTop = this.transcriptScrollTop;
-                            }
+                        const scrollContainer = sttView?.shadowRoot?.querySelector('.transcription-container');
+                        if (scrollContainer) {
+                            scrollContainer.scrollTop = this.transcriptScrollTop || 0;
                         }
                     }, 10); // Small delay to ensure DOM is fully rendered
                 });

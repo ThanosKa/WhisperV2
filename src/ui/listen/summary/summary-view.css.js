@@ -175,7 +175,7 @@ export const summaryViewStyles = css`
     /* 마크다운 렌더링된 콘텐츠 스타일 */
     .markdown-content {
         color: #ffffff;
-        font-size: 14px;
+        font-size: 15px;
         line-height: 1.4;
         margin: 4px 0;
         padding: 6px 8px;
@@ -258,7 +258,7 @@ export const summaryViewStyles = css`
 
     .meeting-intro-item {
         color: #ffffff;
-        font-size: 14px;
+        font-size: 15px;
         line-height: 1.4;
         margin: 4px 0;
         padding: 6px 8px;
@@ -292,7 +292,7 @@ export const summaryViewStyles = css`
 
     .scrollable-action-item {
         color: #ffffff;
-        font-size: 14px;
+        font-size: 15px;
         line-height: 1.4;
         margin: 2px 4px;
         padding: 6px 8px;
@@ -315,7 +315,7 @@ export const summaryViewStyles = css`
     /* Fixed Action Buttons (same style as others + 2px more) */
     .fixed-action-item {
         color: #ffffff;
-        font-size: 16px;
+        font-size: 15px;
         line-height: 1.4;
         margin: 4px 0;
         padding: 6px 8px;
@@ -334,7 +334,7 @@ export const summaryViewStyles = css`
     /* Follow-ups (no border, as before) */
     .followup-item {
         color: #ffffff;
-        font-size: 14px;
+        font-size: 15px;
         line-height: 1.4;
         margin: 4px 0;
         padding: 6px 8px;

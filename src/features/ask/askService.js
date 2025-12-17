@@ -15,7 +15,6 @@ const getWindowPool = () => {
 
 const sessionRepository = require('../common/repositories/session');
 const askRepository = require('./repositories');
-// const { getSystemPrompt } = require('../common/prompts/promptBuilder'); // Deprecated - using server-side prompt construction
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('os');
@@ -238,7 +237,6 @@ class AskService {
 
     /**
      * Resolve profile id and whether to include conversation context based on intent and preset.
-     * Only uses prompt IDs that exist in promptTemplates.
      * @param {string} intent
      * @param {string|null} presetId
      * @returns {{ profileToUse: string, useConversationContext: boolean }}

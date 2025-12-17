@@ -4,7 +4,6 @@ const summaryRepository = require('./repositories');
 const config = require('../../common/config/config');
 const fs = require('fs');
 const path = require('path');
-// const { getSystemPrompt } = require('../../common/prompts/promptBuilder'); // Deprecated - using server-side prompt construction
 
 class SummaryService {
     constructor() {

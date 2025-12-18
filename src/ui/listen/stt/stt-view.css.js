@@ -155,4 +155,44 @@ export const sttViewStyles = css`
         color: rgba(255, 255, 255, 0.6);
         font-size: 12px;
     }
+
+    /* STT Quota Exceeded Message */
+    .quota-exceeded-message {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 24px 20px;
+        text-align: center;
+        min-height: 150px;
+    }
+
+    .quota-title {
+        font-weight: 600;
+        font-size: 14px;
+        margin-bottom: 8px;
+        color: #ff6b6b;
+    }
+
+    .quota-text {
+        font-size: 12px;
+        margin-bottom: 12px;
+        color: rgba(255, 255, 255, 0.6);
+    }
+
+    .quota-cta {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.6);
+    }
+
+    .upgrade-link {
+        color: #4dabf7;
+        text-decoration: underline;
+        cursor: pointer;
+        transition: color 0.15s ease;
+    }
+
+    .upgrade-link:hover {
+        color: #74c0fc;
+    }
 `;

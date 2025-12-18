@@ -8,6 +8,8 @@ export class SttView extends LitElement {
         sttMessages: { type: Array },
         isVisible: { type: Boolean },
         copyStates: { type: Object, state: true },
+        quotaExceeded: { type: Boolean, state: true },
+        resetAt: { type: String, state: true },
     };
 
     constructor() {
@@ -18,6 +20,10 @@ export class SttView extends LitElement {
         this._shouldScrollAfterUpdate = false;
         this.copyStates = new Map(); // Track copy states for each message
 
+        // STT quota exceeded state
+        this.quotaExceeded = false;
+        this.resetAt = null;
+
         this.handleSttUpdate = this.handleSttUpdate.bind(this);
         this.handleCopyMessage = this.handleCopyMessage.bind(this);
     }
@@ -26,6 +32,13 @@ export class SttView extends LitElement {
         super.connectedCallback();
         if (window.api) {
             window.api.sttView.onSttUpdate(this.handleSttUpdate);
+
+            // STT quota exceeded listener
+            this._quotaListener = (_event, { resetAt }) => {
+                this.quotaExceeded = true;
+                this.resetAt = resetAt;
+            };
+            window.api.sttView.onSttQuotaExceeded(this._quotaListener);
         }
     }
 
@@ -33,12 +46,18 @@ export class SttView extends LitElement {
         super.disconnectedCallback();
         if (window.api) {
             window.api.sttView.removeOnSttUpdate(this.handleSttUpdate);
+            if (this._quotaListener) {
+                window.api.sttView.removeOnSttQuotaExceeded(this._quotaListener);
+                this._quotaListener = null;
+            }
         }
     }
 
     // Handle session reset from parent
     resetTranscript() {
         this.sttMessages = [];
+        this.quotaExceeded = false;
+        this.resetAt = null;
         this.requestUpdate();
     }
 
@@ -168,9 +187,32 @@ export class SttView extends LitElement {
         }
     }
 
+    _handleUpgradeClick(e) {
+        e.preventDefault();
+        const baseUrl = (window.api?.env?.API_BASE_URL || 'https://www.app-whisper.com').replace(/\/$/, '');
+        const pricingUrl = `${baseUrl}/pricing`;
+        window.api?.common?.openExternal?.(pricingUrl);
+    }
+
     render() {
         if (!this.isVisible) {
             return html`<div style="display: none;"></div>`;
+        }
+
+        // Show quota exceeded message
+        if (this.quotaExceeded) {
+            return html`
+                <div class="transcription-container">
+                    <div class="quota-exceeded-message">
+                        <div class="quota-title">Daily audio limit reached</div>
+                        <div class="quota-text">You've used your daily listening budget.</div>
+                        <div class="quota-cta">
+                            <a href="#" class="upgrade-link" @click=${this._handleUpgradeClick}>Upgrade to Pro</a>
+                            for more listening time.
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
         return html`

@@ -28,6 +28,9 @@ class ListenService {
             onStatusUpdate: status => {
                 this.sendToRenderer('update-status', status);
             },
+            onQuotaExceeded: resetAt => {
+                this.handleSttQuotaExceeded(resetAt);
+            },
         });
 
         // Summary service callbacks
@@ -226,6 +229,45 @@ class ListenService {
 
         // Add to summary service for analysis
         this.summaryService.addConversationTurn(speaker, trimmedText);
+    }
+
+    async handleSttQuotaExceeded(resetAt) {
+        console.log('[ListenService] STT quota exceeded, resetAt:', resetAt);
+
+        // Stop audio capture
+        this.sendToRenderer('change-listen-capture-state', { status: 'stop' });
+
+        // Close STT sessions (but don't call closeSessions which would end the DB session)
+        try {
+            await this.sttService.closeSessions();
+            await this.stopMacOSAudioCapture();
+        } catch (err) {
+            console.error('[ListenService] Error stopping audio on quota exceeded:', err);
+        }
+
+        // Notify header window
+        const { windowPool } = require('../../window/windowManager');
+        const header = windowPool.get('header');
+        if (header && !header.isDestroyed()) {
+            header.webContents.send('stt:quotaExceeded', { resetAt });
+            header.webContents.send('listen:changeSessionResult', {
+                success: false,
+                nextStatus: 'beforeSession',
+                error: 'STT_AUDIO_QUOTA_EXCEEDED',
+            });
+        }
+
+        // Notify listen window (for SttView to show quota exceeded message)
+        const listenWindow = windowPool.get('listen');
+        if (listenWindow && !listenWindow.isDestroyed()) {
+            listenWindow.webContents.send('stt:quotaExceeded', { resetAt });
+            listenWindow.webContents.send('session-state-changed', {
+                isActive: false,
+                mode: 'quotaExceeded',
+            });
+        }
+
+        this.sendToRenderer('update-status', 'Daily audio limit reached');
     }
 
     async saveConversationTurn(speaker, transcription) {

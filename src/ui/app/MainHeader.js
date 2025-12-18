@@ -11,6 +11,8 @@ export class MainHeader extends LitElement {
         isLoadingPlan: { type: Boolean, state: true },
         isListenWindowVisible: { type: Boolean, state: true },
         strandedSession: { type: Object, state: true },
+        sttQuotaExceeded: { type: Boolean, state: true },
+        sttResetAt: { type: String, state: true },
     };
 
     static styles = mainHeaderStyles;
@@ -38,6 +40,12 @@ export class MainHeader extends LitElement {
         this.apiQuota = null; // { daily, used, remaining }
         this.isLoadingPlan = false;
         this.strandedSession = null;
+
+        // STT quota exceeded state
+        this.sttQuotaExceeded = false;
+        this.sttResetAt = null;
+        this._quotaResetTimer = null;
+        this._countdownInterval = null;
     }
 
     async loadShortcuts() {
@@ -227,6 +235,14 @@ export class MainHeader extends LitElement {
                     })
                     .catch(() => {});
             } catch (_) {}
+
+            // STT quota exceeded listener
+            this._sttQuotaListener = (_event, { resetAt }) => {
+                this.sttQuotaExceeded = true;
+                this.sttResetAt = resetAt;
+                this._startCountdown(resetAt);
+            };
+            window.api.mainHeader.onSttQuotaExceeded(this._sttQuotaListener);
         }
     }
 
@@ -256,6 +272,20 @@ export class MainHeader extends LitElement {
                 window.api.mainHeader.removeOnStrandedSessionDetected(this._strandedSessionListener);
                 this._strandedSessionListener = null;
             }
+            if (this._sttQuotaListener) {
+                window.api.mainHeader.removeOnSttQuotaExceeded(this._sttQuotaListener);
+                this._sttQuotaListener = null;
+            }
+        }
+
+        // Clean up countdown timers
+        if (this._countdownInterval) {
+            clearInterval(this._countdownInterval);
+            this._countdownInterval = null;
+        }
+        if (this._quotaResetTimer) {
+            clearTimeout(this._quotaResetTimer);
+            this._quotaResetTimer = null;
         }
     }
 
@@ -463,6 +493,41 @@ export class MainHeader extends LitElement {
         }
     }
 
+    _startCountdown(resetAt) {
+        const resetDate = new Date(resetAt);
+
+        // Clear any existing intervals
+        if (this._countdownInterval) clearInterval(this._countdownInterval);
+        if (this._quotaResetTimer) clearTimeout(this._quotaResetTimer);
+
+        // Update countdown every minute
+        this._countdownInterval = setInterval(() => this.requestUpdate(), 60000);
+
+        // Auto-reset when time passes
+        const msUntilReset = resetDate - Date.now();
+        if (msUntilReset > 0) {
+            this._quotaResetTimer = setTimeout(() => {
+                this.sttQuotaExceeded = false;
+                this.sttResetAt = null;
+                if (this._countdownInterval) {
+                    clearInterval(this._countdownInterval);
+                    this._countdownInterval = null;
+                }
+            }, msUntilReset);
+        }
+    }
+
+    _getCountdownText() {
+        if (!this.sttResetAt) return 'Listen';
+        const now = Date.now();
+        const resetTime = new Date(this.sttResetAt).getTime();
+        const remaining = resetTime - now;
+        if (remaining <= 0) return 'Listen';
+
+        const hours = Math.floor(remaining / (60 * 60 * 1000));
+        const minutes = Math.floor((remaining % (60 * 60 * 1000)) / 60000);
+        return hours > 0 ? `Resets in ${hours}h ${minutes}m` : `Resets in ${minutes}m`;
+    }
 
     render() {
         const listenButtonText = this._getListenButtonText(this.listenSessionStatus);
@@ -494,13 +559,13 @@ export class MainHeader extends LitElement {
                         .filter(k => buttonClasses[k])
                         .join(' ')}"
                     @click=${this._handleListenClick}
-                    ?disabled=${this.isTogglingSession}
+                    ?disabled=${this.isTogglingSession || this.sttQuotaExceeded}
                 >
                     ${isInSession || isPaused
                         ? ''
                         : html`
                               <div class="action-text">
-                                  <div class="action-text-content">${listenButtonText}</div>
+                                  <div class="action-text-content">${this.sttQuotaExceeded ? this._getCountdownText() : listenButtonText}</div>
                               </div>
                           `}
                     <div class="listen-icon">

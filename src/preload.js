@@ -100,6 +100,10 @@ contextBridge.exposeInMainWorld('api', {
         getStrandedSession: () => ipcRenderer.invoke('listen:getStrandedSession'),
         showRecoveryToast: (sessionInfo, headerBounds) => ipcRenderer.invoke('recovery-toast:show', sessionInfo, headerBounds),
         hideRecoveryToast: () => ipcRenderer.invoke('recovery-toast:hide'),
+
+        // STT quota exceeded
+        onSttQuotaExceeded: callback => ipcRenderer.on('stt:quotaExceeded', callback),
+        removeOnSttQuotaExceeded: callback => ipcRenderer.removeListener('stt:quotaExceeded', callback),
     },
 
     // src/ui/app/RecoveryToast.js
@@ -186,6 +190,10 @@ contextBridge.exposeInMainWorld('api', {
         // Listeners
         onSttUpdate: callback => ipcRenderer.on('stt-update', callback),
         removeOnSttUpdate: callback => ipcRenderer.removeListener('stt-update', callback),
+
+        // STT quota exceeded
+        onSttQuotaExceeded: callback => ipcRenderer.on('stt:quotaExceeded', callback),
+        removeOnSttQuotaExceeded: callback => ipcRenderer.removeListener('stt:quotaExceeded', callback),
     },
 
     // src/ui/listen/summary/SummaryView.js

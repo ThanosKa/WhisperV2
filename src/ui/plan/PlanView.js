@@ -6,12 +6,14 @@ export class PlanView extends LitElement {
 
     static properties = {
         usage: { type: Object, state: true },
+        sttUsage: { type: Object, state: true }, // STT quota: { used, limit, remaining } in seconds
         isLoading: { type: Boolean, state: true },
     };
 
     constructor() {
         super();
         this.usage = null;
+        this.sttUsage = null; // { used: seconds, limit: seconds, remaining: seconds }
         this.isLoading = true;
 
         // Bind event handlers for mouse interactions
@@ -138,6 +140,16 @@ export class PlanView extends LitElement {
                     remaining: apiQuota?.remaining || 0,
                     limit: apiQuota?.daily || 10,
                 };
+
+                // Extract STT quota if available (server returns audioSecondsUsed, audioSecondsLimit, audioSecondsRemaining)
+                const sttQuota = data.data.sttQuota;
+                if (sttQuota) {
+                    this.sttUsage = {
+                        used: sttQuota.audioSecondsUsed || 0,
+                        limit: sttQuota.audioSecondsLimit || 900, // 15 min default for free
+                        remaining: sttQuota.audioSecondsRemaining || 0,
+                    };
+                }
             } else {
                 this._setDefaultUsage();
             }
@@ -221,9 +233,33 @@ export class PlanView extends LitElement {
         return `The free plan is limited to ${limit} full responses per day.`;
     }
 
+    _getSttText() {
+        if (!this.sttUsage) {
+            return null;
+        }
+
+        const usedMins = Math.floor(this.sttUsage.used / 60);
+        const limitMins = Math.floor(this.sttUsage.limit / 60);
+
+        // Show hours if limit is >= 60 minutes
+        if (limitMins >= 60) {
+            const usedHrs = Math.floor(usedMins / 60);
+            const usedRemMins = usedMins % 60;
+            const limitHrs = Math.floor(limitMins / 60);
+            const limitRemMins = limitMins % 60;
+
+            const usedStr = usedHrs > 0 ? `${usedHrs}h ${usedRemMins}m` : `${usedMins}m`;
+            const limitStr = limitRemMins > 0 ? `${limitHrs}h ${limitRemMins}m` : `${limitHrs}h`;
+            return `Audio: ${usedStr} / ${limitStr} used today`;
+        }
+
+        return `Audio: ${usedMins}m / ${limitMins}m used today`;
+    }
+
     render() {
         const primaryText = this._getPrimaryText();
         const secondaryText = this._getSecondaryText();
+        const sttText = this._getSttText();
 
         return html`
             <div class="plan-menu-wrapper" @mouseenter=${this.handleMouseEnter} @mouseleave=${this.handleMouseLeave}>
@@ -238,6 +274,7 @@ export class PlanView extends LitElement {
                         : html`
                               <p class="plan-primary-text">${primaryText}</p>
                               ${secondaryText ? html` <p class="plan-secondary-text">${secondaryText}</p> ` : ''}
+                              ${sttText ? html` <p class="plan-secondary-text">${sttText}</p> ` : ''}
                           `}
                 </div>
             </div>

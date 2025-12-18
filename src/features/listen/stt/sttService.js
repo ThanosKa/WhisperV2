@@ -41,9 +41,10 @@ class SttService {
         this.relayReady = false;
     }
 
-    setCallbacks({ onTranscriptionComplete, onStatusUpdate }) {
+    setCallbacks({ onTranscriptionComplete, onStatusUpdate, onQuotaExceeded }) {
         this.onTranscriptionComplete = onTranscriptionComplete;
         this.onStatusUpdate = onStatusUpdate;
+        this.onQuotaExceeded = onQuotaExceeded;
     }
 
     sendToRenderer(channel, data) {
@@ -475,8 +476,21 @@ class SttService {
                 }
             });
 
-            socket.on('close', () => {
-                console.log('[SttService] Relay socket closed');
+            socket.on('close', (code, reason) => {
+                const reasonStr = reason?.toString() || '';
+                console.log('[SttService] Relay socket closed, code:', code, 'reason:', reasonStr);
+
+                // Handle STT quota exceeded (close code 4429)
+                if (code === 4429) {
+                    const match = reasonStr.match(/resetAt=([^\s]+)/);
+                    const resetAt = match ? match[1] : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+                    console.log('[SttService] STT quota exceeded, resetAt:', resetAt);
+
+                    if (this.onQuotaExceeded) {
+                        this.onQuotaExceeded(resetAt);
+                    }
+                }
+
                 const wasReady = this.relayReady;
                 this._teardownRelayState();
                 if (!wasReady) {

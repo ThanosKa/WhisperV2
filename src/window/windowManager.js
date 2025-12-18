@@ -831,7 +831,7 @@ function createFeatureWindows(header, namesToCreate) {
                 const plan = new BrowserWindow({
                     ...commonChildOptions,
                     width: 280,
-                    height: 120,
+                    height: 160,
                 });
                 plan.setContentProtection(isContentProtectionOn);
                 plan.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });

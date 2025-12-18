@@ -51,7 +51,7 @@ export const planViewStyles = css`
         font-size: 12px;
         color: rgba(255, 255, 255, 0.7);
         line-height: 1.3;
-        margin: 0;
+        margin: 4px 0 0 0;
     }
 
     .plan-loading {

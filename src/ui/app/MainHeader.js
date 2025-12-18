@@ -173,6 +173,7 @@ export class MainHeader extends LitElement {
                     if (user?.currentUser) {
                         this.userPlan = user.currentUser.plan || 'free';
                         this.apiQuota = user.currentUser.apiQuota || null;
+                        this._updateSttQuotaState(user.currentUser.sttQuota);
                         if (user.currentUser.sessionUuid) {
                             this.isLoadingPlan = true;
                             this._fetchUserProfile(user.currentUser.sessionUuid);
@@ -189,7 +190,7 @@ export class MainHeader extends LitElement {
                 } else {
                     this.listenSessionStatus = 'beforeSession';
                 }
-                this.isTogglingSession = false; // ✨ 로딩 상태만 해제
+                this.isTogglingSession = false;
             };
             window.api.mainHeader.onListenChangeSessionResult(this._sessionStateTextListener);
 
@@ -198,6 +199,7 @@ export class MainHeader extends LitElement {
                 if (userState?.currentUser) {
                     this.userPlan = userState.currentUser.plan || 'free';
                     this.apiQuota = userState.currentUser.apiQuota || null;
+                    this._updateSttQuotaState(userState.currentUser.sttQuota);
                     if (userState.currentUser.sessionUuid) {
                         this.isLoadingPlan = true;
                         this._fetchUserProfile(userState.currentUser.sessionUuid);
@@ -207,19 +209,21 @@ export class MainHeader extends LitElement {
                 } else {
                     this.userPlan = 'free';
                     this.apiQuota = null;
+                    this.sttQuotaExceeded = false;
+                    this.sttResetAt = null;
                     this.isLoadingPlan = false;
                 }
             };
             window.api.headerController.onUserStateChanged(this._userStateListener);
 
             // Recovery listener
-        this._strandedSessionListener = async (event, sessionInfo) => {
-            console.log('[Recovery] Header received prompt');
-            this.strandedSession = sessionInfo;
-            await this._maybeShowRecoveryToast(sessionInfo);
-        };
-        window.api.mainHeader.onStrandedSessionDetected(this._strandedSessionListener);
-        this._hydrateStrandedSessionState();
+            this._strandedSessionListener = async (event, sessionInfo) => {
+                console.log('[Recovery] Header received prompt');
+                this.strandedSession = sessionInfo;
+                await this._maybeShowRecoveryToast(sessionInfo);
+            };
+            window.api.mainHeader.onStrandedSessionDetected(this._strandedSessionListener);
+            this._hydrateStrandedSessionState();
 
             this._listenVisibilityListener = (event, visible) => {
                 this.isListenWindowVisible = !!visible;
@@ -451,6 +455,7 @@ export class MainHeader extends LitElement {
             if (res.ok && data && data.success && data.data) {
                 this.userPlan = data.data.plan || this.userPlan || 'free';
                 this.apiQuota = data.data.apiQuota || null;
+                this._updateSttQuotaState(data.data.sttQuota);
                 this.requestUpdate();
             }
         } catch (e) {
@@ -460,19 +465,54 @@ export class MainHeader extends LitElement {
         }
     }
 
+    _updateSttQuotaState(sttQuota) {
+        if (!sttQuota) return;
+
+        // Check if remaining seconds is 0 or less
+        const isExceeded = typeof sttQuota.audioSecondsRemaining === 'number' && sttQuota.audioSecondsRemaining <= 0;
+
+        this.sttQuotaExceeded = isExceeded;
+        this.sttResetAt = sttQuota.resetAt || null;
+
+        if (isExceeded && this.sttResetAt) {
+            this._startCountdown(this.sttResetAt);
+        } else if (!isExceeded) {
+            // Clear countdown if quota is no longer exceeded
+            if (this._countdownInterval) {
+                clearInterval(this._countdownInterval);
+                this._countdownInterval = null;
+            }
+            if (this._quotaResetTimer) {
+                clearTimeout(this._quotaResetTimer);
+                this._quotaResetTimer = null;
+            }
+        }
+    }
+
     _getPlanLabel() {
         if (this.isLoadingPlan) {
             return 'Loading...';
         }
-        return (this.userPlan || 'free') === 'pro' ? 'Pro plan' : 'Upgrade to Pro';
+        const plan = (this.userPlan || 'free').toLowerCase();
+        switch (plan) {
+            case 'pro':
+                return 'Pro plan';
+            case 'pro_plus':
+                return 'Pro Plus plan';
+            case 'ultra':
+                return 'Ultra plan';
+            default:
+                return 'Upgrade to Pro';
+        }
     }
 
     _getPlanTooltip() {
         if (this.isLoadingPlan) {
             return 'Loading plan information...';
         }
-        const isPro = (this.userPlan || 'free') !== 'free';
-        if (isPro) return 'You have unlimited responses.';
+        const plan = (this.userPlan || 'free').toLowerCase();
+        const isPaid = plan === 'pro' || plan === 'pro_plus' || plan === 'ultra';
+        if (isPaid) return 'You have unlimited responses.';
         const remaining = this.apiQuota?.remaining;
         if (typeof remaining === 'number') {
             return `You have ${remaining} free responses left today.`;
@@ -482,7 +522,8 @@ export class MainHeader extends LitElement {
 
     _handlePlanClick() {
         if (this.isLoadingPlan) return; // Don't allow clicks while loading
-        const isFree = (this.userPlan || 'free') === 'free';
+        const plan = (this.userPlan || 'free').toLowerCase();
+        const isFree = plan === 'free';
         if (!isFree) return;
         const baseUrl = (window.api?.env?.API_BASE_URL || 'https://www.app-whisper.com').replace(/\/$/, '');
         const url = `${baseUrl}/pricing`;
@@ -500,8 +541,8 @@ export class MainHeader extends LitElement {
         if (this._countdownInterval) clearInterval(this._countdownInterval);
         if (this._quotaResetTimer) clearTimeout(this._quotaResetTimer);
 
-        // Update countdown every minute
-        this._countdownInterval = setInterval(() => this.requestUpdate(), 60000);
+        // Update countdown every second for real-time HH:mm:ss
+        this._countdownInterval = setInterval(() => this.requestUpdate(), 1000);
 
         // Auto-reset when time passes
         const msUntilReset = resetDate - Date.now();
@@ -524,9 +565,14 @@ export class MainHeader extends LitElement {
         const remaining = resetTime - now;
         if (remaining <= 0) return 'Listen';
 
-        const hours = Math.floor(remaining / (60 * 60 * 1000));
-        const minutes = Math.floor((remaining % (60 * 60 * 1000)) / 60000);
-        return hours > 0 ? `Resets in ${hours}h ${minutes}m` : `Resets in ${minutes}m`;
+        const seconds = Math.floor((remaining / 1000) % 60);
+        const minutes = Math.floor((remaining / (1000 * 60)) % 60);
+        const hours = Math.floor(remaining / (1000 * 60 * 60));
+
+        const h = hours > 0 ? `${hours}hr:` : '';
+        const m = `${minutes}m:`;
+        const s = `${seconds}s`;
+        return `${h}${m}${s}`;
     }
 
     render() {
@@ -568,96 +614,100 @@ export class MainHeader extends LitElement {
                                   <div class="action-text-content">${this.sttQuotaExceeded ? this._getCountdownText() : listenButtonText}</div>
                               </div>
                           `}
-                    <div class="listen-icon">
-                        ${this.isTogglingSession
-                            ? html`
-                                  <div class="water-drop-ripple">
-                                      <div class="ripple-ring"></div>
-                                      <div class="ripple-ring"></div>
-                                      <div class="ripple-ring"></div>
-                                      <div class="ripple-ring"></div>
-                                  </div>
-                              `
-                            : isInSession
-                              ? html`
-                                    <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        width="16"
-                                        height="16"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="white"
-                                        stroke-width="2"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                    >
-                                        <rect x="14" y="3" width="5" height="18" rx="1" />
-                                        <rect x="5" y="3" width="5" height="18" rx="1" />
-                                    </svg>
-                                    <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        width="12"
-                                        height="11"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="white"
-                                        stroke-width="2"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        class="lucide lucide-audio-lines-icon lucide-audio-lines wavy-animation"
-                                    >
-                                        <path d="M2 10v3" />
-                                        <path d="M6 6v11" />
-                                        <path d="M10 3v18" />
-                                        <path d="M14 8v7" />
-                                        <path d="M18 5v13" />
-                                        <path d="M22 10v3" />
-                                    </svg>
-                                `
-                              : isPaused
-                                ? html`
-                                      <svg
-                                          xmlns="http://www.w3.org/2000/svg"
-                                          width="16"
-                                          height="16"
-                                          viewBox="0 0 24 24"
-                                          fill="none"
-                                          stroke="white"
-                                          stroke-width="2"
-                                          stroke-linecap="round"
-                                          stroke-linejoin="round"
-                                      >
-                                          <path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z" />
-                                      </svg>
-                                  `
-                                : isAfterSession
-                                  ? html`
-                                        <svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                            <rect width="9" height="9" rx="1" fill="white" />
-                                        </svg>
-                                    `
-                                  : html`
-                                        <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            width="12"
-                                            height="11"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="white"
-                                            stroke-width="2"
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            class="lucide lucide-audio-lines-icon lucide-audio-lines"
-                                        >
-                                            <path d="M2 10v3" />
-                                            <path d="M6 6v11" />
-                                            <path d="M10 3v18" />
-                                            <path d="M14 8v7" />
-                                            <path d="M18 5v13" />
-                                            <path d="M22 10v3" />
-                                        </svg>
-                                    `}
-                    </div>
+                    ${this.sttQuotaExceeded
+                        ? ''
+                        : html`
+                              <div class="listen-icon">
+                                  ${this.isTogglingSession
+                                      ? html`
+                                            <div class="water-drop-ripple">
+                                                <div class="ripple-ring"></div>
+                                                <div class="ripple-ring"></div>
+                                                <div class="ripple-ring"></div>
+                                                <div class="ripple-ring"></div>
+                                            </div>
+                                        `
+                                      : isInSession
+                                        ? html`
+                                              <svg
+                                                  xmlns="http://www.w3.org/2000/svg"
+                                                  width="16"
+                                                  height="16"
+                                                  viewBox="0 0 24 24"
+                                                  fill="none"
+                                                  stroke="white"
+                                                  stroke-width="2"
+                                                  stroke-linecap="round"
+                                                  stroke-linejoin="round"
+                                              >
+                                                  <rect x="14" y="3" width="5" height="18" rx="1" />
+                                                  <rect x="5" y="3" width="5" height="18" rx="1" />
+                                              </svg>
+                                              <svg
+                                                  xmlns="http://www.w3.org/2000/svg"
+                                                  width="12"
+                                                  height="11"
+                                                  viewBox="0 0 24 24"
+                                                  fill="none"
+                                                  stroke="white"
+                                                  stroke-width="2"
+                                                  stroke-linecap="round"
+                                                  stroke-linejoin="round"
+                                                  class="lucide lucide-audio-lines-icon lucide-audio-lines wavy-animation"
+                                              >
+                                                  <path d="M2 10v3" />
+                                                  <path d="M6 6v11" />
+                                                  <path d="M10 3v18" />
+                                                  <path d="M14 8v7" />
+                                                  <path d="M18 5v13" />
+                                                  <path d="M22 10v3" />
+                                              </svg>
+                                          `
+                                        : isPaused
+                                          ? html`
+                                                <svg
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    width="16"
+                                                    height="16"
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="white"
+                                                    stroke-width="2"
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                >
+                                                    <path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z" />
+                                                </svg>
+                                            `
+                                          : isAfterSession
+                                            ? html`
+                                                  <svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                      <rect width="9" height="9" rx="1" fill="white" />
+                                                  </svg>
+                                              `
+                                            : html`
+                                                  <svg
+                                                      xmlns="http://www.w3.org/2000/svg"
+                                                      width="12"
+                                                      height="11"
+                                                      viewBox="0 0 24 24"
+                                                      fill="none"
+                                                      stroke="white"
+                                                      stroke-width="2"
+                                                      stroke-linecap="round"
+                                                      stroke-linejoin="round"
+                                                      class="lucide lucide-audio-lines-icon lucide-audio-lines"
+                                                  >
+                                                      <path d="M2 10v3" />
+                                                      <path d="M6 6v11" />
+                                                      <path d="M10 3v18" />
+                                                      <path d="M14 8v7" />
+                                                      <path d="M18 5v13" />
+                                                      <path d="M22 10v3" />
+                                                  </svg>
+                                              `}
+                              </div>
+                          `}
                 </button>
 
                 ${isInSession || isPaused

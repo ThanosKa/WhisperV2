@@ -28,6 +28,43 @@ export class PlanView extends LitElement {
         console.log('[PlanView] Component connected');
         this._loadUserData();
 
+        // Listen for user state changes to keep plan and STT quota in sync
+        try {
+            if (window.api?.headerController?.onUserStateChanged) {
+                this._onUserStateChanged = (_event, userState) => {
+                    console.log('[PlanView] User state changed received');
+                    if (userState?.currentUser) {
+                        const currentUser = userState.currentUser;
+                        const plan = currentUser.plan || 'free';
+                        const apiQuota = currentUser.apiQuota;
+                        const sttQuota = currentUser.sttQuota;
+
+                        if (apiQuota) {
+                            this.usage = {
+                                plan: plan,
+                                used: apiQuota.used || 0,
+                                remaining: apiQuota.remaining || 0,
+                                limit: apiQuota.daily || (plan === 'pro' ? null : 10),
+                            };
+                        }
+
+                        if (sttQuota) {
+                            this.sttUsage = {
+                                used: sttQuota.audioSecondsUsed || 0,
+                                limit: sttQuota.audioSecondsLimit || 900,
+                                remaining: sttQuota.audioSecondsRemaining || 0,
+                            };
+                        }
+                        this.isLoading = false;
+                        this.requestUpdate();
+                    }
+                };
+                window.api.headerController.onUserStateChanged(this._onUserStateChanged);
+            }
+        } catch (e) {
+            console.warn('[PlanView] Failed to subscribe to user state changes:', e);
+        }
+
         // Subscribe to real-time quota updates from main (headers on stream start)
         try {
             if (window.api?.quota?.onUpdate) {
@@ -36,7 +73,17 @@ export class PlanView extends LitElement {
                     const used = typeof payload?.used === 'number' ? payload.used : undefined;
                     const remaining = typeof payload?.remaining === 'number' ? payload.remaining : undefined;
 
-                    if (typeof limit === 'undefined' && typeof used === 'undefined' && typeof remaining === 'undefined') return;
+                    if (typeof limit === 'undefined' && typeof used === 'undefined' && typeof remaining === 'undefined') {
+                        // Check if payload has STT quota instead
+                        if (payload?.sttQuota) {
+                            this.sttUsage = {
+                                used: payload.sttQuota.audioSecondsUsed || 0,
+                                limit: payload.sttQuota.audioSecondsLimit || 900,
+                                remaining: payload.sttQuota.audioSecondsRemaining || 0,
+                            };
+                        }
+                        return;
+                    }
 
                     // If we don't yet know plan, assume free when limit is finite
                     const plan = limit && limit >= 1000 ? 'pro' : 'free';
@@ -54,6 +101,16 @@ export class PlanView extends LitElement {
                     };
 
                     this.usage = next;
+
+                    // Update STT if present in payload
+                    if (payload?.sttQuota) {
+                        this.sttUsage = {
+                            used: payload.sttQuota.audioSecondsUsed || 0,
+                            limit: payload.sttQuota.audioSecondsLimit || 900,
+                            remaining: payload.sttQuota.audioSecondsRemaining || 0,
+                        };
+                    }
+
                     this.isLoading = false;
                 };
                 window.api.quota.onUpdate(this._onQuotaUpdate);
@@ -65,6 +122,9 @@ export class PlanView extends LitElement {
 
     disconnectedCallback() {
         try {
+            if (this._onUserStateChanged && window.api?.headerController?.removeOnUserStateChanged) {
+                window.api.headerController.removeOnUserStateChanged(this._onUserStateChanged);
+            }
             if (this._onQuotaUpdate && window.api?.quota?.removeOnUpdate) {
                 window.api.quota.removeOnUpdate(this._onQuotaUpdate);
             }
@@ -96,6 +156,7 @@ export class PlanView extends LitElement {
 
             const plan = currentUser.plan || 'free';
             const apiQuota = currentUser.apiQuota;
+            const sttQuota = currentUser.sttQuota;
 
             if (apiQuota) {
                 this.usage = {
@@ -104,6 +165,15 @@ export class PlanView extends LitElement {
                     remaining: apiQuota.remaining || 0,
                     limit: apiQuota.daily || (plan === 'pro' ? null : 10),
                 };
+
+                if (sttQuota) {
+                    this.sttUsage = {
+                        used: sttQuota.audioSecondsUsed || 0,
+                        limit: sttQuota.audioSecondsLimit || 900,
+                        remaining: sttQuota.audioSecondsRemaining || 0,
+                    };
+                }
+
                 this.isLoading = false;
                 return;
             }
@@ -168,6 +238,11 @@ export class PlanView extends LitElement {
             remaining: 0,
             limit: 10,
         };
+        this.sttUsage = {
+            used: 0,
+            limit: 900,
+            remaining: 900,
+        };
         this.isLoading = false;
     }
 
@@ -208,14 +283,14 @@ export class PlanView extends LitElement {
             return 'Free plan: limited responses.';
         }
 
-        const isPro = this.usage.plan === 'pro';
+        const plan = (this.usage.plan || 'free').toLowerCase();
 
-        if (isPro) {
+        if (plan === 'ultra') {
             return 'You have unlimited AI responses';
         }
 
         const remaining = this.usage.remaining || 0;
-        return `You have ${remaining} free responses left.`;
+        return `You have ${remaining} responses left.`;
     }
 
     _getSecondaryText() {
@@ -223,14 +298,19 @@ export class PlanView extends LitElement {
             return null;
         }
 
-        const isPro = this.usage.plan === 'pro';
+        const plan = (this.usage.plan || 'free').toLowerCase();
 
-        if (isPro) {
+        if (plan === 'ultra') {
             return null;
         }
 
         const limit = this.usage.limit || 10;
-        return `The free plan is limited to ${limit} full responses per day.`;
+        const normalizedPlan = plan
+            .split('_')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+
+        return `The ${normalizedPlan} plan is limited to ${limit} responses per day.`;
     }
 
     _getSttText() {
@@ -238,22 +318,21 @@ export class PlanView extends LitElement {
             return null;
         }
 
-        const usedMins = Math.floor(this.sttUsage.used / 60);
-        const limitMins = Math.floor(this.sttUsage.limit / 60);
-
-        // Show hours if limit is >= 60 minutes
-        if (limitMins >= 60) {
-            const usedHrs = Math.floor(usedMins / 60);
-            const usedRemMins = usedMins % 60;
-            const limitHrs = Math.floor(limitMins / 60);
-            const limitRemMins = limitMins % 60;
-
-            const usedStr = usedHrs > 0 ? `${usedHrs}h ${usedRemMins}m` : `${usedMins}m`;
-            const limitStr = limitRemMins > 0 ? `${limitHrs}h ${limitRemMins}m` : `${limitHrs}h`;
-            return `Audio: ${usedStr} / ${limitStr} used today`;
+        const plan = (this.usage?.plan || 'free').toLowerCase();
+        if (plan === 'ultra') {
+            return 'Meeting Time: Unlimited';
         }
 
-        return `Audio: ${usedMins}m / ${limitMins}m used today`;
+        const remainingSecs = this.sttUsage.remaining || 0;
+        const remainingMins = Math.floor(remainingSecs / 60);
+
+        if (remainingMins >= 60) {
+            const hours = Math.floor(remainingMins / 60);
+            const mins = remainingMins % 60;
+            return `Meeting Time: ${hours}h ${mins}m remaining`;
+        }
+
+        return `Meeting Time: ${remainingMins}m remaining`;
     }
 
     render() {

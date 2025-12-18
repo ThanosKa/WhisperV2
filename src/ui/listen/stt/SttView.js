@@ -207,7 +207,7 @@ export class SttView extends LitElement {
                         <div class="quota-title">Daily audio limit reached</div>
                         <div class="quota-text">You've used your daily listening budget.</div>
                         <div class="quota-cta">
-                            <a href="#" class="upgrade-link" @click=${this._handleUpgradeClick}>Upgrade to Pro</a>
+                            <a href="#" class="upgrade-link" @click=${this._handleUpgradeClick}>Upgrade plan</a>
                             for more listening time.
                         </div>
                     </div>

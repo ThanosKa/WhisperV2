@@ -90,7 +90,7 @@ export const mainHeaderStyles = css`
         background: transparent;
         border-radius: 9000px;
         justify-content: center;
-        width: 78px;
+        width: 95px;
         align-items: center;
         gap: 6px;
         display: flex;

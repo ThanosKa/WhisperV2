@@ -380,6 +380,7 @@ class AuthService {
                       email: this.currentUser.email,
                       plan: this.currentUser.plan,
                       apiQuota: this.currentUser.apiQuota,
+                      sttQuota: this.currentUser.sttQuota,
                   }
                 : null,
         };

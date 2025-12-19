@@ -1,5 +1,14 @@
 # AGENTS.md - WhisperV2 Project
 
+Monorepo project
+-src folder contains the desktop app in electron.
+-whisper_web contains the local webapp dashboard. Its not the server!!
+
+This projects connets to 2 servers that are seperated from this codebase. You do not have access to them
+
+1. The STT microservice with soniox proiver deployed on railway
+2. The landing page which is the main server deployed on vercel
+
 ## Context Discovery - READ THIS FIRST
 
 **Always load the canonical files stored in `.cursor/agents/`.**  

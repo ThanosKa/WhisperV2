@@ -88,7 +88,7 @@ export default function HelpPage() {
               <h2 className="text-xl font-semibold text-gray-900">Contact Us</h2>
             </div>
             <p className="text-gray-600 mb-4">
-              Couldn't find a solution? Contact us directly.
+              Couldn&apos;t find a solution? Contact us directly.
             </p>
             <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
               Contact via Email →

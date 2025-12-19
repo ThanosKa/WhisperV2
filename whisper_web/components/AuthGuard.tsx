@@ -15,13 +15,8 @@ export default function AuthGuard({ children, requireAuth = false, redirectTo = 
     const { user, isLoading, mode } = useAuth();
     const router = useRouter();
 
-    // In dev mock mode, always allow rendering without checks
-    if (isDevMockEnabled()) {
-        return <>{children}</>;
-    }
-
     useEffect(() => {
-        if (isLoading) return;
+        if (isLoading || isDevMockEnabled()) return;
 
         const checkAuth = async () => {
             // Check if we're in Electron mode

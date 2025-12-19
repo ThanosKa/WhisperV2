@@ -151,8 +151,8 @@ function SessionDetailsContent() {
         }
     };
 
-    const askMessages = sessionDetails?.ai_messages ?? [];
-    const transcripts = sessionDetails?.transcripts ?? [];
+    const askMessages = useMemo(() => sessionDetails?.ai_messages ?? [], [sessionDetails?.ai_messages]);
+    const transcripts = useMemo(() => sessionDetails?.transcripts ?? [], [sessionDetails?.transcripts]);
     const userAskMessages = useMemo(() => askMessages.filter(message => message.role === 'user'), [askMessages]);
     
     // Check if session is active (not finished)

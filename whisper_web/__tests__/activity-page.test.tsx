@@ -246,8 +246,9 @@ describe('ActivityPage', () => {
         expect(observerCallback).toBeTruthy();
         const initialCallCount = mockGetMeetingsPage.mock.calls.length;
         if (observerCallback) {
+            const cb = observerCallback as IntersectionObserverCallback;
             act(() => {
-                observerCallback([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
+                cb([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
             });
         }
 

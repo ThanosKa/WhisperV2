@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { getUserProfile } from '@/utils/api';
 import { RefreshCw, User, Check } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { isDevMockEnabled } from '@/utils/devMock';
 
 export default function SyncPage() {
@@ -14,32 +14,7 @@ export default function SyncPage() {
     const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
 
-    useEffect(() => {
-        const checkElectronMode = async () => {
-            // In dev mock mode, do not attempt Electron sync or runtime-config fetch
-            if (isDevMockEnabled()) {
-                setIsElectronMode(false);
-                return;
-            }
-            try {
-                const response = await fetch('/runtime-config.json');
-                if (response.ok) {
-                    setIsElectronMode(true);
-                    console.log('🖥️ Detected Electron mode - attempting auto-sync');
-                    // Auto-attempt sync in Electron mode
-                    handleSyncWithDesktop();
-                } else {
-                    console.log('🌐 Detected Web mode');
-                }
-            } catch (error) {
-                console.log('🌐 Detected Web mode (no runtime config)');
-            }
-        };
-
-        checkElectronMode();
-    }, []);
-
-    const handleSyncWithDesktop = async () => {
+    const handleSyncWithDesktop = useCallback(async () => {
         setIsSyncing(true);
         setSyncStatus('syncing');
         setErrorMessage('');
@@ -80,7 +55,32 @@ export default function SyncPage() {
         } finally {
             setIsSyncing(false);
         }
-    };
+    }, [router]);
+
+    useEffect(() => {
+        const checkElectronMode = async () => {
+            // In dev mock mode, do not attempt Electron sync or runtime-config fetch
+            if (isDevMockEnabled()) {
+                setIsElectronMode(false);
+                return;
+            }
+            try {
+                const response = await fetch('/runtime-config.json');
+                if (response.ok) {
+                    setIsElectronMode(true);
+                    console.log('🖥️ Detected Electron mode - attempting auto-sync');
+                    // Auto-attempt sync in Electron mode
+                    handleSyncWithDesktop();
+                } else {
+                    console.log('🌐 Detected Web mode');
+                }
+            } catch (error) {
+                console.log('🌐 Detected Web mode (no runtime config)');
+            }
+        };
+
+        checkElectronMode();
+    }, [handleSyncWithDesktop]);
 
     // Removed local mode continue: site is protected, must sync
 
@@ -96,7 +96,7 @@ export default function SyncPage() {
                 ) : (
                     <>
                         <p className="text-gray-600 mt-2">Sign in with your account to sync your data across all devices.</p>
-                        <p className="text-sm text-gray-500 mt-1">Local mode will run if you don't sign in.</p>
+                        <p className="text-sm text-gray-500 mt-1">Local mode will run if you don&apos;t sign in.</p>
                     </>
                 )}
             </div>

@@ -152,16 +152,14 @@ describe('api utilities', () => {
 
         it('calls API when dev mock disabled', async () => {
             mockIsDevMockEnabled.mockReturnValue(false);
-            (global.fetch as jest.Mock)
-                .mockResolvedValueOnce({ ok: false })
-                .mockResolvedValueOnce({
-                    ok: true,
-                    json: async () => ({
-                        uid: 'user-1',
-                        display_name: 'Test User',
-                        email: 'test@example.com',
-                    }),
-                });
+            (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false }).mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    uid: 'user-1',
+                    display_name: 'Test User',
+                    email: 'test@example.com',
+                }),
+            });
 
             const result = await api.getUserProfile();
 
@@ -191,12 +189,10 @@ describe('api utilities', () => {
                 })
             );
 
-            (global.fetch as jest.Mock)
-                .mockResolvedValueOnce({ ok: false })
-                .mockResolvedValueOnce({
-                    ok: true,
-                    json: async () => ({}),
-                });
+            (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false }).mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({}),
+            });
 
             await api.apiCall('/test', { method: 'GET' });
 
@@ -207,13 +203,11 @@ describe('api utilities', () => {
 
         it('handles API errors', async () => {
             mockIsDevMockEnabled.mockReturnValue(false);
-            (global.fetch as jest.Mock)
-                .mockResolvedValueOnce({ ok: false })
-                .mockResolvedValueOnce({
-                    ok: false,
-                    status: 500,
-                    text: async () => 'Internal Server Error',
-                });
+            (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false }).mockResolvedValueOnce({
+                ok: false,
+                status: 500,
+                text: async () => 'Internal Server Error',
+            });
 
             const response = await api.apiCall('/test');
 
@@ -233,7 +227,7 @@ describe('api utilities', () => {
                     title: 'Meeting 1',
                     session_type: 'listen',
                     started_at: Math.floor(Date.now() / 1000),
-                    sync_state: 'clean',
+                    sync_state: 'clean' as const,
                     updated_at: Math.floor(Date.now() / 1000),
                 },
             ];
@@ -245,4 +239,3 @@ describe('api utilities', () => {
         });
     });
 });
-

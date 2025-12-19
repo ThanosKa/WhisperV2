@@ -8,6 +8,7 @@
         "build:backend": "tsc -p backend_node/tsconfig.json",
         "start": "next start",
         "lint": "next lint",
+        "type-check": "tsc --noEmit",
         "test": "jest",
         "test:watch": "jest --watch",
         "test:coverage": "jest --coverage",

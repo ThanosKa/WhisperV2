@@ -17,6 +17,8 @@
         "dist:linux": "npm run build:all && electron-builder --linux --publish never",
         "dist:all": "npm run build:all && electron-builder --mac --win --linux --publish never",
         "lint": "eslint --ext .ts,.tsx,.js .",
+        "web:lint": "npm run lint --prefix whisper_web",
+        "web:type-check": "npm run type-check --prefix whisper_web",
         "postinstall": "electron-builder install-app-deps",
         "build:renderer": "node build.js",
         "build:web": "cd whisper_web && npm run build && cd ..",

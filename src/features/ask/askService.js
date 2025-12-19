@@ -317,7 +317,11 @@ class AskService {
         const intentsWithoutContext = new Set(['define']);
         const useConversationContext = !intentsWithoutContext.has(intent);
 
-        return { profileToUse, useConversationContext };
+        // Actions that should NOT receive role context (keep objective/factual)
+        const intentsWithoutRole = new Set(['define', 'recap', 'summary']);
+        const shouldIncludeRole = !intentsWithoutRole.has(intent);
+
+        return { profileToUse, useConversationContext, shouldIncludeRole };
     }
 
     _deriveTitleFromPrompt(prompt) {
@@ -635,7 +639,7 @@ class AskService {
             const explicitIntent = this._detectIntentFromClickPill(userPrompt) || expansion.mode;
             const activePreset = presetId || (summaryService && summaryService.selectedPresetId) || null;
 
-            let { profileToUse, useConversationContext } = this._resolveProfileForIntent(explicitIntent, activePreset);
+            let { profileToUse, useConversationContext, shouldIncludeRole } = this._resolveProfileForIntent(explicitIntent, activePreset);
 
             if (this._forceDefaultProfileOnce) {
                 console.log('[AskService] Manual Ask detected → forcing default profile: whisper');
@@ -643,21 +647,12 @@ class AskService {
                 // Keep context decision based on intent (e.g., define=false), do not override
             }
 
-            // Build context for prompt
-            let contextForPrompt = useConversationContext ? conversationHistory : '';
+            // Get role context from summaryService (contains default + user custom context)
+            const roleContext = summaryService.selectedRoleText || '';
+            console.log(`[AskService] Role context length: ${roleContext.length} chars`);
 
-            // For analysis profiles, include previous terms/questions context from summary service
-            if (isInMeeting && profileToUse && profileToUse.endsWith('_analysis')) {
-                const summaryContext = summaryService.getCurrentContext();
-                if (summaryContext && (summaryContext.definedTerms.length > 0 || summaryContext.detectedQuestions.length > 0)) {
-                    // Use the summary service's method to format context appropriately for the analysis type
-                    const previousContext = summaryService.getFormattedPreviousContext(profileToUse);
-                    contextForPrompt = contextForPrompt ? `${contextForPrompt}\n\n${previousContext}` : previousContext;
-                    console.log(
-                        `[AskService] Added summary context for ${profileToUse}: ${summaryContext.definedTerms.length} terms, ${summaryContext.detectedQuestions.length} questions`
-                    );
-                }
-            }
+            // Build context for prompt - conversation transcript
+            const contextForPrompt = useConversationContext ? conversationHistory : '';
 
             // Build new payload format for server-side prompt construction
             const userContent = screenshotBase64
@@ -679,31 +674,41 @@ class AskService {
                 } catch (_) {}
             }
 
-            // Build context object for analysis profiles
+            // Build context object - ALWAYS use structured format { transcript, previousItems }
+            // Server expects this structure for both analysis and action profiles
             let context = null;
-            if (isInMeeting && profileToUse && profileToUse.endsWith('_analysis')) {
+            if (useConversationContext && contextForPrompt) {
                 const summaryContext = summaryService.getCurrentContext();
-                if (summaryContext && (summaryContext.definedTerms.length > 0 || summaryContext.detectedQuestions.length > 0)) {
-                    context = {
-                        transcript: contextForPrompt,
-                        previousItems: [
-                            ...summaryContext.definedTerms.map(term => `📘 Define ${term}`),
-                            ...summaryContext.detectedQuestions.map(question => `❓ ${question}`),
-                        ],
-                    };
-                    console.log(
-                        `[AskService] Added summary context for ${profileToUse}: ${summaryContext.definedTerms.length} terms, ${summaryContext.detectedQuestions.length} questions`
-                    );
-                }
-            } else if (useConversationContext && contextForPrompt) {
-                context = contextForPrompt; // Simple string context for non-analysis profiles
+                const hasPreviousItems = summaryContext && (summaryContext.definedTerms.length > 0 || summaryContext.detectedQuestions.length > 0);
+
+                context = {
+                    transcript: contextForPrompt,
+                    previousItems: hasPreviousItems
+                        ? [
+                              ...summaryContext.definedTerms.map(term => `📘 Define ${term}`),
+                              ...summaryContext.detectedQuestions.map(question => `❓ ${question}`),
+                          ]
+                        : [],
+                };
+                console.log(`[AskService] Context built: transcript=${contextForPrompt.length} chars, previousItems=${context.previousItems.length}`);
             }
 
+            // Build base payload
             const payload = {
                 profile: profileToUse,
                 userContent: userContent,
                 context: context,
             };
+
+            // Add role unless excluded for this intent type OR profile is whisper (generic chatbot)
+            if (shouldIncludeRole && roleContext && profileToUse !== 'whisper') {
+                payload.role = roleContext;
+                console.log(`[AskService] Including role context for intent: ${explicitIntent}`);
+            } else if (!shouldIncludeRole) {
+                console.log(`[AskService] Excluding role context for intent: ${explicitIntent} (objective/factual)`);
+            } else if (profileToUse === 'whisper') {
+                console.log(`[AskService] Excluding role context for whisper profile (generic chatbot)`);
+            }
 
             // concise request log
             try {
@@ -712,6 +717,7 @@ class AskService {
                     profile: profileToUse,
                     hasImage: hasImagePart,
                     hasContext: !!context,
+                    hasRole: !!payload.role,
                 });
             } catch (_) {
                 console.log('[AskService] sending request to llm');
@@ -758,6 +764,10 @@ class AskService {
                         temperature: 0.7,
                     };
 
+                    // Include role in fallback if it was in original payload (exclude whisper)
+                    if (shouldIncludeRole && roleContext && profileToUse !== 'whisper') {
+                        textOnlyPayload.role = roleContext;
+                    }
                     const fallbackResponse = await llmClient.stream(textOnlyPayload, { signal });
                     // Broadcast quota headers for fallback as well
                     broadcastQuotaUpdateFromResponse(fallbackResponse);

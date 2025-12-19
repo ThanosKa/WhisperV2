@@ -10,6 +10,19 @@ jest.mock('../../../src/features/listen/listenService', () => ({
     getCurrentSessionData: jest.fn(() => ({ sessionId: 'test-session-id' })),
 }));
 
+// Mock summaryService for role context tests
+// Use a mutable object so test mutations are visible to code under test
+const mockSummaryService = {
+    selectedRoleText: '',
+    selectedPresetId: null,
+    getCurrentContext: jest.fn(() => ({
+        definedTerms: [],
+        detectedQuestions: [],
+        analysisProfile: 'meeting_analysis',
+    })),
+};
+jest.mock('../../../src/features/listen/summary/summaryService', () => mockSummaryService);
+
 jest.mock('../../../src/window/windowManager', () => {
     const createMockWindow = () => ({
         isDestroyed: jest.fn(() => false),
@@ -39,6 +52,16 @@ describe('AskService', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         jest.resetModules();
+
+        // Reset mockSummaryService properties for test isolation
+        mockSummaryService.selectedRoleText = '';
+        mockSummaryService.selectedPresetId = null;
+        mockSummaryService.getCurrentContext.mockReturnValue({
+            definedTerms: [],
+            detectedQuestions: [],
+            analysisProfile: 'meeting_analysis',
+        });
+
         askService = require('../../../src/features/ask/askService');
     });
 
@@ -346,6 +369,279 @@ describe('AskService', () => {
             await askService.toggleAskButton(true);
 
             expect(mockDesktopCapturer.getSources).toHaveBeenCalled();
+        });
+    });
+
+    describe('Role Context Passing', () => {
+        describe('_resolveProfileForIntent - shouldIncludeRole flag', () => {
+            test('returns shouldIncludeRole=true for next intent', () => {
+                const result = askService._resolveProfileForIntent('next', 'sales');
+                expect(result.shouldIncludeRole).toBe(true);
+                expect(result.profileToUse).toBe('sales_next');
+            });
+
+            test('returns shouldIncludeRole=true for email intent', () => {
+                const result = askService._resolveProfileForIntent('email', 'recruiting');
+                expect(result.shouldIncludeRole).toBe(true);
+                expect(result.profileToUse).toBe('recruiting_email');
+            });
+
+            test('returns shouldIncludeRole=false for define intent', () => {
+                const result = askService._resolveProfileForIntent('define', 'sales');
+                expect(result.shouldIncludeRole).toBe(false);
+                expect(result.useConversationContext).toBe(false);
+            });
+
+            test('returns shouldIncludeRole=false for recap intent', () => {
+                const result = askService._resolveProfileForIntent('recap', 'meeting');
+                expect(result.shouldIncludeRole).toBe(false);
+            });
+
+            test('returns shouldIncludeRole=false for summary intent', () => {
+                const result = askService._resolveProfileForIntent('summary', 'sales');
+                expect(result.shouldIncludeRole).toBe(false);
+            });
+        });
+
+        describe('Payload Construction - Role Inclusion', () => {
+            test('includes role in payload for next intent with sales preset', async () => {
+                // Set mock properties directly
+                mockSummaryService.selectedRoleText = 'You are a sales assistant helping sell CRM software.';
+                mockSummaryService.selectedPresetId = 'sales';
+
+                const llmClient = require('../../../src/features/common/ai/llmClient');
+                llmClient.stream.mockResolvedValueOnce({
+                    headers: new Map(),
+                    body: {
+                        getReader: () => ({
+                            read: async () => ({ done: true, value: undefined }),
+                        }),
+                    },
+                });
+
+                askService.state.useScreenCapture = false;
+
+                await askService.sendMessage('✨ What should I say next?', ['me: hi', 'them: hello'], 'sales', false);
+
+                expect(llmClient.stream).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        profile: 'sales_next',
+                        role: 'You are a sales assistant helping sell CRM software.',
+                        context: expect.objectContaining({
+                            transcript: expect.any(String),
+                        }),
+                    }),
+                    expect.any(Object)
+                );
+            });
+
+            test('includes role in payload for email intent', async () => {
+                // Set mock properties directly
+                mockSummaryService.selectedRoleText = 'You are a recruiting assistant.';
+                mockSummaryService.selectedPresetId = 'recruiting';
+
+                const llmClient = require('../../../src/features/common/ai/llmClient');
+                llmClient.stream.mockResolvedValueOnce({
+                    headers: new Map(),
+                    body: {
+                        getReader: () => ({
+                            read: async () => ({ done: true, value: undefined }),
+                        }),
+                    },
+                });
+
+                askService.state.useScreenCapture = false;
+
+                await askService.sendMessage('✉️ Draft a follow-up email', ['me: interview went well'], 'recruiting', false);
+
+                expect(llmClient.stream).toHaveBeenCalledWith(
+                    expect.objectContaining({
+                        profile: 'recruiting_email',
+                        role: 'You are a recruiting assistant.',
+                    }),
+                    expect.any(Object)
+                );
+            });
+        });
+
+        describe('Payload Construction - Role Exclusion', () => {
+            test('excludes role from payload for define intent', async () => {
+                // Set mock properties directly
+                mockSummaryService.selectedRoleText = 'You are a sales assistant.';
+                mockSummaryService.selectedPresetId = 'sales';
+
+                const llmClient = require('../../../src/features/common/ai/llmClient');
+                llmClient.stream.mockResolvedValueOnce({
+                    headers: new Map(),
+                    body: {
+                        getReader: () => ({
+                            read: async () => ({ done: true, value: undefined }),
+                        }),
+                    },
+                });
+
+                askService.state.useScreenCapture = false;
+
+                await askService.sendMessage('📘 Define API', [], 'sales', false);
+
+                const callArgs = llmClient.stream.mock.calls[0][0];
+                expect(callArgs).not.toHaveProperty('role');
+                expect(callArgs.profile).toBe('sales_define');
+            });
+
+            test('excludes role from payload for recap intent', async () => {
+                // Set mock properties directly
+                mockSummaryService.selectedRoleText = 'You are a sales assistant.';
+                mockSummaryService.selectedPresetId = 'sales';
+
+                const llmClient = require('../../../src/features/common/ai/llmClient');
+                llmClient.stream.mockResolvedValueOnce({
+                    headers: new Map(),
+                    body: {
+                        getReader: () => ({
+                            read: async () => ({ done: true, value: undefined }),
+                        }),
+                    },
+                });
+
+                askService.state.useScreenCapture = false;
+
+                await askService.sendMessage('🗒️ Recap meeting so far', ['me: discussed pricing'], 'sales', false);
+
+                const callArgs = llmClient.stream.mock.calls[0][0];
+                expect(callArgs).not.toHaveProperty('role');
+                expect(callArgs.profile).toBe('sales_recap');
+            });
+
+            test('excludes role from payload for summary intent', async () => {
+                // Set mock properties directly
+                mockSummaryService.selectedRoleText = 'You are a recruiting assistant.';
+                mockSummaryService.selectedPresetId = 'recruiting';
+
+                const llmClient = require('../../../src/features/common/ai/llmClient');
+                llmClient.stream.mockResolvedValueOnce({
+                    headers: new Map(),
+                    body: {
+                        getReader: () => ({
+                            read: async () => ({ done: true, value: undefined }),
+                        }),
+                    },
+                });
+
+                askService.state.useScreenCapture = false;
+
+                await askService.sendMessage('📝 Show summary', ['me: candidate looks great'], 'recruiting', false);
+
+                const callArgs = llmClient.stream.mock.calls[0][0];
+                expect(callArgs).not.toHaveProperty('role');
+            });
+        });
+
+        describe('Whisper Profile (Generic Chatbot)', () => {
+            test('excludes role from payload for whisper profile', async () => {
+                // Set mock properties directly
+                mockSummaryService.selectedRoleText = 'You are a sales assistant.';
+
+                const llmClient = require('../../../src/features/common/ai/llmClient');
+                llmClient.stream.mockResolvedValueOnce({
+                    headers: new Map(),
+                    body: {
+                        getReader: () => ({
+                            read: async () => ({ done: true, value: undefined }),
+                        }),
+                    },
+                });
+
+                askService.state.useScreenCapture = false;
+                askService._forceDefaultProfileOnce = true;
+
+                await askService.sendMessage('Generic question', ['me: some context'], null, false);
+
+                const callArgs = llmClient.stream.mock.calls[0][0];
+                expect(callArgs).not.toHaveProperty('role');
+                expect(callArgs.profile).toBe('whisper');
+            });
+
+            test('includes transcript but excludes role for whisper profile', async () => {
+                // Set mock properties directly
+                mockSummaryService.selectedRoleText = 'You are a sales assistant.';
+
+                const llmClient = require('../../../src/features/common/ai/llmClient');
+                llmClient.stream.mockResolvedValueOnce({
+                    headers: new Map(),
+                    body: {
+                        getReader: () => ({
+                            read: async () => ({ done: true, value: undefined }),
+                        }),
+                    },
+                });
+
+                askService.state.useScreenCapture = false;
+                askService._forceDefaultProfileOnce = true;
+
+                await askService.sendMessage('Help me', ['me: conversation history'], null, false);
+
+                const callArgs = llmClient.stream.mock.calls[0][0];
+                expect(callArgs).not.toHaveProperty('role');
+                expect(callArgs.context).toHaveProperty('transcript');
+                expect(callArgs.context.transcript).toContain('conversation history');
+            });
+        });
+
+        describe('Edge Cases', () => {
+            test('handles empty roleContext (no role sent even for action intents)', async () => {
+                // Set mock properties directly (empty role)
+                mockSummaryService.selectedRoleText = '';
+                mockSummaryService.selectedPresetId = 'sales';
+
+                const llmClient = require('../../../src/features/common/ai/llmClient');
+                llmClient.stream.mockResolvedValueOnce({
+                    headers: new Map(),
+                    body: {
+                        getReader: () => ({
+                            read: async () => ({ done: true, value: undefined }),
+                        }),
+                    },
+                });
+
+                askService.state.useScreenCapture = false;
+
+                await askService.sendMessage('✨ What should I say next?', [], 'sales', false);
+
+                const callArgs = llmClient.stream.mock.calls[0][0];
+                expect(callArgs).not.toHaveProperty('role');
+            });
+
+            test('includes both role and previousItems in payload', async () => {
+                // Set mock properties directly
+                mockSummaryService.selectedRoleText = 'You are a sales assistant.';
+                mockSummaryService.selectedPresetId = 'sales';
+                mockSummaryService.getCurrentContext.mockReturnValue({
+                    definedTerms: ['API', 'SaaS'],
+                    detectedQuestions: ['What is the pricing?'],
+                    analysisProfile: 'sales_analysis',
+                });
+
+                const llmClient = require('../../../src/features/common/ai/llmClient');
+                llmClient.stream.mockResolvedValueOnce({
+                    headers: new Map(),
+                    body: {
+                        getReader: () => ({
+                            read: async () => ({ done: true, value: undefined }),
+                        }),
+                    },
+                });
+
+                askService.state.useScreenCapture = false;
+
+                await askService.sendMessage('✨ What should I say next?', ['me: hi', 'them: hello'], 'sales', false);
+
+                const callArgs = llmClient.stream.mock.calls[0][0];
+                expect(callArgs.role).toBe('You are a sales assistant.');
+                expect(callArgs.context.previousItems).toContain('📘 Define API');
+                expect(callArgs.context.previousItems).toContain('📘 Define SaaS');
+                expect(callArgs.context.previousItems).toContain('❓ What is the pricing?');
+            });
         });
     });
 });

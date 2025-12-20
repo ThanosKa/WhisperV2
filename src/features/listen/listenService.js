@@ -842,14 +842,6 @@ class ListenService {
     );
 
     handleStopMacosAudio = this._createHandler(this.stopMacOSAudioCapture, 'macOS audio capture stopped.', 'Error stopping macOS audio capture:');
-
-    handleUpdateGoogleSearchSetting = this._createHandler(
-        async enabled => {
-            console.log('Google Search setting updated to:', enabled);
-        },
-        null,
-        'Error updating Google Search setting:'
-    );
 }
 
 const listenService = new ListenService();

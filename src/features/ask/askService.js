@@ -21,8 +21,6 @@ const os = require('os');
 const util = require('util');
 const execFile = util.promisify(require('child_process').execFile);
 const { desktopCapturer, screen } = require('electron');
-const modelStateService = require('../common/services/modelStateService');
-const config = require('../common/config/config');
 
 // Try to load sharp, but don't fail if it's not available
 let sharp;
@@ -34,7 +32,6 @@ try {
     console.warn('[AskService] Screenshot functionality will work with reduced image processing capabilities');
     sharp = null;
 }
-let lastScreenshot = null;
 
 function broadcastQuotaUpdateFromResponse(response) {
     try {
@@ -78,13 +75,6 @@ async function captureScreenshot(options = {}) {
                     const base64 = resizedBuffer.toString('base64');
                     const metadata = await sharp(resizedBuffer).metadata();
 
-                    lastScreenshot = {
-                        base64,
-                        width: metadata.width,
-                        height: metadata.height,
-                        timestamp: Date.now(),
-                    };
-
                     return { success: true, base64, width: metadata.width, height: metadata.height };
                 } catch (sharpError) {
                     console.warn('Sharp module failed, falling back to basic image processing:', sharpError.message);
@@ -94,13 +84,6 @@ async function captureScreenshot(options = {}) {
             // Fallback: Return the original image without resizing
             console.log('[AskService] Using fallback image processing (no resize/compression)');
             const base64 = imageBuffer.toString('base64');
-
-            lastScreenshot = {
-                base64,
-                width: null, // We don't have metadata without sharp
-                height: null,
-                timestamp: Date.now(),
-            };
 
             return { success: true, base64, width: null, height: null };
         } catch (error) {
@@ -760,8 +743,6 @@ class AskService {
                         profile: profileToUse,
                         userContent: `User Request: ${userPrompt.trim()}`,
                         context: context,
-                        model: 'gemini-2.5-flash-lite',
-                        temperature: 0.7,
                     };
 
                     // Include role in fallback if it was in original payload (exclude whisper)

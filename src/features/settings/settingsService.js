@@ -148,7 +148,6 @@ function getDefaultSettings() {
         throttleTokens: 500,
         maxTokens: 2000,
         throttlePercent: 80,
-        googleSearchEnabled: false,
         backgroundTransparency: 0.5,
         fontSize: 14,
         contentProtection: true,

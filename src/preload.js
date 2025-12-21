@@ -145,7 +145,8 @@ contextBridge.exposeInMainWorld('api', {
         adjustWindowHeight: (winName, height) => ipcRenderer.invoke('adjust-window-height', { winName, height }),
 
         // Message Handling
-        sendMessage: (text, useScreenCapture = true) => ipcRenderer.invoke('ask:sendQuestionFromAsk', text, useScreenCapture),
+        sendMessage: (text, useScreenCapture = true, webSearchEnabled = false) =>
+            ipcRenderer.invoke('ask:sendQuestionFromAsk', text, useScreenCapture, webSearchEnabled),
         setUseScreenCapture: value => ipcRenderer.invoke('ask:setUseScreenCapture', value),
         interruptStream: () => ipcRenderer.invoke('ask:interruptStream'),
 

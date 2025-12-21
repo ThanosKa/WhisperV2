@@ -28,6 +28,12 @@ export class AskView extends LitElement {
         interrupted: { type: Boolean },
         isAnalyzing: { type: Boolean },
         useScreenCapture: { type: Boolean },
+        isSearching: { type: Boolean },
+        searchCompleted: { type: Boolean },
+        searchQuery: { type: String },
+        citations: { type: Array },
+        webSearchEnabled: { type: Boolean },
+        chatHistory: { type: Array },
     };
 
     static styles = styles;
@@ -46,6 +52,14 @@ export class AskView extends LitElement {
         this.interrupted = false;
         this.isAnalyzing = false;
         this.useScreenCapture = true; // Default to enabled
+        this.isSearching = false;
+        this.searchCompleted = false;
+        this.searchQuery = '';
+        this.searchQueries = [];
+        this.citations = [];
+        this.webSearchEnabled = false;
+        this.chatHistory = [];
+        this.searchQueries = [];
 
         this.isAnimating = false; // Tracks typewriter animation state
 
@@ -75,6 +89,7 @@ export class AskView extends LitElement {
         this.handleCloseAskWindow = this.handleCloseAskWindow.bind(this);
         this.handleCloseIfNoContent = this.handleCloseIfNoContent.bind(this);
         this.handleToggleScreenCapture = this.handleToggleScreenCapture.bind(this);
+        this.handleToggleWebSearch = this.handleToggleWebSearch.bind(this);
 
         // Analyze timeout reference
         this.analyzeTimeout = null;
@@ -123,7 +138,10 @@ export class AskView extends LitElement {
         if (container) this.resizeObserver.observe(container);
 
         // Attach scroll listener when response container is available
-        this.updateComplete.then(() => this.attachResponseScrollHandler());
+        this.updateComplete.then(() => {
+            this.attachResponseScrollHandler();
+            this.attachLinkInterceptor();
+        });
 
         this.handleQuestionFromAssistant = (event, question) => {
             console.log('AskView: Received question from ListenView:', question);
@@ -152,6 +170,21 @@ export class AskView extends LitElement {
                 this.isLoading = newState.isLoading;
                 this.isStreaming = newState.isStreaming;
                 this.interrupted = newState.interrupted;
+                this.isSearching = newState.isSearching;
+                this.searchCompleted = newState.searchCompleted;
+                this.searchQuery = newState.searchQuery;
+
+                // Track multiple search queries for dynamic UI
+                if (this.isSearching && this.searchQuery) {
+                    if (!this.searchQueries.includes(this.searchQuery)) {
+                        this.searchQueries.push(this.searchQuery);
+                    }
+                } else if (!this.isSearching && !this.searchQuery) {
+                    // Only clear if search completely stops and no active query
+                    // Actually we want to keep them for the duration of the current search session
+                }
+
+                this.citations = newState.citations || [];
 
                 // Handle analyze state transition
                 if (newState.isLoading && !wasLoading) {
@@ -195,7 +228,7 @@ export class AskView extends LitElement {
                     (!this._lastScreenshotData || this._lastScreenshotData.timestamp !== newState.screenshotData.timestamp)
                 ) {
                     // Screenshot data is new, add indicator to last user message if it doesn't have one
-                    const responseContainer = this.shadowRoot?.getElementById('responseContainer');
+                    const responseContainer = this.responseContainer;
                     if (responseContainer) {
                         const userMessages = responseContainer.querySelectorAll('.msg-user');
                         const lastUserMessage = userMessages[userMessages.length - 1];
@@ -259,7 +292,7 @@ export class AskView extends LitElement {
             clearTimeout(this.analyzeTimeout);
         }
 
-        Object.values(this.lineCopyTimeouts).forEach(timeout => clearTimeout(timeout));
+        Object.values(this.lineCopyTimeouts || {}).forEach(timeout => clearTimeout(timeout));
 
         if (window.api) {
             if (this._onAskStateUpdateFn) {
@@ -277,7 +310,7 @@ export class AskView extends LitElement {
         }
 
         // Detach scroll listener
-        const resp = this.shadowRoot?.getElementById('responseContainer');
+        const resp = this.responseContainer;
         if (resp && this._onResponseScroll) {
             resp.removeEventListener('scroll', this._onResponseScroll);
         }
@@ -377,6 +410,11 @@ export class AskView extends LitElement {
         this.smdContainer = null;
         this.wordCount = 0;
         this.interrupted = false;
+        this.isSearching = false;
+        this.searchCompleted = false;
+        this.searchQuery = '';
+        this.searchQueries = [];
+        this.citations = [];
         this._appendedCurrentQuestion = false;
         this._lastScreenshotData = null; // Reset screenshot tracking
 
@@ -388,7 +426,7 @@ export class AskView extends LitElement {
     }
 
     clearConversationHistory() {
-        const responseContainer = this.shadowRoot?.getElementById('responseContainer');
+        const responseContainer = this.responseContainer;
         if (responseContainer) {
             responseContainer.innerHTML = '';
         }
@@ -464,50 +502,278 @@ export class AskView extends LitElement {
     }
 
     renderContent() {
-        const responseContainer = this.shadowRoot.getElementById('responseContainer');
+        const responseContainer = this.responseContainer;
         if (!responseContainer) return;
-
-        // Show loading indicator during initial loading (before any response content)
-        if (this.isLoading && !this.currentResponse) {
-            this.ensureLoadingContainer(responseContainer);
-            // Enable auto-scroll for new loading state
-            this._autoScroll = true;
-        } else {
-            // Remove loading container when we start streaming content
-            const loadingContainer = responseContainer.querySelector('#loadingContainer');
-            if (loadingContainer) {
-                loadingContainer.parentElement.remove();
-            }
-        }
-
-        // Show streaming loading indicator when we're streaming but no content yet
-        if (this.isStreaming && !this.currentResponse) {
-            this.ensureStreamingLoadingContainer(responseContainer);
-            // Enable auto-scroll for new streaming loading state
-            this._autoScroll = true;
-        } else {
-            // Remove streaming loading container when content starts arriving
-            const streamingLoadingContainer = responseContainer.querySelector('#streamingLoadingContainer');
-            if (streamingLoadingContainer) {
-                streamingLoadingContainer.parentElement.remove();
-            }
-        }
 
         // Ensure scroll handler exists
         this.attachResponseScrollHandler();
 
-        // Set streaming markdown parser
+        // 1. Handle streaming markdown first to ensure the bubble and text container exist.
+        // This ensures the search badge (if any) is appended BELOW existing text.
         if (this.currentResponse) {
-            // Only initialize or re-render streaming view when actively streaming
-            // or when there is no existing rendered container (e.g., first paint).
             const containerMissing = !this.smdContainer || !this.smdContainer.isConnected;
             if (this.isStreaming || containerMissing) {
                 this.renderStreamingMarkdown(responseContainer);
             }
         }
 
+        // Handle citation enhancement - only when NOT actively streaming to avoid breaking the parser
+        if (!this.isStreaming && !this.isAnimating && this.citations && this.citations.length > 0) {
+            this.enhanceCitations(responseContainer);
+        }
+
+        // 2. Handle search status - Only show if actively searching
+        if (this.isSearching) {
+            this.ensureSearchStatusContainer(responseContainer);
+            this._autoScroll = true;
+        } else {
+            // Remove search status when done searching (as per UX request)
+            const searchMsg = responseContainer.querySelector('.search-status-msg');
+            if (searchMsg) searchMsg.remove();
+        }
+
+        // Show loading indicator during initial loading (before any response content)
+        if (this.isLoading && !this.currentResponse && !this.isSearching) {
+            this.ensureLoadingContainer(responseContainer);
+            this._autoScroll = true;
+        } else {
+            const loadingContainer = responseContainer.querySelector('#loadingContainer');
+            if (loadingContainer) {
+                // Check if we should keep it briefly to prevent jump, but usually better to remove
+                loadingContainer.closest('.msg-assistant').remove();
+            }
+        }
+
+        // Show streaming loading indicator when we're streaming but no content yet
+        if (this.isStreaming && !this.currentResponse && !this.isSearching) {
+            this.ensureStreamingLoadingContainer(responseContainer);
+            this._autoScroll = true;
+        } else {
+            const streamingLoadingContainer = responseContainer.querySelector('#streamingLoadingContainer');
+            if (streamingLoadingContainer) {
+                streamingLoadingContainer.closest('.msg-assistant').remove();
+            }
+        }
+
+        // Render citations if available and streaming is done
+        if (this.citations && this.citations.length > 0 && !this.isStreaming && !this.isSearching) {
+            this.ensureCitationsContainer(responseContainer);
+        }
+
         // After updating content, recalculate window height
         this.adjustWindowHeightThrottled();
+    }
+
+    enhanceCitations(responseContainer, force = false) {
+        if (!this.citations || this.citations.length === 0) return;
+
+        // Target assistant messages that are NOT search status indicators
+        const selector = force
+            ? '.msg-assistant:not(.search-status-msg) .msg-content:not(.search-status-simple)'
+            : '.msg-assistant:not(.search-status-msg):last-of-type .msg-content:not(.search-status-simple)';
+
+        const targets = responseContainer.querySelectorAll(selector);
+
+        targets.forEach(target => {
+            // Skip if this is the active streaming container (unless force is true)
+            if (!force && target.id === 'assistantStream') return;
+
+            // Use TreeWalker to find only text nodes, avoiding re-parsing the whole HTML
+            const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT, {
+                acceptNode: node => {
+                    const parent = node.parentElement;
+                    // Reject if already inside a link or a code block
+                    const isForbidden = parent.closest('a, pre, code');
+                    return isForbidden ? NodeFilter.FILTER_REJECT : NodeFilter.SHOW_TEXT;
+                },
+            });
+
+            const nodesToProcess = [];
+            let currentNode;
+            while ((currentNode = walker.nextNode())) {
+                nodesToProcess.push(currentNode);
+            }
+
+            // Process collected text nodes
+            nodesToProcess.forEach(textNode => {
+                const content = textNode.nodeValue;
+                // Matches [1], [2], or escaped \[1\], \[2\]
+                const citationRegex = /\\?\[(\d+)\]/g;
+                let match;
+                const matches = [];
+
+                while ((match = citationRegex.exec(content)) !== null) {
+                    matches.push(match);
+                }
+
+                // Process matches in reverse to keep index positions valid during split
+                for (let i = matches.length - 1; i >= 0; i--) {
+                    const m = matches[i];
+                    const citationIdx = parseInt(m[1]) - 1;
+                    const cite = this.citations[citationIdx];
+
+                    if (cite) {
+                        const markerText = m[0];
+
+                        // 1. Split the text node at the start of the match
+                        const remainingTextNode = textNode.splitText(m.index);
+                        // 2. Remove the actual marker characters from the start of the remaining text
+                        remainingTextNode.nodeValue = remainingTextNode.nodeValue.substring(markerText.length);
+
+                        // 3. Create the real anchor element
+                        const link = document.createElement('a');
+                        link.href = cite.url;
+                        link.target = '_blank';
+                        link.title = cite.title;
+                        link.className = 'citation-link';
+                        link.textContent = markerText;
+                        link.dataset.citationIndex = citationIdx + 1;
+
+                        // 4. Insert the link between the two text nodes
+                        textNode.parentNode.insertBefore(link, remainingTextNode);
+
+                        // Ensure our click interceptor handles this new link
+                        this.attachLinkInterceptor();
+                    }
+                }
+            });
+        });
+    }
+
+    ensureSearchStatusContainer(responseContainer) {
+        let existing = responseContainer.querySelector('.search-status-msg');
+
+        if (existing) {
+            // Update existing container
+            const querySpan = existing.querySelector('.search-query-text');
+            const statusLabel = existing.querySelector('.search-status-text-base');
+
+            if (this.searchQueries && this.searchQueries.length > 0 && querySpan) {
+                // Join multiple queries with a bullet or separator
+                const fullQueryText = this.searchQueries.join(', ');
+                querySpan.textContent = ` ${fullQueryText}`;
+
+                if (statusLabel) {
+                    statusLabel.textContent = this.searchQueries.length > 1 ? 'Searching the web for multiple queries' : 'Searching the web for';
+                    statusLabel.classList.remove('shiny-text');
+                }
+                querySpan.classList.add('shiny-text');
+            } else if (!this.searchQuery && querySpan) {
+                querySpan.textContent = '';
+                querySpan.classList.remove('shiny-text');
+                if (statusLabel) {
+                    statusLabel.textContent = 'Searching the web...';
+                    statusLabel.classList.add('shiny-text');
+                }
+            }
+
+            // Move to bottom if new content was streamed after this badge
+            if (responseContainer.lastElementChild !== existing) {
+                responseContainer.appendChild(existing);
+            }
+
+            return existing.querySelector('.search-status-simple');
+        }
+
+        // Create a NEW assistant message for the search status
+        const msg = document.createElement('div');
+        msg.className = 'msg msg-assistant search-status-msg';
+
+        const inner = document.createElement('div');
+        inner.className = 'msg-content search-status-simple search-status-container-active';
+
+        // Build the content: "Searching the web for" with static text, then shiny query
+        const queryPart =
+            this.searchQueries && this.searchQueries.length > 0
+                ? ` ${this.searchQueries.join(', ')}`
+                : this.searchQuery
+                  ? ` ${this.searchQuery}`
+                  : '';
+
+        const shinyClass = this.searchQuery || (this.searchQueries && this.searchQueries.length > 0) ? 'shiny-text' : '';
+        const statusText =
+            this.searchQuery || (this.searchQueries && this.searchQueries.length > 0) ? 'Searching the web for' : 'Searching the web...';
+        const labelShinyClass = this.searchQuery || (this.searchQueries && this.searchQueries.length > 0) ? '' : 'shiny-text';
+
+        inner.innerHTML = `
+            <div class="search-status-content">
+                <div class="search-status-main">
+                    <div class="search-globe-container pulsing">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-globe">
+                            <circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>
+                        </svg>
+                    </div>
+                    <span class="search-status-text-base ${labelShinyClass}">${statusText}</span><span class="search-query-text ${shinyClass}">${queryPart}</span>
+                </div>
+            </div>
+        `;
+
+        msg.appendChild(inner);
+        responseContainer.appendChild(msg);
+
+        requestAnimationFrame(() => {
+            try {
+                responseContainer.scrollTop = responseContainer.scrollHeight;
+            } catch (_) {}
+        });
+
+        return inner;
+    }
+
+    ensureCitationsContainer(responseContainer) {
+        // Look for citations in the context of the last assistant message that isn't a search status
+        const lastAssistantMsg = responseContainer.querySelector('.msg-assistant:not(.search-status-msg):last-of-type');
+        if (!lastAssistantMsg) return null;
+
+        let existing = lastAssistantMsg.querySelector('.citations-container');
+        if (existing) return existing;
+
+        const container = document.createElement('div');
+        container.className = 'citations-container';
+
+        const title = document.createElement('div');
+        title.className = 'citations-title';
+        title.textContent = 'Sources';
+        container.appendChild(title);
+
+        const scrollArea = document.createElement('div');
+        scrollArea.className = 'citations-scroll';
+
+        this.citations.forEach(citation => {
+            const card = document.createElement('div');
+            card.className = 'citation-card';
+            card.dataset.url = citation.url; // Store URL for easy copying
+            card.addEventListener('click', e => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (window.api?.common?.openExternal) {
+                    window.api.common.openExternal(citation.url);
+                }
+            });
+
+            const hostname = new URL(citation.url).hostname;
+            const faviconUrl = `https://www.google.com/s2/favicons?domain=${hostname}&sz=32`;
+
+            card.innerHTML = `
+                <img src="${faviconUrl}" alt="" class="citation-favicon" />
+                <div class="citation-info">
+                    <div class="citation-card-title">${citation.title}</div>
+                    <div class="citation-domain">${hostname}</div>
+                </div>
+            `;
+            scrollArea.appendChild(card);
+        });
+
+        container.appendChild(scrollArea);
+        lastAssistantMsg.appendChild(container);
+
+        requestAnimationFrame(() => {
+            try {
+                responseContainer.scrollTop = responseContainer.scrollHeight;
+            } catch (_) {}
+        });
+
+        return container;
     }
 
     resetStreamingParser() {
@@ -593,9 +859,17 @@ export class AskView extends LitElement {
         let active = responseContainer.querySelector('#assistantStream');
         if (active) return active;
 
-        // Create minimal assistant message block (no avatar/text, no background)
-        const msg = document.createElement('div');
-        msg.className = 'msg msg-assistant';
+        // Try to reuse last assistant message if it is a real message container (not search status or loading)
+        const lastMsg = responseContainer.lastElementChild;
+        let msg = lastMsg && lastMsg.classList.contains('msg-assistant') && !lastMsg.classList.contains('search-status-msg') ? lastMsg : null;
+
+        if (!msg) {
+            // Create minimal assistant message block
+            msg = document.createElement('div');
+            msg.className = 'msg msg-assistant';
+            responseContainer.appendChild(msg);
+        }
+
         const inner = document.createElement('div');
         inner.className = 'msg-content';
         inner.id = 'assistantStream';
@@ -617,7 +891,6 @@ export class AskView extends LitElement {
 
         msg.appendChild(inner);
         msg.appendChild(copyButton);
-        responseContainer.appendChild(msg);
         return inner;
     }
 
@@ -716,7 +989,7 @@ export class AskView extends LitElement {
     }
 
     appendUserMessage(text, screenshotData = null) {
-        const responseContainer = this.shadowRoot.getElementById('responseContainer');
+        const responseContainer = this.responseContainer;
         if (!responseContainer) return;
         const msg = document.createElement('div');
         msg.className = 'msg msg-user';
@@ -782,7 +1055,7 @@ export class AskView extends LitElement {
         // Only render if screenshot data exists and has base64
         if (!screenshotData || !screenshotData.base64) return;
 
-        const responseContainer = this.shadowRoot.getElementById('responseContainer');
+        const responseContainer = this.responseContainer;
         if (!responseContainer) return;
 
         // Find the last user message
@@ -834,7 +1107,7 @@ export class AskView extends LitElement {
 
     attachResponseScrollHandler() {
         if (this._scrollHandlerAttached) return;
-        const resp = this.shadowRoot?.getElementById('responseContainer');
+        const resp = this.responseContainer;
         if (!resp) return;
         this._onResponseScroll = () => {
             const threshold = 24; // px from bottom treated as "at bottom"
@@ -951,6 +1224,7 @@ export class AskView extends LitElement {
     attachLinkInterceptor() {
         if (this._linkHandlerAttached) return;
         this._linkHandlerAttached = true;
+        console.log('[AskView] Link interceptor attached to shadowRoot');
 
         // Delegate on the component's shadow root to catch dynamic links
         this.shadowRoot?.addEventListener('click', e => {
@@ -963,7 +1237,9 @@ export class AskView extends LitElement {
                     break;
                 }
             }
+
             if (!anchor) return;
+            console.log('[AskView] Link clicked:', anchor.href);
 
             const href = anchor.getAttribute('href') || '';
             if (!href) return;
@@ -1062,15 +1338,34 @@ export class AskView extends LitElement {
     }
 
     async handleMessageCopy(messageElement) {
-        const messageText = messageElement.textContent?.trim() || '';
+        let messageText = messageElement.textContent?.trim() || '';
         if (!messageText) return;
+
+        // Find sources/citations if they exist in the same message container
+        const msgContainer = messageElement.closest('.msg');
+        const citationsContainer = msgContainer?.querySelector('.citations-container');
+
+        if (citationsContainer) {
+            const sourceCards = citationsContainer.querySelectorAll('.citation-card');
+            if (sourceCards.length > 0) {
+                messageText += '\n\nSources:';
+                sourceCards.forEach(card => {
+                    const title = card.querySelector('.citation-card-title')?.textContent?.trim();
+                    const url = card.dataset.url;
+                    if (title && url) {
+                        messageText += `\n- ${title}: ${url}`;
+                    } else if (url) {
+                        messageText += `\n- ${url}`;
+                    }
+                });
+            }
+        }
 
         try {
             await navigator.clipboard.writeText(messageText);
-            console.log('Message copied to clipboard');
+            console.log('Message copied to clipboard (including sources)');
 
             // Add visual feedback - find the copy button in the parent message container
-            const msgContainer = messageElement.closest('.msg');
             const copyButton = msgContainer?.querySelector('.msg-copy-button');
             if (copyButton) {
                 copyButton.classList.add('copied');
@@ -1084,33 +1379,52 @@ export class AskView extends LitElement {
     }
 
     getConversationHistory() {
-        const responseContainer = this.shadowRoot?.getElementById('responseContainer');
+        const responseContainer = this.responseContainer;
         if (!responseContainer) return '';
 
         const messages = [];
-        const userMessages = responseContainer.querySelectorAll('.msg-user .msg-content');
-        const aiMessages = responseContainer.querySelectorAll('.msg-assistant .msg-content');
+        const msgBlocks = responseContainer.querySelectorAll('.msg');
 
-        // Assuming alternating pattern: user message, then AI response
-        const maxLength = Math.max(userMessages.length, aiMessages.length);
+        msgBlocks.forEach((block, index) => {
+            const isUser = block.classList.contains('msg-user');
+            const isSearchStatus = block.classList.contains('search-status-msg');
+            const content = block.querySelector('.msg-content');
 
-        for (let i = 0; i < maxLength; i++) {
-            if (userMessages[i]) {
-                const questionText = userMessages[i].textContent?.trim() || '';
-                if (questionText) {
-                    messages.push(`Question ${i + 1}: ${questionText}`);
+            if (isSearchStatus || !content) return;
+
+            const text = content.textContent?.trim() || '';
+            if (!text && !block.querySelector('.loading-indicator')) return;
+
+            if (isUser) {
+                messages.push(`Question: ${text}`);
+            } else {
+                // Assistant message
+                let aiText = text;
+
+                // Check for sources in this block
+                const citationsContainer = block.querySelector('.citations-container');
+                if (citationsContainer) {
+                    const sourceCards = citationsContainer.querySelectorAll('.citation-card');
+                    if (sourceCards.length > 0) {
+                        aiText += '\n\nSources:';
+                        sourceCards.forEach(card => {
+                            const title = card.querySelector('.citation-card-title')?.textContent?.trim();
+                            const url = card.dataset.url;
+                            if (title && url) {
+                                aiText += `\n- ${title}: ${url}`;
+                            } else if (url) {
+                                aiText += `\n- ${url}`;
+                            }
+                        });
+                    }
                 }
-            }
-            if (aiMessages[i]) {
-                const answerText = aiMessages[i].textContent?.trim() || '';
-                if (answerText) {
-                    messages.push(`Answer ${i + 1}: ${answerText}`);
-                }
-            }
-            if (i < maxLength - 1) messages.push(''); // Empty line between Q&A pairs
-        }
 
-        return messages.join('\n');
+                messages.push(`Answer: ${aiText}`);
+                messages.push(''); // Empty line after each Q&A pair
+            }
+        });
+
+        return messages.join('\n').trim();
     }
 
     async handleCopy() {
@@ -1130,7 +1444,15 @@ export class AskView extends LitElement {
 
         // For global copy, include full conversation context
         const conversationHistory = this.getConversationHistory();
-        const textToCopy = conversationHistory.length > 0 ? conversationHistory : `Question: ${this.currentQuestion}\n\nAnswer: ${responseToCopy}`;
+        let textToCopy = conversationHistory.length > 0 ? conversationHistory : `Question: ${this.currentQuestion}\n\nAnswer: ${responseToCopy}`;
+
+        // If using fallback and we have citations, append them
+        if (conversationHistory.length === 0 && this.citations && this.citations.length > 0) {
+            textToCopy += '\n\nSources:';
+            this.citations.forEach(cite => {
+                textToCopy += `\n- ${cite.title}: ${cite.url}`;
+            });
+        }
 
         try {
             await navigator.clipboard.writeText(textToCopy);
@@ -1208,8 +1530,15 @@ export class AskView extends LitElement {
         this.isStreaming = false;
         this.isAnimating = false;
 
+        const responseContainer = this.responseContainer;
+
+        // Remove search status indicators on completion
+        if (responseContainer) {
+            const searchMsgs = responseContainer.querySelectorAll('.search-status-msg');
+            searchMsgs.forEach(msg => msg.remove());
+        }
+
         // Finalize streaming container so a new one is created next time
-        const responseContainer = this.shadowRoot.getElementById('responseContainer');
         const active = responseContainer?.querySelector('#assistantStream');
         if (active) {
             active.removeAttribute('id');
@@ -1228,8 +1557,13 @@ export class AskView extends LitElement {
                 block.setAttribute('data-highlighted', 'true');
             });
         }
+
+        // Final citation enhancement after stream ends
+        if (responseContainer) {
+            this.enhanceCitations(responseContainer, true);
+        }
+
         if (this.interrupted) {
-            const responseContainer = this.shadowRoot.getElementById('responseContainer');
             if (responseContainer && !responseContainer.querySelector('.interruption-indicator')) {
                 const indicator = document.createElement('div');
                 indicator.className = 'interruption-indicator';
@@ -1259,11 +1593,24 @@ export class AskView extends LitElement {
         // Mark that we've appended locally so backend update won't duplicate
         this._appendedCurrentQuestion = true;
 
+        // Reset search/citation state for new query
+        this.isSearching = false; // Wait for signal from backend
+        this.searchCompleted = false;
+        this.searchQuery = '';
+        this.searchQueries = [];
+        this.citations = [];
+        this.currentResponse = '';
+
         if (window.api) {
-            window.api.askView.sendMessage(text, this.useScreenCapture).catch(error => {
+            window.api.askView.sendMessage(text, this.useScreenCapture, this.webSearchEnabled).catch(error => {
                 console.error('Error sending text:', error);
             });
         }
+    }
+
+    handleToggleWebSearch() {
+        this.webSearchEnabled = !this.webSearchEnabled;
+        this.requestUpdate();
     }
 
     handleToggleScreenCapture() {
@@ -1293,8 +1640,22 @@ export class AskView extends LitElement {
     updated(changedProperties) {
         super.updated(changedProperties);
 
-        // Redraw the view whenever isLoading, isAnalyzing, or currentResponse changes
-        if (changedProperties.has('isLoading') || changedProperties.has('isAnalyzing') || changedProperties.has('currentResponse')) {
+        // Update manual response container visibility
+        if (this.responseContainer) {
+            const hasResponse = this.isLoading || this.currentResponse || this.isStreaming || this.isSearching;
+            this.responseContainer.classList.toggle('hidden', !hasResponse);
+        }
+
+        // Redraw the view whenever state relevant to content changes
+        if (
+            changedProperties.has('isLoading') ||
+            changedProperties.has('isAnalyzing') ||
+            changedProperties.has('currentResponse') ||
+            changedProperties.has('isSearching') ||
+            changedProperties.has('searchCompleted') ||
+            changedProperties.has('isStreaming') ||
+            changedProperties.has('citations')
+        ) {
             this.renderContent();
         }
 
@@ -1308,6 +1669,18 @@ export class AskView extends LitElement {
     }
 
     firstUpdated() {
+        // Create response container manually to prevent Lit from wiping it on re-renders (fixes flashing)
+        const slot = this.shadowRoot.getElementById('responseContainerSlot');
+        if (slot) {
+            this.responseContainer = document.createElement('div');
+            this.responseContainer.id = 'responseContainer';
+            this.responseContainer.className = 'response-container hidden';
+            slot.parentNode.replaceChild(this.responseContainer, slot);
+
+            // Re-render content now that container is ready
+            this.renderContent();
+        }
+
         setTimeout(() => this.adjustWindowHeight(), 300); // Increased delay to ensure full DOM rendering
     }
 

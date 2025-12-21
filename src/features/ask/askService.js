@@ -168,6 +168,11 @@ class AskService {
             interrupted: false,
             screenshotData: null, // Store screenshot data for current message
             useScreenCapture: true, // Default enabled, session-only (resets on app restart)
+            isSearching: false,
+            searchCompleted: false,
+            searchQuery: null,
+            citations: [],
+            webSearchEnabled: false,
         };
         this._forceDefaultProfileOnce = false;
         console.log('[AskService] Service instance created.');
@@ -204,6 +209,9 @@ class AskService {
 
         // Generic question pill (placed last so Clarify takes precedence)
         if (raw.startsWith('❓ ')) return 'question';
+
+        // Search intent for suggested searches
+        if (raw.startsWith('🌐 Search:')) return 'search';
 
         // Heuristic fallbacks (if labels localized or slightly edited)
         if (lower.includes('what should i say next')) return 'next';
@@ -520,25 +528,48 @@ class AskService {
      * @param {string[]} conversationHistoryRaw
      * @param {string|null} presetId
      * @param {boolean} useScreenCapture
+     * @param {boolean} webSearchEnabled
      * @returns {Promise<{success: boolean, response?: string, error?: string}>}
      */
-    async sendMessage(userPrompt, conversationHistoryRaw = [], presetId = null, useScreenCapture = true) {
+    async sendMessage(userPrompt, conversationHistoryRaw = [], presetId = null, useScreenCapture = true, webSearchEnabled = false) {
         // Normalize and fallback to default help text when empty
         try {
             userPrompt = ((userPrompt ?? '') + '').trim();
         } catch (_) {
             userPrompt = '';
         }
-        const originalPrompt = userPrompt; // Keep for title derivation
-        if (!userPrompt) {
-            userPrompt = 'Help me';
+
+        // Detect if this is a suggested search from summary
+        const isSuggestedSearch = userPrompt.startsWith('🌐 Search:');
+        let actualPrompt = userPrompt;
+        let searchForce = webSearchEnabled || isSuggestedSearch;
+
+        if (isSuggestedSearch) {
+            // Parse: 🌐 Search: [Label] | [Query]
+            const searchParts = userPrompt.replace('🌐 Search:', '').trim().split('|');
+            if (searchParts.length > 1) {
+                actualPrompt = searchParts[1].trim();
+            } else {
+                actualPrompt = searchParts[0].trim();
+            }
         }
+
+        const originalPrompt = actualPrompt; // Keep for title derivation
+        if (!actualPrompt) {
+            actualPrompt = 'Help me';
+        }
+
         internalBridge.emit('window:requestVisibility', { name: 'ask', visible: true });
         this.state = {
             ...this.state,
             isLoading: true,
             isStreaming: false,
-            currentQuestion: userPrompt,
+            isSearching: false, // Don't assume search until status signal is received
+            searchCompleted: false,
+            searchQuery: null,
+            searchQueries: [], // Initialize search queries array
+            citations: [],
+            currentQuestion: actualPrompt,
             currentResponse: '',
             showTextInput: false,
             interrupted: false,
@@ -555,7 +586,7 @@ class AskService {
         let sessionId;
 
         try {
-            console.log(`[AskService] 🤖 Processing message: ${userPrompt.substring(0, 50)}...`);
+            console.log(`[AskService] 🤖 Processing message: ${actualPrompt.substring(0, 50)}...`);
             console.log(`[AskService] history: items=${conversationHistoryRaw?.length || 0}`);
 
             // Check if we're in a meeting context (open listen session exists)
@@ -582,7 +613,7 @@ class AskService {
                     }
                 }
             }
-            await askRepository.addAiMessage({ sessionId, role: 'user', content: userPrompt.trim() });
+            await askRepository.addAiMessage({ sessionId, role: 'user', content: actualPrompt.trim() });
             console.log(`[AskService] DB: Saved user prompt to session ${sessionId}`);
 
             // LLM is server-backed only; no client-side provider/model
@@ -590,7 +621,7 @@ class AskService {
 
             // Capture screenshot when useScreenCapture is enabled AND (manual Ask OR prompt equals 'Assist me')
             // 'Assist me' is the Ask template's empty-input fallback and should include a screenshot
-            const isAssistMe = (userPrompt || '').trim().toLowerCase() === 'assist me';
+            const isAssistMe = (actualPrompt || '').trim().toLowerCase() === 'assist me';
             const shouldCaptureScreenshot = useScreenCapture && (this._forceDefaultProfileOnce === true || isAssistMe);
             let screenshotBase64 = null;
             if (shouldCaptureScreenshot) {
@@ -613,13 +644,13 @@ class AskService {
 
             const conversationHistory = this._formatConversationForPrompt(conversationHistoryRaw);
             console.log(
-                `[AskService] what llm sees: clickLen=${userPrompt.trim().length}, historyChars=${conversationHistory.length}, screenshot=${screenshotBase64 ? 1 : 0}`
+                `[AskService] what llm sees: clickLen=${actualPrompt.trim().length}, historyChars=${conversationHistory.length}, screenshot=${screenshotBase64 ? 1 : 0}`
             );
-            const expansion = this._expandInsightRequest(userPrompt);
+            const expansion = this._expandInsightRequest(actualPrompt);
             console.log(`[AskService] expanded intent (heuristic): mode=${expansion.mode}`);
 
             // Prefer explicit click intent detection from pill labels/prefixes
-            const explicitIntent = this._detectIntentFromClickPill(userPrompt) || expansion.mode;
+            const explicitIntent = this._detectIntentFromClickPill(actualPrompt) || expansion.mode;
             const activePreset = presetId || (summaryService && summaryService.selectedPresetId) || null;
 
             let { profileToUse, useConversationContext, shouldIncludeRole } = this._resolveProfileForIntent(explicitIntent, activePreset);
@@ -640,13 +671,13 @@ class AskService {
             // Build new payload format for server-side prompt construction
             const userContent = screenshotBase64
                 ? [
-                      { type: 'text', text: userPrompt.trim() },
+                      { type: 'text', text: actualPrompt.trim() },
                       {
                           type: 'image_url',
                           image_url: { url: `data:image/jpeg;base64,${screenshotBase64}` },
                       },
                   ]
-                : userPrompt.trim();
+                : actualPrompt.trim();
 
             if (screenshotBase64) {
                 try {
@@ -682,6 +713,11 @@ class AskService {
                 userContent: userContent,
                 context: context,
             };
+
+            if (searchForce) {
+                payload.forceSearch = true;
+                console.log(`[AskService] Web search enabled for this request (forceSearch=true)`);
+            }
 
             // Add role unless excluded for this intent type OR profile is whisper (generic chatbot)
             if (shouldIncludeRole && roleContext && profileToUse !== 'whisper') {
@@ -838,24 +874,41 @@ class AskService {
                         }
                         try {
                             const json = JSON.parse(data);
+
+                            // Handle immediate feedback signal (status: searching)
+                            if (json.status === 'searching') {
+                                this.state.isSearching = true;
+                                this.state.searchCompleted = false;
+                                // Update query ONLY if server provides it explicitly
+                                if (json.query) {
+                                    this.state.searchQuery = json.query;
+                                }
+                                this._broadcastState();
+                                continue;
+                            }
+
+                            // Handle streaming citations
+                            if (json.citations) {
+                                this.state.citations = json.citations;
+                                this.state.isSearching = false;
+                                this.state.searchCompleted = true;
+                                this._broadcastState();
+                                continue;
+                            }
+
                             const token = json.choices[0]?.delta?.content || '';
                             if (token) {
-                                if (!firstTokenReceived) {
-                                    // console.log('🔥 [AskService] First token received from LLM:', JSON.stringify(token));
-                                    firstTokenReceived = true;
+                                if (this.state.isSearching) {
+                                    // Searching was active, but now we have real result tokens
+                                    this.state.isSearching = false;
+                                    this.state.searchCompleted = true;
                                 }
 
+                                firstTokenReceived = true;
                                 tokenCount++;
                                 fullResponse += token;
                                 this.state.currentResponse = fullResponse;
                                 this._broadcastState();
-
-                                // Log first few tokens for debugging
-                                // if (tokenCount <= 10) {
-                                //     console.log(`📄 [AskService] Token ${tokenCount}:`, JSON.stringify(token));
-                                // } else if (tokenCount === 11) {
-                                //     console.log('📄 [AskService] Continuing stream... (further tokens not logged)');
-                                // }
                             }
                         } catch (error) {}
                     }
@@ -910,10 +963,10 @@ class AskService {
         );
     }
 
-    async sendMessageManual(userPrompt, conversationHistoryRaw = [], useScreenCapture = true) {
+    async sendMessageManual(userPrompt, conversationHistoryRaw = [], useScreenCapture = true, webSearchEnabled = false) {
         this._forceDefaultProfileOnce = true;
         try {
-            return await this.sendMessage(userPrompt, conversationHistoryRaw, null, useScreenCapture);
+            return await this.sendMessage(userPrompt, conversationHistoryRaw, null, useScreenCapture, webSearchEnabled);
         } finally {
             this._forceDefaultProfileOnce = false;
         }

@@ -15,7 +15,7 @@ class SummaryService {
         this.lastAnalyzedIndex = 0; // Track how many utterances we've already analyzed
         this.detectedQuestions = new Set(); // Track previously detected questions
         this.analysisProfile = 'meeting_analysis'; // base template id
-        this.mockMode = false; // New: Mock STT mode flag (enabled for testing)
+        this.mockMode = true; // New: Mock STT mode flag (enabled for testing)
         console.log('[SummaryService] Mock STT mode enabled by default for testing');
         this.mockDataMap = null; // Will load mock convo data
         this.analysisRound = 0; // Track analysis rounds for debugging
@@ -835,6 +835,19 @@ PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (acti
                                 structuredData.actions.push(prefixed);
                             }
                         });
+                    } else if (section.type === 'searches' && Array.isArray(section.items)) {
+                        section.items.forEach(item => {
+                            const searchItem = item
+                                .trim()
+                                .replace(/^-?\s*/, '')
+                                .replace(/^SEARCH:\s*/i, '')
+                                .replace(/^"|"$/g, '')
+                                .replace(/"([^"]+)"/g, '$1');
+                            if (searchItem) {
+                                const prefixed = `🌐 Search: ${searchItem}`;
+                                structuredData.actions.push(prefixed);
+                            }
+                        });
                     }
                 });
 
@@ -1033,6 +1046,7 @@ PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (acti
                 { prefix: '👆 Suggested Question: ', type: 'suggested_question' },
                 { prefix: '📚 Study Question: ', type: 'study_question' },
                 { prefix: '🔍 Troubleshooting Step: ', type: 'troubleshooting' },
+                { prefix: '🌐 Search: ', type: 'search' },
             ];
 
             // Check for term patterns first

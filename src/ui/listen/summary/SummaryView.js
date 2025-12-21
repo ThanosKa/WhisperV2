@@ -463,18 +463,50 @@ export class SummaryView extends LitElement {
                           ${scrollableActions.length > 0
                               ? html`
                                     <div class="scrollable-actions-container">
-                                        ${scrollableActions.map(
-                                            (action, index) => html`
+                                        ${scrollableActions.map((action, index) => {
+                                            const isSearch = action.startsWith('🌐 Search:');
+                                            let displayAction = action;
+                                            let actionClass = 'markdown-content scrollable-action-item';
+
+                                            if (isSearch) {
+                                                actionClass += ' search-action-item';
+                                                // Extract label for display
+                                                const searchParts = action.replace('🌐 Search:', '').trim().split('|');
+                                                displayAction = searchParts[0].trim();
+                                            }
+
+                                            return html`
                                                 <div
-                                                    class="markdown-content scrollable-action-item"
+                                                    class="${actionClass}"
                                                     data-markdown-id="scrollable-action-${index}"
-                                                    data-original-text="${action}"
+                                                    data-original-text="${displayAction}"
                                                     @click=${() => this.handleMarkdownClick(action)}
                                                 >
-                                                    ${action}
+                                                    ${isSearch
+                                                        ? html`
+                                                              <svg
+                                                                  xmlns="http://www.w3.org/2000/svg"
+                                                                  width="14"
+                                                                  height="14"
+                                                                  viewBox="0 0 24 24"
+                                                                  fill="none"
+                                                                  stroke="currentColor"
+                                                                  stroke-width="2"
+                                                                  stroke-linecap="round"
+                                                                  stroke-linejoin="round"
+                                                                  class="lucide lucide-globe"
+                                                                  style="margin-right: 6px; vertical-align: middle; color: #60a5fa;"
+                                                              >
+                                                                  <circle cx="12" cy="12" r="10" />
+                                                                  <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+                                                                  <path d="M2 12h20" />
+                                                              </svg>
+                                                          `
+                                                        : ''}
+                                                    ${displayAction}
                                                 </div>
-                                            `
-                                        )}
+                                            `;
+                                        })}
                                     </div>
                                 `
                               : ''}

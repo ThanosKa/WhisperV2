@@ -312,6 +312,16 @@ export const summaryViewStyles = css`
         border-left-color: rgba(255, 255, 255, 0.5);
     }
 
+    .search-action-item {
+        border-left: 2px solid rgba(255, 255, 255, 0.2) !important;
+        background: transparent;
+    }
+
+    .search-action-item:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-left-color: rgba(255, 255, 255, 0.5) !important;
+    }
+
     /* Fixed Action Buttons (same style as others + 2px more) */
     .fixed-action-item {
         color: #ffffff;
@@ -348,6 +358,67 @@ export const summaryViewStyles = css`
     .followup-item:hover {
         background: rgba(255, 255, 255, 0.1);
         transform: translateX(2px);
+    }
+
+    /* Improved Table Styles for Insights */
+    .table-wrapper {
+        position: relative;
+        margin: 16px 0;
+        width: 100%;
+    }
+
+    .table-copy {
+        position: absolute;
+        top: -32px;
+        right: 0;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        color: #a1a1aa;
+        font-size: 11px;
+        padding: 4px 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        opacity: 0;
+        z-index: 10;
+    }
+
+    .table-wrapper:hover .table-copy {
+        opacity: 1;
+    }
+
+    .table-copy:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+    }
+
+    .insights-container table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0;
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    .insights-container th {
+        background: rgba(255, 255, 255, 0.08);
+        padding: 10px;
+        text-align: left;
+        font-weight: 600;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .insights-container td {
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        vertical-align: top;
+    }
+
+    .insights-container tr:last-child td {
+        border-bottom: none;
     }
 
     /* Click to ask Whisper prompt */

@@ -1610,9 +1610,37 @@ export function default_add_token(data, type) {
         slot   = document.createElement("code");
         break;
     }
-    case TABLE:
-        slot = document.createElement("table")
-        break
+    case TABLE: {
+        const wrapper = document.createElement("div");
+        wrapper.className = "table-wrapper";
+
+        const copyBtn = document.createElement("button");
+        copyBtn.className = "table-copy";
+        copyBtn.textContent = "Copy Table";
+        copyBtn.onclick = () => {
+            const table = wrapper.querySelector("table");
+            if (table) {
+                // Simplified text representation for clipboard
+                const rows = Array.from(table.querySelectorAll("tr"));
+                const text = rows.map(row => 
+                    Array.from(row.querySelectorAll("th, td"))
+                        .map(cell => cell.textContent.trim())
+                        .join("\t")
+                ).join("\n");
+                
+                navigator.clipboard.writeText(text);
+                copyBtn.textContent = "Copied";
+                setTimeout(() => copyBtn.textContent = "Copy Table", 1200);
+            }
+        };
+        wrapper.appendChild(copyBtn);
+        
+        slot = document.createElement("table");
+        wrapper.appendChild(slot);
+        parent.appendChild(wrapper);
+        data.nodes[++data.index] = slot;
+        return;
+    }
     case TABLE_ROW:
         switch (parent.children.length) {
         case 0:

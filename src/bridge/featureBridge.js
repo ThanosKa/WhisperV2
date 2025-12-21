@@ -86,7 +86,7 @@ module.exports = {
                 if (process.env.NODE_ENV === 'development') {
                     return { success: false, error: 'Development mode - updates disabled' };
                 }
-                
+
                 // Force close all windows to prevent "zombie" processes from blocking quit
                 // Using destroy() bypasses close event listeners that might prevent quit
                 console.log('[FeatureBridge] Force closing all windows before update install...');
@@ -97,10 +97,10 @@ module.exports = {
                         win.destroy();
                     }
                 });
-                
+
                 // Small delay to ensure windows are fully destroyed
                 await new Promise(resolve => setTimeout(resolve, 100));
-                
+
                 // quitAndInstall(isSilent=false, isForceRunAfter=true)
                 // isSilent=false: Show normal quit behavior
                 // isForceRunAfter=true: Force launch the updated app immediately
@@ -118,17 +118,17 @@ module.exports = {
         ipcMain.handle('get-web-url', () => process.env.whisper_WEB_URL || 'http://localhost:3000');
 
         // Ask
-        ipcMain.handle('ask:sendQuestionFromAsk', async (event, userPrompt, useScreenCapture = true) => {
+        ipcMain.handle('ask:sendQuestionFromAsk', async (event, userPrompt, useScreenCapture = true, webSearchEnabled = false) => {
             // Get conversation history from listenService and pass it to askService
             const conversationHistory = listenService.getConversationHistory();
             console.log(
-                `[FeatureBridge] ask:sendQuestionFromAsk: clickLen=${userPrompt?.length || 0}, historyItems=${conversationHistory.length}, useScreenCapture=${useScreenCapture}`
+                `[FeatureBridge] ask:sendQuestionFromAsk: clickLen=${userPrompt?.length || 0}, historyItems=${conversationHistory.length}, useScreenCapture=${useScreenCapture}, webSearchEnabled=${webSearchEnabled}`
             );
             if (Array.isArray(conversationHistory)) {
                 const preview = conversationHistory.slice(-2);
                 console.log('[FeatureBridge] history preview:', JSON.stringify(preview));
             }
-            return await askService.sendMessageManual(userPrompt, conversationHistory, useScreenCapture);
+            return await askService.sendMessageManual(userPrompt, conversationHistory, useScreenCapture, webSearchEnabled);
         });
         ipcMain.handle('ask:sendQuestionFromSummary', async (event, userPrompt) => {
             // Get conversation history from listenService and pass it to askService

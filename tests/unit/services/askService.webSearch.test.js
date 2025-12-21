@@ -381,6 +381,30 @@ describe('AskService - Web Search Integration', () => {
             expect(askService.state.currentResponse).toContain('Tesla announced');
         });
 
+        test('rejects query if it is not a string (defensive check)', async () => {
+            const { createSearchStreamReader } = require('../../mocks/llmClient.mock');
+
+            llmClient.stream.mockResolvedValueOnce({
+                headers: new Map(),
+                body: {
+                    getReader: () =>
+                        createSearchStreamReader([
+                            'data: {"status":"searching","query":{"entire":"json"}}\n', // Invalid: object instead of string
+                            'data: {"choices":[{"delta":{"content":"Result"}}]}\n',
+                            'data: [DONE]\n',
+                        ]),
+                },
+            });
+
+            askService.state.useScreenCapture = false;
+
+            await askService.sendMessage('Test search', [], null, false, true);
+
+            // Verify searchQuery was NOT set to the invalid object
+            // It should remain null (unchanged) when invalid query is received
+            expect(askService.state.searchQuery).toBeNull();
+        });
+
         test('final citations array includes all sources from all searches', async () => {
             const { createSearchStreamReader } = require('../../mocks/llmClient.mock');
 

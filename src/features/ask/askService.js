@@ -890,9 +890,15 @@ class AskService {
                             if (json.status === 'searching') {
                                 this.state.isSearching = true;
                                 this.state.searchCompleted = false;
-                                // Update query ONLY if server provides it explicitly
-                                if (json.query) {
-                                    this.state.searchQuery = json.query;
+                                // Update query ONLY if server provides it explicitly AND it's a string
+                                if (json.query && typeof json.query === 'string') {
+                                    this.state.searchQuery = json.query.trim();
+                                } else if (json.query) {
+                                    // Log unexpected format for debugging
+                                    console.warn('[AskService] Unexpected query format received:', {
+                                        type: typeof json.query,
+                                        value: json.query,
+                                    });
                                 }
                                 this._broadcastState();
                                 continue;

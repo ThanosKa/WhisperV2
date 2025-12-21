@@ -175,7 +175,7 @@ export class AskView extends LitElement {
                 this.searchQuery = newState.searchQuery;
 
                 // Track multiple search queries for dynamic UI
-                if (this.isSearching && this.searchQuery) {
+                if (this.isSearching && typeof this.searchQuery === 'string' && this.searchQuery) {
                     if (!this.searchQueries.includes(this.searchQuery)) {
                         this.searchQueries.push(this.searchQuery);
                     }
@@ -650,7 +650,11 @@ export class AskView extends LitElement {
 
             if (this.searchQueries && this.searchQueries.length > 0 && querySpan) {
                 // Join multiple queries with a bullet or separator
-                const fullQueryText = this.searchQueries.join(', ');
+                // Sanitize: ensure all items are strings and not objects
+                const sanitizedQueries = this.searchQueries
+                    .map(q => (typeof q === 'string' ? q : ''))
+                    .filter(q => q.length > 0);
+                const fullQueryText = sanitizedQueries.join(', ');
                 querySpan.textContent = ` ${fullQueryText}`;
 
                 if (statusLabel) {
@@ -658,7 +662,7 @@ export class AskView extends LitElement {
                     statusLabel.classList.remove('shiny-text');
                 }
                 querySpan.classList.add('shiny-text');
-            } else if (!this.searchQuery && querySpan) {
+            } else if ((typeof this.searchQuery !== 'string' || !this.searchQuery) && querySpan) {
                 querySpan.textContent = '';
                 querySpan.classList.remove('shiny-text');
                 if (statusLabel) {
@@ -683,17 +687,23 @@ export class AskView extends LitElement {
         inner.className = 'msg-content search-status-simple search-status-container-active';
 
         // Build the content: "Searching the web for" with static text, then shiny query
+        // Sanitize queries to ensure only strings are displayed
+        const sanitizedSearchQueries = this.searchQueries
+            ? this.searchQueries
+                  .map(q => (typeof q === 'string' ? q : ''))
+                  .filter(q => q.length > 0)
+            : [];
         const queryPart =
-            this.searchQueries && this.searchQueries.length > 0
-                ? ` ${this.searchQueries.join(', ')}`
-                : this.searchQuery
+            sanitizedSearchQueries && sanitizedSearchQueries.length > 0
+                ? ` ${sanitizedSearchQueries.join(', ')}`
+                : typeof this.searchQuery === 'string' && this.searchQuery
                   ? ` ${this.searchQuery}`
                   : '';
 
-        const shinyClass = this.searchQuery || (this.searchQueries && this.searchQueries.length > 0) ? 'shiny-text' : '';
-        const statusText =
-            this.searchQuery || (this.searchQueries && this.searchQueries.length > 0) ? 'Searching the web for' : 'Searching the web...';
-        const labelShinyClass = this.searchQuery || (this.searchQueries && this.searchQueries.length > 0) ? '' : 'shiny-text';
+        const hasValidQuery = (typeof this.searchQuery === 'string' && this.searchQuery) || sanitizedSearchQueries.length > 0;
+        const shinyClass = hasValidQuery ? 'shiny-text' : '';
+        const statusText = hasValidQuery ? 'Searching the web for' : 'Searching the web...';
+        const labelShinyClass = hasValidQuery ? '' : 'shiny-text';
 
         inner.innerHTML = `
             <div class="search-status-content">

@@ -85,8 +85,8 @@ export class PlanView extends LitElement {
                         return;
                     }
 
-                    // If we don't yet know plan, assume free when limit is finite
-                    const plan = limit && limit >= 1000 ? 'pro' : 'free';
+                    // Preserve existing plan (especially 'ultra'), only infer if needed
+                    const plan = this.usage?.plan || (limit && limit >= 1000 ? 'pro' : 'free');
 
                     const next = {
                         plan: plan,

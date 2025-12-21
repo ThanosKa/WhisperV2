@@ -429,12 +429,22 @@ export class SummaryView extends LitElement {
                                           title = 'Meeting Introduction';
                                   }
                               } else {
-                                  if (this.allActions.some(a => a.includes('Objection') || a.includes('Sales Follow-up'))) title = 'Sales Insights';
-                                  else if (this.allActions.some(a => a.includes('Gap') || a.includes('Suggested Question')))
+                                  if (
+                                      this.allActions.some(
+                                          a =>
+                                              a.includes('Objection') || a.includes('Sales Follow-up') || a.includes('Search') || a.includes('Define')
+                                      )
+                                  )
+                                      title = 'Sales Insights';
+                                  else if (this.allActions.some(a => a.includes('Gap') || a.includes('Suggested Question') || a.includes('Search')))
                                       title = 'Recruiting Insights';
-                                  else if (this.allActions.some(a => a.includes('Root Cause') || a.includes('Troubleshooting Step')))
+                                  else if (
+                                      this.allActions.some(
+                                          a => a.includes('Root Cause') || a.includes('Troubleshooting Step') || a.includes('Search')
+                                      )
+                                  )
                                       title = 'Support Insights';
-                                  else if (this.allActions.some(a => a.includes('Clarify') || a.includes('Study Question')))
+                                  else if (this.allActions.some(a => a.includes('Clarify') || a.includes('Study Question') || a.includes('Search')))
                                       title = 'Educational Insights';
                                   else title = 'Summary Insights';
                               }
@@ -464,45 +474,21 @@ export class SummaryView extends LitElement {
                               ? html`
                                     <div class="scrollable-actions-container">
                                         ${scrollableActions.map((action, index) => {
-                                            const isSearch = action.startsWith('🌐 Search:');
+                                            const isSearch = action.includes('Search:');
                                             let displayAction = action;
-                                            let actionClass = 'markdown-content scrollable-action-item';
 
-                                            if (isSearch) {
-                                                actionClass += ' search-action-item';
-                                                // Extract label for display
-                                                const searchParts = action.replace('🌐 Search:', '').trim().split('|');
-                                                displayAction = searchParts[0].trim();
+                                            if (isSearch && action.includes('|')) {
+                                                // Just show the part before the pipe (Label + Emoji)
+                                                displayAction = action.split('|')[0].trim();
                                             }
 
                                             return html`
                                                 <div
-                                                    class="${actionClass}"
+                                                    class="markdown-content scrollable-action-item"
                                                     data-markdown-id="scrollable-action-${index}"
                                                     data-original-text="${displayAction}"
                                                     @click=${() => this.handleMarkdownClick(action)}
                                                 >
-                                                    ${isSearch
-                                                        ? html`
-                                                              <svg
-                                                                  xmlns="http://www.w3.org/2000/svg"
-                                                                  width="14"
-                                                                  height="14"
-                                                                  viewBox="0 0 24 24"
-                                                                  fill="none"
-                                                                  stroke="currentColor"
-                                                                  stroke-width="2"
-                                                                  stroke-linecap="round"
-                                                                  stroke-linejoin="round"
-                                                                  class="lucide lucide-globe"
-                                                                  style="margin-right: 6px; vertical-align: middle; color: #60a5fa;"
-                                                              >
-                                                                  <circle cx="12" cy="12" r="10" />
-                                                                  <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
-                                                                  <path d="M2 12h20" />
-                                                              </svg>
-                                                          `
-                                                        : ''}
                                                     ${displayAction}
                                                 </div>
                                             `;

@@ -840,10 +840,11 @@ PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (acti
                             const searchItem = item
                                 .trim()
                                 .replace(/^-?\s*/, '')
-                                .replace(/^SEARCH:\s*/i, '')
+                                .replace(/^Search:\s*/i, '')
                                 .replace(/^"|"$/g, '')
                                 .replace(/"([^"]+)"/g, '$1');
                             if (searchItem) {
+                                // Exactly like Define: Emoji + Label | Query
                                 const prefixed = `🌐 Search: ${searchItem}`;
                                 structuredData.actions.push(prefixed);
                             }

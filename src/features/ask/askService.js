@@ -196,6 +196,9 @@ class AskService {
         if (raw === '📝 Show summary') return 'summary';
         if (raw === '🗒️ Recap meeting so far') return 'recap';
 
+        // Search intent - handle variations of globe emoji and spacing
+        if (/^[\u{1F310}\u{1F30D}\u{1F30E}\u{1F30F}]?\s*Search:/iu.test(raw)) return 'search';
+
         // Prefixed items from analysis parsing
         if (raw.startsWith('📘 Define')) return 'define';
         if (raw.startsWith('📈 Sales Follow-Up')) return 'followup';
@@ -212,6 +215,7 @@ class AskService {
 
         // Search intent for suggested searches
         if (raw.startsWith('🌐 Search:')) return 'search';
+        if (raw.toLowerCase().startsWith('search:')) return 'search';
 
         // Heuristic fallbacks (if labels localized or slightly edited)
         if (lower.includes('what should i say next')) return 'next';
@@ -246,6 +250,7 @@ class AskService {
                 summary: 'meeting_summary',
                 recap: 'meeting_recap',
                 email: 'meeting_email',
+                search: 'meeting_search',
             },
             sales: {
                 next: 'sales_next',
@@ -259,6 +264,7 @@ class AskService {
                 summary: 'sales_summary',
                 recap: 'sales_recap',
                 email: 'sales_email',
+                search: 'sales_search',
             },
             recruiting: {
                 next: 'recruiting_should_say_next',
@@ -272,6 +278,7 @@ class AskService {
                 summary: 'recruiting_summary',
                 recap: 'recruiting_recap',
                 email: 'recruiting_email',
+                search: 'recruiting_search',
             },
             'customer-support': {
                 next: 'customer_support_next',
@@ -285,6 +292,7 @@ class AskService {
                 summary: 'customer_support_summary',
                 recap: 'customer_support_recap',
                 email: 'customer_support_email',
+                search: 'customer_support_search',
             },
             school: {
                 next: 'school_next',
@@ -298,6 +306,7 @@ class AskService {
                 summary: 'school_summary',
                 recap: 'school_recap',
                 email: 'school_email',
+                search: 'school_search',
             },
         };
 
@@ -650,13 +659,15 @@ class AskService {
             console.log(`[AskService] expanded intent (heuristic): mode=${expansion.mode}`);
 
             // Prefer explicit click intent detection from pill labels/prefixes
-            const explicitIntent = this._detectIntentFromClickPill(actualPrompt) || expansion.mode;
+            const explicitIntent = this._detectIntentFromClickPill(userPrompt) || expansion.mode;
             const activePreset = presetId || (summaryService && summaryService.selectedPresetId) || null;
+
+            console.log(`[AskService] Routing: intent=${explicitIntent}, preset=${activePreset}`);
 
             let { profileToUse, useConversationContext, shouldIncludeRole } = this._resolveProfileForIntent(explicitIntent, activePreset);
 
             if (this._forceDefaultProfileOnce) {
-                console.log('[AskService] Manual Ask detected → forcing default profile: whisper');
+                console.log(`[AskService] Manual Ask detected (force=${this._forceDefaultProfileOnce}) → forcing default profile: whisper`);
                 profileToUse = 'whisper';
                 // Keep context decision based on intent (e.g., define=false), do not override
             }

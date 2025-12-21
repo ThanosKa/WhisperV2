@@ -8,9 +8,10 @@ const rootDir = path.join(__dirname, '..');
 const webDir = path.join(rootDir, 'whisper_web');
 const bumpType = (process.argv[2] || process.env.BUMP || 'patch').toLowerCase();
 const validBumps = ['major', 'minor', 'patch'];
+const isDirectVersion = /^\d+\.\d+\.\d+(-[a-z0-9.]+)?$/i.test(bumpType);
 
-if (!validBumps.includes(bumpType)) {
-    console.error(`Invalid bump "${bumpType}". Use one of: ${validBumps.join(', ')}`);
+if (!validBumps.includes(bumpType) && !isDirectVersion) {
+    console.error(`Invalid argument "${bumpType}". Use one of: ${validBumps.join(', ')} or a specific version (e.g. 1.7.0)`);
     process.exit(1);
 }
 
@@ -27,6 +28,8 @@ function ensureCleanWorkingTree() {
 }
 
 function bumpVersion(version, bump) {
+    if (/^\d+\.\d+\.\d+(-[a-z0-9.]+)?$/i.test(bump)) return bump;
+
     const [major, minor, patch] = version.split('.').map(Number);
     if ([major, minor, patch].some(Number.isNaN)) {
         throw new Error(`Invalid semver: ${version}`);

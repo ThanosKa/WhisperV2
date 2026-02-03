@@ -1,5 +1,15 @@
 WhisperV2 – Electron + Next.js monorepo for the Whisper assistant.
 
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [SETUP.md](./SETUP.md) | Complete setup guide for developers |
+| [DATABASE.md](./DATABASE.md) | SQLite schema and data management |
+| [EXTERNAL_SERVICES.md](./EXTERNAL_SERVICES.md) | STT relay and external service configuration |
+| [AGENTS.md](./AGENTS.md) | AI agent documentation for codebase navigation |
+| [docs/](./docs/) | Architecture deep-dives (auth, LLM, STT pipelines) |
+
 ## Prereqs
 
 - Download & install Python and Node. On Windows also install Build Tools for Visual Studio.
@@ -54,7 +64,19 @@ npm run setup
     - Bump version in root + `whisper_web` package.json and both lockfiles.
     - Commit with `Release vX.Y.Z`, tag `vX.Y.Z`, push commit + tag to origin.
 
+## Environment Setup
+
+1. Copy `.env.example` to `.env`
+2. Configure required variables (see [SETUP.md](./SETUP.md#environment-variables))
+3. For macOS distribution, set Apple signing credentials
+
+```bash
+cp .env.example .env
+# Edit .env with your values
+```
+
+
 ## Notes
 
-- Env vars: see `src/features/common/config/config.js` and `whisper_web/next.config.mjs`.
+- Env vars: see `.env.example` for all options, `src/features/common/config/config.js` for defaults.
 - Keep `whisper_web/backend_node` rebuilt (`npm run build:backend`) before packaging.

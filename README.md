@@ -1,4 +1,9 @@
+
 Cluely Alternative 
+
+Whisper. Meeting Copilot
+
+<img width="1535" height="825" alt="image" src="https://github.com/user-attachments/assets/80d70c9f-e492-4bcf-8d0b-2194b432dcab" />
 
 Whisper – Electron + Next.js monorepo for the Whisper assistant.
 

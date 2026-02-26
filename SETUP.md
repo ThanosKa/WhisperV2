@@ -76,7 +76,7 @@ See `.env.example` for all available options. Here's what's required vs optional
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `API_BASE_URL` | Backend API URL | `https://app-whisper.com` |
+| `API_BASE_URL` | Backend API URL | `http://localhost:3000` |
 | `STT_RELAY_URL` | Speech-to-text WebSocket | `wss://your-stt-server.com` |
 
 ### Required for macOS Distribution

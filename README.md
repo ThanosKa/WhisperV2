@@ -1,5 +1,7 @@
 WhisperV2 – Electron + Next.js monorepo for the Whisper assistant.
 
+This is the client a.k.a Desktop app. In order for this to work you need to connect it a server for the LLM and a microservice for the STT 
+
 ## Documentation
 
 | Document | Description |

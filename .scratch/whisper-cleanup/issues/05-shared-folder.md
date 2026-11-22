@@ -1,6 +1,6 @@
 # Shared folder for the Whisper repos
 
-Status: open
+Status: claimed
 Type: grilling
 Blocked by: none
 

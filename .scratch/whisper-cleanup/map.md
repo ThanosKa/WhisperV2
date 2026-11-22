@@ -24,6 +24,7 @@ The map ends when nothing is left to decide before someone starts doing the work
 <!-- one line per closed ticket: [title](issues/NN-slug.md): gist -->
 
 - [Electron app inventory](issues/02-electron-inventory.md): ~22.7K lines; main/preload ship unbuilt as CommonJS, renderer is Lit bundled by esbuild; two import cycles and stringly-typed IPC are the main TS hazards.
+- [STT relay: keep or replace](issues/03-stt-relay-options.md): Soniox is 15-40x the hosting cost; direct-to-Soniox needs pre-charged key leases, Cloudflare needs a relay rewrite, Railway needs nothing. The Soniox model must move to `stt-rt-v6` before 2026-12-15 whatever is chosen.
 
 ## Not yet specified
 

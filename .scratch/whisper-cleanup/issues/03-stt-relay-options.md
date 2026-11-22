@@ -1,6 +1,6 @@
 # STT relay: keep or replace
 
-Status: open
+Status: claimed
 Type: research
 Blocked by: none
 

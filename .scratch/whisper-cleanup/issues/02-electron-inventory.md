@@ -1,6 +1,6 @@
 # Electron app inventory
 
-Status: open
+Status: claimed
 Type: research
 Blocked by: none
 

@@ -1,6 +1,6 @@
 # Test safety net today
 
-Status: open
+Status: claimed
 Type: task
 Blocked by: none
 

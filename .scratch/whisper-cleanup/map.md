@@ -23,6 +23,8 @@ The map ends when nothing is left to decide before someone starts doing the work
 
 <!-- one line per closed ticket: [title](issues/NN-slug.md): gist -->
 
+- [Electron app inventory](issues/02-electron-inventory.md): ~22.7K lines; main/preload ship unbuilt as CommonJS, renderer is Lit bundled by esbuild; two import cycles and stringly-typed IPC are the main TS hazards.
+
 ## Not yet specified
 
 - **Code structure after TypeScript.** Which modules to deepen, where the seams go (services, windows, IPC bridges). Waits on the TypeScript approach and the Electron inventory.

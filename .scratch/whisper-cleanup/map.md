@@ -25,6 +25,7 @@ The map ends when nothing is left to decide before someone starts doing the work
 
 - [Electron app inventory](issues/02-electron-inventory.md): ~22.7K lines; main/preload ship unbuilt as CommonJS, renderer is Lit bundled by esbuild; two import cycles and stringly-typed IPC are the main TS hazards.
 - [STT relay: keep or replace](issues/03-stt-relay-options.md): Soniox is 15-40x the hosting cost; direct-to-Soniox needs pre-charged key leases, Cloudflare needs a relay rewrite, Railway needs nothing. The Soniox model must move to `stt-rt-v6` before 2026-12-15 whatever is chosen.
+- [Shared folder for the Whisper repos](issues/05-shared-folder.md): `~/Desktop/Cursor/Whisper/` with the three repos under their current names; a plain folder, not a repo; a ~10-line root CLAUDE.md on what each repo does and how they talk; sync every repo with GitHub before moving.
 
 ## Not yet specified
 
@@ -33,7 +34,6 @@ The map ends when nothing is left to decide before someone starts doing the work
 - **DESIGN.md.** One file or two (Electron UI and `whisper_web/`), and where the current tokens come from. Format: `../DESIGN.skeleton.md`.
 - **Per-app CLAUDE.md files.** Root, `src/`, `whisper_web/`, `whisper_web/backend_node/`: content waits on the docs inventory and the shared-folder decision.
 - **Relay migration plan.** Only if the relay ticket says replace it.
-- **Where this map lives long term.** It may move to the shared folder if that becomes a repo.
 
 ## Out of scope
 

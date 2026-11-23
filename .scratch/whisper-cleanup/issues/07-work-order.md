@@ -1,6 +1,6 @@
 # Order of the work
 
-Status: open
+Status: claimed
 Type: grilling
 Blocked by: 01, 02, 04, 08, 09, 10, 11
 

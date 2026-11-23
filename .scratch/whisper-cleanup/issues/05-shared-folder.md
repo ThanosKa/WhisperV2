@@ -24,3 +24,7 @@ Checklist for whoever does the move:
 3. In `WhisperV2`, run `git worktree repair` (research worktrees under `.claude/worktrees/` store absolute paths), or remove those worktrees first.
 4. Expect old Claude Code and Cursor sessions not to show up: they are keyed by the old path.
 5. Check for hard-coded absolute paths (for example `WhisperAPP`'s `watchman:reset` script).
+
+## Comments
+
+**Amended by [Which docs to keep, merge or delete](06-docs-inventory.md):** the workspace folder is now a small **private git repo**, not a plain folder, because it holds `CODING_STANDARDS.md` as well as `CLAUDE.md`. The three repos go in its `.gitignore` (not submodules) and stay fully independent. Its root `CLAUDE.md` also loads `@CODING_STANDARDS.md`.

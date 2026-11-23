@@ -17,7 +17,7 @@ Context: [STT relay decision](08-stt-relay-decision.md), [STT relay: keep or rep
 
 ## Answer
 
-Run on 2026-11-23 against the real Soniox API, model `stt-rt-v6`, with the production project key (copied from the Railway `websocket` service into the git-ignored `.scratch/whisper-cleanup/.env`). Total cost about $0.005. Script, log and raw results: [assets/13-soniox-temp-key-test/](../assets/13-soniox-temp-key-test/) (`test.cjs`, `run.log`, `results.json`).
+Run on 2026-11-23 against the real Soniox API, model `stt-rt-v6`, with the production project key (copied from the Railway `websocket` service into the git-ignored `.scratch/whisper-cleanup/.env`). Total cost about $0.005. Script, log and raw results: [assets/13-soniox-temp-key-test/](../assets/13-soniox-temp-key-test/) (`test.cjs`, `results.json`; `run.log` stays local, git ignores `*.log`).
 
 **All four checks pass. Nothing blocks the direct-to-Soniox design.**
 

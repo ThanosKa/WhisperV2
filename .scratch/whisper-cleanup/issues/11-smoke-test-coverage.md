@@ -1,6 +1,6 @@
 # What the smoke tests and screenshots cover
 
-Status: open
+Status: claimed
 Type: grilling
 Blocked by: 04
 

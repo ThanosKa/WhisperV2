@@ -1,0 +1,463 @@
+{
+  "run": "wf13-1795469009378",
+  "startedAt": "2026-11-23T21:23:29.378Z",
+  "tests": {
+    "reconnectAndExpiry": {
+      "ref": "wf13-1795469009378-A",
+      "maxSessionSeconds": 45,
+      "reconnected": true,
+      "expiredAfterSecondsFromStreamStart": 45.16,
+      "stream": {
+        "name": "A",
+        "openedAt": 1.16,
+        "finished": false,
+        "errors": [
+          {
+            "t": 46.32,
+            "onCurrent": true,
+            "error_code": 403,
+            "error_type": "temp_api_key_session_expired",
+            "error_message": "Temporary API key session duration limit exceeded. Create a new temporary API key to start a new session."
+          }
+        ],
+        "closes": [
+          {
+            "t": 16.23,
+            "code": 1006,
+            "reason": "",
+            "current": true
+          },
+          {
+            "t": 46.34,
+            "code": 1000,
+            "reason": "",
+            "current": true
+          }
+        ],
+        "events": [
+          {
+            "t": 1.16,
+            "kind": "opened"
+          },
+          {
+            "t": 1.32,
+            "kind": "reconnect-info",
+            "hasToken": true,
+            "url": "wss://stt-rt.soniox.com/transcribe-websocket"
+          },
+          {
+            "t": 16.23,
+            "kind": "dropping socket (terminate, no close frame)",
+            "keyPastExpiry": true
+          },
+          {
+            "t": 16.23,
+            "kind": "close",
+            "code": 1006,
+            "reason": "",
+            "current": true
+          },
+          {
+            "t": 19.84,
+            "kind": "reconnected",
+            "last_request": 149
+          },
+          {
+            "t": 19.84,
+            "kind": "resent",
+            "count": 30
+          },
+          {
+            "t": 46.32,
+            "kind": "error",
+            "onCurrent": true,
+            "error_code": 403,
+            "error_type": "temp_api_key_session_expired",
+            "error_message": "Temporary API key session duration limit exceeded. Create a new temporary API key to start a new session."
+          },
+          {
+            "t": 46.34,
+            "kind": "close",
+            "code": 1000,
+            "reason": "",
+            "current": true
+          }
+        ],
+        "finalText": "Good morning, everyone, and thank you for joining the weekly product meeting. Today we will review the launch plan for the new desktop app, the budget for the next quarter, and the results of the customer survey. First, the launch. The team finished the beta last Friday, and we received about 200 bug reports. Most of them were small, like a button in the wrong place or a slow settings window. Three of them were serious, and we fixed all three on Monday. Second, the budget. We plan to spend less on servers because the new design sends audio straight to the speech provider. That removes one service we pay for every month. Third, the survey. 70% of"
+      },
+      "singleUseSecondStream": {
+        "name": "A-dup",
+        "openedAt": 3.81,
+        "finished": false,
+        "errors": [
+          {
+            "t": 4.07,
+            "onCurrent": true,
+            "error_code": 401,
+            "error_type": "unauthenticated",
+            "error_message": "Invalid or expired temporary API key. Create a new temporary API key and retry. See https://soniox.com/docs/guides/temporary-api-keys for details."
+          }
+        ],
+        "closes": [
+          {
+            "t": 4.08,
+            "code": 1000,
+            "reason": "",
+            "current": true
+          }
+        ],
+        "events": [
+          {
+            "t": 3.81,
+            "kind": "opened"
+          },
+          {
+            "t": 4.07,
+            "kind": "error",
+            "onCurrent": true,
+            "error_code": 401,
+            "error_type": "unauthenticated",
+            "error_message": "Invalid or expired temporary API key. Create a new temporary API key and retry. See https://soniox.com/docs/guides/temporary-api-keys for details."
+          },
+          {
+            "t": 4.08,
+            "kind": "close",
+            "code": 1000,
+            "reason": "",
+            "current": true
+          }
+        ],
+        "finalText": ""
+      },
+      "endedAt": "2026-11-23T21:24:15.793Z"
+    },
+    "clean": {
+      "ref": "wf13-1795469009378-C",
+      "endedAt": "2026-11-23T21:24:25.176Z",
+      "stream": {
+        "name": "C",
+        "openedAt": 47.4,
+        "finished": true,
+        "errors": [],
+        "closes": [
+          {
+            "t": 55.83,
+            "code": 1000,
+            "reason": "",
+            "current": true
+          }
+        ],
+        "events": [
+          {
+            "t": 47.4,
+            "kind": "opened"
+          },
+          {
+            "t": 55.73,
+            "kind": "finished",
+            "total_audio_proc_ms": 8000
+          },
+          {
+            "t": 55.83,
+            "kind": "close",
+            "code": 1000,
+            "reason": "",
+            "current": true
+          }
+        ],
+        "finalText": "Good morning, everyone, and thank you for joining the weekly product meeting. Today we will review the launch plan for the new desktop app, the budget."
+      }
+    },
+    "leaseSwitch": {
+      "switchInfo": {
+        "newOpenedWhileOldOpen": true,
+        "newOpenedAtMsFromStart": 11175,
+        "switchedAtChunk": 119
+      },
+      "baseline": "good morning everyone and thank you for joining the weekly product meeting today we will review the launch plan for the new desktop app the budget for the next quarter and the results of the customer survey first the launch the team finished the beta last friday and we received about bug reports most of them were small like a button in the wrong place or a slow settings window three of them were serious",
+      "meJoined": "good morning everyone and thank you for joining the weekly product meeting today we will review the launch plan for the new desktop app the budget for the next quarter and the results of the customer survey first the launch the team finished the beta last friday and we received about bug reports most of them were small like a button in the wrong place or a slow settings window three of them were serious",
+      "themJoined": "good morning everyone and thank you for joining the weekly product meeting today we will review the launch plan for the new desktop app the budget for the next quarter and the results of the customer survey first the launch the team finished the beta last friday and we received about bug reports most of them were small like a button in the wrong place or a slow settings window three of them were serious",
+      "me1Tail": "and the results of the customer survey first",
+      "me2Head": "the launch the team finished the beta last",
+      "streams": [
+        {
+          "name": "D-base",
+          "errors": [],
+          "closes": [
+            {
+              "t": 81.33,
+              "code": 1000,
+              "reason": "",
+              "current": true
+            }
+          ],
+          "finished": true
+        },
+        {
+          "name": "D-me-1",
+          "errors": [],
+          "closes": [
+            {
+              "t": 69.14,
+              "code": 1000,
+              "reason": "",
+              "current": true
+            }
+          ],
+          "finished": true
+        },
+        {
+          "name": "D-them-1",
+          "errors": [],
+          "closes": [
+            {
+              "t": 69.14,
+              "code": 1000,
+              "reason": "",
+              "current": true
+            }
+          ],
+          "finished": true
+        },
+        {
+          "name": "D-me-2",
+          "errors": [],
+          "closes": [
+            {
+              "t": 81.18,
+              "code": 1000,
+              "reason": "",
+              "current": true
+            }
+          ],
+          "finished": true
+        },
+        {
+          "name": "D-them-2",
+          "errors": [],
+          "closes": [
+            {
+              "t": 81.33,
+              "code": 1000,
+              "reason": "",
+              "current": true
+            }
+          ],
+          "finished": true
+        }
+      ],
+      "endedAt": "2026-11-23T21:24:50.662Z"
+    },
+    "usageLogs": {
+      "refs": [
+        "wf13-1795469009378-A",
+        "wf13-1795469009378-C",
+        "wf13-1795469009378-D-base",
+        "wf13-1795469009378-D-me-1",
+        "wf13-1795469009378-D-them-1",
+        "wf13-1795469009378-D-me-2",
+        "wf13-1795469009378-D-them-2"
+      ],
+      "found": {
+        "wf13-1795469009378-A": {
+          "firstSeenAt": "2026-11-23T21:24:51.068Z",
+          "entry": {
+            "uuid": "cbe2321f-f1cf-4626-a8d0-263f47ca6174",
+            "request_scope": "api",
+            "client_reference_id": "wf13-1795469009378-A",
+            "model": "stt-rt-v6",
+            "start_time": "2026-11-23T21:23:30.681Z",
+            "end_time": "2026-11-23T21:24:15.699Z",
+            "input_text_tokens": 9,
+            "input_audio_tokens": 375,
+            "input_audio_duration_ms": 45000,
+            "output_text_tokens": 226,
+            "output_audio_tokens": 0,
+            "output_audio_duration_ms": 0,
+            "duration_ms": 0,
+            "input_agent_text_tokens": 0,
+            "cost_usd": "0.0016900000",
+            "input_cost_usd": "0.0007860000",
+            "input_text_cost_usd": "0.0000360000",
+            "input_audio_cost_usd": "0.0007500000",
+            "output_cost_usd": "0.0009040000",
+            "output_text_cost_usd": "0.0009040000",
+            "output_audio_cost_usd": "0.0000000000",
+            "duration_cost_usd": "0.0000000000",
+            "input_agent_text_cost_usd": "0.0000000000"
+          }
+        },
+        "wf13-1795469009378-C": {
+          "firstSeenAt": "2026-11-23T21:24:51.068Z",
+          "entry": {
+            "uuid": "1ead5266-3696-4212-9bdc-448560d22140",
+            "request_scope": "api",
+            "client_reference_id": "wf13-1795469009378-C",
+            "model": "stt-rt-v6",
+            "start_time": "2026-11-23T21:24:16.982Z",
+            "end_time": "2026-11-23T21:24:25.139Z",
+            "input_text_tokens": 9,
+            "input_audio_tokens": 67,
+            "input_audio_duration_ms": 8083,
+            "output_text_tokens": 46,
+            "output_audio_tokens": 0,
+            "output_audio_duration_ms": 0,
+            "duration_ms": 0,
+            "input_agent_text_tokens": 0,
+            "cost_usd": "0.0003540000",
+            "input_cost_usd": "0.0001700000",
+            "input_text_cost_usd": "0.0000360000",
+            "input_audio_cost_usd": "0.0001340000",
+            "output_cost_usd": "0.0001840000",
+            "output_text_cost_usd": "0.0001840000",
+            "output_audio_cost_usd": "0.0000000000",
+            "duration_cost_usd": "0.0000000000",
+            "input_agent_text_cost_usd": "0.0000000000"
+          }
+        },
+        "wf13-1795469009378-D-me-1": {
+          "firstSeenAt": "2026-11-23T21:24:51.068Z",
+          "entry": {
+            "uuid": "eb23ae9a-ea36-4b53-b6a1-5fcd55618d0d",
+            "request_scope": "api",
+            "client_reference_id": "wf13-1795469009378-D-me-1",
+            "model": "stt-rt-v6",
+            "start_time": "2026-11-23T21:24:26.285Z",
+            "end_time": "2026-11-23T21:24:38.499Z",
+            "input_text_tokens": 9,
+            "input_audio_tokens": 102,
+            "input_audio_duration_ms": 12202,
+            "output_text_tokens": 66,
+            "output_audio_tokens": 0,
+            "output_audio_duration_ms": 0,
+            "duration_ms": 0,
+            "input_agent_text_tokens": 0,
+            "cost_usd": "0.0005040000",
+            "input_cost_usd": "0.0002400000",
+            "input_text_cost_usd": "0.0000360000",
+            "input_audio_cost_usd": "0.0002040000",
+            "output_cost_usd": "0.0002640000",
+            "output_text_cost_usd": "0.0002640000",
+            "output_audio_cost_usd": "0.0000000000",
+            "duration_cost_usd": "0.0000000000",
+            "input_agent_text_cost_usd": "0.0000000000"
+          }
+        },
+        "wf13-1795469009378-D-them-1": {
+          "firstSeenAt": "2026-11-23T21:24:51.068Z",
+          "entry": {
+            "uuid": "7607d5e3-cd8e-4e7f-90b4-fe6b05783f03",
+            "request_scope": "api",
+            "client_reference_id": "wf13-1795469009378-D-them-1",
+            "model": "stt-rt-v6",
+            "start_time": "2026-11-23T21:24:26.262Z",
+            "end_time": "2026-11-23T21:24:38.506Z",
+            "input_text_tokens": 9,
+            "input_audio_tokens": 102,
+            "input_audio_duration_ms": 12228,
+            "output_text_tokens": 66,
+            "output_audio_tokens": 0,
+            "output_audio_duration_ms": 0,
+            "duration_ms": 0,
+            "input_agent_text_tokens": 0,
+            "cost_usd": "0.0005040000",
+            "input_cost_usd": "0.0002400000",
+            "input_text_cost_usd": "0.0000360000",
+            "input_audio_cost_usd": "0.0002040000",
+            "output_cost_usd": "0.0002640000",
+            "output_text_cost_usd": "0.0002640000",
+            "output_audio_cost_usd": "0.0000000000",
+            "duration_cost_usd": "0.0000000000",
+            "input_agent_text_cost_usd": "0.0000000000"
+          }
+        },
+        "wf13-1795469009378-D-me-2": {
+          "firstSeenAt": "2026-11-23T21:25:11.470Z",
+          "entry": {
+            "uuid": "2f0cb88b-b932-4cc7-8f9d-0361bc3fd1cf",
+            "request_scope": "api",
+            "client_reference_id": "wf13-1795469009378-D-me-2",
+            "model": "stt-rt-v6",
+            "start_time": "2026-11-23T21:24:37.453Z",
+            "end_time": "2026-11-23T21:24:50.542Z",
+            "input_text_tokens": 9,
+            "input_audio_tokens": 109,
+            "input_audio_duration_ms": 13076,
+            "output_text_tokens": 62,
+            "output_audio_tokens": 0,
+            "output_audio_duration_ms": 0,
+            "duration_ms": 0,
+            "input_agent_text_tokens": 0,
+            "cost_usd": "0.0005020000",
+            "input_cost_usd": "0.0002540000",
+            "input_text_cost_usd": "0.0000360000",
+            "input_audio_cost_usd": "0.0002180000",
+            "output_cost_usd": "0.0002480000",
+            "output_text_cost_usd": "0.0002480000",
+            "output_audio_cost_usd": "0.0000000000",
+            "duration_cost_usd": "0.0000000000",
+            "input_agent_text_cost_usd": "0.0000000000"
+          }
+        },
+        "wf13-1795469009378-D-them-2": {
+          "firstSeenAt": "2026-11-23T21:25:11.471Z",
+          "entry": {
+            "uuid": "f502a725-2c54-4799-94fc-1ea65d433e45",
+            "request_scope": "api",
+            "client_reference_id": "wf13-1795469009378-D-them-2",
+            "model": "stt-rt-v6",
+            "start_time": "2026-11-23T21:24:37.682Z",
+            "end_time": "2026-11-23T21:24:50.632Z",
+            "input_text_tokens": 9,
+            "input_audio_tokens": 107,
+            "input_audio_duration_ms": 12876,
+            "output_text_tokens": 62,
+            "output_audio_tokens": 0,
+            "output_audio_duration_ms": 0,
+            "duration_ms": 0,
+            "input_agent_text_tokens": 0,
+            "cost_usd": "0.0004980000",
+            "input_cost_usd": "0.0002500000",
+            "input_text_cost_usd": "0.0000360000",
+            "input_audio_cost_usd": "0.0002140000",
+            "output_cost_usd": "0.0002480000",
+            "output_text_cost_usd": "0.0002480000",
+            "output_audio_cost_usd": "0.0000000000",
+            "duration_cost_usd": "0.0000000000",
+            "input_agent_text_cost_usd": "0.0000000000"
+          }
+        },
+        "wf13-1795469009378-D-base": {
+          "firstSeenAt": "2026-11-23T21:25:11.471Z",
+          "entry": {
+            "uuid": "50cd7a15-c54e-45bb-ad3b-baff1b2eb3ed",
+            "request_scope": "api",
+            "client_reference_id": "wf13-1795469009378-D-base",
+            "model": "stt-rt-v6",
+            "start_time": "2026-11-23T21:24:26.508Z",
+            "end_time": "2026-11-23T21:24:50.632Z",
+            "input_text_tokens": 9,
+            "input_audio_tokens": 200,
+            "input_audio_duration_ms": 24051,
+            "output_text_tokens": 127,
+            "output_audio_tokens": 0,
+            "output_audio_duration_ms": 0,
+            "duration_ms": 0,
+            "input_agent_text_tokens": 0,
+            "cost_usd": "0.0009440000",
+            "input_cost_usd": "0.0004360000",
+            "input_text_cost_usd": "0.0000360000",
+            "input_audio_cost_usd": "0.0004000000",
+            "output_cost_usd": "0.0005080000",
+            "output_text_cost_usd": "0.0005080000",
+            "output_audio_cost_usd": "0.0000000000",
+            "duration_cost_usd": "0.0000000000",
+            "input_agent_text_cost_usd": "0.0000000000"
+          }
+        }
+      },
+      "missing": [],
+      "polledMinutes": 0.3468
+    }
+  }
+}

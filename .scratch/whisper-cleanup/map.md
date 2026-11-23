@@ -37,6 +37,7 @@ The map ends when nothing is left to decide before someone starts doing the work
 - [What the smoke tests and screenshots cover](issues/11-smoke-test-coverage.md): 4 Playwright smoke tests (open, Ask, Listen, settings) and 6 screenshots, one per window, offline against a local fake server; the agent runs them after every step; the owner's manual checklist runs once, at the very end.
 - [Order of the work](issues/07-work-order.md): housekeeping and docs, safety net, upgrades + pnpm, then TS for main/preload alongside `whisper_web` cleanup, DESIGN.md, React UI, direct-to-Soniox, new CLAUDE.md files last, one manual check before deploy; relay model fix first, before 2026-12-15.
 - [macOS minimum version](issues/12-macos-minimum-version.md): macOS 13 and later, as the industry does; auto-update must not hand 11-12 users a build that won't open; the app starts sending its app and OS version to WhisperAPP so we know who runs what.
+- [Soniox temporary key test](issues/13-soniox-temp-key-test.md): all pass: a used, expired temporary key still reconnects to its own stream (clock keeps running, drops are billed); the limit ends with 403 `temp_api_key_session_expired` + close 1000; usage logs appear within 20 s, filtered by `client_reference_id` on our side; both streams switch to a new lease with no gap.
 
 ## Not yet specified
 

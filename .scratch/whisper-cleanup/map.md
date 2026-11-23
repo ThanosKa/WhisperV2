@@ -38,10 +38,11 @@ The map ends when nothing is left to decide before someone starts doing the work
 - [Order of the work](issues/07-work-order.md): housekeeping and docs, safety net, upgrades + pnpm, then TS for main/preload alongside `whisper_web` cleanup, DESIGN.md, React UI, direct-to-Soniox, new CLAUDE.md files last, one manual check before deploy; relay model fix first, before 2026-12-15.
 - [macOS minimum version](issues/12-macos-minimum-version.md): macOS 13 and later, as the industry does; auto-update must not hand 11-12 users a build that won't open; the app starts sending its app and OS version to WhisperAPP so we know who runs what.
 - [Soniox temporary key test](issues/13-soniox-temp-key-test.md): all pass: a used, expired temporary key still reconnects to its own stream (clock keeps running, drops are billed); the limit ends with 403 `temp_api_key_session_expired` + close 1000; usage logs appear within 20 s, filtered by `client_reference_id` on our side; both streams switch to a new lease with no gap.
+- [Direct-to-Soniox design](issues/14-direct-to-soniox-design.md): quotas and quota screen unchanged; 5-min leases per audio stream from a new WhisperAPP `POST /api/stt/lease`, switched at a pause and reconnected after drops; unused seconds given back from the desktop's count, then settled from Soniox usage logs (no cron); Railway off when no paying user has used it for 30 days; step 7, on the TS `sttService`.
 
 ## Not yet specified
 
-- **Per-app CLAUDE.md files.** Workspace root, `WhisperV2` root, and maybe `src/`, `whisper_web/`, `whisper_web/backend_node/`: which exist and what each says waits on the code structure after TypeScript (paths change). Written from scratch from the code; the docs ticket lists areas with no doc today (recovery, windows, `web-data-request` channels, auto-update, permissions, CI/build). The new `README.md` is written alongside them.
+- **Per-app CLAUDE.md files.** Workspace root, `WhisperV2` root, and maybe `src/`, `whisper_web/`, `whisper_web/backend_node/`: which exist and what each says waits on the code structure after TypeScript (paths change). Written from scratch from the code; the docs ticket lists areas with no doc today (recovery, windows, `web-data-request` channels, auto-update, permissions, CI/build). The new `README.md` is written alongside them. Glossary terms (Lease; audio stream vs the LLM Stream route; Chat) and an ADR for leases settled from Soniox usage logs go in with them, in WhisperAPP.
 
 ## Out of scope
 

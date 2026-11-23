@@ -18,6 +18,7 @@ The map ends when nothing is left to decide before someone starts doing the work
 - **Behavior must not change.** Every plan step keeps the app working the same for the user.
 - **Follow the stable industry standard.** The owner's standing rule: when a tool or pattern is a choice, pick what the industry uses (latest stable/LTS, never beta) and recommend it; don't ask about it as an open question.
 - **Skills.** Grilling tickets: `grilling` + `domain-modeling`. Code structure tickets: `codebase-design`. Any CLAUDE.md / agent docs ticket: `writing-for-agents`. Research tickets: `research`. TypeScript rules: `CODING_STANDARDS.md`.
+- **Checking the work.** The owner checks nothing by hand and deploys nothing until the whole cleanup is done; every step is verified by the automated suite, and the manual checklist runs once at the end.
 - **Working with the owner.** Solo developer. Reply in Greek, plain words, explain jargon, one question at a time. Commit after every change to this map or a ticket. Research runs on local branches; nothing is pushed without asking.
 
 ## Decisions so far
@@ -33,6 +34,7 @@ The map ends when nothing is left to decide before someone starts doing the work
 - [Target versions for the upgrade](issues/10-upgrade-target-versions.md): Node 26 LTS, pnpm workspace, Electron 45, `better-sqlite3` 13 (fixes the clean install), Next 16, React 19, Tailwind 4, ESLint 10 and TypeScript 6 (not 9 and 7); about 20 unused dependencies deleted; Electron 45 drops macOS 11-12.
 - [STT relay decision](issues/08-stt-relay-decision.md): replace the Railway relay; the desktop connects straight to Soniox with short temporary keys from WhisperAPP, charged up front and corrected from Soniox usage logs; `../websocket` is deleted once old builds are gone. A Soniox test comes first.
 - [Which tests to delete](issues/09-which-tests-to-delete.md): tests only at three seams (Electron app via a small Playwright suite, services via public methods with a real in-memory DB, `whisper_web` pages via Testing Library); no Playwright in `whisper_web`; mock-only and empty tests deleted, the rest rewritten to Vitest in the TS step.
+- [What the smoke tests and screenshots cover](issues/11-smoke-test-coverage.md): 4 Playwright smoke tests (open, Ask, Listen, settings) and 6 screenshots, one per window, offline against a local fake server; the agent runs them after every step; the owner's manual checklist runs once, at the very end.
 
 ## Not yet specified
 

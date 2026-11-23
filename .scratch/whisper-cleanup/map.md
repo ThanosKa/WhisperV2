@@ -36,6 +36,7 @@ The map ends when nothing is left to decide before someone starts doing the work
 - [Which tests to delete](issues/09-which-tests-to-delete.md): tests only at three seams (Electron app via a small Playwright suite, services via public methods with a real in-memory DB, `whisper_web` pages via Testing Library); no Playwright in `whisper_web`; mock-only and empty tests deleted, the rest rewritten to Vitest in the TS step.
 - [What the smoke tests and screenshots cover](issues/11-smoke-test-coverage.md): 4 Playwright smoke tests (open, Ask, Listen, settings) and 6 screenshots, one per window, offline against a local fake server; the agent runs them after every step; the owner's manual checklist runs once, at the very end.
 - [Order of the work](issues/07-work-order.md): housekeeping and docs, safety net, upgrades + pnpm, then TS for main/preload alongside `whisper_web` cleanup, DESIGN.md, React UI, direct-to-Soniox, new CLAUDE.md files last, one manual check before deploy; relay model fix first, before 2026-12-15.
+- [macOS minimum version](issues/12-macos-minimum-version.md): macOS 13 and later, as the industry does; auto-update must not hand 11-12 users a build that won't open; the app starts sending its app and OS version to WhisperAPP so we know who runs what.
 
 ## Not yet specified
 

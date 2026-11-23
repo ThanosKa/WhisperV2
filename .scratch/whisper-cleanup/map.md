@@ -31,6 +31,7 @@ The map ends when nothing is left to decide before someone starts doing the work
 - [Which docs to keep, merge or delete](issues/06-docs-inventory.md): keep only `CLAUDE.md` and `README.md` (both rewritten from scratch) and `docs/agents/`; delete `AGENTS.md`, all of `.cursor/`, the root docs and the 9 pipeline docs, carrying nothing over. `CODING_STANDARDS.md` moves to the workspace root; glossary, ADRs, tickets and `docs/agents/` stay per repo, as Matt Pocock's skills expect.
 - [TypeScript migration approach](issues/04-typescript-approach.md): Playwright smoke tests + screenshots first, then upgrades + pnpm, then main/preload to TS in one go, then the UI rewritten in React + TS + Tailwind; electron-vite + electron-builder, Vitest, ESLint 9 + typescript-eslint, zod, pino, strict TS.
 - [Target versions for the upgrade](issues/10-upgrade-target-versions.md): Node 26 LTS, pnpm workspace, Electron 45, `better-sqlite3` 13 (fixes the clean install), Next 16, React 19, Tailwind 4, ESLint 10 and TypeScript 6 (not 9 and 7); about 20 unused dependencies deleted; Electron 45 drops macOS 11-12.
+- [STT relay decision](issues/08-stt-relay-decision.md): replace the Railway relay; the desktop connects straight to Soniox with short temporary keys from WhisperAPP, charged up front and corrected from Soniox usage logs; `../websocket` is deleted once old builds are gone. A Soniox test comes first.
 
 ## Not yet specified
 
@@ -38,7 +39,6 @@ The map ends when nothing is left to decide before someone starts doing the work
 - **`whisper_web/` cleanup.** It is already TypeScript; what else it needs (lint, structure) is not yet clear. Its `.cursor/` rules are deleted (docs ticket).
 - **DESIGN.md.** One file or two (Electron UI and `whisper_web/`), and where the current tokens come from (today's Lit CSS, to become Tailwind tokens in the React UI). Format: `../DESIGN.skeleton.md`.
 - **Per-app CLAUDE.md files.** Workspace root, `WhisperV2` root, and maybe `src/`, `whisper_web/`, `whisper_web/backend_node/`: which exist and what each says waits on the code structure after TypeScript (paths change). Written from scratch from the code; the docs ticket lists areas with no doc today (recovery, windows, `web-data-request` channels, auto-update, permissions, CI/build). The new `README.md` is written alongside them.
-- **Relay migration plan.** Only if the relay ticket says replace it.
 
 ## Out of scope
 

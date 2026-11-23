@@ -1,6 +1,6 @@
 # Which tests to delete
 
-Status: open
+Status: claimed
 Type: grilling
 Blocked by: 01
 

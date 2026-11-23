@@ -35,12 +35,10 @@ The map ends when nothing is left to decide before someone starts doing the work
 - [STT relay decision](issues/08-stt-relay-decision.md): replace the Railway relay; the desktop connects straight to Soniox with short temporary keys from WhisperAPP, charged up front and corrected from Soniox usage logs; `../websocket` is deleted once old builds are gone. A Soniox test comes first.
 - [Which tests to delete](issues/09-which-tests-to-delete.md): tests only at three seams (Electron app via a small Playwright suite, services via public methods with a real in-memory DB, `whisper_web` pages via Testing Library); no Playwright in `whisper_web`; mock-only and empty tests deleted, the rest rewritten to Vitest in the TS step.
 - [What the smoke tests and screenshots cover](issues/11-smoke-test-coverage.md): 4 Playwright smoke tests (open, Ask, Listen, settings) and 6 screenshots, one per window, offline against a local fake server; the agent runs them after every step; the owner's manual checklist runs once, at the very end.
+- [Order of the work](issues/07-work-order.md): housekeeping and docs, safety net, upgrades + pnpm, then TS for main/preload alongside `whisper_web` cleanup, DESIGN.md, React UI, direct-to-Soniox, new CLAUDE.md files last, one manual check before deploy; relay model fix first, before 2026-12-15.
 
 ## Not yet specified
 
-- **Code structure after TypeScript.** Which modules to deepen, where the seams go (services, windows, IPC bridges), and the folder and component layout of the new React UI. Breaking the 2 import cycles is already decided (ticket 04); the rest is not. Also: the code uses two default domains (`app-whisper.com` and `www.app-whisper.com`).
-- **`whisper_web/` cleanup.** It is already TypeScript; what else it needs (lint, structure) is not yet clear. Its `.cursor/` rules are deleted (docs ticket).
-- **DESIGN.md.** One file or two (Electron UI and `whisper_web/`), and where the current tokens come from (today's Lit CSS, to become Tailwind tokens in the React UI). Format: `../DESIGN.skeleton.md`.
 - **Per-app CLAUDE.md files.** Workspace root, `WhisperV2` root, and maybe `src/`, `whisper_web/`, `whisper_web/backend_node/`: which exist and what each says waits on the code structure after TypeScript (paths change). Written from scratch from the code; the docs ticket lists areas with no doc today (recovery, windows, `web-data-request` channels, auto-update, permissions, CI/build). The new `README.md` is written alongside them.
 
 ## Out of scope

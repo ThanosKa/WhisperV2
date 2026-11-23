@@ -1,6 +1,6 @@
 # Direct-to-Soniox design
 
-Status: open
+Status: claimed
 Type: grilling
 Blocked by: 13
 

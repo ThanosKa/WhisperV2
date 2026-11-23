@@ -1,6 +1,6 @@
 # Which docs to keep, merge or delete
 
-Status: open
+Status: claimed
 Type: grilling
 Blocked by: none
 

@@ -1,6 +1,6 @@
 # Soniox temporary key test
 
-Status: open
+Status: claimed
 Type: task
 Blocked by: 08
 

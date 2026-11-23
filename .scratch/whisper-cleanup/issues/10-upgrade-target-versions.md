@@ -1,6 +1,6 @@
 # Target versions for the upgrade
 
-Status: open
+Status: claimed
 Type: research
 Blocked by: 04
 

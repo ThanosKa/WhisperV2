@@ -1,6 +1,6 @@
 # STT relay decision
 
-Status: open
+Status: claimed
 Type: grilling
 Blocked by: 03
 

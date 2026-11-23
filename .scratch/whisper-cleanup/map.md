@@ -32,6 +32,7 @@ The map ends when nothing is left to decide before someone starts doing the work
 - [TypeScript migration approach](issues/04-typescript-approach.md): Playwright smoke tests + screenshots first, then upgrades + pnpm, then main/preload to TS in one go, then the UI rewritten in React + TS + Tailwind; electron-vite + electron-builder, Vitest, ESLint 9 + typescript-eslint, zod, pino, strict TS.
 - [Target versions for the upgrade](issues/10-upgrade-target-versions.md): Node 26 LTS, pnpm workspace, Electron 45, `better-sqlite3` 13 (fixes the clean install), Next 16, React 19, Tailwind 4, ESLint 10 and TypeScript 6 (not 9 and 7); about 20 unused dependencies deleted; Electron 45 drops macOS 11-12.
 - [STT relay decision](issues/08-stt-relay-decision.md): replace the Railway relay; the desktop connects straight to Soniox with short temporary keys from WhisperAPP, charged up front and corrected from Soniox usage logs; `../websocket` is deleted once old builds are gone. A Soniox test comes first.
+- [Which tests to delete](issues/09-which-tests-to-delete.md): tests only at three seams (Electron app via a small Playwright suite, services via public methods with a real in-memory DB, `whisper_web` pages via Testing Library); no Playwright in `whisper_web`; mock-only and empty tests deleted, the rest rewritten to Vitest in the TS step.
 
 ## Not yet specified
 

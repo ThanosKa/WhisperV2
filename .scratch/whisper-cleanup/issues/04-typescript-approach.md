@@ -1,6 +1,6 @@
 # TypeScript migration approach
 
-Status: open
+Status: claimed
 Type: grilling
 Blocked by: 01, 02
 

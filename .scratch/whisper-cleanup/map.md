@@ -30,6 +30,7 @@ The map ends when nothing is left to decide before someone starts doing the work
 - [Test safety net today](issues/01-test-safety-net.md): Jest passes (124 root, 49 web), but the IPC bridges, preload, windows, UI and DB have no tests, and Electron e2e is empty placeholders. A clean install fails today (lockfile out of sync, `better-sqlite3` won't build on Node 26).
 - [Which docs to keep, merge or delete](issues/06-docs-inventory.md): keep only `CLAUDE.md` and `README.md` (both rewritten from scratch) and `docs/agents/`; delete `AGENTS.md`, all of `.cursor/`, the root docs and the 9 pipeline docs, carrying nothing over. `CODING_STANDARDS.md` moves to the workspace root; glossary, ADRs, tickets and `docs/agents/` stay per repo, as Matt Pocock's skills expect.
 - [TypeScript migration approach](issues/04-typescript-approach.md): Playwright smoke tests + screenshots first, then upgrades + pnpm, then main/preload to TS in one go, then the UI rewritten in React + TS + Tailwind; electron-vite + electron-builder, Vitest, ESLint 9 + typescript-eslint, zod, pino, strict TS.
+- [Target versions for the upgrade](issues/10-upgrade-target-versions.md): Node 26 LTS, pnpm workspace, Electron 45, `better-sqlite3` 13 (fixes the clean install), Next 16, React 19, Tailwind 4, ESLint 10 and TypeScript 6 (not 9 and 7); about 20 unused dependencies deleted; Electron 45 drops macOS 11-12.
 
 ## Not yet specified
 

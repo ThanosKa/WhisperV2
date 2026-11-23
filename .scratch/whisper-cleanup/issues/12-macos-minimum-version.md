@@ -1,6 +1,6 @@
 # macOS minimum version
 
-Status: open
+Status: claimed
 Type: grilling
 Blocked by: 10
 

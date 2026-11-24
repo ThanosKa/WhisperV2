@@ -46,3 +46,5 @@ Resolved 2026-11-24 with the owner. Facts behind it: [Soniox temporary key test]
 **Where it sits** ([Order of the work](07-work-order.md)): step 7, on the TypeScript `sttService`. The WhisperAPP lease routes ship first; the desktop build that uses them follows.
 
 **Left for the docs step at the end:** the glossary terms (Lease; audio stream as opposed to the LLM Stream route; Chat) and an ADR for "leases charged up front and settled from Soniox usage logs instead of a relay".
+
+**Amended by [Which CLAUDE.md files, and what each says](19-claude-md-files.md):** the glossary terms and the lease ADR are written in step 7, with the lease routes, not at the end.

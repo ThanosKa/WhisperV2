@@ -1,6 +1,6 @@
 # Which CLAUDE.md files, and what each says
 
-Status: open
+Status: claimed
 Type: grilling
 Blocked by: 16, 18
 

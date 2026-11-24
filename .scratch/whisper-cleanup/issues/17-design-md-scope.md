@@ -1,6 +1,6 @@
 # DESIGN.md scope
 
-Status: open
+Status: claimed
 Type: grilling
 Blocked by: 07
 

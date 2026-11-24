@@ -1,6 +1,6 @@
 # Code structure for main and preload
 
-Status: open
+Status: claimed
 Type: grilling
 Blocked by: 07
 

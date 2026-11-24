@@ -23,3 +23,7 @@ Resolved 2026-11-23 with the owner. Rule: the `tdd` skill (test behavior at publ
 **Rewritten at seam 2, not deleted:** the private-method tests in ask, stt and summary; the 6 crash-recovery files (one shared setup, overlaps merged, real in-memory DB).
 
 **When:** the empty Electron e2e files and `whisper_web/e2e/` go in step 0, when the Electron Playwright suite is set up. The root unit tests stay on Jest until step 2 (main/preload to TS): there each kept test is rewritten to Vitest at its seam and the rest deleted. No new test is needed before deleting, because the deleted tests protect nothing the kept ones and the step-0 suite do not.
+
+## Comments
+
+**Amended by [whisper_web cleanup scope](18-whisper-web-cleanup.md):** seam 3 stubs the network with MSW instead of mocking `@/utils/api`; the dashboard API routes are tested at seam 2 through Hono's `app.request()` on a real in-memory DB.

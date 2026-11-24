@@ -21,3 +21,7 @@ Full findings: branch `research/upgrade-target-versions` (commit `3474b6a`, loca
 - **Unused dependencies to delete:** root `@google/genai`, `@google/generative-ai`, `axios`, `jsonwebtoken`, `react-hot-toast`, `react-markdown`, `remark-gfm`, `validator`, `wait-on`, `electron-liquid-glass`, `electron-reloader`, plus `@electron/fuses`, `dmg-license`, `node-fetch` (built-in `fetch`) and `electron-squirrel-startup`; in `whisper_web`, `@headlessui/react`, `framer-motion`, `shadcn-ui`, `axios`, `react-hot-toast`. Keep root `cors` and `express`: the packaged bridge loads them at runtime.
 - **Risks:** Electron 44+ drops macOS 11 and 12 (product decision, see [macOS minimum version](12-macos-minimum-version.md)); Tailwind 4 will change how the web pages look, and step-0 screenshots cover only Electron windows; Express must move in root and `whisper_web` together; root tests stay on Jest until `src/` is ESM.
 - **Unresolved (check while doing the work):** glibc floor of the `better-sqlite3` Linux binaries; whether user ids can contain `.` or `[` (`electron-store` 12 throws); pino transports inside `app.asar` (use `pino-pretty` as a stream in dev).
+
+## Comments
+
+**Amended by [whisper_web cleanup scope](18-whisper-web-cleanup.md):** Express is replaced by Hono in step 4a-2, so root `express` and `cors` go then (they stay through step 3). The Tailwind 4 risk to the dashboard's look is covered by a Claude in Chrome comparison of the 10 pages, not by screenshots in the suite.

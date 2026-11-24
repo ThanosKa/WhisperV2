@@ -34,3 +34,5 @@ The agent runs the automated suite after every step.
 ## Comments
 
 **Amended by [Code structure for main and preload](15-main-code-structure.md):** step 4a is split into 4a-1 (main + preload to TypeScript, today's structure) and 4a-2 (the new structure, one point at a time, Vitest service tests written here). Step 4a ends when 4a-2's list is done.
+
+**Amended by [whisper_web cleanup scope](18-whisper-web-cleanup.md):** step 4b is split. 4b-1 runs in parallel with 4a; 4b-2 runs after 4a-2 (the dashboard API moves into main on Hono there). Kosmos components enter the dashboard in step 6, with the Electron UI. Dashboard pages are checked by eye with Claude in Chrome against "before" screenshots taken before step 3.

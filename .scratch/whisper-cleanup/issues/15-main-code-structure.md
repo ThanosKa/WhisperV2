@@ -41,3 +41,7 @@ Nothing here changes what the user sees.
 - **4a-1, TypeScript only:** today's structure in strict TS with typed IPC channels. The cycles may stay for now (electron-vite bundles them fine while the imports are used only inside functions). Checked with the smoke tests.
 - **4a-2, new structure:** points 1-8 above, one at a time, smoke tests after each. The Vitest service tests ([Which tests to delete](09-which-tests-to-delete.md)) are written here, since they need the new shape. Point 9 happens in step 6 with the React UI.
 - **End:** when points 1-8 are done. Making the code easy for agents to work in is then covered by the new `CLAUDE.md` files in step 8; further refactoring is a new effort, not this map.
+
+## Comments
+
+**Amended by [whisper_web cleanup scope](18-whisper-web-cleanup.md):** `webStack` is one Hono app on one port serving both the dashboard pages and `/api/...`; `runtime-config.json`, CORS and `whisper_API_URL/PORT`, `whisper_WEB_URL/PORT` are deleted. `whisper_web/backend_node/` is deleted; its routes live under `src/main/webStack/`.

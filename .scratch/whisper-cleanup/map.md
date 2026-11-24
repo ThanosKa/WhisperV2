@@ -42,6 +42,7 @@ The map ends when nothing is left to decide before someone starts doing the work
 - [Code structure for main and preload](issues/15-main-code-structure.md): electron-vite folders (`src/main`, `preload`, `renderer`, `shared`); services get their dependencies passed in and only `windowManager` touches windows; repository middle layers, `internalBridge` and the two bridge files deleted; one typed IPC list with zod; one `API_BASE_URL` = `www.app-whisper.com`; step 4a split into TS first, then the new structure, ending when its list is done.
 - [React UI structure](issues/16-react-ui-structure.md): one electron-vite entry and folder per window (7), shared components and hooks, audio capture as plain TS; typed `window.api.<feature>` plus a `useIpcEvent` hook; state stays in main, no store library; `react-markdown` + `rehype-highlight`; components from the owner's Kosmos registry with Whisper's own token values; one window at a time, smallest first.
 - [DESIGN.md scope](issues/17-design-md-scope.md): two DESIGN.md files (`src/renderer/`, `whisper_web/`) in the skeleton's format, written like the example; every value lives only in Kosmos's CSS variables, one theme file per app, lint fails on hard-coded values; today's 114 colors merged into a small palette; screenshots compared with a small tolerance.
+- [whisper_web cleanup scope](issues/18-whisper-web-cleanup.md): the dashboard API moves into main on Hono (typed client), pages and API on one port so `runtime-config.json`, CORS and port env vars go; shared lint + strict TS; standard Next/shadcn folders; Vitest + MSW page tests, route tests via `app.request()`; Kosmos components in step 6; dashboard checked by eye with Claude in Chrome; split into 4b-1 / 4b-2 around 4a-2.
 
 ## Not yet specified
 
@@ -52,4 +53,5 @@ The map ends when nothing is left to decide before someone starts doing the work
 - Rewriting in Rust (Tauri or otherwise): a full rewrite in a language the owner does not know, against a behavior-preserving goal.
 - New features.
 - New colors or a new look: a separate effort after the cleanup, made a change of values only by [DESIGN.md scope](issues/17-design-md-scope.md).
+- Writing the code in Effect: rejected for the whole codebase in [whisper_web cleanup scope](issues/18-whisper-web-cleanup.md); a separate effort if ever.
 - Audit of `WhisperAPP` and `websocket` against the same standards: a separate session.

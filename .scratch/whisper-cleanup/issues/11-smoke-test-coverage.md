@@ -20,3 +20,7 @@ Resolved 2026-11-23 with the owner. Kept deliberately small. The owner checks no
 - **6 screenshots, one per window in its normal state:** header, Ask, Listen, Settings, Plan, Screenshot. Taken on macOS only, fixed window size, animations off.
 - **Manual checklist, once, at the very end before deploy (owner):** mic, system audio, macOS permissions, real login through the browser and deep link, auto-update, installers on mac, Windows and Linux.
 - **Offline stubs (default by the stable-standard rule):** one local fake server started by the test stands in for WhisperAPP (auth, LLM) and the STT side, wired through the existing env overrides `whisper_API_URL` and `STT_RELAY_URL` (`src/features/common/config/config.js`). A logged-in state is seeded before launch. When the desktop moves to Soniox ([Direct-to-Soniox design](14-direct-to-soniox-design.md)), the fake STT side follows the Soniox protocol.
+
+## Comments
+
+From [DESIGN.md scope](17-design-md-scope.md): the Electron UI's 114 colors are merged into a small palette in step 5, so the step-6 screenshot comparison uses a small pixel tolerance, not an exact match.

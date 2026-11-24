@@ -41,6 +41,7 @@ The map ends when nothing is left to decide before someone starts doing the work
 - [Direct-to-Soniox design](issues/14-direct-to-soniox-design.md): quotas and quota screen unchanged; 5-min leases per audio stream from a new WhisperAPP `POST /api/stt/lease`, switched at a pause and reconnected after drops; unused seconds given back from the desktop's count, then settled from Soniox usage logs (no cron); Railway off when no paying user has used it for 30 days; step 7, on the TS `sttService`.
 - [Code structure for main and preload](issues/15-main-code-structure.md): electron-vite folders (`src/main`, `preload`, `renderer`, `shared`); services get their dependencies passed in and only `windowManager` touches windows; repository middle layers, `internalBridge` and the two bridge files deleted; one typed IPC list with zod; one `API_BASE_URL` = `www.app-whisper.com`; step 4a split into TS first, then the new structure, ending when its list is done.
 - [React UI structure](issues/16-react-ui-structure.md): one electron-vite entry and folder per window (7), shared components and hooks, audio capture as plain TS; typed `window.api.<feature>` plus a `useIpcEvent` hook; state stays in main, no store library; `react-markdown` + `rehype-highlight`; components from the owner's Kosmos registry with Whisper's own token values; one window at a time, smallest first.
+- [DESIGN.md scope](issues/17-design-md-scope.md): two DESIGN.md files (`src/renderer/`, `whisper_web/`) in the skeleton's format, written like the example; every value lives only in Kosmos's CSS variables, one theme file per app, lint fails on hard-coded values; today's 114 colors merged into a small palette; screenshots compared with a small tolerance.
 
 ## Not yet specified
 
@@ -50,4 +51,5 @@ The map ends when nothing is left to decide before someone starts doing the work
 
 - Rewriting in Rust (Tauri or otherwise): a full rewrite in a language the owner does not know, against a behavior-preserving goal.
 - New features.
+- New colors or a new look: a separate effort after the cleanup, made a change of values only by [DESIGN.md scope](issues/17-design-md-scope.md).
 - Audit of `WhisperAPP` and `websocket` against the same standards: a separate session.

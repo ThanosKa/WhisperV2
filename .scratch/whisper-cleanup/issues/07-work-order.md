@@ -30,3 +30,7 @@ Resolved 2026-11-23 with the owner.
 9. **Owner's manual checklist once, then deploy.**
 
 The agent runs the automated suite after every step.
+
+## Comments
+
+**Amended by [Code structure for main and preload](15-main-code-structure.md):** step 4a is split into 4a-1 (main + preload to TypeScript, today's structure) and 4a-2 (the new structure, one point at a time, Vitest service tests written here). Step 4a ends when 4a-2's list is done.

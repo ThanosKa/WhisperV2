@@ -1,6 +1,6 @@
 # React UI structure
 
-Status: open
+Status: claimed
 Type: grilling
 Blocked by: 15
 

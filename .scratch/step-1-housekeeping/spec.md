@@ -1,6 +1,6 @@
 # Spec: Step 1, housekeeping
 
-Status: open
+Status: resolved
 Label: ready-for-agent
 
 Step 1 of [Order of the work](../whisper-cleanup/issues/07-work-order.md), from the [Whisper cleanup map](../whisper-cleanup/map.md). Decisions come from [Shared folder for the Whisper repos](../whisper-cleanup/issues/05-shared-folder.md), [Which docs to keep, merge or delete](../whisper-cleanup/issues/06-docs-inventory.md) and [Which CLAUDE.md files, and what each says](../whisper-cleanup/issues/19-claude-md-files.md).

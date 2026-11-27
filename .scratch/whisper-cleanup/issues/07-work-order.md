@@ -38,3 +38,5 @@ The agent runs the automated suite after every step.
 **Amended by [whisper_web cleanup scope](18-whisper-web-cleanup.md):** step 4b is split. 4b-1 runs in parallel with 4a; 4b-2 runs after 4a-2 (the dashboard API moves into main on Hono there). Kosmos components enter the dashboard in step 6, with the Electron UI. Dashboard pages are checked by eye with Claude in Chrome against "before" screenshots taken before step 3.
 
 **Step 0 done 2026-11-25:** the relay (`../websocket`, commit `23c6c7c`) uses `stt-rt-v6`. It was tested locally against the real Soniox API with spoken audio (exact transcript, `<end>` turn detected, no errors), then deployed to Railway, where the deploy succeeded.
+
+**Step 1 done 2026-11-28:** [Spec: Step 1, housekeeping](../../step-1-housekeeping/spec.md). The three repos live in `~/Desktop/Cursor/Whisper/`, a local git repo whose root `CLAUDE.md` and `CODING_STANDARDS.md` load into every repo. WhisperV2's old docs are deleted, and its work reaches GitHub on `dev` through PRs (#2-#4); `main` waits for step 9. Same suite counts before and after.

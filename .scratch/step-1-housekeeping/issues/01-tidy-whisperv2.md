@@ -6,6 +6,8 @@
 
 **Status:** ready-for-agent
 
+**Model:** Sonnet (run `/model sonnet` before `/implement`)
+
 - [ ] Before any change: the suite's baseline (root Jest, `whisper_web` Jest, root lint, `whisper_web` lint, `whisper_web` type-check) is run against the installed `node_modules`, and its pass/fail counts are saved to this spec's `assets/` folder
 - [ ] The uncommitted `whisper_web` ESLint config change is committed on a local branch `wip/whisper-web-lint-rules` (not merged, not pushed), and `main` has the committed config back
 - [ ] The whitespace-only `package-lock.json` change is discarded (check `git diff -w` is empty first)

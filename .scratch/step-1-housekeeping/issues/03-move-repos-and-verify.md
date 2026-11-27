@@ -6,6 +6,8 @@
 
 **Status:** ready-for-agent
 
+**Model:** Sonnet (run `/model sonnet` before `/implement`)
+
 - [ ] Runs from a session or shell whose working directory is outside `WhisperV2` (for example `~/Desktop/Cursor/`). If the agent can't, it hands the owner the exact commands instead
 - [ ] Right before moving, each repo is checked again: neither ahead of nor behind its remote
 - [ ] `WhisperV2`, `WhisperAPP` and `websocket` are moved into `~/Desktop/Cursor/Whisper/` under their current names

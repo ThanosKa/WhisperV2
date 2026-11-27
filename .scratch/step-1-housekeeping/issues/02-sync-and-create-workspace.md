@@ -6,6 +6,8 @@
 
 **Status:** ready-for-agent
 
+**Model:** Sonnet (run `/model sonnet` before `/implement`)
+
 - [ ] In each repo: `git fetch`, then its main branch is neither behind nor ahead of its remote. A repo that is behind is pulled
 - [ ] Before pushing `WhisperV2` (about 50 local commits), the agent asks the owner and pushes only on a yes. The `wip/*` and `research/*` branches are not pushed
 - [ ] Untracked files outside git (for example `WhisperAPP`'s `.wrangler/`) are left alone

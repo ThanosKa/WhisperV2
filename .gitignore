@@ -117,3 +117,4 @@ public/build/
 whisper_web/out/
 .next/
 content.js
+.claude/worktrees/

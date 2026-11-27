@@ -12,7 +12,7 @@
 - [ ] Right before moving, each repo is checked again: neither ahead of nor behind its remote
 - [ ] `WhisperV2`, `WhisperAPP` and `websocket` are moved into `~/Desktop/Cursor/Whisper/` under their current names
 - [ ] `CODING_STANDARDS.md` is moved from `WhisperV2` to the workspace root unchanged and committed in the workspace repo
-- [ ] `WhisperV2/CLAUDE.md` drops its `@CODING_STANDARDS.md` line (committed); `WhisperAPP` and `websocket` keep their own copies
+- [ ] `WhisperV2/CLAUDE.md` drops its `@CODING_STANDARDS.md` line on a branch made from `dev`, which goes to `dev` as a PR and is merged (see the map's Branches note); `WhisperAPP` and `websocket` keep their own copies
 - [ ] The suite, rerun in the moved `WhisperV2`, gives the same counts as the baseline saved in ticket 01
-- [ ] A short shell script in this spec's `assets/` folder checks and passes: every file on the delete list is absent; `WhisperV2` has no `CODING_STANDARDS.md` and no `AGENTS.md`; the workspace is a git repo with `CLAUDE.md`, `CODING_STANDARDS.md` and a `.gitignore` listing the three repos; the three repos sit inside it with clean working trees, neither ahead of nor behind their remotes, except for this ticket's `CLAUDE.md` commit, which the owner is asked about before it is pushed; `git worktree list` in `WhisperV2` shows only the main worktree
+- [ ] A short shell script in this spec's `assets/` folder checks and passes: every file on the delete list is absent; `WhisperV2` has no `CODING_STANDARDS.md` and no `AGENTS.md`; the workspace is a git repo with `CLAUDE.md`, `CODING_STANDARDS.md` and a `.gitignore` listing the three repos; the three repos sit inside it with clean working trees, neither ahead of nor behind their remotes (for `WhisperV2`, its `dev` branch); `git worktree list` in `WhisperV2` shows only the main worktree
 - [ ] The owner is told that sessions and Claude Code project memory from the old paths no longer show up

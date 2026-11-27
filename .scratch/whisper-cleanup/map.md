@@ -20,6 +20,7 @@ The map ends when nothing is left to decide before someone starts doing the work
 - **Skills.** Grilling tickets: `grilling` + `domain-modeling`. Code structure tickets: `codebase-design`. Any CLAUDE.md / agent docs ticket: `writing-for-agents`. Research tickets: `research`. TypeScript rules: `CODING_STANDARDS.md`.
 - **Checking the work.** The owner checks nothing by hand and deploys nothing until the whole cleanup is done; every step is verified by the automated suite, and the manual checklist runs once at the end.
 - **Working with the owner.** Solo developer. Reply in Greek, plain words, explain jargon, one question at a time. Commit after every change to this map or a ticket. Research runs on local branches; nothing is pushed without asking.
+- **Branches (WhisperV2).** `dev` on GitHub is the integration branch for the whole cleanup. Each step runs on its own branch, goes to `dev` as a PR, and the agent merges it; that standing yes covers pushing step branches and merging into `dev`. Nothing goes to `main` until step 9, and only after asking: a push to `main` runs `build.yml`, which publishes a release (`electron-builder --publish always`). `main` on GitHub stays at the last release until then.
 
 ## Decisions so far
 

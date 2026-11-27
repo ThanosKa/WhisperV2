@@ -1,4 +1,6 @@
-read AGENTS.md if you need context and its canonical files on .cursor folder
+# WhisperV2 (cleanup in progress)
+
+This repo is being cleaned up. The plan is the map at `.scratch/whisper-cleanup/map.md`: read it before changing structure, docs or tooling. The old agent docs are deleted on purpose; read the code instead. The real `CLAUDE.md` files arrive in step 8.
 
 Write TypeScript by the rules in @CODING_STANDARDS.md.
 

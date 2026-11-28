@@ -13,7 +13,7 @@ export default {
         ipcMain.on('hide-settings-window', () => windowManager.hideSettingsWindow());
         ipcMain.on('cancel-hide-settings-window', () => windowManager.cancelHideSettingsWindow());
         // Screenshot window show/hide
-        ipcMain.on('show-screenshot-window', (event, { base64Data, position }) => windowManager.showScreenshotWindow(base64Data, position));
+        ipcMain.on('show-screenshot-window', (event, { base64Data, position }) => windowManager.showScreenshotWindow({ base64Data, position }));
         ipcMain.on('hide-screenshot-window', () => windowManager.hideScreenshotWindow());
         ipcMain.on('cancel-hide-screenshot-window', () => windowManager.cancelHideScreenshotWindow());
         // Plan tooltip show/hide
@@ -23,7 +23,7 @@ export default {
 
         // Recovery toast show/hide
         ipcMain.handle('recovery-toast:show', (event, sessionInfo, headerBounds) => {
-            windowManager.showRecoveryToast(sessionInfo, headerBounds);
+            windowManager.showRecoveryToast({ sessionInfo, headerBounds });
             return { success: true };
         });
         ipcMain.handle('recovery-toast:hide', () => {
@@ -40,11 +40,11 @@ export default {
         ipcMain.on('header-state-changed', (event, state) => windowManager.handleHeaderStateChanged(state));
         ipcMain.on('header-animation-finished', (event, state) => windowManager.handleHeaderAnimationFinished(state));
         ipcMain.handle('get-header-position', () => windowManager.getHeaderPosition());
-        ipcMain.handle('move-header-to', (event, newX, newY) => windowManager.moveHeaderTo(newX, newY));
-        ipcMain.handle('adjust-window-height', (event, { winName, height }) => windowManager.adjustWindowHeight(winName, height));
+        ipcMain.handle('move-header-to', (event, newX, newY) => windowManager.moveHeaderTo({ newX, newY }));
+        ipcMain.handle('adjust-window-height', (event, { winName, height }) => windowManager.adjustWindowHeight({ winName, targetHeight: height }));
 
         // Window visibility controls
-        ipcMain.handle('window:set-visibility', (event, { name, visible }) => windowManager.setWindowVisibility(name, visible));
+        ipcMain.handle('window:set-visibility', (event, { name, visible }) => windowManager.setWindowVisibility({ name, visible }));
         ipcMain.handle('window:is-visible', (event, name) => windowManager.isWindowVisible(name));
 
         // Display management

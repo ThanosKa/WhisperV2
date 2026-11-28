@@ -1,53 +1,56 @@
-import { BrowserWindow, globalShortcut, screen, app, shell } from 'electron';
-import WindowLayoutManager from './windowLayoutManager';
+import { BrowserWindow, screen, app, shell } from 'electron';
+import type { Rectangle } from 'electron';
+import WindowLayoutManager, { getCurrentDisplay } from './windowLayoutManager';
+import type { Direction, WindowLayout } from './windowLayoutManager';
 import SmoothMovementManager from './smoothMovementManager';
 import path from 'node:path';
-import os from 'os';
 import shortcutsService from '../features/shortcuts/shortcutsService';
 import internalBridge from '../bridge/internalBridge';
 import askService from '../features/ask/askService';
 import { env } from '../features/common/config/env';
+import { logger } from '../features/common/utils/logger';
 import { apiBaseUrlArgument } from '../../shared/preloadArguments';
+
+const log = logger.child({ module: 'WindowManager' });
 
 // Main is bundled into out/main/: the preload is built into out/preload/, and the Lit renderer is
 // served from src/renderer/ with its esbuild bundles in public/build/ (build.js).
 const PRELOAD_PATH = path.join(__dirname, '../preload/preload.js');
 const RENDERER_APP_DIR = path.join(__dirname, '../../src/renderer/app');
 
-/* ────────────────[ UNIFIED CROSS-PLATFORM DESIGN ]─────────────── */
-// Liquid glass disabled for consistent cross-platform performance
-// and smoother user experience across all operating systems
-let shouldUseLiquidGlass = false;
-/* ────────────────[ UNIFIED CROSS-PLATFORM DESIGN ]─────────────── */
+type FeatureWindowName = 'listen' | 'ask' | 'settings' | 'plan' | 'screenshot' | 'recoveryToast';
+type Visibility = { listen?: boolean; ask?: boolean };
+type Timer = ReturnType<typeof setTimeout>;
 
 let isContentProtectionOn = true;
-let lastVisibleWindows = new Set(['header']);
+const lastVisibleWindows = new Set(['header']);
 
 let currentHeaderState = 'apikey';
-const windowPool = new Map();
+const windowPool = new Map<string, BrowserWindow>();
 
-function notifyWindowVisibility(name, visible) {
+// A caught value is `unknown`; the old code read `e?.message || 'unknown'`.
+const failureReason = (e: unknown): string => (e instanceof Error && e.message) || 'unknown';
+
+function notifyWindowVisibility({ name, visible }: { name: string; visible: boolean }) {
     if (name !== 'listen') return;
     const header = windowPool.get('header');
     if (!header || header.isDestroyed()) return;
     try {
         header.webContents.send('listen-window-visibility', !!visible);
     } catch (e) {
-        console.warn(`[WindowManager] Failed to notify visibility for '${name}':`, e?.message || e);
+        log.warn({ err: e, name }, 'Failed to notify window visibility');
     }
 }
 
-let settingsHideTimer = null;
-let screenshotHideTimer = null;
-let planHideTimer = null;
+let settingsHideTimer: Timer | null = null;
+let screenshotHideTimer: Timer | null = null;
+let planHideTimer: Timer | null = null;
 
-let layoutManager = null;
-let movementManager = null;
+let layoutManager: WindowLayoutManager | null = null;
+let movementManager: SmoothMovementManager | null = null;
 
-function updateChildWindowLayouts(animated = true) {
-    // if (movementManager.isAnimating) return;
-
-    const visibleWindows = {};
+function visibleFeatureWindows(): Visibility {
+    const visibleWindows: Visibility = {};
     const listenWin = windowPool.get('listen');
     const askWin = windowPool.get('ask');
     if (listenWin && !listenWin.isDestroyed() && listenWin.isVisible()) {
@@ -56,11 +59,17 @@ function updateChildWindowLayouts(animated = true) {
     if (askWin && !askWin.isDestroyed() && askWin.isVisible()) {
         visibleWindows.ask = true;
     }
+    return visibleWindows;
+}
 
+function updateChildWindowLayouts(animated = true) {
+    if (!layoutManager || !movementManager) return;
+
+    const visibleWindows = visibleFeatureWindows();
     if (Object.keys(visibleWindows).length === 0) return;
 
-    const newLayout = layoutManager.calculateFeatureWindowLayout(visibleWindows);
-    movementManager.animateLayout(newLayout, animated);
+    const newLayout = layoutManager.calculateFeatureWindowLayout({ visibility: visibleWindows });
+    movementManager.animateLayout({ layout: newLayout, animated });
 }
 
 const showSettingsWindow = () => {
@@ -75,13 +84,15 @@ const cancelHideSettingsWindow = () => {
     internalBridge.emit('window:requestVisibility', { name: 'settings', visible: true });
 };
 
-const showScreenshotWindow = (base64Data, position) => {
+type Point = { x: number; y: number };
+
+const showScreenshotWindow = ({ base64Data, position }: { base64Data: string; position?: Point | undefined }) => {
     const screenshotWin = windowPool.get('screenshot');
     if (!screenshotWin || screenshotWin.isDestroyed()) {
         // Create window if it doesn't exist
         const header = windowPool.get('header');
         if (header && !header.isDestroyed()) {
-            createFeatureWindows(header, ['screenshot']);
+            createFeatureWindows({ header, names: ['screenshot'] });
             const createdWin = windowPool.get('screenshot');
             if (!createdWin || createdWin.isDestroyed()) return;
             // The page can take longer than 100 ms to load (Electron 45), and data sent before it
@@ -94,9 +105,9 @@ const showScreenshotWindow = (base64Data, position) => {
                 const newWin = windowPool.get('screenshot');
                 if (newWin && !newWin.isDestroyed()) {
                     if (position) {
-                        console.log('[WindowManager] Showing screenshot window at position:', position);
+                        log.info({ position }, 'Showing screenshot window');
                         const currentBounds = newWin.getBounds();
-                        console.log('[WindowManager] Screenshot current bounds:', currentBounds);
+                        log.info({ currentBounds }, 'Screenshot current bounds');
                         newWin.setBounds({
                             x: position.x,
                             y: position.y,
@@ -104,7 +115,7 @@ const showScreenshotWindow = (base64Data, position) => {
                             height: 300,
                         });
                         const newBounds = newWin.getBounds();
-                        console.log('[WindowManager] Screenshot bounds after setBounds:', newBounds);
+                        log.info({ newBounds }, 'Screenshot bounds after setBounds');
                     }
                     newWin.show();
                     newWin.setAlwaysOnTop(true);
@@ -126,9 +137,9 @@ const showScreenshotWindow = (base64Data, position) => {
 
     // Position window near indicator
     if (position) {
-        console.log('[WindowManager] Showing screenshot window at position:', position);
+        log.info({ position }, 'Showing screenshot window');
         const currentBounds = screenshotWin.getBounds();
-        console.log('[WindowManager] Screenshot current bounds:', currentBounds);
+        log.info({ currentBounds }, 'Screenshot current bounds');
         screenshotWin.setBounds({
             x: position.x,
             y: position.y,
@@ -136,7 +147,7 @@ const showScreenshotWindow = (base64Data, position) => {
             height: 300,
         });
         const newBounds = screenshotWin.getBounds();
-        console.log('[WindowManager] Screenshot bounds after setBounds:', newBounds);
+        log.info({ newBounds }, 'Screenshot bounds after setBounds');
     }
 
     screenshotWin.show();
@@ -172,17 +183,17 @@ const hidePlanWindow = () => {
     const planWin = windowPool.get('plan');
     if (!planWin || planWin.isDestroyed()) return;
 
-    console.log('[WindowManager] hidePlanWindow called at', Date.now());
+    log.info({ at: Date.now() }, 'hidePlanWindow called');
 
     // Hide after a delay
     if (planHideTimer) {
-        console.log('[WindowManager] Clearing existing planHideTimer');
+        log.info('Clearing existing planHideTimer');
         clearTimeout(planHideTimer);
     }
-    console.log('[WindowManager] Setting planHideTimer (200ms delay)');
+    log.info('Setting planHideTimer (200ms delay)');
     planHideTimer = setTimeout(() => {
         if (planWin && !planWin.isDestroyed()) {
-            console.log('[WindowManager] planHideTimer fired - hiding window at', Date.now());
+            log.info({ at: Date.now() }, 'planHideTimer fired, hiding window');
             planWin.setAlwaysOnTop(false);
             planWin.hide();
             planHideTimer = null;
@@ -191,31 +202,31 @@ const hidePlanWindow = () => {
 };
 
 const cancelHidePlanWindow = () => {
-    console.log('[WindowManager] cancelHidePlanWindow called at', Date.now());
+    log.info({ at: Date.now() }, 'cancelHidePlanWindow called');
     if (planHideTimer) {
-        console.log('[WindowManager] Cancelling planHideTimer');
+        log.info('Cancelling planHideTimer');
         clearTimeout(planHideTimer);
         planHideTimer = null;
     } else {
-        console.log('[WindowManager] No planHideTimer to cancel');
+        log.info('No planHideTimer to cancel');
     }
 };
 
 // Plan tooltip window show/hide via external IPC
-const showPlanWindow = visible => {
+const showPlanWindow = (visible: boolean) => {
     internalBridge.emit('window:showPlanWindow', { visible });
 };
 
-const showRecoveryToast = (sessionInfo, headerBounds) => {
+const showRecoveryToast = ({ sessionInfo, headerBounds }: { sessionInfo: unknown; headerBounds?: Rectangle | undefined }) => {
     const toastWin = windowPool.get('recoveryToast');
     if (!toastWin || toastWin.isDestroyed()) {
         const header = windowPool.get('header');
         if (header) {
-            createFeatureWindows(header, ['recoveryToast']);
+            createFeatureWindows({ header, names: ['recoveryToast'] });
             setTimeout(() => {
                 const newWin = windowPool.get('recoveryToast');
                 if (newWin && !newWin.isDestroyed()) {
-                    positionRecoveryToast(newWin, headerBounds);
+                    positionRecoveryToast({ toastWin: newWin, headerBounds });
                     newWin.webContents.send('recovery-toast:show', sessionInfo);
                     newWin.show();
                     newWin.setAlwaysOnTop(true);
@@ -226,7 +237,7 @@ const showRecoveryToast = (sessionInfo, headerBounds) => {
         return;
     }
 
-    positionRecoveryToast(toastWin, headerBounds);
+    positionRecoveryToast({ toastWin, headerBounds });
     toastWin.webContents.send('recovery-toast:show', sessionInfo);
     toastWin.show();
     toastWin.setAlwaysOnTop(true);
@@ -240,11 +251,12 @@ const hideRecoveryToast = () => {
     toastWin.hide();
 };
 
-const positionRecoveryToast = (toastWin, headerBounds) => {
-    if (!headerBounds) {
+const positionRecoveryToast = ({ toastWin, headerBounds }: { toastWin: BrowserWindow; headerBounds?: Rectangle | undefined }) => {
+    let bounds = headerBounds;
+    if (!bounds) {
         const header = windowPool.get('header');
         if (header && !header.isDestroyed()) {
-            headerBounds = header.getBounds();
+            bounds = header.getBounds();
         } else {
             return;
         }
@@ -255,8 +267,8 @@ const positionRecoveryToast = (toastWin, headerBounds) => {
     const toastHeight = 125;
     const offsetY = 10; // Gap below header
 
-    const x = headerBounds.x + headerBounds.width / 2 - toastWidth / 2;
-    const y = headerBounds.y + headerBounds.height + offsetY;
+    const x = bounds.x + bounds.width / 2 - toastWidth / 2;
+    const y = bounds.y + bounds.height + offsetY;
 
     toastWin.setBounds({
         x: Math.round(x),
@@ -266,124 +278,127 @@ const positionRecoveryToast = (toastWin, headerBounds) => {
     });
 };
 
-const moveWindowStep = direction => {
+const moveWindowStep = (direction: Direction) => {
     internalBridge.emit('window:moveStep', { direction });
 };
 
-const resizeHeaderWindow = ({ width, height }) => {
+const resizeHeaderWindow = ({ width, height }: { width: number; height: number }) => {
     internalBridge.emit('window:resizeHeaderWindow', { width, height });
 };
 
-const handleHeaderAnimationFinished = state => {
+const handleHeaderAnimationFinished = (state: string) => {
     internalBridge.emit('window:headerAnimationFinished', state);
 };
 
 const getHeaderPosition = () => {
-    return new Promise(resolve => {
-        internalBridge.emit('window:getHeaderPosition', position => {
+    return new Promise<Rectangle>(resolve => {
+        internalBridge.emit('window:getHeaderPosition', (position: Rectangle) => {
             resolve(position);
         });
     });
 };
 
-const moveHeaderTo = (newX, newY) => {
+const moveHeaderTo = ({ newX, newY }: { newX: number; newY: number }) => {
     internalBridge.emit('window:moveHeaderTo', { newX, newY });
 };
 
-const adjustWindowHeight = (winName, targetHeight) => {
+const adjustWindowHeight = ({ winName, targetHeight }: { winName: string; targetHeight: number }) => {
     internalBridge.emit('window:adjustWindowHeight', { winName, targetHeight });
 };
 
 // Expose visibility controls for specific windows (e.g., 'listen')
-function setWindowVisibility(name, visible) {
+function setWindowVisibility({ name, visible }: { name: string; visible: boolean }) {
     try {
         internalBridge.emit('window:requestVisibility', { name, visible });
         return { success: true };
     } catch (e) {
-        console.error('[WindowManager] Failed to set window visibility:', name, e);
-        return { success: false, error: e?.message || 'unknown' };
+        log.error({ err: e, name }, 'Failed to set window visibility');
+        return { success: false, error: failureReason(e) };
     }
 }
 
-function isWindowVisible(name) {
+function isWindowVisible(name: string) {
     try {
         const win = windowPool.get(name);
         return !!(win && !win.isDestroyed() && win.isVisible());
-    } catch (e) {
+    } catch {
         return false;
     }
 }
 
-function setupWindowController(windowPool, layoutManager, movementManager) {
-    internalBridge.on('window:requestVisibility', ({ name, visible }) => {
-        handleWindowVisibilityRequest(windowPool, layoutManager, movementManager, name, visible);
+function setupWindowController({
+    layoutManager,
+    movementManager,
+}: {
+    layoutManager: WindowLayoutManager;
+    movementManager: SmoothMovementManager;
+}) {
+    internalBridge.on('window:requestVisibility', ({ name, visible }: { name: string; visible: boolean }) => {
+        void handleWindowVisibilityRequest({ layoutManager, movementManager, name, shouldBeVisible: visible });
     });
-    internalBridge.on('window:requestToggleAllWindowsVisibility', ({ targetVisibility }) => {
-        changeAllWindowsVisibility(windowPool, targetVisibility);
+    internalBridge.on('window:requestToggleAllWindowsVisibility', ({ targetVisibility }: { targetVisibility: boolean }) => {
+        changeAllWindowsVisibility({ targetVisibility });
     });
-    internalBridge.on('window:moveToDisplay', ({ displayId }) => {
-        // movementManager.moveToDisplay(displayId);
+    internalBridge.on('window:moveToDisplay', ({ displayId }: { displayId: number }) => {
         const header = windowPool.get('header');
         if (header) {
-            const newPosition = layoutManager.calculateNewPositionForDisplay(header, displayId);
+            const newPosition = layoutManager.calculateNewPositionForDisplay({ window: header, targetDisplayId: displayId });
             if (newPosition) {
-                movementManager.animateWindowPosition(header, newPosition, {
+                movementManager.animateWindowPosition({
+                    win: header,
+                    targetPosition: newPosition,
                     onComplete: () => updateChildWindowLayouts(true),
                 });
             }
         }
     });
-    internalBridge.on('window:moveToEdge', ({ direction }) => {
+    internalBridge.on('window:moveToEdge', ({ direction }: { direction: Direction }) => {
         const header = windowPool.get('header');
         if (header) {
-            const newPosition = layoutManager.calculateEdgePosition(header, direction);
-            movementManager.animateWindowPosition(header, newPosition, {
+            const newPosition = layoutManager.calculateEdgePosition({ header, direction });
+            movementManager.animateWindowPosition({
+                win: header,
+                targetPosition: newPosition,
                 onComplete: () => updateChildWindowLayouts(true),
             });
         }
     });
 
-    internalBridge.on('window:moveStep', ({ direction }) => {
+    internalBridge.on('window:moveStep', ({ direction }: { direction: Direction }) => {
         const header = windowPool.get('header');
         if (header) {
-            const newHeaderPosition = layoutManager.calculateStepMovePosition(header, direction);
-            if (!newHeaderPosition) return;
+            const newHeaderPosition = layoutManager.calculateStepMovePosition({ header, direction });
 
             const futureHeaderBounds = { ...header.getBounds(), ...newHeaderPosition };
-            const visibleWindows = {};
-            const listenWin = windowPool.get('listen');
-            const askWin = windowPool.get('ask');
-            if (listenWin && !listenWin.isDestroyed() && listenWin.isVisible()) {
-                visibleWindows.listen = true;
-            }
-            if (askWin && !askWin.isDestroyed() && askWin.isVisible()) {
-                visibleWindows.ask = true;
-            }
+            const newChildLayout = layoutManager.calculateFeatureWindowLayout({
+                visibility: visibleFeatureWindows(),
+                headerBoundsOverride: futureHeaderBounds,
+            });
 
-            const newChildLayout = layoutManager.calculateFeatureWindowLayout(visibleWindows, futureHeaderBounds);
-
-            movementManager.animateWindowPosition(header, newHeaderPosition);
-            movementManager.animateLayout(newChildLayout);
+            movementManager.animateWindowPosition({ win: header, targetPosition: newHeaderPosition });
+            movementManager.animateLayout({ layout: newChildLayout });
         }
     });
 
-    internalBridge.on('window:resizeHeaderWindow', ({ width, height }) => {
+    internalBridge.on('window:resizeHeaderWindow', ({ width, height }: { width: number; height: number }) => {
         const header = windowPool.get('header');
         if (!header || movementManager.isAnimating) return;
 
-        const newHeaderBounds = layoutManager.calculateHeaderResize(header, { width, height });
+        const newHeaderBounds = layoutManager.calculateHeaderResize({ header, width, height });
 
         const wasResizable = header.isResizable();
         if (!wasResizable) header.setResizable(true);
 
-        movementManager.animateWindowBounds(header, newHeaderBounds, {
+        movementManager.animateWindowBounds({
+            win: header,
+            targetBounds: newHeaderBounds,
             onComplete: () => {
                 if (!wasResizable) header.setResizable(false);
                 updateChildWindowLayouts(true);
             },
         });
     });
-    internalBridge.on('window:headerAnimationFinished', state => {
+    internalBridge.on('window:headerAnimationFinished', (state: string) => {
         const header = windowPool.get('header');
         if (!header || header.isDestroyed()) return;
 
@@ -393,7 +408,7 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
             updateChildWindowLayouts(false);
         }
     });
-    internalBridge.on('window:getHeaderPosition', reply => {
+    internalBridge.on('window:getHeaderPosition', (reply: (bounds: Rectangle) => void) => {
         const header = windowPool.get('header');
         if (header && !header.isDestroyed()) {
             reply(header.getBounds());
@@ -401,23 +416,24 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
             reply({ x: 0, y: 0, width: 0, height: 0 });
         }
     });
-    internalBridge.on('window:moveHeaderTo', ({ newX, newY }) => {
+    internalBridge.on('window:moveHeaderTo', ({ newX, newY }: { newX: number; newY: number }) => {
         const header = windowPool.get('header');
         if (header) {
-            const newPosition = layoutManager.calculateClampedPosition(header, { x: newX, y: newY });
+            const newPosition = layoutManager.calculateClampedPosition({ header, x: newX, y: newY });
             header.setPosition(newPosition.x, newPosition.y);
         }
     });
-    internalBridge.on('window:adjustWindowHeight', ({ winName, targetHeight }) => {
-        // console.log(`[Layout Debug] adjustWindowHeight: targetHeight=${targetHeight}`);
+    internalBridge.on('window:adjustWindowHeight', ({ winName, targetHeight }: { winName: string; targetHeight: number }) => {
         const senderWindow = windowPool.get(winName);
         if (senderWindow) {
-            const newBounds = layoutManager.calculateWindowHeightAdjustment(senderWindow, targetHeight);
+            const newBounds = layoutManager.calculateWindowHeightAdjustment({ senderWindow, targetHeight });
 
             const wasResizable = senderWindow.isResizable();
             if (!wasResizable) senderWindow.setResizable(true);
 
-            movementManager.animateWindowBounds(senderWindow, newBounds, {
+            movementManager.animateWindowBounds({
+                win: senderWindow,
+                targetBounds: newBounds,
                 onComplete: () => {
                     if (!wasResizable) senderWindow.setResizable(false);
                     updateChildWindowLayouts(true);
@@ -427,26 +443,26 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
     });
 
     // Plan tooltip show/hide
-    internalBridge.on('window:showPlanWindow', ({ visible }) => {
+    internalBridge.on('window:showPlanWindow', ({ visible }: { visible: boolean }) => {
         const plan = windowPool.get('plan');
         if (!plan || plan.isDestroyed()) {
-            console.warn('[WindowManager] Plan window not found or destroyed');
+            log.warn('Plan window not found or destroyed');
             return;
         }
 
         if (visible) {
             // Cancel any pending hide operations
             if (planHideTimer) {
-                console.log('[WindowManager] Cancelling pending planHideTimer on show');
+                log.info('Cancelling pending planHideTimer on show');
                 clearTimeout(planHideTimer);
                 planHideTimer = null;
             }
 
             const pos = layoutManager.calculatePlanWindowPosition();
             if (pos) {
-                console.log(`[WindowManager] Showing plan window at position:`, pos);
+                log.info({ pos }, 'Showing plan window');
                 const currentBounds = plan.getBounds();
-                console.log(`[WindowManager] Plan current bounds:`, currentBounds);
+                log.info({ currentBounds }, 'Plan current bounds');
 
                 plan.setPosition(pos.x, pos.y);
                 plan.showInactive();
@@ -455,9 +471,9 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
 
                 // Log bounds after setting
                 const newBounds = plan.getBounds();
-                console.log(`[WindowManager] Plan bounds after positioning:`, newBounds);
+                log.info({ newBounds }, 'Plan bounds after positioning');
             } else {
-                console.warn('[WindowManager] Could not calculate plan window position.');
+                log.warn('Could not calculate plan window position');
             }
         } else {
             // Use hidePlanWindow which has delay
@@ -466,7 +482,7 @@ function setupWindowController(windowPool, layoutManager, movementManager) {
     });
 }
 
-function changeAllWindowsVisibility(windowPool, targetVisibility) {
+function changeAllWindowsVisibility({ targetVisibility }: { targetVisibility: boolean }) {
     const header = windowPool.get('header');
     if (!header) return;
 
@@ -488,7 +504,7 @@ function changeAllWindowsVisibility(windowPool, targetVisibility) {
             const win = windowPool.get(name);
             if (win && !win.isDestroyed()) {
                 win.hide();
-                notifyWindowVisibility(name, false);
+                notifyWindowVisibility({ name, visible: false });
             }
         });
         header.hide();
@@ -500,50 +516,38 @@ function changeAllWindowsVisibility(windowPool, targetVisibility) {
         const win = windowPool.get(name);
         if (win && !win.isDestroyed()) {
             win.show();
-            notifyWindowVisibility(name, true);
+            notifyWindowVisibility({ name, visible: true });
         }
     });
 }
 
-/**
- *
- * @param {Map<string, BrowserWindow>} windowPool
- * @param {WindowLayoutManager} layoutManager
- * @param {SmoothMovementManager} movementManager
- * @param {'listen' | 'ask' | 'settings'} name
- * @param {boolean} shouldBeVisible
- */
-async function handleWindowVisibilityRequest(windowPool, layoutManager, movementManager, name, shouldBeVisible) {
-    console.log(`[WindowManager] Request: set '${name}' visibility to ${shouldBeVisible}`);
+async function handleWindowVisibilityRequest({
+    layoutManager,
+    movementManager,
+    name,
+    shouldBeVisible,
+}: {
+    layoutManager: WindowLayoutManager;
+    movementManager: SmoothMovementManager;
+    name: string;
+    shouldBeVisible: boolean;
+}) {
+    log.info({ name, shouldBeVisible }, 'Request: set window visibility');
     const win = windowPool.get(name);
 
     if (!win || win.isDestroyed()) {
-        console.warn(`[WindowManager] Window '${name}' not found or destroyed.`);
+        log.warn({ name }, 'Window not found or destroyed');
         return;
     }
 
     if (name !== 'settings') {
         const isCurrentlyVisible = win.isVisible();
         if (isCurrentlyVisible === shouldBeVisible) {
-            console.log(`[WindowManager] Window '${name}' is already in the desired state.`);
-            notifyWindowVisibility(name, isCurrentlyVisible);
+            log.info({ name }, 'Window is already in the desired state');
+            notifyWindowVisibility({ name, visible: isCurrentlyVisible });
             return;
         }
     }
-
-    const disableClicks = selectedWindow => {
-        for (const [name, win] of windowPool) {
-            if (win !== selectedWindow && !win.isDestroyed()) {
-                win.setIgnoreMouseEvents(true, { forward: true });
-            }
-        }
-    };
-
-    const restoreClicks = () => {
-        for (const [, win] of windowPool) {
-            if (!win.isDestroyed()) win.setIgnoreMouseEvents(false);
-        }
-    };
 
     if (name === 'settings') {
         if (shouldBeVisible) {
@@ -554,25 +558,24 @@ async function handleWindowVisibilityRequest(windowPool, layoutManager, movement
             }
             const position = layoutManager.calculateSettingsWindowPosition();
             if (position) {
-                console.log(`[WindowManager] Showing settings window at position:`, position);
+                log.info({ position }, 'Showing settings window');
                 const currentBounds = win.getBounds();
-                console.log(`[WindowManager] Settings current bounds:`, currentBounds);
-                console.log(`[WindowManager] Settings maxHeight: ${win.getMaximumSize()[1]}, minHeight: ${win.getMinimumSize()[1]}`);
+                log.info({ currentBounds }, 'Settings current bounds');
+                log.info({ maxHeight: win.getMaximumSize()[1], minHeight: win.getMinimumSize()[1] }, 'Settings height limits');
 
                 win.setBounds(position);
-                win.__lockedByButton = true;
                 win.show();
                 win.setAlwaysOnTop(true);
                 win.moveTop();
 
                 // Log bounds after setting
                 const newBounds = win.getBounds();
-                console.log(`[WindowManager] Settings bounds after setBounds:`, newBounds);
+                log.info({ newBounds }, 'Settings bounds after setBounds');
             } else {
-                console.warn('[WindowManager] Could not calculate settings window position.');
+                log.warn('Could not calculate settings window position');
             }
         } else {
-            console.log(`[WindowManager] Hiding settings window`);
+            log.info('Hiding settings window');
             // Hide after a delay
             if (settingsHideTimer) {
                 clearTimeout(settingsHideTimer);
@@ -581,18 +584,15 @@ async function handleWindowVisibilityRequest(windowPool, layoutManager, movement
                 if (win && !win.isDestroyed()) {
                     win.setAlwaysOnTop(false);
                     win.hide();
-                    console.log(`[WindowManager] Settings window hidden`);
+                    log.info('Settings window hidden');
                 }
                 settingsHideTimer = null;
             }, 200);
-
-            win.__lockedByButton = false;
         }
         return;
     }
 
     if (name === 'listen' || name === 'ask') {
-        const win = windowPool.get(name);
         const otherName = name === 'listen' ? 'ask' : 'listen';
         const otherWin = windowPool.get(otherName);
         const isOtherWinVisible = otherWin && !otherWin.isDestroyed() && otherWin.isVisible();
@@ -600,18 +600,17 @@ async function handleWindowVisibilityRequest(windowPool, layoutManager, movement
         const ANIM_OFFSET_X = 50;
         const ANIM_OFFSET_Y = 20;
 
-        const finalVisibility = {
-            listen: (name === 'listen' && shouldBeVisible) || (otherName === 'listen' && isOtherWinVisible),
-            ask: (name === 'ask' && shouldBeVisible) || (otherName === 'ask' && isOtherWinVisible),
+        const finalVisibility: Visibility = {
+            listen: (name === 'listen' && shouldBeVisible) || (otherName === 'listen' && !!isOtherWinVisible),
+            ask: (name === 'ask' && shouldBeVisible) || (otherName === 'ask' && !!isOtherWinVisible),
         };
         if (!shouldBeVisible) {
             finalVisibility[name] = false;
         }
 
-        const targetLayout = layoutManager.calculateFeatureWindowLayout(finalVisibility);
+        const targetLayout = layoutManager.calculateFeatureWindowLayout({ visibility: finalVisibility });
 
         if (shouldBeVisible) {
-            if (!win) return;
             const targetBounds = targetLayout[name];
             if (!targetBounds) return;
 
@@ -623,12 +622,12 @@ async function handleWindowVisibilityRequest(windowPool, layoutManager, movement
             win.setBounds(startPos);
             win.show();
 
-            movementManager.fade(win, { to: 1 });
-            movementManager.animateLayout(targetLayout);
-            notifyWindowVisibility(name, true);
+            movementManager.fade({ win, to: 1 });
+            movementManager.animateLayout({ layout: targetLayout });
+            notifyWindowVisibility({ name, visible: true });
         } else {
-            if (!win || !win.isVisible()) {
-                notifyWindowVisibility(name, false);
+            if (!win.isVisible()) {
+                notifyWindowVisibility({ name, visible: false });
                 return;
             }
 
@@ -637,26 +636,27 @@ async function handleWindowVisibilityRequest(windowPool, layoutManager, movement
             if (name === 'listen') targetPos.x -= ANIM_OFFSET_X;
             else if (name === 'ask') targetPos.y -= ANIM_OFFSET_Y;
 
-            movementManager.fade(win, {
+            movementManager.fade({
+                win,
                 to: 0,
                 onComplete: () => {
                     win.hide();
-                    notifyWindowVisibility(name, false);
+                    notifyWindowVisibility({ name, visible: false });
                 },
             });
-            movementManager.animateWindowPosition(win, targetPos);
+            movementManager.animateWindowPosition({ win, targetPosition: targetPos });
 
             // Animate other windows to new layout
-            const otherWindowsLayout = { ...targetLayout };
+            const otherWindowsLayout: WindowLayout = { ...targetLayout };
             delete otherWindowsLayout[name];
-            movementManager.animateLayout(otherWindowsLayout);
+            movementManager.animateLayout({ layout: otherWindowsLayout });
         }
     }
 }
 
-const setContentProtection = status => {
+const setContentProtection = (status: boolean) => {
     isContentProtectionOn = status;
-    console.log(`[Protection] Content protection toggled to: ${isContentProtectionOn}`);
+    log.info({ enabled: isContentProtectionOn }, 'Content protection toggled');
     windowPool.forEach(win => {
         if (win && !win.isDestroyed()) {
             win.setContentProtection(isContentProtectionOn);
@@ -675,8 +675,8 @@ const toggleContentProtection = () => {
 const openLoginPage = () => {
     const webUrl = process.env.whisper_WEB_URL || 'http://localhost:3000';
     const personalizeUrl = `${webUrl}/personalize?desktop=true`;
-    shell.openExternal(personalizeUrl);
-    console.log('Opening personalization page:', personalizeUrl);
+    void shell.openExternal(personalizeUrl);
+    log.info({ personalizeUrl }, 'Opening personalization page');
 };
 
 // List available displays and identify current/primary
@@ -685,8 +685,7 @@ function listDisplays() {
         const allDisplays = screen.getAllDisplays();
         const primaryId = screen.getPrimaryDisplay().id;
         const header = windowPool.get('header');
-        const currentDisplay = getCurrentDisplay(header);
-        const currentDisplayId = currentDisplay?.id ?? primaryId;
+        const currentDisplayId = getCurrentDisplay(header).id;
 
         const displays = allDisplays.map((d, index) => ({
             id: d.id,
@@ -699,31 +698,27 @@ function listDisplays() {
 
         return { currentDisplayId, displays };
     } catch (e) {
-        console.error('[WindowManager] Failed to list displays:', e);
+        log.error({ err: e }, 'Failed to list displays');
         return { currentDisplayId: null, displays: [] };
     }
 }
 
 // Move header (and thus the app) to a specific display via internal bridge
-function moveToDisplay(displayId) {
+function moveToDisplay(displayId: number) {
     try {
         internalBridge.emit('window:moveToDisplay', { displayId });
         return { success: true };
     } catch (e) {
-        console.error('[WindowManager] Failed to move to display:', e);
-        return { success: false, error: e?.message || 'unknown' };
+        log.error({ err: e, displayId }, 'Failed to move to display');
+        return { success: false, error: failureReason(e) };
     }
 }
 
-function createFeatureWindows(header, namesToCreate) {
-    // if (windowPool.has('listen')) return;
-
-    const commonChildOptions = {
-        parent: header,
+function createFeatureWindows({ header, names }: { header: BrowserWindow; names?: FeatureWindowName[] | FeatureWindowName }) {
+    const standaloneOptions = {
         show: false,
         frame: false,
         transparent: true,
-        vibrancy: false,
         hasShadow: false,
         skipTaskbar: true,
         hiddenInMissionControl: true,
@@ -735,8 +730,9 @@ function createFeatureWindows(header, namesToCreate) {
             additionalArguments: [apiBaseUrlArgument(env.API_BASE_URL)],
         },
     };
+    const commonChildOptions = { ...standaloneOptions, parent: header };
 
-    const createFeatureWindow = name => {
+    const createFeatureWindow = (name: FeatureWindowName) => {
         if (windowPool.has(name)) return;
 
         switch (name) {
@@ -750,10 +746,6 @@ function createFeatureWindows(header, namesToCreate) {
                     minHeight: 250, // Minimum when empty
                     maxHeight: 500, // Maximum when full content
                     resizable: true, // Allow resizing for dynamic growth
-                    // Dynamic dimensions - window grows with content from 250px to 500px
-                    // backgroundColor: '#ff0000', // Red background to visualize window boundaries
-                    // transparent: false, // Disable transparency to show the red background
-                    // useContentSize: true // Use content size to ensure proper sizing
                 });
                 listen.setContentProtection(isContentProtectionOn);
                 listen.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
@@ -762,7 +754,7 @@ function createFeatureWindows(header, namesToCreate) {
                 }
                 const listenLoadOptions = { query: { view: 'listen' } };
                 // Load content consistently across all platforms
-                listen.loadFile(path.join(RENDERER_APP_DIR, 'content.html'), listenLoadOptions);
+                void listen.loadFile(path.join(RENDERER_APP_DIR, 'content.html'), listenLoadOptions);
                 if (!app.isPackaged) {
                     listen.webContents.openDevTools({ mode: 'detach' });
                 }
@@ -775,10 +767,6 @@ function createFeatureWindows(header, namesToCreate) {
                 const ask = new BrowserWindow({
                     ...commonChildOptions,
                     width: 750,
-                    // maxHeight: 700,
-                    // backgroundColor: '#ff0000', // Red background to visualize window boundaries
-                    // transparent: false, // Disable transparency to show the red background
-                    // useContentSize: true // Use content size to ensure proper sizing
                 });
                 ask.setContentProtection(isContentProtectionOn);
                 ask.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
@@ -787,7 +775,7 @@ function createFeatureWindows(header, namesToCreate) {
                 }
                 const askLoadOptions = { query: { view: 'ask' } };
                 // Load content consistently across all platforms
-                ask.loadFile(path.join(RENDERER_APP_DIR, 'content.html'), askLoadOptions);
+                void ask.loadFile(path.join(RENDERER_APP_DIR, 'content.html'), askLoadOptions);
 
                 // Open DevTools in development
                 if (!app.isPackaged) {
@@ -817,10 +805,9 @@ function createFeatureWindows(header, namesToCreate) {
             // settings
             case 'settings': {
                 const settings = new BrowserWindow({
-                    ...commonChildOptions,
+                    ...standaloneOptions,
                     width: 240,
                     maxHeight: 400,
-                    parent: undefined,
                 });
                 settings.setContentProtection(isContentProtectionOn);
                 settings.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
@@ -829,15 +816,16 @@ function createFeatureWindows(header, namesToCreate) {
                 }
                 const settingsLoadOptions = { query: { view: 'settings' } };
                 // Load content consistently across all platforms
-                settings.loadFile(path.join(RENDERER_APP_DIR, 'content.html'), settingsLoadOptions).catch(console.error);
+                settings
+                    .loadFile(path.join(RENDERER_APP_DIR, 'content.html'), settingsLoadOptions)
+                    .catch((err: unknown) => log.error({ err }, 'Failed to load the settings window'));
                 windowPool.set('settings', settings);
 
                 if (!app.isPackaged) {
                     settings.webContents.openDevTools({ mode: 'detach' });
                 }
 
-                // Add logging for settings window creation
-                console.log(`[WindowManager] Settings window created with maxHeight: ${settings.getMaximumSize()[1]}`);
+                log.info({ maxHeight: settings.getMaximumSize()[1] }, 'Settings window created');
                 break;
             }
             // plan tooltip (small ephemeral window)
@@ -853,27 +841,27 @@ function createFeatureWindows(header, namesToCreate) {
                     plan.setWindowButtonVisibility(false);
                 }
                 const planLoadOptions = { query: { view: 'plan' } };
-                plan.loadFile(path.join(RENDERER_APP_DIR, 'content.html'), planLoadOptions).catch(console.error);
+                plan.loadFile(path.join(RENDERER_APP_DIR, 'content.html'), planLoadOptions).catch((err: unknown) =>
+                    log.error({ err }, 'Failed to load the plan window')
+                );
                 windowPool.set('plan', plan);
 
                 if (!app.isPackaged) {
                     plan.webContents.openDevTools({ mode: 'detach' });
                 }
 
-                // Add logging for plan window creation
-                console.log(`[WindowManager] Plan window created with dimensions: ${plan.getBounds().width}x${plan.getBounds().height}`);
+                log.info({ width: plan.getBounds().width, height: plan.getBounds().height }, 'Plan window created');
                 break;
             }
 
             // screenshot viewer (popup window)
             case 'screenshot': {
                 const screenshot = new BrowserWindow({
-                    ...commonChildOptions,
+                    ...standaloneOptions,
                     width: 400,
                     height: 300,
                     minWidth: 250,
                     minHeight: 150,
-                    parent: undefined,
                     alwaysOnTop: true, // Ensure it's always on top
                 });
                 screenshot.setContentProtection(isContentProtectionOn);
@@ -882,24 +870,25 @@ function createFeatureWindows(header, namesToCreate) {
                     screenshot.setWindowButtonVisibility(false);
                 }
                 const screenshotLoadOptions = { query: { view: 'screenshot' } };
-                screenshot.loadFile(path.join(RENDERER_APP_DIR, 'content.html'), screenshotLoadOptions).catch(console.error);
+                screenshot
+                    .loadFile(path.join(RENDERER_APP_DIR, 'content.html'), screenshotLoadOptions)
+                    .catch((err: unknown) => log.error({ err }, 'Failed to load the screenshot window'));
                 windowPool.set('screenshot', screenshot);
 
                 if (!app.isPackaged) {
                     screenshot.webContents.openDevTools({ mode: 'detach' });
                 }
 
-                console.log(`[WindowManager] Screenshot window created`);
+                log.info('Screenshot window created');
                 break;
             }
 
             // recovery toast (small ephemeral window)
             case 'recoveryToast': {
                 const recoveryToast = new BrowserWindow({
-                    ...commonChildOptions,
+                    ...standaloneOptions,
                     width: 270,
                     height: 125,
-                    parent: undefined,
                     alwaysOnTop: true,
                 });
                 recoveryToast.setContentProtection(isContentProtectionOn);
@@ -907,19 +896,21 @@ function createFeatureWindows(header, namesToCreate) {
                 if (process.platform === 'darwin') {
                     recoveryToast.setWindowButtonVisibility(false);
                 }
-                recoveryToast.loadFile(path.join(RENDERER_APP_DIR, 'recovery-toast.html')).catch(console.error);
+                recoveryToast
+                    .loadFile(path.join(RENDERER_APP_DIR, 'recovery-toast.html'))
+                    .catch((err: unknown) => log.error({ err }, 'Failed to load the recovery toast window'));
                 windowPool.set('recoveryToast', recoveryToast);
 
-                console.log(`[WindowManager] Recovery toast window created`);
+                log.info('Recovery toast window created');
                 break;
             }
         }
     };
 
-    if (Array.isArray(namesToCreate)) {
-        namesToCreate.forEach(name => createFeatureWindow(name));
-    } else if (typeof namesToCreate === 'string') {
-        createFeatureWindow(namesToCreate);
+    if (Array.isArray(names)) {
+        names.forEach(name => createFeatureWindow(name));
+    } else if (typeof names === 'string') {
+        createFeatureWindow(names);
     } else {
         createFeatureWindow('listen');
         createFeatureWindow('ask');
@@ -929,7 +920,7 @@ function createFeatureWindows(header, namesToCreate) {
 }
 
 function destroyFeatureWindows() {
-    const featureWindows = ['listen', 'ask', 'settings', 'plan', 'screenshot', 'recoveryToast'];
+    const featureWindows: FeatureWindowName[] = ['listen', 'ask', 'settings', 'plan', 'screenshot', 'recoveryToast'];
     if (settingsHideTimer) {
         clearTimeout(settingsHideTimer);
         settingsHideTimer = null;
@@ -943,18 +934,6 @@ function destroyFeatureWindows() {
         if (win && !win.isDestroyed()) win.destroy();
         windowPool.delete(name);
     });
-}
-
-function getCurrentDisplay(window) {
-    if (!window || window.isDestroyed()) return screen.getPrimaryDisplay();
-
-    const windowBounds = window.getBounds();
-    const windowCenter = {
-        x: windowBounds.x + windowBounds.width / 2,
-        y: windowBounds.y + windowBounds.height / 2,
-    };
-
-    return screen.getDisplayNearestPoint(windowCenter);
 }
 
 function createWindows() {
@@ -974,7 +953,6 @@ function createWindows() {
         y: initialY,
         frame: false,
         transparent: true,
-        vibrancy: false,
         hasShadow: false,
         alwaysOnTop: true,
         skipTaskbar: true,
@@ -989,7 +967,6 @@ function createWindows() {
             additionalArguments: [apiBaseUrlArgument(env.API_BASE_URL)],
             backgroundThrottling: false,
             webSecurity: false,
-            enableRemoteModule: false,
             // Ensure proper rendering and prevent pixelation
             experimentalFeatures: false,
         },
@@ -1001,13 +978,15 @@ function createWindows() {
         header.setWindowButtonVisibility(false);
     }
     // Load content consistently across all platforms
-    header.loadFile(path.join(RENDERER_APP_DIR, 'header.html'));
+    void header.loadFile(path.join(RENDERER_APP_DIR, 'header.html'));
     windowPool.set('header', header);
-    layoutManager = new WindowLayoutManager(windowPool);
-    movementManager = new SmoothMovementManager(windowPool);
+    const newLayoutManager = new WindowLayoutManager(windowPool);
+    const newMovementManager = new SmoothMovementManager(windowPool);
+    layoutManager = newLayoutManager;
+    movementManager = newMovementManager;
 
     header.on('moved', () => {
-        if (movementManager.isAnimating) {
+        if (newMovementManager.isAnimating) {
             return;
         }
         updateChildWindowLayouts(false);
@@ -1015,14 +994,14 @@ function createWindows() {
 
     header.webContents.once('dom-ready', () => {
         shortcutsService.initialize(windowPool);
-        shortcutsService.registerShortcuts();
+        void shortcutsService.registerShortcuts();
     });
 
-    setupIpcHandlers(windowPool, layoutManager);
-    setupWindowController(windowPool, layoutManager, movementManager);
+    setupIpcHandlers({ layoutManager: newLayoutManager });
+    setupWindowController({ layoutManager: newLayoutManager, movementManager: newMovementManager });
 
     if (currentHeaderState === 'main') {
-        createFeatureWindows(header, ['listen', 'ask', 'settings', 'plan', 'recoveryToast']);
+        createFeatureWindows({ header, names: ['listen', 'ask', 'settings', 'plan', 'recoveryToast'] });
     }
 
     header.setContentProtection(isContentProtectionOn);
@@ -1034,20 +1013,11 @@ function createWindows() {
     }
 
     header.on('focus', () => {
-        console.log('[WindowManager] Header gained focus');
+        log.info('Header gained focus');
     });
 
     header.on('blur', () => {
-        console.log('[WindowManager] Header lost focus');
-    });
-
-    header.webContents.on('before-input-event', (event, input) => {
-        if (input.type === 'mouseDown') {
-            const target = input.target;
-            if (target && (target.includes('input') || target.includes('apikey'))) {
-                header.focus();
-            }
-        }
+        log.info('Header lost focus');
     });
 
     header.on('resize', () => updateChildWindowLayouts(false));
@@ -1055,18 +1025,18 @@ function createWindows() {
     return windowPool;
 }
 
-function setupIpcHandlers(windowPool, layoutManager) {
-    screen.on('display-added', (event, newDisplay) => {
-        console.log('[Display] New display added:', newDisplay.id);
+function setupIpcHandlers({ layoutManager }: { layoutManager: WindowLayoutManager }) {
+    screen.on('display-added', (_event, newDisplay) => {
+        log.info({ displayId: newDisplay.id }, 'New display added');
     });
 
-    screen.on('display-removed', (event, oldDisplay) => {
-        console.log('[Display] Display removed:', oldDisplay.id);
+    screen.on('display-removed', (_event, oldDisplay) => {
+        log.info({ displayId: oldDisplay.id }, 'Display removed');
         const header = windowPool.get('header');
 
         if (header && getCurrentDisplay(header).id === oldDisplay.id) {
             const primaryDisplay = screen.getPrimaryDisplay();
-            const newPosition = layoutManager.calculateNewPositionForDisplay(header, primaryDisplay.id);
+            const newPosition = layoutManager.calculateNewPositionForDisplay({ window: header, targetDisplayId: primaryDisplay.id });
             if (newPosition) {
                 // Recovery situation, move immediately without animation
                 header.setPosition(newPosition.x, newPosition.y, false);
@@ -1075,18 +1045,19 @@ function setupIpcHandlers(windowPool, layoutManager) {
         }
     });
 
-    screen.on('display-metrics-changed', (event, display, changedMetrics) => {
+    screen.on('display-metrics-changed', () => {
         // Call layout update function with new version
         updateChildWindowLayouts(false);
     });
 }
 
-const handleHeaderStateChanged = state => {
-    console.log(`[WindowManager] Header state changed to: ${state}`);
+const handleHeaderStateChanged = (state: string) => {
+    log.info({ state }, 'Header state changed');
     currentHeaderState = state;
 
     if (state === 'main') {
-        createFeatureWindows(windowPool.get('header'));
+        const header = windowPool.get('header');
+        if (header) createFeatureWindows({ header });
     } else {
         // 'apikey' | 'permission'
         destroyFeatureWindows();
@@ -1103,8 +1074,8 @@ function forceShowPermissionOnboarding() {
         header.webContents.send('header:force-show-permission');
         return { success: true };
     } catch (e) {
-        console.error('[WindowManager] Failed to force show permission onboarding:', e);
-        return { success: false, error: e?.message || 'unknown' };
+        log.error({ err: e }, 'Failed to force show permission onboarding');
+        return { success: false, error: failureReason(e) };
     }
 }
 

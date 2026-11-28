@@ -126,7 +126,7 @@ export default {
                 const preview = conversationHistory.slice(-2);
                 console.log('[FeatureBridge] history preview:', JSON.stringify(preview));
             }
-            return await askService.sendMessageManual(userPrompt, conversationHistory, useScreenCapture, webSearchEnabled);
+            return await askService.sendMessageManual({ userPrompt, conversationHistory, useScreenCapture, webSearchEnabled });
         });
         ipcMain.handle('ask:sendQuestionFromSummary', async (event, userPrompt) => {
             // Get conversation history from listenService and pass it to askService
@@ -139,7 +139,7 @@ export default {
                 console.log('[FeatureBridge] history preview:', JSON.stringify(preview));
             }
             const presetId = listenService.summaryService.selectedPresetId;
-            return await askService.sendMessage(userPrompt, conversationHistory, presetId);
+            return await askService.sendMessage({ userPrompt, conversationHistory, presetId });
         });
         ipcMain.handle('ask:toggleAskButton', async () => await askService.toggleAskButton());
         ipcMain.handle('ask:setUseScreenCapture', async (event, value) => {

@@ -13,23 +13,14 @@ const settingsRepositoryAdapter = {
         return getBaseRepository().getPresets(uid);
     },
 
-    getPresetTemplates: () => {
-        return getBaseRepository().getPresetTemplates();
-    },
-
-    updatePreset: (id, options) => {
-        const uid = authService.getCurrentUserId();
-        return getBaseRepository().updatePreset(id, options, uid);
-    },
-
     getAutoUpdate: () => {
         const uid = authService.getCurrentUserId();
         return getBaseRepository().getAutoUpdate(uid);
     },
 
-    setAutoUpdate: isEnabled => {
+    setAutoUpdate: (isEnabled: boolean) => {
         const uid = authService.getCurrentUserId();
-        return getBaseRepository().setAutoUpdate(uid, isEnabled);
+        return getBaseRepository().setAutoUpdate({ uid, isEnabled });
     },
 };
 

@@ -1,8 +1,24 @@
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, desktopCapturer, screen } from 'electron';
+import type { Display } from 'electron';
+import { z } from 'zod';
 import * as llmClient from '../common/ai/llmClient';
+import type { LlmPayload } from '../common/ai/llmClient';
 import * as windowManager from '../../window/windowManager';
 import internalBridge from '../../bridge/internalBridge';
 import summaryService from '../listen/summary/summaryService';
+import sessionRepository from '../common/repositories/session';
+import askRepository from './repositories';
+import { errorMessage } from '../common/utils/errors';
+import { logger } from '../common/utils/logger';
+import path from 'node:path';
+import fs from 'node:fs';
+import os from 'os';
+import util from 'util';
+import { execFile as execFileCallback } from 'child_process';
+
+const log = logger.child({ module: 'AskService' });
+
+const execFile = util.promisify(execFileCallback);
 
 const getWindowPool = () => {
     try {
@@ -12,33 +28,36 @@ const getWindowPool = () => {
     }
 };
 
-import sessionRepository from '../common/repositories/session';
-import askRepository from './repositories';
-import path from 'node:path';
-import fs from 'node:fs';
-import os from 'os';
-import util from 'util';
-import { execFile as execFileCallback } from 'child_process';
-const execFile = util.promisify(execFileCallback);
-import { desktopCapturer, screen } from 'electron';
+// The part of `listenService` that Ask uses. It is imported where it is used (see toggleAskButton).
+type ListenApi = {
+    getConversationHistory(): string[];
+    getCurrentSessionData(): { sessionId?: string | null } | null | undefined;
+};
+
+async function loadListenService(): Promise<ListenApi> {
+    // Imported here, not at the top: a static import closes the cycle summaryService ->
+    // settingsService -> windowManager -> askService -> listenService, whose constructor needs
+    // summaryService loaded.
+    const { default: listenService } = await import('../listen/listenService');
+    return listenService;
+}
 
 // Try to load sharp, but don't fail if it's not available
 const sharpLoading = import('sharp').then(
     module => {
-        console.log('[AskService] Sharp module loaded successfully');
+        log.info('Sharp module loaded successfully');
         return module.default;
     },
-    error => {
-        console.warn('[AskService] Sharp module not available:', error.message);
-        console.warn('[AskService] Screenshot functionality will work with reduced image processing capabilities');
+    (error: unknown) => {
+        log.warn({ err: error }, 'Sharp module not available');
+        log.warn('Screenshot functionality will work with reduced image processing capabilities');
         return null;
     }
 );
 
-function broadcastQuotaUpdateFromResponse(response) {
+function broadcastQuotaUpdateFromResponse(response: Response) {
     try {
-        const headers = response?.headers;
-        if (!headers) return;
+        const headers = response.headers;
         const limitHeader = headers.get('x-ratelimit-limit') || headers.get('X-RateLimit-Limit');
         const usedHeader = headers.get('x-ratelimit-used') || headers.get('X-RateLimit-Used');
         const remainingHeader = headers.get('x-ratelimit-remaining') || headers.get('X-RateLimit-Remaining');
@@ -55,11 +74,15 @@ function broadcastQuotaUpdateFromResponse(response) {
             }
         });
     } catch (e) {
-        console.warn('[AskService] Failed to broadcast quota headers:', e?.message || e);
+        log.warn({ err: e }, 'Failed to broadcast quota headers');
     }
 }
 
-async function captureScreenshot(options = {}) {
+type ScreenshotResult =
+    | { success: true; base64: string; width: number | null | undefined; height: number | null | undefined }
+    | { success: false; error: string };
+
+async function captureScreenshot(): Promise<ScreenshotResult> {
     if (process.platform === 'darwin') {
         try {
             const tempPath = path.join(os.tmpdir(), `screenshot-${Date.now()}.jpg`);
@@ -80,24 +103,24 @@ async function captureScreenshot(options = {}) {
 
                     return { success: true, base64, width: metadata.width, height: metadata.height };
                 } catch (sharpError) {
-                    console.warn('Sharp module failed, falling back to basic image processing:', sharpError.message);
+                    log.warn({ err: sharpError }, 'Sharp module failed, falling back to basic image processing');
                 }
             }
 
             // Fallback: Return the original image without resizing
-            console.log('[AskService] Using fallback image processing (no resize/compression)');
+            log.info('Using fallback image processing (no resize/compression)');
             const base64 = imageBuffer.toString('base64');
 
             return { success: true, base64, width: null, height: null };
         } catch (error) {
-            console.error('Failed to capture screenshot:', error);
-            return { success: false, error: error.message };
+            log.error({ err: error }, 'Failed to capture screenshot');
+            return { success: false, error: errorMessage(error) };
         }
     }
 
     try {
         // Determine which display the app is currently on (prefer Ask window, fallback to header)
-        let targetDisplay = null;
+        let targetDisplay: Display | null = null;
         try {
             const pool = getWindowPool?.() || null;
             const askWin = pool?.get('ask');
@@ -108,7 +131,9 @@ async function captureScreenshot(options = {}) {
                 const center = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
                 targetDisplay = screen.getDisplayNearestPoint(center);
             }
-        } catch (_) {}
+        } catch {
+            // No reference window: use the first screen.
+        }
 
         const sources = await desktopCapturer.getSources({
             types: ['screen'],
@@ -118,10 +143,10 @@ async function captureScreenshot(options = {}) {
             },
         });
 
-        if (sources.length === 0) {
+        let source = sources[0];
+        if (!source) {
             throw new Error('No screen sources available');
         }
-        let source = sources[0];
         if (targetDisplay) {
             const targetId = String(targetDisplay.id);
             const matchByDisplayId = sources.find(s => String(s.display_id || '') === targetId);
@@ -146,21 +171,63 @@ async function captureScreenshot(options = {}) {
             height: size.height,
         };
     } catch (error) {
-        console.error('Failed to capture screenshot using desktopCapturer:', error);
+        log.error({ err: error }, 'Failed to capture screenshot using desktopCapturer');
         return {
             success: false,
-            error: error.message,
+            error: errorMessage(error),
         };
     }
 }
+
+// One chunk of the server's SSE stream (`data: {...}`). Every field is optional: the server sends
+// a "searching" signal, the citations, or a content delta. A chunk that does not fit is skipped.
+const StreamChunkSchema = z.object({
+    status: z.string().optional(),
+    query: z.unknown().optional(),
+    citations: z.unknown().optional(),
+    choices: z.array(z.object({ delta: z.object({ content: z.string().nullish() }).nullish() })).optional(),
+});
+
+// What `summaryService.getCurrentContext()` hands over: the terms and questions already surfaced.
+const SummaryContextSchema = z.object({
+    definedTerms: z.array(z.string()),
+    detectedQuestions: z.array(z.string()),
+});
+
+type ScreenshotData = { base64: string; timestamp: number };
+
+// What the Ask window renders (sent as `ask:stateUpdate`). `closeAskWindow` resets the state to the
+// first nine fields only, so the rest are optional.
+export type AskState = {
+    isVisible: boolean;
+    isLoading: boolean;
+    isStreaming: boolean;
+    currentQuestion: string;
+    currentResponse: string;
+    showTextInput: boolean;
+    interrupted: boolean;
+    screenshotData: ScreenshotData | null;
+    useScreenCapture?: boolean;
+    isSearching?: boolean;
+    searchCompleted?: boolean;
+    searchQuery?: string | null;
+    searchQueries?: string[];
+    citations?: unknown;
+    webSearchEnabled?: boolean;
+};
+
+type ProfileTable = Record<string, string>;
 
 /**
  * @class
  * @description
  */
 class AskService {
+    abortController: AbortController | null = null;
+    state: AskState;
+    _forceDefaultProfileOnce = false;
+
     constructor() {
-        this.abortController = null;
         this.state = {
             isVisible: false,
             isLoading: false,
@@ -177,8 +244,7 @@ class AskService {
             citations: [],
             webSearchEnabled: false,
         };
-        this._forceDefaultProfileOnce = false;
-        console.log('[AskService] Service instance created.');
+        log.info('Service instance created');
     }
 
     /**
@@ -187,7 +253,7 @@ class AskService {
      * @param {string} userPromptRaw
      * @returns {string|null} intent key (e.g., 'next', 'generic_followup', 'email', 'actions', 'summary', 'recap', 'define', 'root_causes', 'troubleshooting', 'study_questions', 'unclear', 'suggested_questions', 'gaps', 'objection', 'question')
      */
-    _detectIntentFromClickPill(userPromptRaw) {
+    _detectIntentFromClickPill(userPromptRaw: string | null | undefined): string | null {
         const raw = (userPromptRaw || '').trim();
         const lower = raw.toLowerCase();
 
@@ -239,10 +305,10 @@ class AskService {
      * @param {string|null} presetId
      * @returns {{ profileToUse: string, useConversationContext: boolean }}
      */
-    _resolveProfileForIntent(intent, presetId) {
+    _resolveProfileForIntent({ intent, presetId }: { intent: string; presetId: string | null }) {
         const preset = (presetId || '').trim() || 'meeting';
         // Centralized, low-risk routing table
-        const MAP = {
+        const MAP: { meeting: ProfileTable; [preset: string]: ProfileTable | undefined } = {
             meeting: {
                 next: 'meeting_next',
                 generic_followup: 'meeting_followup',
@@ -313,7 +379,7 @@ class AskService {
             },
         };
 
-        const table = MAP[preset] || MAP.meeting;
+        const table = MAP[preset] ?? MAP.meeting;
         const profileToUse = table[intent] || MAP.meeting[intent] || 'whisper';
 
         // Conversation context policy per intent
@@ -327,7 +393,7 @@ class AskService {
         return { profileToUse, useConversationContext, shouldIncludeRole };
     }
 
-    _deriveTitleFromPrompt(prompt) {
+    _deriveTitleFromPrompt(prompt: string | null | undefined): string {
         try {
             const raw = (prompt || '').replace(/[\p{Emoji}\p{Extended_Pictographic}]/gu, '').trim();
             if (!raw) return '';
@@ -340,7 +406,7 @@ class AskService {
                 .trim();
             // Capitalize first letter
             return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
-        } catch (_) {
+        } catch {
             return '';
         }
     }
@@ -351,9 +417,9 @@ class AskService {
      * @param {string} userPromptRaw
      * @returns {{ mode: 'default'|'define'|'email'|'actions'|'summary'|'recap'|'next'|'followup' }}
      */
-    _expandInsightRequest(userPromptRaw) {
+    _expandInsightRequest(userPromptRaw: string | null | undefined): { mode: string } {
         const text = (userPromptRaw || '').toLowerCase();
-        const stripEmoji = s => s.replace(/[\p{Emoji}\p{Extended_Pictographic}]/gu, '').trim();
+        const stripEmoji = (value: string) => value.replace(/[\p{Emoji}\p{Extended_Pictographic}]/gu, '').trim();
         const normalized = stripEmoji(text);
 
         // Draft follow-up email
@@ -438,9 +504,10 @@ class AskService {
         return { mode: 'default' };
     }
 
+
     interruptStream() {
         if (this.abortController) {
-            console.log('[AskService] User interrupted the stream.');
+            log.info('User interrupted the stream');
             this.abortController.abort('User interrupted');
             this.abortController = null;
 
@@ -467,15 +534,10 @@ class AskService {
     async toggleAskButton(inputScreenOnly = false) {
         const askWindow = getWindowPool()?.get('ask');
 
-        let shouldSendScreenOnly = false;
         if (inputScreenOnly && this.state.showTextInput && askWindow && askWindow.isVisible()) {
-            shouldSendScreenOnly = true;
-            // Imported here, not at the top: a static import closes the cycle summaryService ->
-            // settingsService -> windowManager -> askService -> listenService, whose constructor needs
-            // summaryService loaded.
-            const { default: listenService } = await import('../listen/listenService');
+            const listenService = await loadListenService();
             const conversationHistory = listenService.getConversationHistory();
-            await this.sendMessage('Assist me', conversationHistory, null, this.state.useScreenCapture);
+            await this.sendMessage({ userPrompt: 'Assist me', conversationHistory, presetId: null, useScreenCapture: this.state.useScreenCapture });
             return;
         }
 
@@ -489,7 +551,7 @@ class AskService {
                 internalBridge.emit('window:requestVisibility', { name: 'ask', visible: false });
                 this.state.isVisible = false;
             } else {
-                console.log('[AskService] Showing hidden Ask window');
+                log.info('Showing hidden Ask window');
                 internalBridge.emit('window:requestVisibility', { name: 'ask', visible: true });
                 this.state.isVisible = true;
             }
@@ -523,13 +585,7 @@ class AskService {
         return { success: true };
     }
 
-    /**
-     *
-     * @param {string[]} conversationTexts
-     * @returns {string}
-     * @private
-     */
-    _formatConversationForPrompt(conversationTexts) {
+    _formatConversationForPrompt(conversationTexts: string[] | null | undefined): string {
         if (!conversationTexts || conversationTexts.length === 0) {
             return 'No conversation history available.';
         }
@@ -537,36 +593,31 @@ class AskService {
         return conversationTexts.join('\n'); // Send full conversation
     }
 
-    /**
-     *
-     * @param {string} userPrompt
-     * @param {string[]} conversationHistoryRaw
-     * @param {string|null} presetId
-     * @param {boolean} useScreenCapture
-     * @param {boolean} webSearchEnabled
-     * @returns {Promise<{success: boolean, response?: string, error?: string}>}
-     */
-    async sendMessage(userPrompt, conversationHistoryRaw = [], presetId = null, useScreenCapture = true, webSearchEnabled = false) {
+    async sendMessage({
+        userPrompt: rawPrompt,
+        conversationHistory: conversationHistoryRaw = [],
+        presetId = null,
+        useScreenCapture = true,
+        webSearchEnabled = false,
+    }: {
+        userPrompt: string;
+        conversationHistory?: string[] | undefined;
+        presetId?: string | null | undefined;
+        useScreenCapture?: boolean | undefined;
+        webSearchEnabled?: boolean | undefined;
+    }): Promise<{ success: true } | { success: false; error: string }> {
         // Normalize and fallback to default help text when empty
-        try {
-            userPrompt = ((userPrompt ?? '') + '').trim();
-        } catch (_) {
-            userPrompt = '';
-        }
+        const userPrompt = String(rawPrompt ?? '').trim();
 
         // Detect if this is a suggested search from summary
         const isSuggestedSearch = userPrompt.startsWith('🌐 Search:');
         let actualPrompt = userPrompt;
-        let searchForce = webSearchEnabled || isSuggestedSearch;
+        const searchForce = webSearchEnabled || isSuggestedSearch;
 
         if (isSuggestedSearch) {
             // Parse: 🌐 Search: [Label] | [Query]
-            const searchParts = userPrompt.replace('🌐 Search:', '').trim().split('|');
-            if (searchParts.length > 1) {
-                actualPrompt = searchParts[1].trim();
-            } else {
-                actualPrompt = searchParts[0].trim();
-            }
+            const [label = '', query] = userPrompt.replace('🌐 Search:', '').trim().split('|');
+            actualPrompt = (query ?? label).trim();
         }
 
         const originalPrompt = actualPrompt; // Keep for title derivation
@@ -595,52 +646,52 @@ class AskService {
         if (this.abortController) {
             this.abortController.abort('New request received.');
         }
-        this.abortController = new AbortController();
-        const { signal } = this.abortController;
+        const abortController = new AbortController();
+        this.abortController = abortController;
+        const { signal } = abortController;
 
-        let sessionId;
+        let sessionId: string | null = null;
 
         try {
-            console.log(`[AskService] 🤖 Processing message: ${actualPrompt.substring(0, 50)}...`);
-            console.log(`[AskService] history: items=${conversationHistoryRaw?.length || 0}`);
+            log.info({ promptPreview: actualPrompt.substring(0, 50), historyItems: conversationHistoryRaw?.length || 0 }, 'Processing message');
 
             // Check if we're in a meeting context (open listen session exists)
-            const { default: listenService } = await import('../listen/listenService');
+            const listenService = await loadListenService();
             const currentListenSessionId = listenService.getCurrentSessionData()?.sessionId || null;
             const isInMeeting = Boolean(currentListenSessionId);
 
             if (isInMeeting) {
                 // We're in a meeting - use or promote to listen session for context
                 sessionId = await sessionRepository.getOrCreateActive('listen');
-                console.log(`[AskService] 📋 Using meeting session ${sessionId} for ask question`);
+                log.info({ sessionId }, 'Using meeting session for ask question');
             } else {
                 // Standalone question - create new session for each question
                 sessionId = await sessionRepository.create('ask');
-                console.log(`[AskService] ❓ Created new question session ${sessionId}`);
+                log.info({ sessionId }, 'Created new question session');
                 // Derive and save a concise title from user prompt
                 const derived = this._deriveTitleFromPrompt(originalPrompt);
-                if (derived) {
+                if (derived && sessionId) {
                     try {
                         await sessionRepository.updateTitle({ id: sessionId, title: derived });
-                        console.log(`[AskService] 🏷️ Titled question session ${sessionId}: ${derived}`);
+                        log.info({ sessionId, title: derived }, 'Titled question session');
                     } catch (e) {
-                        console.warn('[AskService] Failed to update session title for ask session:', e.message);
+                        log.warn({ err: e, sessionId }, 'Failed to update session title for ask session');
                     }
                 }
             }
             await askRepository.addAiMessage({ sessionId, role: 'user', content: actualPrompt.trim() });
-            console.log(`[AskService] DB: Saved user prompt to session ${sessionId}`);
+            log.info({ sessionId }, 'Saved user prompt');
 
             // LLM is server-backed only; no client-side provider/model
-            console.log('[AskService] model: provider=server, model=remote-default');
+            log.info({ provider: 'server', model: 'remote-default' }, 'Model');
 
             // Capture screenshot when useScreenCapture is enabled AND (manual Ask OR prompt equals 'Assist me')
             // 'Assist me' is the Ask template's empty-input fallback and should include a screenshot
             const isAssistMe = (actualPrompt || '').trim().toLowerCase() === 'assist me';
             const shouldCaptureScreenshot = useScreenCapture && (this._forceDefaultProfileOnce === true || isAssistMe);
-            let screenshotBase64 = null;
+            let screenshotBase64: string | null = null;
             if (shouldCaptureScreenshot) {
-                const screenshotResult = await captureScreenshot({ quality: 'medium' });
+                const screenshotResult = await captureScreenshot();
                 screenshotBase64 = screenshotResult.success ? screenshotResult.base64 : null;
             }
             const screenshotTaken = Boolean(screenshotBase64);
@@ -658,29 +709,32 @@ class AskService {
             this._broadcastState();
 
             const conversationHistory = this._formatConversationForPrompt(conversationHistoryRaw);
-            console.log(
-                `[AskService] what llm sees: clickLen=${actualPrompt.trim().length}, historyChars=${conversationHistory.length}, screenshot=${screenshotBase64 ? 1 : 0}`
+            log.info(
+                { clickLen: actualPrompt.trim().length, historyChars: conversationHistory.length, screenshot: screenshotBase64 ? 1 : 0 },
+                'What the LLM sees'
             );
             const expansion = this._expandInsightRequest(actualPrompt);
-            console.log(`[AskService] expanded intent (heuristic): mode=${expansion.mode}`);
+            log.info({ mode: expansion.mode }, 'Expanded intent (heuristic)');
 
             // Prefer explicit click intent detection from pill labels/prefixes
             const explicitIntent = this._detectIntentFromClickPill(userPrompt) || expansion.mode;
             const activePreset = presetId || (summaryService && summaryService.selectedPresetId) || null;
 
-            console.log(`[AskService] Routing: intent=${explicitIntent}, preset=${activePreset}`);
+            log.info({ intent: explicitIntent, preset: activePreset }, 'Routing');
 
-            let { profileToUse, useConversationContext, shouldIncludeRole } = this._resolveProfileForIntent(explicitIntent, activePreset);
+            const resolved = this._resolveProfileForIntent({ intent: explicitIntent, presetId: activePreset });
+            const { useConversationContext, shouldIncludeRole } = resolved;
+            let profileToUse = resolved.profileToUse;
 
             if (this._forceDefaultProfileOnce) {
-                console.log(`[AskService] Manual Ask detected (force=${this._forceDefaultProfileOnce}) → forcing default profile: whisper`);
+                log.info({ force: this._forceDefaultProfileOnce }, 'Manual Ask detected, forcing default profile: whisper');
                 profileToUse = 'whisper';
                 // Keep context decision based on intent (e.g., define=false), do not override
             }
 
             // Get role context from summaryService (contains default + user custom context)
             const roleContext = summaryService.selectedRoleText || '';
-            console.log(`[AskService] Role context length: ${roleContext.length} chars`);
+            log.info({ chars: roleContext.length }, 'Role context length');
 
             // Build context for prompt - conversation transcript
             const contextForPrompt = useConversationContext ? conversationHistory : '';
@@ -697,35 +751,31 @@ class AskService {
                 : actualPrompt.trim();
 
             if (screenshotBase64) {
-                try {
-                    console.log('[AskService] screenshot present:', {
-                        b64Len: screenshotBase64.length,
-                        head: screenshotBase64.slice(0, 32),
-                    });
-                } catch (_) {}
+                log.info({ b64Len: screenshotBase64.length, head: screenshotBase64.slice(0, 32) }, 'Screenshot present');
             }
 
             // Build context object - ALWAYS use structured format { transcript, previousItems }
             // Server expects this structure for both analysis and action profiles
-            let context = null;
+            let context: { transcript: string; previousItems: string[] } | null = null;
             if (useConversationContext && contextForPrompt) {
-                const summaryContext = summaryService.getCurrentContext();
+                const parsedContext = SummaryContextSchema.safeParse(summaryService.getCurrentContext());
+                const summaryContext = parsedContext.success ? parsedContext.data : null;
                 const hasPreviousItems = summaryContext && (summaryContext.definedTerms.length > 0 || summaryContext.detectedQuestions.length > 0);
 
                 context = {
                     transcript: contextForPrompt,
-                    previousItems: hasPreviousItems
+                    previousItems: summaryContext && hasPreviousItems
                         ? [
                               ...summaryContext.definedTerms.map(term => `📘 Define ${term}`),
                               ...summaryContext.detectedQuestions.map(question => `❓ ${question}`),
                           ]
                         : [],
                 };
-                console.log(`[AskService] Context built: transcript=${contextForPrompt.length} chars, previousItems=${context.previousItems.length}`);
+                log.info({ transcriptChars: contextForPrompt.length, previousItems: context.previousItems.length }, 'Context built');
             }
 
             // Build base payload
-            const payload = {
+            const payload: LlmPayload = {
                 profile: profileToUse,
                 userContent: userContent,
                 context: context,
@@ -733,31 +783,21 @@ class AskService {
 
             if (searchForce) {
                 payload.forceSearch = true;
-                console.log(`[AskService] Web search enabled for this request (forceSearch=true)`);
+                log.info('Web search enabled for this request (forceSearch=true)');
             }
 
             // Add role unless excluded for this intent type OR profile is whisper (generic chatbot)
             if (shouldIncludeRole && roleContext && profileToUse !== 'whisper') {
                 payload.role = roleContext;
-                console.log(`[AskService] Including role context for intent: ${explicitIntent}`);
+                log.info({ intent: explicitIntent }, 'Including role context');
             } else if (!shouldIncludeRole) {
-                console.log(`[AskService] Excluding role context for intent: ${explicitIntent} (objective/factual)`);
+                log.info({ intent: explicitIntent }, 'Excluding role context (objective/factual)');
             } else if (profileToUse === 'whisper') {
-                console.log(`[AskService] Excluding role context for whisper profile (generic chatbot)`);
+                log.info('Excluding role context for whisper profile (generic chatbot)');
             }
 
             // concise request log
-            try {
-                const hasImagePart = screenshotBase64 ? true : false;
-                console.log('[AskService] sending request to llm', {
-                    profile: profileToUse,
-                    hasImage: hasImagePart,
-                    hasContext: !!context,
-                    hasRole: !!payload.role,
-                });
-            } catch (_) {
-                console.log('[AskService] sending request to llm');
-            }
+            log.info({ profile: profileToUse, hasImage: Boolean(screenshotBase64), hasContext: !!context, hasRole: !!payload.role }, 'Sending request to LLM');
 
             try {
                 const response = await llmClient.stream({ payload, signal });
@@ -765,34 +805,35 @@ class AskService {
                 // Broadcast quota headers immediately on stream start
                 broadcastQuotaUpdateFromResponse(response);
 
-                console.log('📡 [AskService] LLM responded - starting to process stream...');
+                log.info('LLM responded, starting to process stream');
 
                 const askWin = getWindowPool()?.get('ask');
 
                 if (!askWin || askWin.isDestroyed()) {
-                    console.error('[AskService] Ask window is not available to send stream to.');
-                    response.body.getReader().cancel();
+                    log.error('Ask window is not available to send stream to');
+                    void response.body?.getReader().cancel();
                     return { success: false, error: 'Ask window is not available.' };
                 }
 
-                const reader = response.body.getReader();
+                const reader = this._readerOf(response);
                 signal.addEventListener('abort', () => {
-                    console.log(`[AskService] Aborting stream reader. Reason: ${signal.reason}`);
+                    log.info({ reason: signal.reason }, 'Aborting stream reader');
                     reader.cancel(signal.reason).catch(() => {
                         /* Ignore errors when already cancelled */
                     });
                 });
 
-                await this._processStream(reader, askWin, sessionId, signal);
-                console.log(`[AskService] ✅ LLM stream finished. screenshotTaken=${screenshotTaken}`);
+                await this._processStream({ reader, askWin, sessionId, signal });
+                log.info({ screenshotTaken }, 'LLM stream finished');
                 return { success: true };
             } catch (multimodalError) {
-                // 멀티모달 요청이 실패했고 스크린샷이 포함되어 있다면 텍스트만으로 재시도
-                if (screenshotBase64 && this._isMultimodalError(multimodalError)) {
-                    console.log(`[AskService] Multimodal request failed, retrying with text-only: ${multimodalError.message}`);
+                // The server did not take the image: retry with text only. (`_isMultimodalError`
+                // was an async method whose Promise was always truthy, so any failure with a
+                // screenshot retried. The retry rule is kept as it ran.)
+                if (screenshotBase64) {
+                    log.info({ reason: errorMessage(multimodalError) }, 'Multimodal request failed, retrying with text-only');
 
-                    // 텍스트만으로 payload 재구성
-                    const textOnlyPayload = {
+                    const textOnlyPayload: LlmPayload = {
                         profile: profileToUse,
                         userContent: `User Request: ${userPrompt.trim()}`,
                         context: context,
@@ -808,27 +849,27 @@ class AskService {
                     const askWin = getWindowPool()?.get('ask');
 
                     if (!askWin || askWin.isDestroyed()) {
-                        console.error('[AskService] Ask window is not available for fallback response.');
-                        fallbackResponse.body.getReader().cancel();
+                        log.error('Ask window is not available for fallback response');
+                        void fallbackResponse.body?.getReader().cancel();
                         return { success: false, error: 'Ask window is not available.' };
                     }
 
-                    const fallbackReader = fallbackResponse.body.getReader();
+                    const fallbackReader = this._readerOf(fallbackResponse);
                     signal.addEventListener('abort', () => {
-                        console.log(`[AskService] Aborting fallback stream reader. Reason: ${signal.reason}`);
+                        log.info({ reason: signal.reason }, 'Aborting fallback stream reader');
                         fallbackReader.cancel(signal.reason).catch(() => {});
                     });
 
-                    await this._processStream(fallbackReader, askWin, sessionId, signal);
-                    console.log(`[AskService] ✅ LLM stream finished (fallback). screenshotTaken=${screenshotTaken}`);
+                    await this._processStream({ reader: fallbackReader, askWin, sessionId, signal });
+                    log.info({ screenshotTaken }, 'LLM stream finished (fallback)');
                     return { success: true };
                 } else {
-                    // 다른 종류의 에러이거나 스크린샷이 없었다면 그대로 throw
+                    // Another kind of error, or there was no screenshot: throw it as it is.
                     throw multimodalError;
                 }
             }
         } catch (error) {
-            console.error('[AskService] Error during message processing:', error);
+            log.error({ err: error, sessionId }, 'Error during message processing');
             this.state = {
                 ...this.state,
                 isLoading: false,
@@ -837,43 +878,51 @@ class AskService {
             };
             this._broadcastState();
 
+            const message = errorMessage(error);
             const askWin = getWindowPool()?.get('ask');
             if (askWin && !askWin.isDestroyed()) {
                 // Detect quota exceeded via status text to keep logic simple
-                const msg = (error?.message || '').toLowerCase();
+                const msg = message.toLowerCase();
                 if (msg.includes('429') || msg.includes('too many requests')) {
                     askWin.webContents.send('ask-response-stream-error', { error: 'quota_exceeded' });
                 } else {
-                    const streamError = error.message || 'Unknown error occurred';
+                    const streamError = message || 'Unknown error occurred';
                     askWin.webContents.send('ask-response-stream-error', { error: streamError });
                 }
             }
 
-            return { success: false, error: error.message };
+            return { success: false, error: message };
         }
     }
 
-    /**
-     *
-     * @param {ReadableStreamDefaultReader} reader
-     * @param {BrowserWindow} askWin
-     * @param {number} sessionId
-     * @param {AbortSignal} signal
-     * @returns {Promise<void>}
-     * @private
-     */
-    async _processStream(reader, askWin, sessionId, signal) {
+    _readerOf(response: Response): ReadableStreamDefaultReader<Uint8Array> {
+        if (!response.body) {
+            throw new Error('LLM response has no body');
+        }
+        return response.body.getReader();
+    }
+
+    async _processStream({
+        reader,
+        askWin,
+        sessionId,
+        signal,
+    }: {
+        reader: ReadableStreamDefaultReader<Uint8Array>;
+        askWin: BrowserWindow;
+        sessionId: string | null;
+        signal: AbortSignal;
+    }): Promise<void> {
         const decoder = new TextDecoder();
         let fullResponse = '';
         let tokenCount = 0;
-        let firstTokenReceived = false;
 
         try {
             this.state.isLoading = false;
             this.state.isStreaming = true;
             this._broadcastState();
 
-            console.log('📡 [AskService] Starting to process LLM response stream...');
+            log.info('Starting to process LLM response stream');
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -886,67 +935,61 @@ class AskService {
                     if (line.startsWith('data: ')) {
                         const data = line.substring(6);
                         if (data === '[DONE]') {
-                            console.log('🏁 [AskService] LLM stream completed with [DONE] signal');
+                            log.info('LLM stream completed with [DONE] signal');
                             return;
                         }
-                        try {
-                            const json = JSON.parse(data);
+                        const json = this._parseChunk(data);
+                        if (!json) continue;
 
-                            // Handle immediate feedback signal (status: searching)
-                            if (json.status === 'searching') {
-                                this.state.isSearching = true;
-                                this.state.searchCompleted = false;
-                                // Update query ONLY if server provides it explicitly AND it's a string
-                                if (json.query && typeof json.query === 'string') {
-                                    this.state.searchQuery = json.query.trim();
-                                } else if (json.query) {
-                                    // Log unexpected format for debugging
-                                    console.warn('[AskService] Unexpected query format received:', {
-                                        type: typeof json.query,
-                                        value: json.query,
-                                    });
-                                }
-                                this._broadcastState();
-                                continue;
+                        // Handle immediate feedback signal (status: searching)
+                        if (json.status === 'searching') {
+                            this.state.isSearching = true;
+                            this.state.searchCompleted = false;
+                            // Update query ONLY if server provides it explicitly AND it's a string
+                            if (json.query && typeof json.query === 'string') {
+                                this.state.searchQuery = json.query.trim();
+                            } else if (json.query) {
+                                // Log unexpected format for debugging
+                                log.warn({ type: typeof json.query, value: json.query }, 'Unexpected query format received');
                             }
+                            this._broadcastState();
+                            continue;
+                        }
 
-                            // Handle streaming citations
-                            if (json.citations) {
-                                this.state.citations = json.citations;
+                        // Handle streaming citations
+                        if (json.citations) {
+                            this.state.citations = json.citations;
+                            this.state.isSearching = false;
+                            this.state.searchCompleted = true;
+                            this._broadcastState();
+                            continue;
+                        }
+
+                        const token = json.choices?.[0]?.delta?.content || '';
+                        if (token) {
+                            if (this.state.isSearching) {
+                                // Searching was active, but now we have real result tokens
                                 this.state.isSearching = false;
                                 this.state.searchCompleted = true;
-                                this._broadcastState();
-                                continue;
                             }
 
-                            const token = json.choices[0]?.delta?.content || '';
-                            if (token) {
-                                if (this.state.isSearching) {
-                                    // Searching was active, but now we have real result tokens
-                                    this.state.isSearching = false;
-                                    this.state.searchCompleted = true;
-                                }
-
-                                firstTokenReceived = true;
-                                tokenCount++;
-                                fullResponse += token;
-                                this.state.currentResponse = fullResponse;
-                                this._broadcastState();
-                            }
-                        } catch (error) {}
+                            tokenCount++;
+                            fullResponse += token;
+                            this.state.currentResponse = fullResponse;
+                            this._broadcastState();
+                        }
                     }
                 }
             }
 
-            console.log('📊 [AskService] Stream processing completed. Total tokens:', tokenCount);
-            console.log('📋 [AskService] Final response length:', fullResponse.length, 'characters');
+            log.info({ tokenCount, responseChars: fullResponse.length }, 'Stream processing completed');
         } catch (streamError) {
             if (signal.aborted) {
-                console.log(`[AskService] Stream reading was intentionally cancelled. Reason: ${signal.reason}`);
+                log.info({ reason: signal.reason }, 'Stream reading was intentionally cancelled');
             } else {
-                console.error('[AskService] Error while processing stream:', streamError);
+                log.error({ err: streamError, sessionId }, 'Error while processing stream');
                 if (askWin && !askWin.isDestroyed()) {
-                    askWin.webContents.send('ask-response-stream-error', { error: streamError.message });
+                    askWin.webContents.send('ask-response-stream-error', { error: errorMessage(streamError) });
                 }
             }
         } finally {
@@ -960,36 +1003,40 @@ class AskService {
             if (fullResponse) {
                 try {
                     await askRepository.addAiMessage({ sessionId, role: 'assistant', content: fullResponse });
-                    console.log(`[AskService] DB: Saved partial or full assistant response to session ${sessionId} after stream ended.`);
+                    log.info({ sessionId }, 'Saved partial or full assistant response after stream ended');
                 } catch (dbError) {
-                    console.error('[AskService] DB: Failed to save assistant response after stream ended:', dbError);
+                    log.error({ err: dbError, sessionId }, 'Failed to save assistant response after stream ended');
                 }
             }
         }
     }
 
-    /**
-     * Determine if it's a multimodal-related error
-     * @private
-     */
-    async _isMultimodalError(error) {
-        const errorMessage = error.message?.toLowerCase() || '';
-        return (
-            errorMessage.includes('vision') ||
-            errorMessage.includes('image') ||
-            errorMessage.includes('multimodal') ||
-            errorMessage.includes('unsupported') ||
-            errorMessage.includes('image_url') ||
-            errorMessage.includes('400') || // Bad Request often for unsupported features
-            errorMessage.includes('invalid') ||
-            errorMessage.includes('not supported')
-        );
+    // A line that is not JSON, or not one of the chunk shapes, is skipped (as before).
+    _parseChunk(data: string): z.infer<typeof StreamChunkSchema> | null {
+        let raw: unknown;
+        try {
+            raw = JSON.parse(data);
+        } catch {
+            return null;
+        }
+        const parsed = StreamChunkSchema.safeParse(raw);
+        return parsed.success ? parsed.data : null;
     }
 
-    async sendMessageManual(userPrompt, conversationHistoryRaw = [], useScreenCapture = true, webSearchEnabled = false) {
+    async sendMessageManual({
+        userPrompt,
+        conversationHistory = [],
+        useScreenCapture = true,
+        webSearchEnabled = false,
+    }: {
+        userPrompt: string;
+        conversationHistory?: string[] | undefined;
+        useScreenCapture?: boolean | undefined;
+        webSearchEnabled?: boolean | undefined;
+    }) {
         this._forceDefaultProfileOnce = true;
         try {
-            return await this.sendMessage(userPrompt, conversationHistoryRaw, null, useScreenCapture, webSearchEnabled);
+            return await this.sendMessage({ userPrompt, conversationHistory, presetId: null, useScreenCapture, webSearchEnabled });
         } finally {
             this._forceDefaultProfileOnce = false;
         }

@@ -1,6 +1,30 @@
+import type { ElectronApplication, Page } from '@playwright/test';
 import { queryDatabase } from './database';
-import { FAKE_ANSWER, FAKE_TRANSCRIPT } from './fakeServer';
+import { FAKE_ANSWER, FAKE_TRANSCRIPT, type FakeServer } from './fakeServer';
 import { expect, findWindow, test } from './fixtures';
+
+const listenButton = (headerWindow: Page) => headerWindow.locator('main-header .listen-button').first();
+
+// Starts Listen and waits for the fake transcript in the Listen window. The fake relay sends it
+// once microphone audio arrives, so this also shows that the fake microphone reached the relay.
+async function listenUntilTranscript({ electronApp, headerWindow }: { electronApp: ElectronApplication; headerWindow: Page }) {
+    await listenButton(headerWindow).click();
+    await expect(listenButton(headerWindow)).toHaveClass(/active/);
+    const listenWindow = await findWindow({ electronApp, view: 'listen' });
+    await listenWindow.getByRole('button', { name: 'Show Transcript' }).click();
+    await expect(listenWindow.locator('.stt-message')).toHaveText([FAKE_TRANSCRIPT]);
+    return listenWindow;
+}
+
+// Stop, then Done. Done asks the LLM for a summary in the background; wait for that request,
+// so the app is not closed in the middle of it.
+async function finishListening({ headerWindow, fakeServer }: { headerWindow: Page; fakeServer: FakeServer }) {
+    await listenButton(headerWindow).click();
+    await expect(listenButton(headerWindow)).toHaveClass(/paused/);
+    await headerWindow.locator('main-header .listen-button.done').click();
+    await expect(listenButton(headerWindow)).not.toHaveClass(/paused|active/);
+    await expect.poll(() => fakeServer.llmRequests.some(({ route }) => route === 'chat')).toBe(true);
+}
 
 test('the app opens on the main header', async ({ headerWindow }) => {
     await expect(headerWindow.locator('main-header')).toBeVisible();
@@ -23,23 +47,8 @@ test('Ask streams the answer to a typed question', async ({ electronApp, headerW
 });
 
 test('Listen shows the transcript and saves the session', async ({ electronApp, headerWindow, fakeServer, userDataDir }) => {
-    const listenButton = headerWindow.locator('main-header .listen-button').first();
-    await listenButton.click();
-    await expect(listenButton).toHaveClass(/active/);
-
-    // The fake relay sends its transcript once microphone audio arrives, so this also shows
-    // that the fake microphone reached the relay.
-    const listenWindow = await findWindow({ electronApp, view: 'listen' });
-    await listenWindow.getByRole('button', { name: 'Show Transcript' }).click();
-    await expect(listenWindow.locator('.stt-message')).toHaveText([FAKE_TRANSCRIPT]);
-
-    await listenButton.click();
-    await expect(listenButton).toHaveClass(/paused/);
-    await headerWindow.locator('main-header .listen-button.done').click();
-    await expect(listenButton).not.toHaveClass(/paused|active/);
-
-    // Done asks the LLM for a summary in the background; let it finish before closing the app.
-    await expect.poll(() => fakeServer.llmRequests.map(({ route }) => route)).toEqual(['chat']);
+    await listenUntilTranscript({ electronApp, headerWindow });
+    await finishListening({ headerWindow, fakeServer });
     await electronApp.close();
 
     const sessions = await queryDatabase({
@@ -49,4 +58,21 @@ test('Listen shows the transcript and saves the session', async ({ electronApp, 
     expect(sessions).toEqual([{ session_type: 'listen', ended: 1 }]);
     const transcripts = await queryDatabase({ userDataDir, sql: 'SELECT speaker, text FROM transcripts' });
     expect(transcripts).toEqual([{ speaker: 'Me', text: FAKE_TRANSCRIPT }]);
+});
+
+// The analysis preset is the one setting the user changes that the app stores (in the
+// `whisper-settings` store); the Settings window has none. See ticket 02's comments.
+test('the analysis preset chosen in Listen is still chosen after a restart', async ({ launchApp, fakeServer }) => {
+    const firstRun = await launchApp();
+    const firstHeader = await findWindow({ electronApp: firstRun, view: 'header' });
+    const firstPreset = (await listenUntilTranscript({ electronApp: firstRun, headerWindow: firstHeader })).locator('.preset-select');
+    await expect(firstPreset).toHaveValue('meetings');
+    await firstPreset.selectOption('recruiting');
+    await finishListening({ headerWindow: firstHeader, fakeServer });
+    await firstRun.close();
+
+    const secondRun = await launchApp();
+    const secondHeader = await findWindow({ electronApp: secondRun, view: 'header' });
+    const secondPreset = (await listenUntilTranscript({ electronApp: secondRun, headerWindow: secondHeader })).locator('.preset-select');
+    await expect(secondPreset).toHaveValue('recruiting');
 });

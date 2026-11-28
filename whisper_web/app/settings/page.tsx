@@ -3,7 +3,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/utils/auth';
+import { useAuth } from '@/lib/auth';
 import SettingsTabs from '@/components/settings/SettingsTabs';
 import { useRouter } from 'next/navigation';
 
@@ -38,11 +38,12 @@ export default function SettingsPage() {
         const parts = trimmedValue.split(/\s+/).filter(Boolean);
 
         if (parts.length === 1) {
-            const cleaned = parts[0].replace(/[^a-zA-Z0-9]/g, '');
+            const onlyPart = parts[0] ?? '';
+            const cleaned = onlyPart.replace(/[^a-zA-Z0-9]/g, '');
             if (cleaned.length >= 1) {
                 return cleaned.slice(0, 1).toUpperCase();
             }
-            return parts[0].slice(0, 1).toUpperCase();
+            return onlyPart.slice(0, 1).toUpperCase();
         }
 
         return parts

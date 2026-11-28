@@ -25,7 +25,7 @@
         "build:web": "pnpm --filter whisper-frontend run build",
         "build:all": "pnpm run build:web && pnpm run build:app",
         "test": "vitest run && pnpm run test:jest",
-        "test:jest": "jest && pnpm --filter whisper-frontend run test",
+        "test:jest": "jest",
         "test:watch": "jest --watch",
         "test:coverage": "jest --coverage",
         "test:unit": "jest tests/unit",

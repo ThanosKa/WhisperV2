@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Sidebar from '@/components/Sidebar';
-import SearchPopup from '@/components/SearchPopup';
-import AuthGuard from '@/components/AuthGuard';
+import Sidebar from '@/components/layout/Sidebar';
+import SearchPopup from '@/components/layout/SearchPopup';
+import AuthGuard from '@/components/layout/AuthGuard';
 import { Toaster } from '@/components/ui/toaster';
 import { usePathname } from 'next/navigation';
 

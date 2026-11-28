@@ -2,20 +2,20 @@
 
 import { useState, useEffect, useRef, Suspense, useMemo } from 'react';
 import { cn } from '@/lib/utils';
-import { useRedirectIfNotAuth } from '@/utils/auth';
+import { useRedirectIfNotAuth } from '@/lib/auth';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
-import { UserProfile, SessionDetails, getSessionDetails, deleteSession, updateSessionTitle } from '@/utils/api';
+import { type UserProfile, type SessionDetails, getSessionDetails, deleteSession, updateSessionTitle } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import dynamic from 'next/dynamic';
 import { Sparkles, Copy, Check, Calendar, Timer } from 'lucide-react';
 import { TranscriptViewer } from '@/components/activity/TranscriptViewer';
 import { TranscriptSidebar } from '@/components/activity/TranscriptSidebar';
 
-const Markdown = dynamic(() => import('@/components/Markdown'), { ssr: false });
+const Markdown = dynamic(() => import('@/components/activity/Markdown'), { ssr: false });
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
     <section className="mb-8 rounded-lg border border-slate-200 bg-white px-6 py-5">
@@ -27,7 +27,7 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 );
 
 function SessionDetailsContent() {
-    const userInfo = useRedirectIfNotAuth() as UserProfile | null;
+    const userInfo = useRedirectIfNotAuth();
     const [sessionDetails, setSessionDetails] = useState<SessionDetails | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const searchParams = useSearchParams();
@@ -48,7 +48,7 @@ function SessionDetailsContent() {
             const fetchDetails = async () => {
                 setIsLoading(true);
                 try {
-                    const details = await getSessionDetails(sessionId as string);
+                    const details = await getSessionDetails(sessionId);
                     setSessionDetails(details);
                     setNewTitle(details.session.title || '');
                 } catch (error) {
@@ -159,15 +159,16 @@ function SessionDetailsContent() {
     const isActiveSession = sessionDetails?.session && !sessionDetails.session.ended_at;
     
     // Flatten insights for active sessions (like desktop SummaryView does)
+    const insights = sessionDetails?.insights;
     const flattenedInsights = useMemo(() => {
-        if (!isActiveSession || !sessionDetails?.insights || sessionDetails.insights.length === 0) {
+        if (!isActiveSession || !insights || insights.length === 0) {
             return null;
         }
         
         const actions = new Set<string>();
         const summaryBullets = new Set<string>();
         
-        sessionDetails.insights.forEach(insight => {
+        insights.forEach(insight => {
             if (insight.payload?.actions && Array.isArray(insight.payload.actions)) {
                 insight.payload.actions.forEach((action: string) => actions.add(action));
             }
@@ -180,7 +181,7 @@ function SessionDetailsContent() {
             actions: Array.from(actions).reverse(),
             summary: Array.from(summaryBullets).reverse(),
         };
-    }, [isActiveSession, sessionDetails?.insights]);
+    }, [isActiveSession, insights]);
 
     if (!userInfo || isLoading) {
         return (

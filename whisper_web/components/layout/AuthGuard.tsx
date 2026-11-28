@@ -2,8 +2,8 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/utils/auth';
-import { isDevMockEnabled } from '@/utils/devMock';
+import { useAuth } from '@/lib/auth';
+import { isDevMockEnabled } from '@/lib/devMock';
 
 interface AuthGuardProps {
     children: React.ReactNode;

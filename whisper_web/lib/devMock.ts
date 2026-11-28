@@ -4,77 +4,90 @@
 // - localStorage.dev_mock === '1'
 // - URL param ?dev=1 (or disable with ?dev=0)
 
-export interface DevUserProfile {
-    uid: string;
-    display_name: string;
-    email: string;
-}
+import { z } from 'zod';
+import type { AiMessage, PromptPreset, Session, SessionDetails, Summary, Transcript, UserProfile } from './api';
 
-export interface DevSession {
-    id: string;
-    uid: string;
-    title: string;
-    session_type: string; // keep broad for compatibility with app types
-    started_at: number;
-    ended_at?: number;
-    sync_state: 'clean' | 'dirty';
-    updated_at: number;
-}
+// The mock data has the same shape as the app's types, so these are aliases.
+export type DevUserProfile = UserProfile;
+export type DevSession = Session;
+export type DevTranscript = Transcript;
+export type DevAiMessage = AiMessage;
+export type DevSummary = Summary;
+export type DevSessionDetails = SessionDetails;
+export type DevPromptPreset = PromptPreset;
 
-export interface DevTranscript {
-    id: string;
-    session_id: string;
-    start_at: number;
-    end_at?: number;
-    speaker?: string;
-    text: string;
-    lang?: string;
-    created_at: number;
-    sync_state: 'clean' | 'dirty';
-}
+const syncStateSchema = z.enum(['clean', 'dirty']);
 
-export interface DevAiMessage {
-    id: string;
-    session_id: string;
-    sent_at: number;
-    role: 'user' | 'assistant';
-    content: string;
-    tokens?: number;
-    model?: string;
-    created_at: number;
-    sync_state: 'clean' | 'dirty';
-}
+// What is read back from localStorage is parsed once here; each schema is checked against the app type it must produce.
+const sessionSchema: z.ZodType<Session> = z.object({
+    id: z.string(),
+    uid: z.string(),
+    title: z.string(),
+    session_type: z.string(),
+    started_at: z.number(),
+    ended_at: z.number().optional(),
+    sync_state: syncStateSchema,
+    updated_at: z.number(),
+});
 
-export interface DevSummary {
-    session_id: string;
-    generated_at: number;
-    model?: string;
-    text: string;
-    tldr: string;
-    bullet_json: string;
-    action_json: string;
-    tokens_used?: number;
-    updated_at: number;
-    sync_state: 'clean' | 'dirty';
-}
+const transcriptSchema: z.ZodType<Transcript> = z.object({
+    id: z.string(),
+    session_id: z.string(),
+    start_at: z.number(),
+    end_at: z.number().optional(),
+    speaker: z.string().optional(),
+    text: z.string(),
+    lang: z.string().optional(),
+    created_at: z.number(),
+    sync_state: syncStateSchema,
+});
 
-export interface DevSessionDetails {
-    session: DevSession;
-    transcripts: DevTranscript[];
-    ai_messages: DevAiMessage[];
-    summary: DevSummary | null;
-}
+const aiMessageSchema: z.ZodType<AiMessage> = z.object({
+    id: z.string(),
+    session_id: z.string(),
+    sent_at: z.number(),
+    role: z.enum(['user', 'assistant']),
+    content: z.string(),
+    tokens: z.number().optional(),
+    model: z.string().optional(),
+    created_at: z.number(),
+    sync_state: syncStateSchema,
+});
 
-export interface DevPromptPreset {
-    id: string;
-    uid: string;
-    title: string;
-    prompt: string;
-    append_text?: string;
-    is_default: 0 | 1;
-    created_at: number;
-    sync_state: 'clean' | 'dirty';
-}
+const summarySchema: z.ZodType<Summary> = z.object({
+    session_id: z.string(),
+    generated_at: z.number(),
+    model: z.string().optional(),
+    text: z.string(),
+    tldr: z.string(),
+    bullet_json: z.string(),
+    action_json: z.string(),
+    tokens_used: z.number().optional(),
+    updated_at: z.number(),
+    sync_state: syncStateSchema,
+});
+
+const sessionDetailsSchema: z.ZodType<SessionDetails> = z.object({
+    session: sessionSchema,
+    transcripts: z.array(transcriptSchema),
+    ai_messages: z.array(aiMessageSchema),
+    summary: summarySchema.nullable(),
+});
+
+const promptPresetSchema: z.ZodType<PromptPreset> = z.object({
+    id: z.string(),
+    uid: z.string(),
+    title: z.string(),
+    prompt: z.string(),
+    append_text: z.string().optional(),
+    is_default: z.union([z.literal(0), z.literal(1)]),
+    created_at: z.number(),
+    sync_state: syncStateSchema,
+});
+
+const presetListSchema = z.array(promptPresetSchema);
+const sessionListSchema = z.array(sessionSchema);
+
 
 const PRESETS_KEY = 'dev_mock_presets';
 const SESSIONS_KEY = 'dev_mock_sessions';
@@ -201,7 +214,7 @@ export function ensureMockData() {
                         'Bug Triage Meeting',
                         'Design System Discussion',
                     ];
-                    title = meetingTitles[(i - 17) % 5];
+                    title = meetingTitles[(i - 17) % 5] ?? '';
                 }
             } else {
                 if (i <= 16) {
@@ -215,7 +228,7 @@ export function ensureMockData() {
                         'Testing Strategy',
                         'Deployment Process',
                     ];
-                    title = questionTitles[(i - 17) % 5];
+                    title = questionTitles[(i - 17) % 5] ?? '';
                 }
             }
             const s: DevSession = {
@@ -319,7 +332,7 @@ export function getPresetsMock(): DevPromptPreset[] {
     ensureMockData();
     try {
         const raw = localStorage.getItem(PRESETS_KEY);
-        return raw ? (JSON.parse(raw) as DevPromptPreset[]) : [];
+        return raw ? presetListSchema.parse(JSON.parse(raw)) : [];
     } catch {
         return [];
     }
@@ -337,7 +350,7 @@ export function getSessionsMock(): DevSession[] {
     ensureMockData();
     try {
         const raw = localStorage.getItem(SESSIONS_KEY);
-        return raw ? (JSON.parse(raw) as DevSession[]) : [];
+        return raw ? sessionListSchema.parse(JSON.parse(raw)) : [];
     } catch {
         return [];
     }
@@ -355,7 +368,7 @@ export function getSessionDetailsMock(id: string): DevSessionDetails | null {
     ensureMockData();
     try {
         const raw = localStorage.getItem(DETAILS_PREFIX + id);
-        return raw ? (JSON.parse(raw) as DevSessionDetails) : null;
+        return raw ? sessionDetailsSchema.parse(JSON.parse(raw)) : null;
     } catch {
         return null;
     }
@@ -410,7 +423,7 @@ function getMeetingTranscript(i: number): string {
         'Initiating bug triage process',
         'Starting design system conversation',
     ];
-    return transcripts[(i - 17) % 5];
+    return transcripts[(i - 17) % 5] ?? '';
 }
 
 function getMeetingDiscussion(i: number): string {
@@ -421,7 +434,7 @@ function getMeetingDiscussion(i: number): string {
         'Categorizing and prioritizing reported issues',
         'Discussing component library updates and guidelines',
     ];
-    return discussions[(i - 17) % 5];
+    return discussions[(i - 17) % 5] ?? '';
 }
 
 function getMeetingSummaryText(i: number): string {
@@ -432,7 +445,7 @@ function getMeetingSummaryText(i: number): string {
         'Bug triage identified critical issues and assigned ownership. Development team categorized reported bugs by severity, assigned responsible developers, and established priority order for resolution. Root cause analysis was initiated for high-impact issues.',
         'Design system discussion established new component standards. Design and development teams reviewed component library updates, established migration strategy, and created implementation guidelines for consistent UI across the application.',
     ];
-    return summaries[(i - 17) % 5];
+    return summaries[(i - 17) % 5] ?? '';
 }
 
 function getMeetingTLDR(i: number): string {
@@ -443,7 +456,7 @@ function getMeetingTLDR(i: number): string {
         'Bug triage completed with severity categorization and developer assignments',
         'Design system standards established with migration strategy and implementation guidelines',
     ];
-    return tldrs[(i - 17) % 5];
+    return tldrs[(i - 17) % 5] ?? '';
 }
 
 function getMeetingBullets(i: number): string {
@@ -536,7 +549,7 @@ function getQuestionContent(i: number): string {
         'What testing strategy works best for React apps?',
         'How do I set up automated deployment pipelines?',
     ];
-    return questions[(i - 17) % 5];
+    return questions[(i - 17) % 5] ?? '';
 }
 
 function getMeetingDiscussion2(i: number): string {
@@ -547,7 +560,7 @@ function getMeetingDiscussion2(i: number): string {
         'Most bugs are in the authentication flow, should prioritize those for security reasons',
         'The new design system will require updating 50+ components across the entire application',
     ];
-    return discussions[(i - 17) % 5];
+    return discussions[(i - 17) % 5] ?? '';
 }
 
 function getMeetingTranscript2(i: number): string {
@@ -558,7 +571,7 @@ function getMeetingTranscript2(i: number): string {
         'Prioritizing the critical bugs that need immediate developer attention',
         'Discussing the component library migration strategy and timeline',
     ];
-    return transcripts[(i - 17) % 5];
+    return transcripts[(i - 17) % 5] ?? '';
 }
 
 function getMeetingTranscript3(i: number): string {
@@ -569,7 +582,7 @@ function getMeetingTranscript3(i: number): string {
         "I'll create tickets for the high-priority bugs we identified in the triage session",
         "I'll prepare the migration documentation and component usage guidelines for the team",
     ];
-    return transcripts[(i - 17) % 5];
+    return transcripts[(i - 17) % 5] ?? '';
 }
 
 function getQuestionAnswer(i: number): string {
@@ -580,7 +593,7 @@ function getQuestionAnswer(i: number): string {
         'Combine unit tests for components, integration tests for user flows, and E2E tests for critical paths.',
         'Use CI/CD platforms like GitHub Actions, implement staging environments, and automate rollback procedures.',
     ];
-    return answers[(i - 17) % 5];
+    return answers[(i - 17) % 5] ?? '';
 }
 
 function generateAIMessages(sessionIndex: number, sessionId: string, startTime: number): DevAiMessage[] {

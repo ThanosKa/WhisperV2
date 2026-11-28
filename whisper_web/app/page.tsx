@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/utils/auth';
-import { isDevMockEnabled } from '@/utils/devMock';
+import { useAuth } from '@/lib/auth';
+import { isDevMockEnabled } from '@/lib/devMock';
 
 export default function Home() {
     const router = useRouter();

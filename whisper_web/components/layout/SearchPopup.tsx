@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, X, MessageSquare, HelpCircle } from 'lucide-react';
-import { searchConversations, searchConversationsPage, Session, PagedResult } from '@/utils/api';
+import { searchConversations, searchConversationsPage, type Session, type PagedResult } from '@/lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,12 @@ interface SearchPopupProps {
     onClose: () => void;
 }
 
+const toShortcut = (char: string): '#' | '?' | null => {
+    if (char === '#') return '#';
+    if (char === '?') return '?';
+    return null;
+};
+
 export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<Session[]>([]);
@@ -20,7 +26,7 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState<boolean>(false);
     const [nextOffset, setNextOffset] = useState<number | null>(0);
-    const sentinelRef = useRef<HTMLDivElement | null>(null);
+    const [sentinel, setSentinel] = useState<HTMLDivElement | null>(null);
     const [activeShortcut, setActiveShortcut] = useState<'#' | '?' | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const router = useRouter();
@@ -32,11 +38,9 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
     }, [isOpen]);
 
     // Clear active shortcut when popup closes
-    useEffect(() => {
-        if (!isOpen) {
-            setActiveShortcut(null);
-        }
-    }, [isOpen]);
+    if (!isOpen && activeShortcut !== null) {
+        setActiveShortcut(null);
+    }
 
     useEffect(() => {
         const handleEscape = (e: KeyboardEvent) => {
@@ -56,8 +60,9 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
             // Only activate when input is focused and caret is at position 0 and key is '#' or '?'
             if (!inputRef.current) return;
             const isAtStart = inputRef.current.selectionStart === 0 && inputRef.current.selectionEnd === 0;
-            if ((e.key === '#' || e.key === '?') && isAtStart) {
-                setActiveShortcut(e.key as '#' | '?');
+            const pressedShortcut = toShortcut(e.key);
+            if (pressedShortcut && isAtStart) {
+                setActiveShortcut(pressedShortcut);
             } else if (e.key.length === 1) {
                 // Any character input that changes the first char should reset highlight unless it remains '#' or '?'
                 const nextFirstChar = e.key;
@@ -69,7 +74,7 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
                 setTimeout(() => {
                     const val = inputRef.current?.value || '';
                     const first = val.charAt(0);
-                    setActiveShortcut(first === '#' || first === '?' ? (first as '#' | '?') : null);
+                    setActiveShortcut(toShortcut(first));
                 }, 0);
             } else if (e.key === 'Escape') {
                 // Keep existing escape close behavior via separate effect
@@ -119,7 +124,7 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
         }
     };
 
-    const loadMore = async () => {
+    const loadMore = useCallback(async () => {
         if (isLoadingMore || !hasMore || nextOffset === null) return;
         const raw = searchQuery || '';
         const trimmed = raw.trim();
@@ -143,30 +148,29 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
         } finally {
             setIsLoadingMore(false);
         }
+    }, [isLoadingMore, hasMore, nextOffset, searchQuery]);
+
+    // Every query change resets pagination; an empty query (or a lone '?') also clears the results.
+    const updateQuery = (query: string) => {
+        setSearchQuery(query);
+        setHasMore(false);
+        setNextOffset(0);
+        const trimmedQuery = query.trim();
+        if (!trimmedQuery || trimmedQuery === '?') {
+            setIsLoading(false);
+            setSearchResults([]);
+        }
     };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const query = e.target.value;
-        setSearchQuery(query);
+        updateQuery(e.target.value);
     };
 
     // Debounce search
     useEffect(() => {
         const trimmedQuery = searchQuery.trim();
 
-        if (!trimmedQuery) {
-            setIsLoading(false);
-            setSearchResults([]);
-            setHasMore(false);
-            setNextOffset(0);
-            return;
-        }
-
-        if (trimmedQuery === '?') {
-            setIsLoading(false);
-            setSearchResults([]);
-            setHasMore(false);
-            setNextOffset(0);
+        if (!trimmedQuery || trimmedQuery === '?') {
             return;
         }
 
@@ -177,20 +181,13 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
         return () => clearTimeout(id);
     }, [searchQuery]);
 
-    // Reset pagination state when query changes
-    useEffect(() => {
-        setHasMore(false);
-        setNextOffset(0);
-    }, [searchQuery]);
-
     // Intersection Observer for infinite scroll inside the dialog content
     useEffect(() => {
-        const sentinel = sentinelRef.current;
         if (!sentinel) return;
         const observer = new IntersectionObserver(
             entries => {
                 const first = entries[0];
-                if (first.isIntersecting) {
+                if (first?.isIntersecting) {
                     loadMore();
                 }
             },
@@ -198,8 +195,7 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
         );
         observer.observe(sentinel);
         return () => observer.disconnect();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sentinelRef.current, hasMore, nextOffset, isLoadingMore, searchQuery]);
+    }, [sentinel, loadMore]);
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -227,7 +223,7 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
                         variant="ghost"
                         size="sm"
                         onClick={() => {
-                            setSearchQuery('');
+                            updateQuery('');
                             setActiveShortcut(null);
                         }}
                     >
@@ -289,7 +285,7 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
                                         <p className="text-muted-foreground text-xs">Loading more...</p>
                                     </div>
                                 )}
-                                {hasMore ? <div ref={sentinelRef} /> : <div className="text-center py-4 text-muted-foreground text-xs">End.</div>}
+                                {hasMore ? <div ref={setSentinel} /> : <div className="text-center py-4 text-muted-foreground text-xs">End.</div>}
                             </div>
                         ) : (
                             <div className="p-6 text-center">

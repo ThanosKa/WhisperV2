@@ -1,10 +1,10 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { getUserProfile } from '@/utils/api';
+import { getUserProfile } from '@/lib/api';
 import { RefreshCw, User, Check } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
-import { isDevMockEnabled } from '@/utils/devMock';
+import { isDevMockEnabled } from '@/lib/devMock';
 
 export default function SyncPage() {
     const router = useRouter();
@@ -145,7 +145,9 @@ export default function SyncPage() {
                         // Web Mode - Redirect to External Webapp
                         <button
                             onClick={() => {
-                                window.location.href = `${process.env.API_BASE_URL || 'http://localhost:3000'}/auth/sign-in?mode=electron`;
+                                const signInUrl = new URL('/auth/sign-in', process.env.API_BASE_URL || 'http://localhost:3000');
+                                signInUrl.searchParams.set('mode', 'electron');
+                                window.location.href = signInUrl.toString();
                             }}
                             disabled={isLoading}
                             className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-gray-300 rounded-md shadow-xs text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"

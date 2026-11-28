@@ -130,6 +130,15 @@ export const handlers = [
         return HttpResponse.json({ totalMeetingSeconds, totalQuestions: desktop.userQuestionCount });
     }),
 
+    /** Title search; the summary scopes match every session, as the test sessions have no summary index. */
+    http.get(api('/api/conversations/search/page'), ({ request }) => {
+        const url = new URL(request.url);
+        const q = (url.searchParams.get('q') || '').toLowerCase();
+        const scope = url.searchParams.get('scope') || 'title';
+        const matches = desktop.sessions.filter(s => scope !== 'title' || (s.title || '').toLowerCase().includes(q));
+        return HttpResponse.json(page({ sessions: matches, url }));
+    }),
+
     http.get(api('/api/conversations/:sessionId'), ({ params }) => {
         const details = typeof params.sessionId === 'string' ? desktop.details[params.sessionId] : undefined;
         if (!details) {

@@ -1,6 +1,8 @@
 module.exports = {
     testEnvironment: 'node',
-    testMatch: ['**/tests/unit/**/*.test.js', '**/tests/integration/**/*.test.js'],
+    testMatch: ['<rootDir>/tests/unit/**/*.test.js', '<rootDir>/tests/integration/**/*.test.js'],
+    // Agent worktrees live under .claude/worktrees/ and hold full copies of the repo.
+    modulePathIgnorePatterns: ['<rootDir>/.claude/'],
     collectCoverageFrom: [
         'src/features/**/*.js',
         'src/bridge/**/*.js',

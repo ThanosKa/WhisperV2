@@ -107,6 +107,8 @@ jest.mock('electron-store', () => {
     ElectronStore.__resetInstances = () => {
         instances.length = 0;
     };
+    // electron-store 12 is ESM: `require` returns its namespace, with the class on `default`.
+    ElectronStore.default = ElectronStore;
 
     return ElectronStore;
 });

@@ -1,11 +1,16 @@
 import { screen } from 'electron';
+import type { BrowserWindow, Display, Rectangle } from 'electron';
+import { logger } from '../features/common/utils/logger';
 
-/**
- *
- * @param {BrowserWindow} window
- * @returns {Display}
- */
-function getCurrentDisplay(window) {
+const log = logger.child({ module: 'WindowLayoutManager' });
+
+type Position = { x: number; y: number };
+export type Direction = 'left' | 'right' | 'up' | 'down';
+// The feature windows that get a place next to the header.
+export type WindowLayout = Partial<Record<'listen' | 'ask', Rectangle>>;
+type Visibility = { listen?: boolean | undefined; ask?: boolean | undefined };
+
+export function getCurrentDisplay(window: BrowserWindow | undefined): Display {
     if (!window || window.isDestroyed()) return screen.getPrimaryDisplay();
 
     const windowBounds = window.getBounds();
@@ -18,29 +23,27 @@ function getCurrentDisplay(window) {
 }
 
 class WindowLayoutManager {
-    /**
-     * @param {Map<string, BrowserWindow>} windowPool - Map of windows to manage
-     */
-    constructor(windowPool) {
+    private readonly windowPool: Map<string, BrowserWindow>;
+
+    constructor(windowPool: Map<string, BrowserWindow>) {
         this.windowPool = windowPool;
-        this.isUpdating = false;
-        this.PADDING = 80;
     }
 
-    getHeaderPosition = () => {
-        const header = this.windowPool.get('header');
-        if (header) {
-            const [x, y] = header.getPosition();
-            return { x, y };
-        }
-        return { x: 0, y: 0 };
-    };
-
-    /**
-     *
-     * @returns {{name: string, primary: string, secondary: string}}
-     */
-    determineLayoutStrategy(headerBounds, screenWidth, screenHeight, relativeX, relativeY, workAreaX, workAreaY) {
+    private determineLayoutStrategy({
+        headerBounds,
+        screenWidth,
+        screenHeight,
+        relativeX,
+        workAreaX,
+        workAreaY,
+    }: {
+        headerBounds: Rectangle;
+        screenWidth: number;
+        screenHeight: number;
+        relativeX: number;
+        workAreaX: number;
+        workAreaY: number;
+    }): { name: string; primary: string; secondary: string } {
         const headerRelX = headerBounds.x - workAreaX;
         const headerRelY = headerBounds.y - workAreaY;
 
@@ -62,10 +65,7 @@ class WindowLayoutManager {
         }
     }
 
-    /**
-     * @returns {{x: number, y: number} | null}
-     */
-    calculateSettingsWindowPosition() {
+    calculateSettingsWindowPosition(): Position | null {
         const header = this.windowPool.get('header');
         const settings = this.windowPool.get('settings');
 
@@ -76,8 +76,7 @@ class WindowLayoutManager {
         const headerBounds = header.getBounds();
         const settingsBounds = settings.getBounds();
 
-        // Add console logging for settings window bounds
-        console.log(`[Layout Debug] Settings Window Bounds: height=${settingsBounds.height}, width=${settingsBounds.width}`);
+        log.info({ height: settingsBounds.height, width: settingsBounds.width }, 'Settings window bounds');
 
         const display = getCurrentDisplay(header);
         const { x: workAreaX, y: workAreaY, width: screenWidth, height: screenHeight } = display.workArea;
@@ -92,16 +91,13 @@ class WindowLayoutManager {
         const clampedY = Math.max(workAreaY + 10, Math.min(workAreaY + screenHeight - settingsBounds.height - 10, y));
 
         const newPosition = { x: Math.round(clampedX), y: Math.round(clampedY) };
-        console.log(`[Layout Debug] Settings Window New Position: x=${newPosition.x}, y=${newPosition.y}`);
+        log.info(newPosition, 'Settings window new position');
 
         return newPosition;
     }
 
-    /**
-     * Position the small plan/quota tooltip window near the left side of the header
-     * @returns {{x:number,y:number}|null}
-     */
-    calculatePlanWindowPosition() {
+    /** Position the small plan/quota tooltip window near the left side of the header. */
+    calculatePlanWindowPosition(): Position | null {
         const header = this.windowPool.get('header');
         const plan = this.windowPool.get('plan');
 
@@ -127,8 +123,7 @@ class WindowLayoutManager {
         return { x: Math.round(clampedX), y: Math.round(clampedY) };
     }
 
-    calculateHeaderResize(header, { width, height }) {
-        if (!header) return null;
+    calculateHeaderResize({ header, width, height }: { header: BrowserWindow; width: number; height: number }): Rectangle {
         const currentBounds = header.getBounds();
         const centerX = currentBounds.x + currentBounds.width / 2;
         const newX = Math.round(centerX - width / 2);
@@ -138,8 +133,7 @@ class WindowLayoutManager {
         return { x: clampedX, y: currentBounds.y, width, height };
     }
 
-    calculateClampedPosition(header, { x: newX, y: newY }) {
-        if (!header) return null;
+    calculateClampedPosition({ header, x: newX, y: newY }: { header: BrowserWindow; x: number; y: number }): Position {
         const currentDisplay = getCurrentDisplay(header);
         const { x: workAreaX, y: workAreaY, width, height } = currentDisplay.workArea;
         const headerBounds = header.getBounds();
@@ -148,11 +142,10 @@ class WindowLayoutManager {
         return { x: clampedX, y: clampedY };
     }
 
-    calculateWindowHeightAdjustment(senderWindow, targetHeight) {
-        if (!senderWindow) return null;
+    calculateWindowHeightAdjustment({ senderWindow, targetHeight }: { senderWindow: BrowserWindow; targetHeight: number }): Rectangle {
         const currentBounds = senderWindow.getBounds();
-        const minHeight = senderWindow.getMinimumSize()[1];
-        const maxHeight = senderWindow.getMaximumSize()[1];
+        const minHeight = senderWindow.getMinimumSize()[1] ?? 0;
+        const maxHeight = senderWindow.getMaximumSize()[1] ?? 0;
         let adjustedHeight = Math.max(minHeight, targetHeight);
         if (maxHeight > 0) {
             adjustedHeight = Math.min(maxHeight, adjustedHeight);
@@ -182,14 +175,13 @@ class WindowLayoutManager {
         };
     }
 
-    // Replace the existing getTargetBoundsForFeatureWindows with this function.
-    calculateFeatureWindowLayout(visibility, headerBoundsOverride = null) {
+    calculateFeatureWindowLayout({ visibility, headerBoundsOverride }: { visibility: Visibility; headerBoundsOverride?: Rectangle }): WindowLayout {
         const header = this.windowPool.get('header');
         const headerBounds = headerBoundsOverride || (header ? header.getBounds() : null);
 
         if (!headerBounds) return {};
 
-        let display;
+        let display: Display;
         if (headerBoundsOverride) {
             const boundsCenter = {
                 x: headerBounds.x + headerBounds.width / 2,
@@ -205,34 +197,25 @@ class WindowLayoutManager {
         const ask = this.windowPool.get('ask');
         const listen = this.windowPool.get('listen');
 
-        const askVis = visibility.ask && ask && !ask.isDestroyed();
-        const listenVis = visibility.listen && listen && !listen.isDestroyed();
+        const askB = visibility.ask && ask && !ask.isDestroyed() ? ask.getBounds() : null;
+        const listenB = visibility.listen && listen && !listen.isDestroyed() ? listen.getBounds() : null;
 
-        if (!askVis && !listenVis) return {};
+        if (!askB && !listenB) return {};
 
         const PAD = 8;
         const headerTopRel = headerBounds.y - workAreaY;
-        const headerBottomRel = headerTopRel + headerBounds.height;
         const headerCenterXRel = headerBounds.x - workAreaX + headerBounds.width / 2;
 
         const relativeX = headerCenterXRel / screenWidth;
-        const relativeY = (headerBounds.y - workAreaY) / screenHeight;
-        const strategy = this.determineLayoutStrategy(headerBounds, screenWidth, screenHeight, relativeX, relativeY, workAreaX, workAreaY);
+        const strategy = this.determineLayoutStrategy({ headerBounds, screenWidth, screenHeight, relativeX, workAreaX, workAreaY });
 
-        const askB = askVis ? ask.getBounds() : null;
-        const listenB = listenVis ? listen.getBounds() : null;
-
-        if (askVis) {
-            console.log(`[Layout Debug] Ask Window Bounds: height=${askB.height}, width=${askB.width}`);
-        }
-        if (listenVis) {
-            // Console logging for listen window dimensions when window is opened/resized
-            // console.log(`[Layout Debug] Listen Window Bounds: height=${listenB.height}, width=${listenB.width}`);
+        if (askB) {
+            log.info({ height: askB.height, width: askB.width }, 'Ask window bounds');
         }
 
-        const layout = {};
+        const layout: WindowLayout = {};
 
-        if (askVis && listenVis) {
+        if (askB && listenB) {
             let askXRel = headerCenterXRel - askB.width / 2;
             let listenXRel = askXRel - listenB.width - PAD;
 
@@ -267,19 +250,19 @@ class WindowLayoutManager {
             }
         } else {
             // Single window
-            const winName = askVis ? 'ask' : 'listen';
-            const winB = askVis ? askB : listenB;
+            const winName = askB ? 'ask' : 'listen';
+            const winB = askB ?? listenB;
             if (!winB) return {};
 
             let xRel = headerCenterXRel - winB.width / 2;
             xRel = Math.max(PAD, Math.min(screenWidth - winB.width - PAD, xRel));
 
-            let yPos;
+            let yPos: number;
             if (strategy.primary === 'above') {
-                yPos = headerBounds.y - workAreaY - PAD - winB.height;
+                yPos = headerTopRel - PAD - winB.height;
             } else {
                 // 'below'
-                yPos = headerBounds.y - workAreaY + headerBounds.height + PAD;
+                yPos = headerTopRel + headerBounds.height + PAD;
             }
 
             layout[winName] = { x: Math.round(xRel + workAreaX), y: Math.round(yPos + workAreaY), width: winB.width, height: winB.height };
@@ -287,26 +270,7 @@ class WindowLayoutManager {
         return layout;
     }
 
-    calculateShortcutSettingsWindowPosition() {
-        const header = this.windowPool.get('header');
-        const shortcutSettings = this.windowPool.get('shortcut-settings');
-        if (!header || !shortcutSettings) return null;
-
-        const headerBounds = header.getBounds();
-        const shortcutBounds = shortcutSettings.getBounds();
-        const { workArea } = getCurrentDisplay(header);
-
-        let newX = Math.round(headerBounds.x + headerBounds.width / 2 - shortcutBounds.width / 2);
-        let newY = Math.round(headerBounds.y);
-
-        newX = Math.max(workArea.x, Math.min(newX, workArea.x + workArea.width - shortcutBounds.width));
-        newY = Math.max(workArea.y, Math.min(newY, workArea.y + workArea.height - shortcutBounds.height));
-
-        return { x: newX, y: newY, width: shortcutBounds.width, height: shortcutBounds.height };
-    }
-
-    calculateStepMovePosition(header, direction) {
-        if (!header) return null;
+    calculateStepMovePosition({ header, direction }: { header: BrowserWindow; direction: Direction }): Position {
         const currentBounds = header.getBounds();
         const stepSize = 80; // movement interval
         let targetX = currentBounds.x;
@@ -327,11 +291,10 @@ class WindowLayoutManager {
                 break;
         }
 
-        return this.calculateClampedPosition(header, { x: targetX, y: targetY });
+        return this.calculateClampedPosition({ header, x: targetX, y: targetY });
     }
 
-    calculateEdgePosition(header, direction) {
-        if (!header) return null;
+    calculateEdgePosition({ header, direction }: { header: BrowserWindow; direction: Direction }): Position {
         const display = getCurrentDisplay(header);
         const { workArea } = display;
         const currentBounds = header.getBounds();
@@ -356,9 +319,7 @@ class WindowLayoutManager {
         return { x: targetX, y: targetY };
     }
 
-    calculateNewPositionForDisplay(window, targetDisplayId) {
-        if (!window) return null;
-
+    calculateNewPositionForDisplay({ window, targetDisplayId }: { window: BrowserWindow; targetDisplayId: number }): Position | null {
         const targetDisplay = screen.getAllDisplays().find(d => d.id === targetDisplayId);
         if (!targetDisplay) return null;
 
@@ -383,21 +344,6 @@ class WindowLayoutManager {
         );
 
         return { x: Math.round(clampedX), y: Math.round(clampedY) };
-    }
-
-    /**
-     * @param {Rectangle} bounds1
-     * @param {Rectangle} bounds2
-     * @returns {boolean}
-     */
-    boundsOverlap(bounds1, bounds2) {
-        const margin = 10;
-        return !(
-            bounds1.x + bounds1.width + margin < bounds2.x ||
-            bounds2.x + bounds2.width + margin < bounds1.x ||
-            bounds1.y + bounds1.height + margin < bounds2.y ||
-            bounds2.y + bounds2.height + margin < bounds1.y
-        );
     }
 }
 

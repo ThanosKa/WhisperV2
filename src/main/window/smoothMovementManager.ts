@@ -1,29 +1,31 @@
-import { screen } from 'electron';
+import type { BrowserWindow, Rectangle } from 'electron';
+import type { WindowLayout } from './windowLayoutManager';
+
+type Position = { x: number; y: number };
+
+type AnimationOptions = {
+    onComplete?: (() => void) | undefined;
+    duration?: number | undefined;
+};
+
+type FadeOptions = { win: BrowserWindow; from?: number | undefined; to: number; duration?: number | undefined; onComplete?: (() => void) | undefined };
 
 class SmoothMovementManager {
-    constructor(windowPool) {
-        this.windowPool = windowPool;
-        this.stepSize = 80;
-        this.animationDuration = 300;
-        this.headerPosition = { x: 0, y: 0 };
-        this.isAnimating = false;
-        this.hiddenPosition = null;
-        this.lastVisiblePosition = null;
-        this.currentDisplayId = null;
-        this.animationFrameId = null;
+    private readonly windowPool: Map<string, BrowserWindow>;
+    private readonly animationDuration = 300;
+    isAnimating = false;
+    private readonly animationTimers = new Map<BrowserWindow, ReturnType<typeof setTimeout>>();
 
-        this.animationTimers = new Map();
+    constructor(windowPool: Map<string, BrowserWindow>) {
+        this.windowPool = windowPool;
     }
 
-    /**
-     * @param {BrowserWindow} win
-     * @returns {boolean}
-     */
-    _isWindowValid(win) {
-        if (!win || win.isDestroyed()) {
+    private isWindowValid(win: BrowserWindow): boolean {
+        if (win.isDestroyed()) {
             // Clean up timer if it exists for this window
-            if (this.animationTimers.has(win)) {
-                clearTimeout(this.animationTimers.get(win));
+            const timer = this.animationTimers.get(win);
+            if (timer !== undefined) {
+                clearTimeout(timer);
                 this.animationTimers.delete(win);
             }
             return false;
@@ -31,55 +33,8 @@ class SmoothMovementManager {
         return true;
     }
 
-    /**
-     *
-     * @param {BrowserWindow} win
-     * @param {number} targetX
-     * @param {number} targetY
-     * @param {object} [options]
-     * @param {object} [options.sizeOverride]
-     * @param {function} [options.onComplete]
-     * @param {number} [options.duration]
-     */
-    animateWindow(win, targetX, targetY, options = {}) {
-        if (!this._isWindowValid(win)) {
-            if (options.onComplete) options.onComplete();
-            return;
-        }
-
-        const { sizeOverride, onComplete, duration: animDuration } = options;
-        const start = win.getBounds();
-        const startTime = Date.now();
-        const duration = animDuration || this.animationDuration;
-        const { width, height } = sizeOverride || start;
-
-        const step = () => {
-            if (!this._isWindowValid(win)) {
-                if (onComplete) onComplete();
-                return;
-            }
-
-            const p = Math.min((Date.now() - startTime) / duration, 1);
-            const eased = 1 - Math.pow(1 - p, 3); // ease-out-cubic
-            const x = start.x + (targetX - start.x) * eased;
-            const y = start.y + (targetY - start.y) * eased;
-
-            win.setBounds({ x: Math.round(x), y: Math.round(y), width, height });
-
-            if (p < 1) {
-                setTimeout(step, 8);
-            } else {
-                this.layoutManager.updateLayout();
-                if (onComplete) {
-                    onComplete();
-                }
-            }
-        };
-        step();
-    }
-
-    fade(win, { from, to, duration = 250, onComplete }) {
-        if (!this._isWindowValid(win)) {
+    fade({ win, from, to, duration = 250, onComplete }: FadeOptions) {
+        if (!this.isWindowValid(win)) {
             if (onComplete) onComplete();
             return;
         }
@@ -87,7 +42,7 @@ class SmoothMovementManager {
         const startTime = Date.now();
 
         const step = () => {
-            if (!this._isWindowValid(win)) {
+            if (!this.isWindowValid(win)) {
                 if (onComplete) onComplete();
                 return;
             }
@@ -105,12 +60,13 @@ class SmoothMovementManager {
         step();
     }
 
-    animateWindowBounds(win, targetBounds, options = {}) {
-        if (this.animationTimers.has(win)) {
-            clearTimeout(this.animationTimers.get(win));
+    animateWindowBounds({ win, targetBounds, ...options }: { win: BrowserWindow; targetBounds: Rectangle } & AnimationOptions) {
+        const pending = this.animationTimers.get(win);
+        if (pending !== undefined) {
+            clearTimeout(pending);
         }
 
-        if (!this._isWindowValid(win)) {
+        if (!this.isWindowValid(win)) {
             if (options.onComplete) options.onComplete();
             return;
         }
@@ -122,7 +78,7 @@ class SmoothMovementManager {
         const duration = options.duration || this.animationDuration;
 
         const step = () => {
-            if (!this._isWindowValid(win)) {
+            if (!this.isWindowValid(win)) {
                 if (options.onComplete) options.onComplete();
                 return;
             }
@@ -133,8 +89,8 @@ class SmoothMovementManager {
             const newBounds = {
                 x: Math.round(startBounds.x + (targetBounds.x - startBounds.x) * eased),
                 y: Math.round(startBounds.y + (targetBounds.y - startBounds.y) * eased),
-                width: Math.round(startBounds.width + ((targetBounds.width ?? startBounds.width) - startBounds.width) * eased),
-                height: Math.round(startBounds.height + ((targetBounds.height ?? startBounds.height) - startBounds.height) * eased),
+                width: Math.round(startBounds.width + (targetBounds.width - startBounds.width) * eased),
+                height: Math.round(startBounds.height + (targetBounds.height - startBounds.height) * eased),
             };
             win.setBounds(newBounds);
 
@@ -155,38 +111,27 @@ class SmoothMovementManager {
         step();
     }
 
-    animateWindowPosition(win, targetPosition, options = {}) {
-        if (!this._isWindowValid(win)) {
+    animateWindowPosition({ win, targetPosition, ...options }: { win: BrowserWindow; targetPosition: Position } & AnimationOptions) {
+        if (!this.isWindowValid(win)) {
             if (options.onComplete) options.onComplete();
             return;
         }
         const currentBounds = win.getBounds();
         const targetBounds = { ...currentBounds, ...targetPosition };
-        this.animateWindowBounds(win, targetBounds, options);
+        this.animateWindowBounds({ win, targetBounds, ...options });
     }
 
-    animateLayout(layout, animated = true) {
-        if (!layout) return;
-        for (const winName in layout) {
+    animateLayout({ layout, animated = true }: { layout: WindowLayout; animated?: boolean }) {
+        for (const [winName, targetBounds] of Object.entries(layout)) {
             const win = this.windowPool.get(winName);
-            const targetBounds = layout[winName];
             if (win && !win.isDestroyed() && targetBounds) {
                 if (animated) {
-                    this.animateWindowBounds(win, targetBounds);
+                    this.animateWindowBounds({ win, targetBounds });
                 } else {
                     win.setBounds(targetBounds);
                 }
             }
         }
-    }
-
-    destroy() {
-        if (this.animationFrameId) {
-            clearTimeout(this.animationFrameId);
-            this.animationFrameId = null;
-        }
-        this.isAnimating = false;
-        console.log('[Movement] Manager destroyed');
     }
 }
 

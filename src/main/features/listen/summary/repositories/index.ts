@@ -1,6 +1,10 @@
 import * as sqliteRepository from './sqlite.repository';
 import * as insightsRepository from './insights.repository';
+import type { NewSummary } from './sqlite.repository';
 import authService from '../../../common/services/authService';
+
+export type { SummaryRow } from './sqlite.repository';
+export type { Insight, InsightPayload } from './insights.repository';
 
 function getBaseRepository() {
     // Always use SQLite for local-first data strategy
@@ -9,11 +13,11 @@ function getBaseRepository() {
 }
 
 const summaryRepositoryAdapter = {
-    saveSummary: ({ sessionId, tldr, text, bullet_json, action_json, model }) => {
+    saveSummary: ({ sessionId, tldr, text, bullet_json, action_json, model }: Omit<NewSummary, 'uid'>) => {
         const uid = authService.getCurrentUserId();
         return getBaseRepository().saveSummary({ uid, sessionId, tldr, text, bullet_json, action_json, model });
     },
-    getSummaryBySessionId: sessionId => {
+    getSummaryBySessionId: (sessionId: string) => {
         return getBaseRepository().getSummaryBySessionId(sessionId);
     },
     // Insights methods
@@ -22,4 +26,3 @@ const summaryRepositoryAdapter = {
 };
 
 export default summaryRepositoryAdapter;
-

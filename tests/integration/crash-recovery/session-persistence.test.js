@@ -11,15 +11,15 @@ const mockAuthService = {
     getCurrentUserId: jestModule.fn(() => 'test-user-id'),
 };
 
-jestModule.mock('../../../src/features/common/repositories/session', () => ({
+jestModule.mock('../../../src/main/features/common/repositories/session', () => ({
     findLatestUnfinishedListen: () => mockSessionRepo.findLatestUnfinishedListen(),
     end: id => mockSessionRepo.end(id),
     endAllActiveSessions: () => mockSessionRepo.endAllActiveSessions(),
 }));
 
-jestModule.mock('../../../src/features/common/services/authService', () => mockAuthService);
+jestModule.mock('../../../src/main/features/common/services/authService', () => mockAuthService);
 
-jestModule.mock('../../../src/features/listen/stt/sttService', () =>
+jestModule.mock('../../../src/main/features/listen/stt/sttService', () =>
     jestModule.fn().mockImplementation(() => ({
         setCallbacks: jestModule.fn(),
         initializeSttSessions: jestModule.fn(async () => true),
@@ -35,17 +35,17 @@ const mockSummaryService = {
     selectedPresetId: null,
 };
 
-jestModule.mock('../../../src/features/listen/summary/summaryService', () => mockSummaryService);
+jestModule.mock('../../../src/main/features/listen/summary/summaryService', () => mockSummaryService);
 
-jestModule.mock('../../../src/features/listen/stt/repositories', () => ({
+jestModule.mock('../../../src/main/features/listen/stt/repositories', () => ({
     getAllTranscriptsBySessionId: jestModule.fn(async () => []),
 }));
 
-jestModule.mock('../../../src/features/listen/summary/repositories', () => ({
+jestModule.mock('../../../src/main/features/listen/summary/repositories', () => ({
     getAllInsightsBySessionId: jestModule.fn(() => []),
 }));
 
-jestModule.mock('../../../src/window/windowManager', () => ({
+jestModule.mock('../../../src/main/window/windowManager', () => ({
     windowPool: {
         get: jestModule.fn(() => ({
             isDestroyed: jestModule.fn(() => false),
@@ -59,13 +59,13 @@ describe('Crash Recovery - Session Persistence', () => {
 
     beforeEach(() => {
         jestModule.clearAllMocks();
-        listenService = require('../../../src/features/listen/listenService');
+        listenService = require('../../../src/main/features/listen/listenService');
         listenService.strandedSession = null;
         listenService.isRecoveryDismissed = false;
         listenService.currentSessionId = null;
         mockAuthService.getCurrentUserId.mockReturnValue('test-user-id');
 
-        const SttService = require('../../../src/features/listen/stt/sttService');
+        const SttService = require('../../../src/main/features/listen/stt/sttService');
         SttService.mockImplementation(() => ({
             setCallbacks: jestModule.fn(),
             initializeSttSessions: jestModule.fn(async () => true),
@@ -82,7 +82,7 @@ describe('Crash Recovery - Session Persistence', () => {
             ended_at: null,
         };
 
-        const { getAllTranscriptsBySessionId } = require('../../../src/features/listen/stt/repositories');
+        const { getAllTranscriptsBySessionId } = require('../../../src/main/features/listen/stt/repositories');
         getAllTranscriptsBySessionId.mockResolvedValue([{ id: 1, speaker: 'User', text: 'Recovered line', timestamp: Date.now() }]);
 
         mockSessionRepo.findLatestUnfinishedListen.mockReturnValue(session);
@@ -119,7 +119,7 @@ describe('Crash Recovery - Session Persistence', () => {
             ended_at: null,
         };
 
-        const { getAllTranscriptsBySessionId } = require('../../../src/features/listen/stt/repositories');
+        const { getAllTranscriptsBySessionId } = require('../../../src/main/features/listen/stt/repositories');
         getAllTranscriptsBySessionId.mockResolvedValue([
             { id: 1, speaker: 'User', text: 'First transcript', timestamp: Date.now() },
             { id: 2, speaker: 'User', text: 'Second transcript', timestamp: Date.now() },
@@ -143,7 +143,7 @@ describe('Crash Recovery - Session Persistence', () => {
             ended_at: null,
         };
 
-        const { getAllTranscriptsBySessionId } = require('../../../src/features/listen/stt/repositories');
+        const { getAllTranscriptsBySessionId } = require('../../../src/main/features/listen/stt/repositories');
         getAllTranscriptsBySessionId.mockResolvedValue([]);
 
         mockSessionRepo.findLatestUnfinishedListen.mockReturnValue(session);
@@ -164,7 +164,7 @@ describe('Crash Recovery - Session Persistence', () => {
 
         mockSessionRepo.findLatestUnfinishedListen.mockReturnValue(latestSession);
 
-        const { getAllTranscriptsBySessionId } = require('../../../src/features/listen/stt/repositories');
+        const { getAllTranscriptsBySessionId } = require('../../../src/main/features/listen/stt/repositories');
         getAllTranscriptsBySessionId.mockResolvedValue([{ id: 1, speaker: 'User', text: 'Test', timestamp: Date.now() }]);
 
         const result = await listenService.findStrandedSession();

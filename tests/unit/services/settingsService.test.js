@@ -1,12 +1,12 @@
 const { describe, test, expect, beforeEach } = require('@jest/globals');
 
-jest.mock('../../../src/features/common/services/authService', () => ({
+jest.mock('../../../src/main/features/common/services/authService', () => ({
     getCurrentUserId: jest.fn(() => 'test-user-id'),
 }));
 
-jest.mock('../../../src/features/settings/repositories', () => require('../../mocks/database.mock').presetRepository);
+jest.mock('../../../src/main/features/settings/repositories', () => require('../../mocks/database.mock').presetRepository);
 
-jest.mock('../../../src/window/windowManager', () => {
+jest.mock('../../../src/main/window/windowManager', () => {
     const { BrowserWindow } = require('electron');
     const createWindow = () => ({
         isDestroyed: jest.fn(() => false),
@@ -37,7 +37,7 @@ describe('SettingsService', () => {
         jest.clearAllMocks();
         jest.useFakeTimers();
         jest.resetModules();
-        settingsService = require('../../../src/features/settings/settingsService');
+        settingsService = require('../../../src/main/features/settings/settingsService');
         const Store = require('electron-store');
         storeInstance = Store.__instances[0];
     });

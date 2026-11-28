@@ -37,7 +37,7 @@ describe('showScreenshotWindow', () => {
             created.push(win);
             return win;
         });
-        windowManager = require('../../../src/window/windowManager');
+        windowManager = require('../../../src/main/window/windowManager');
     });
 
     afterEach(() => {

@@ -1,7 +1,7 @@
 const { describe, test, expect, beforeEach } = require('@jest/globals');
 
-jest.mock('../../../src/features/common/repositories/user', () => require('../../mocks/database.mock').userRepository);
-jest.mock('../../../src/features/common/repositories/session', () => require('../../mocks/database.mock').sessionRepository);
+jest.mock('../../../src/main/features/common/repositories/user', () => require('../../mocks/database.mock').userRepository);
+jest.mock('../../../src/main/features/common/repositories/session', () => require('../../mocks/database.mock').sessionRepository);
 
 describe('AuthService', () => {
     let authService;
@@ -11,7 +11,7 @@ describe('AuthService', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         jest.resetModules();
-        authService = require('../../../src/features/common/services/authService');
+        authService = require('../../../src/main/features/common/services/authService');
         sessionRepositoryMock = require('../../mocks/database.mock').sessionRepository;
         const Store = require('electron-store');
         storeInstance = Store.__instances[0];

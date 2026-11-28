@@ -10,7 +10,7 @@ const mockSummaryService = {
     setAnalysisPreset: jest.fn(async () => {}),
 };
 
-jest.mock('../../../src/features/listen/stt/sttService', () =>
+jest.mock('../../../src/main/features/listen/stt/sttService', () =>
     jest.fn().mockImplementation(() => ({
         setCallbacks: jest.fn(),
         initializeSttSessions: jest.fn(async () => true),
@@ -23,20 +23,20 @@ jest.mock('../../../src/features/listen/stt/sttService', () =>
     }))
 );
 
-jest.mock('../../../src/features/listen/summary/summaryService', () => mockSummaryService);
-jest.mock('../../../src/features/common/repositories/session', () => require('../../mocks/database.mock').sessionRepository);
-jest.mock('../../../src/features/listen/stt/repositories', () => require('../../mocks/database.mock').sttRepository);
+jest.mock('../../../src/main/features/listen/summary/summaryService', () => mockSummaryService);
+jest.mock('../../../src/main/features/common/repositories/session', () => require('../../mocks/database.mock').sessionRepository);
+jest.mock('../../../src/main/features/listen/stt/repositories', () => require('../../mocks/database.mock').sttRepository);
 
-jest.mock('../../../src/features/common/services/authService', () => ({
+jest.mock('../../../src/main/features/common/services/authService', () => ({
     getCurrentUser: jest.fn(() => ({ uid: 'test-user-id', email: 'test@example.com' })),
     getCurrentUserId: jest.fn(() => 'test-user-id'),
 }));
 
-jest.mock('../../../src/features/settings/settingsService', () => ({
+jest.mock('../../../src/main/features/settings/settingsService', () => ({
     getSettings: jest.fn(async () => ({ analysisPresetId: 'sales' })),
 }));
 
-jest.mock('../../../src/window/windowManager', () => {
+jest.mock('../../../src/main/window/windowManager', () => {
     const createMockWindow = () => ({
         isDestroyed: jest.fn(() => false),
         isVisible: jest.fn(() => true),
@@ -64,7 +64,7 @@ describe('ListenService', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         jest.resetModules();
-        listenService = require('../../../src/features/listen/listenService');
+        listenService = require('../../../src/main/features/listen/listenService');
     });
 
     describe('initializeNewSession', () => {

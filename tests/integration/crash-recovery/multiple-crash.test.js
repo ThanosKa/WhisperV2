@@ -18,23 +18,23 @@ const mockAuthService = {
     getCurrentUserId: jestModule.fn(() => 'test-user-id'),
 };
 
-jestModule.mock('../../../src/features/common/repositories/session', () => ({
+jestModule.mock('../../../src/main/features/common/repositories/session', () => ({
     findLatestUnfinishedListen: () => mockSessionRepo.findLatestUnfinishedListen(),
     end: (id) => mockSessionRepo.end(id),
 }));
 
-jestModule.mock('../../../src/features/common/services/authService', () => mockAuthService);
+jestModule.mock('../../../src/main/features/common/services/authService', () => mockAuthService);
 
-jestModule.mock('../../../src/features/listen/stt/repositories', () => ({
+jestModule.mock('../../../src/main/features/listen/stt/repositories', () => ({
     getAllTranscriptsBySessionId: (sessionId) => mockTranscriptRepo.getAllTranscriptsBySessionId(sessionId),
 }));
 
-jestModule.mock('../../../src/features/listen/summary/repositories', () => ({
+jestModule.mock('../../../src/main/features/listen/summary/repositories', () => ({
     getAllInsightsBySessionId: (sessionId) => mockInsightsRepo.getAllInsightsBySessionId(sessionId),
     saveInsight: (data) => mockInsightsRepo.saveInsight(data),
 }));
 
-jestModule.mock('../../../src/features/listen/stt/sttService', () =>
+jestModule.mock('../../../src/main/features/listen/stt/sttService', () =>
     jestModule.fn().mockImplementation(() => ({
         setCallbacks: jestModule.fn(),
         initializeSttSessions: jestModule.fn(async () => true),
@@ -49,14 +49,14 @@ const mockSummaryService = {
     selectedPresetId: 'meeting',
 };
 
-jestModule.mock('../../../src/features/listen/summary/summaryService', () => mockSummaryService);
+jestModule.mock('../../../src/main/features/listen/summary/summaryService', () => mockSummaryService);
 
 const mockWindow = {
     isDestroyed: jestModule.fn(() => false),
     webContents: { send: jestModule.fn() },
 };
 
-jestModule.mock('../../../src/window/windowManager', () => ({
+jestModule.mock('../../../src/main/window/windowManager', () => ({
     windowPool: {
         get: jestModule.fn(() => mockWindow),
     },
@@ -67,17 +67,17 @@ describe('Crash Recovery - Multiple Crash Scenarios', () => {
 
     beforeEach(() => {
         jestModule.clearAllMocks();
-        listenService = require('../../../src/features/listen/listenService');
+        listenService = require('../../../src/main/features/listen/listenService');
         listenService.strandedSession = null;
         listenService.isRecoveryDismissed = false;
         listenService.currentSessionId = null;
         mockAuthService.getCurrentUserId.mockReturnValue('test-user-id');
 
-        const windowManager = require('../../../src/window/windowManager');
+        const windowManager = require('../../../src/main/window/windowManager');
         windowManager.windowPool.get.mockImplementation(() => mockWindow);
         mockWindow.isDestroyed.mockReturnValue(false);
 
-        const SttService = require('../../../src/features/listen/stt/sttService');
+        const SttService = require('../../../src/main/features/listen/stt/sttService');
         SttService.mockImplementation(() => ({
             setCallbacks: jestModule.fn(),
             initializeSttSessions: jestModule.fn(async () => true),

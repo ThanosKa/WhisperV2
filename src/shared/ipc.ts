@@ -22,7 +22,8 @@ import type * as windowManager from '../main/window/windowManager';
 // A handler's result is main's own value, so it is typed, never parsed.
 const result = <T>() => z.custom<T>();
 type Returns<F extends (...args: never[]) => unknown> = Awaited<ReturnType<F>>;
-type Outcome = { success: true } | { success: false; error: string };
+// A result on the `success` literal: the success branch carries its own fields, a failure its error.
+export type Outcome<Success extends object = Record<never, never>> = ({ success: true } & Success) | { success: false; error: string };
 
 const none = z.tuple([]);
 const audioContent = z.object({ data: z.string(), mimeType: z.string() });
@@ -81,7 +82,7 @@ const invoke = {
     // The action (`resume` or `finalize`; listenService answers another with `success: false`), then the session id
     'listen:handleRecoveryAction': {
         args: z.tuple([z.string(), z.string()]),
-        result: result<Returns<typeof listenService.handleRecoveryAction> | { success: false; error: string }>(),
+        result: result<Returns<typeof listenService.handleRecoveryAction>>(),
     },
     'listen:getStrandedSession': { args: none, result: result<StrandedSessionInfo | null>() },
 
@@ -139,8 +140,14 @@ const event = {
     'click-through-toggled': { args: z.tuple([z.boolean()]) },
 
     // Listen
+    // A failure may carry the status to show and an error code, or neither (listenService.handleListenRequest)
     'listen:changeSessionResult': {
-        args: z.tuple([z.object({ success: z.boolean(), nextStatus: z.string().optional(), error: z.string().optional() })]),
+        args: z.tuple([
+            z.union([
+                z.object({ success: z.literal(true), nextStatus: z.string() }),
+                z.object({ success: z.literal(false), nextStatus: z.string().optional(), error: z.string().optional() }),
+            ]),
+        ]),
     },
     'listen-window-visibility': { args: z.tuple([z.boolean()]) },
     'listen:stranded-session-detected': { args: z.tuple([strandedSessionInfo]) },

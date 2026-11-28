@@ -14,7 +14,7 @@ import * as settingsService from '../settings/settingsService';
 import { windowPool } from '../../window/windowManager';
 import { logger } from '../common/utils/logger';
 import { sendEvent } from '../../ipc/sendEvent';
-import type { EventArgs, EventChannel } from '../../../shared/ipc';
+import type { EventArgs, EventChannel, Outcome } from '../../../shared/ipc';
 import { errorMessage } from '../common/utils/errors';
 
 const log = logger.child({ module: 'ListenService' });
@@ -37,7 +37,8 @@ export type StrandedSession = { session: SessionRow; transcripts: TranscriptRow[
 
 export type StrandedSessionInfo = { id: string; title: string; started_at: number | null };
 
-export type HandlerResult = { success: boolean; error?: string | null };
+// Some handlers answer success with `error: null`, which the wire keeps.
+export type HandlerResult = Outcome<{ error?: null }>;
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -160,7 +161,7 @@ class ListenService {
         const header = windowPool.get('header');
         // The untyped code called `header.webContents` without a check, so a missing header threw;
         // this keeps that.
-        const sendResultToHeader = (result: { success: boolean; nextStatus?: string }) => {
+        const sendResultToHeader = (result: EventArgs['listen:changeSessionResult'][0]) => {
             if (!header) throw new Error('Header window is not open');
             sendEvent({ webContents: header.webContents, channel: 'listen:changeSessionResult', args: [result] });
         };

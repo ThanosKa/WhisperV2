@@ -1,16 +1,24 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import Link from 'next/link';
 import { useRedirectIfNotAuth } from '@/lib/auth';
-import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { Input } from '@/components/ui/input';
-import { type UserProfile, type Session, deleteSession, getConversationStats, updateSessionTitle, getMeetingsPage, getQuestionsPage } from '@/lib/api';
-import { useToast } from '@/hooks/use-toast';
-import { Loader2, Mic, MessageSquare, Timer } from 'lucide-react';
+import { type UserProfile } from '@/lib/api';
+import { Loader2 } from 'lucide-react';
+import { SessionList, type ActivityTab } from '@/components/activity/SessionList';
+import { StatsCards } from '@/components/activity/StatsCards';
+import { useActivitySessions } from '@/components/activity/useActivitySessions';
 
-const PAGE_SIZE = 10;
+const TABS = [
+    { id: 'meetings', label: 'Meetings' },
+    { id: 'questions', label: 'Questions' },
+] satisfies { id: ActivityTab; label: string }[];
+
+const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+};
 
 export default function ActivityPage() {
     const userInfo = useRedirectIfNotAuth();
@@ -19,128 +27,8 @@ export default function ActivityPage() {
 }
 
 function ActivityContent({ userInfo }: { userInfo: UserProfile | null }) {
-    const [sessions, setSessions] = useState<Session[]>([]);
-    const [meetings, setMeetings] = useState<Session[]>([]);
-    const [questions, setQuestions] = useState<Session[]>([]);
-    const [activeTab, setActiveTab] = useState<'meetings' | 'questions'>('meetings');
-    const [isLoading, setIsLoading] = useState(true);
-    const [isLoadingMoreMeetings, setIsLoadingMoreMeetings] = useState(false);
-    const [isLoadingMoreQuestions, setIsLoadingMoreQuestions] = useState(false);
-    const [meetingsOffset, setMeetingsOffset] = useState<number>(0);
-    const [questionsOffset, setQuestionsOffset] = useState<number>(0);
-    const [hasMoreMeetings, setHasMoreMeetings] = useState<boolean>(true);
-    const [hasMoreQuestions, setHasMoreQuestions] = useState<boolean>(true);
-    const meetingsSentinelRef = useRef<HTMLDivElement | null>(null);
-    const questionsSentinelRef = useRef<HTMLDivElement | null>(null);
-
-    const [deletingId, setDeletingId] = useState<string | null>(null);
-    const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-    const [totalMeetingSeconds, setTotalMeetingSeconds] = useState<number>(0);
-    const [totalQuestions, setTotalQuestions] = useState<number>(0);
-    const [isStatsLoading, setIsStatsLoading] = useState(true);
-    const { toast } = useToast();
-
-    const fetchSessions = useCallback(async () => {
-        try {
-            const [meetingsPage, questionsPage] = await Promise.all([getMeetingsPage(0, PAGE_SIZE), getQuestionsPage(0, PAGE_SIZE)]);
-            setMeetings(meetingsPage.items);
-            setQuestions(questionsPage.items);
-            setSessions([...meetingsPage.items, ...questionsPage.items]);
-            setMeetingsOffset(meetingsPage.nextOffset ?? meetingsPage.items.length);
-            setQuestionsOffset(questionsPage.nextOffset ?? questionsPage.items.length);
-            setHasMoreMeetings(meetingsPage.nextOffset !== null);
-            setHasMoreQuestions(questionsPage.nextOffset !== null);
-        } catch (error) {
-            console.error('Failed to fetch conversations:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
-    const fetchStats = useCallback(async () => {
-        try {
-            const stats = await getConversationStats();
-            setTotalMeetingSeconds(stats.totalMeetingSeconds || 0);
-            setTotalQuestions(stats.totalQuestions || 0);
-        } catch (error) {
-            console.error('Failed to fetch stats:', error);
-        } finally {
-            setIsStatsLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        const loadInitialData = async () => {
-            await Promise.all([fetchSessions(), fetchStats()]);
-        };
-        void loadInitialData();
-
-        // Listen for session updates from other pages
-        const handleSessionUpdate = () => {
-            setIsStatsLoading(true);
-            fetchSessions();
-            fetchStats();
-        };
-
-        window.addEventListener('sessionUpdated', handleSessionUpdate);
-
-        return () => {
-            window.removeEventListener('sessionUpdated', handleSessionUpdate);
-        };
-    }, [fetchSessions, fetchStats]);
-
-    const loadMoreMeetings = useCallback(async () => {
-        if (isLoadingMoreMeetings || !hasMoreMeetings) return;
-        setIsLoadingMoreMeetings(true);
-        try {
-            const page = await getMeetingsPage(meetingsOffset, PAGE_SIZE);
-            setMeetings(prev => [...prev, ...page.items]);
-            setSessions(prev => [...prev, ...page.items]);
-            setMeetingsOffset(page.nextOffset ?? meetingsOffset + page.items.length);
-            setHasMoreMeetings(page.nextOffset !== null);
-        } catch (e) {
-            console.error('Failed to load more meetings', e);
-        } finally {
-            setIsLoadingMoreMeetings(false);
-        }
-    }, [isLoadingMoreMeetings, hasMoreMeetings, meetingsOffset]);
-
-    const loadMoreQuestions = useCallback(async () => {
-        if (isLoadingMoreQuestions || !hasMoreQuestions) return;
-        setIsLoadingMoreQuestions(true);
-        try {
-            const page = await getQuestionsPage(questionsOffset, PAGE_SIZE);
-            setQuestions(prev => [...prev, ...page.items]);
-            setSessions(prev => [...prev, ...page.items]);
-            setQuestionsOffset(page.nextOffset ?? questionsOffset + page.items.length);
-            setHasMoreQuestions(page.nextOffset !== null);
-        } catch (e) {
-            console.error('Failed to load more questions', e);
-        } finally {
-            setIsLoadingMoreQuestions(false);
-        }
-    }, [isLoadingMoreQuestions, hasMoreQuestions, questionsOffset]);
-
-    // Intersection Observers for infinite scroll
-    useEffect(() => {
-        const sentinel = activeTab === 'meetings' ? meetingsSentinelRef.current : questionsSentinelRef.current;
-        if (!sentinel) return;
-        const observer = new IntersectionObserver(
-            entries => {
-                const first = entries[0];
-                if (first?.isIntersecting) {
-                    if (activeTab === 'meetings') {
-                        loadMoreMeetings();
-                    } else {
-                        loadMoreQuestions();
-                    }
-                }
-            },
-            { root: null, rootMargin: '200px', threshold: 0 }
-        );
-        observer.observe(sentinel);
-        return () => observer.disconnect();
-    }, [activeTab, loadMoreMeetings, loadMoreQuestions]);
+    const activity = useActivitySessions();
+    const { activeTab, deletingId, deleteConfirmId } = activity;
 
     if (!userInfo) {
         return (
@@ -153,39 +41,7 @@ function ActivityContent({ userInfo }: { userInfo: UserProfile | null }) {
         );
     }
 
-    const getGreeting = () => {
-        const hour = new Date().getHours();
-        if (hour < 12) return 'Good morning';
-        if (hour < 18) return 'Good afternoon';
-        return 'Good evening';
-    };
-
-    const handleDelete = async (sessionId: string) => {
-        setDeletingId(sessionId);
-        try {
-            await deleteSession(sessionId);
-            // Remove from both state arrays
-            setMeetings(meetings => meetings.filter(s => s.id !== sessionId));
-            setQuestions(questions => questions.filter(s => s.id !== sessionId));
-            setSessions(sessions => sessions.filter(s => s.id !== sessionId));
-
-            // Refresh stats after deletion
-            await fetchSessions();
-
-            toast({
-                title: 'Activity deleted',
-            });
-        } catch (error) {
-            toast({
-                title: 'Error',
-                variant: 'destructive',
-            });
-            console.error(error);
-        } finally {
-            setDeletingId(null);
-            setDeleteConfirmId(null);
-        }
-    };
+    const list = activity[activeTab];
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -195,115 +51,47 @@ function ActivityContent({ userInfo }: { userInfo: UserProfile | null }) {
                         {getGreeting()}, {userInfo.display_name}
                     </h1>
                 </div>
-                {/* Quick stats */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12">
-                    {isStatsLoading ? (
-                        <>
-                            <SkeletonStatsCard />
-                            <SkeletonStatsCard />
-                        </>
-                    ) : (
-                        <>
-                            <div className="bg-white rounded-lg p-8 border border-gray-200">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <div className="text-lg text-gray-500">Total time in meetings</div>
-                                </div>
-                                <div className="text-3xl text-gray-900">{formatDuration(totalMeetingSeconds)}</div>
-                            </div>
-                            <div className="bg-white rounded-lg p-8 border border-gray-200">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <div className="text-lg text-gray-500">Whisper Uses</div>
-                                </div>
-                                <div className="text-3xl text-gray-900">{totalQuestions}</div>
-                            </div>
-                        </>
-                    )}
-                </div>
+                <StatsCards
+                    isLoading={activity.isStatsLoading}
+                    totalMeetingSeconds={activity.totalMeetingSeconds}
+                    totalQuestions={activity.totalQuestions}
+                />
                 <div>
                     <h2 className="text-2xl font-semibold text-gray-900 mb-8 text-center">Your Past Activity</h2>
 
-                    {/* Tab Navigation */}
                     <div className="flex justify-center mb-8">
                         <div className="bg-gray-100 p-1 rounded-lg">
-                            <button
-                                onClick={() => setActiveTab('meetings')}
-                                className={`px-6 py-2 rounded-md font-medium transition-colors ${
-                                    activeTab === 'meetings' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-600 hover:text-gray-900'
-                                }`}
-                            >
-                                Meetings
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('questions')}
-                                className={`px-6 py-2 rounded-md font-medium transition-colors ${
-                                    activeTab === 'questions' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-600 hover:text-gray-900'
-                                }`}
-                            >
-                                Questions
-                            </button>
+                            {TABS.map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => activity.setActiveTab(tab.id)}
+                                    className={`px-6 py-2 rounded-md font-medium transition-colors ${
+                                        activeTab === tab.id ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-600 hover:text-gray-900'
+                                    }`}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
-                    {isLoading ? (
+                    {activity.isLoading ? (
                         <div className="flex flex-col items-center justify-center py-16">
                             <Loader2 className="h-8 w-8 text-gray-400 animate-spin mb-4" />
                             <p className="text-gray-600">Loading your activity...</p>
                         </div>
                     ) : (
                         <div>
-                            {activeTab === 'meetings' ? (
-                                meetings.length > 0 ? (
-                                    <div className="space-y-4">
-                                        {meetings.map(session => (
-                                            <SessionCard
-                                                key={session.id}
-                                                session={session}
-                                                onDelete={id => setDeleteConfirmId(id)}
-                                                deletingId={deletingId}
-                                                onTitleUpdate={fetchSessions}
-                                                toast={toast}
-                                            />
-                                        ))}
-                                        {isLoadingMoreMeetings && (
-                                            <div className="flex justify-center py-8">
-                                                <Loader2 className="h-6 w-6 text-gray-400 animate-spin" />
-                                            </div>
-                                        )}
-                                        {hasMoreMeetings ? (
-                                            <div data-testid="meetings-sentinel" ref={meetingsSentinelRef} />
-                                        ) : (
-                                            <div className="text-center py-8 text-gray-500 text-sm">End.</div>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <EmptyState type="meetings" />
-                                )
-                            ) : questions.length > 0 ? (
-                                <div className="space-y-4">
-                                    {questions.map(session => (
-                                        <SessionCard
-                                            key={session.id}
-                                            session={session}
-                                            onDelete={id => setDeleteConfirmId(id)}
-                                            deletingId={deletingId}
-                                            onTitleUpdate={fetchSessions}
-                                            toast={toast}
-                                        />
-                                    ))}
-                                    {isLoadingMoreQuestions && (
-                                        <div className="flex justify-center py-8">
-                                            <Loader2 className="h-6 w-6 text-gray-400 animate-spin" />
-                                        </div>
-                                    )}
-                                    {hasMoreQuestions ? (
-                                        <div data-testid="questions-sentinel" ref={questionsSentinelRef} />
-                                    ) : (
-                                            <div className="text-center py-8 text-gray-500 text-sm">End.</div>
-                                    )}
-                                </div>
-                            ) : (
-                                <EmptyState type="questions" />
-                            )}
+                            <SessionList
+                                type={activeTab}
+                                sessions={list.sessions}
+                                isLoadingMore={list.isLoadingMore}
+                                hasMore={list.hasMore}
+                                sentinelRef={list.sentinelRef}
+                                deletingId={deletingId}
+                                onDelete={activity.setDeleteConfirmId}
+                                onTitleUpdate={activity.fetchSessions}
+                            />
                         </div>
                     )}
                 </div>
@@ -311,7 +99,7 @@ function ActivityContent({ userInfo }: { userInfo: UserProfile | null }) {
 
             <ConfirmDialog
                 open={!!deleteConfirmId}
-                onOpenChange={open => setDeleteConfirmId(open ? deleteConfirmId : null)}
+                onOpenChange={open => activity.setDeleteConfirmId(open ? deleteConfirmId : null)}
                 title="Delete"
                 description="Are you sure you want to delete this activity? This cannot be undone."
                 confirmLabel={deletingId && deleteConfirmId === deletingId ? 'Deleting...' : 'Delete'}
@@ -319,235 +107,9 @@ function ActivityContent({ userInfo }: { userInfo: UserProfile | null }) {
                 variant="destructive"
                 loading={!!deletingId && deleteConfirmId === deletingId}
                 onConfirm={() => {
-                    if (deleteConfirmId) void handleDelete(deleteConfirmId);
+                    if (deleteConfirmId) void activity.handleDelete(deleteConfirmId);
                 }}
             />
-        </div>
-    );
-}
-
-// Helper components
-function SessionCard({
-    session,
-    onDelete,
-    deletingId,
-    onTitleUpdate,
-    toast,
-}: {
-    session: Session;
-    onDelete: (id: string) => void;
-    deletingId: string | null;
-    onTitleUpdate?: () => void;
-    toast: ReturnType<typeof useToast>['toast'];
-}) {
-    const typeLabel = session.session_type === 'listen' ? 'Meeting' : 'Question';
-    const TypeIcon = session.session_type === 'listen' ? Mic : MessageSquare;
-    const typeColor =
-        session.session_type === 'listen'
-            ? 'bg-blue-100 text-blue-800' // Meetings: light blue bg + dark blue text
-            : 'bg-green-100 text-green-800'; // Questions: light green bg + dark green text
-    const [isEditing, setIsEditing] = useState(false);
-    const [title, setTitle] = useState(session.title || '');
-    const [saving, setSaving] = useState(false);
-    const [optimisticTitle, setOptimisticTitle] = useState(session.title || '');
-    const inputRef = useRef<HTMLInputElement | null>(null);
-
-    const save = async () => {
-        const t = (title || '').trim();
-        if (!t || saving) return;
-
-        const previousTitle = optimisticTitle;
-        setOptimisticTitle(t); // Optimistic update
-        setSaving(true);
-
-        try {
-            await updateSessionTitle(session.id, t);
-            setIsEditing(false);
-            // Trigger parent refresh
-            if (onTitleUpdate) onTitleUpdate();
-
-            toast({
-                title: 'Title updated',
-            });
-        } catch (e) {
-            // Revert optimistic update on error
-            setOptimisticTitle(previousTitle);
-            toast({
-                title: 'Error',
-                variant: 'destructive',
-            });
-            console.error(e);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const cancelEdit = () => {
-        setIsEditing(false);
-        setTitle(optimisticTitle);
-    };
-
-    // Update local state when session prop changes (adjusted while rendering, not in an effect)
-    const [seenTitle, setSeenTitle] = useState(session.title);
-    if (seenTitle !== session.title) {
-        setSeenTitle(session.title);
-        setOptimisticTitle(session.title || '');
-        setTitle(session.title || '');
-    }
-
-    // Focus input when entering edit mode
-    useEffect(() => {
-        if (isEditing && inputRef.current) {
-            inputRef.current.focus();
-        }
-    }, [isEditing]);
-
-    return (
-        <Link
-            href={`/activity/details?sessionId=${session.id}`}
-            className="relative block bg-white p-6 shadow-xs border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer group"
-        >
-            <div className="flex justify-between items-start mb-3">
-                <div className="min-w-0 flex-1">
-                    <div className="flex justify-between items-start">
-                        <div className="flex-1 min-w-0">
-                            {isEditing ? (
-                                <Input
-                                    ref={inputRef}
-                                    className="w-full bg-transparent border border-transparent p-0 h-auto text-lg font-medium text-gray-900 hover:underline truncate block focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-hidden md:text-lg"
-                                    value={title}
-                                    onChange={e => setTitle(e.target.value)}
-                                    placeholder="Enter title..."
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter') save();
-                                        if (e.key === 'Escape') cancelEdit();
-                                    }}
-                                    onClick={e => e.preventDefault()}
-                                />
-                            ) : (
-                                <div className="text-lg font-medium text-gray-900 hover:underline truncate block">
-                                    {optimisticTitle || `${typeLabel} - ${new Date(session.started_at * 1000).toLocaleDateString()}`}
-                                </div>
-                            )}
-                        </div>
-                        <div className="flex items-center gap-2 ml-4 shrink-0">
-                            {isEditing ? (
-                                <>
-                                    <Button
-                                        onClick={e => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            save();
-                                        }}
-                                        size="sm"
-                                        disabled={saving || !title.trim()}
-                                    >
-                                        {saving ? 'Saving...' : 'Save'}
-                                    </Button>
-                                    <Button
-                                        onClick={e => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            cancelEdit();
-                                        }}
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={saving}
-                                    >
-                                        Cancel
-                                    </Button>
-                                </>
-                            ) : (
-                                <>
-                                    <Button
-                                        onClick={e => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            setIsEditing(true);
-                                        }}
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={saving}
-                                    >
-                                        Edit
-                                    </Button>
-                                    <Button
-                                        onClick={e => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            onDelete(session.id);
-                                        }}
-                                        variant="destructive"
-                                        size="sm"
-                                        disabled={deletingId === session.id}
-                                    >
-                                        {deletingId === session.id ? 'Deleting...' : 'Delete'}
-                                    </Button>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                    <div className="text-sm text-gray-500">{new Date(session.started_at * 1000).toLocaleString()}</div>
-                </div>
-            </div>
-            <span className={`capitalize inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${typeColor}`}>
-                <TypeIcon className="h-3 w-3" />
-                {typeLabel}
-            </span>
-        </Link>
-    );
-}
-
-function EmptyState({ type }: { type: 'meetings' | 'questions' }) {
-    const content =
-        type === 'meetings'
-            ? {
-                  title: 'No meetings yet',
-                  description: 'Start a meeting in the desktop app using the Listen feature to see your meeting transcripts and summaries here.',
-              }
-            : {
-                  title: 'No questions yet',
-                  description: 'Ask questions in the desktop app to see your Q&A history here.',
-              };
-
-    return (
-        <div className="text-center bg-white rounded-lg p-12">
-            <h3 className="text-2xl font-semibold text-gray-900 mb-3">{content.title}</h3>
-            <p className="text-gray-500">{content.description}</p>
-        </div>
-    );
-}
-
-// utils
-function formatDuration(totalSeconds: number) {
-    if (!totalSeconds || totalSeconds <= 0) return '0h 00m';
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    return `${hours}h ${String(minutes).padStart(2, '0')}m`;
-}
-function SkeletonStatsCard() {
-    return (
-        <div className="bg-white rounded-lg p-8 border border-gray-200 animate-pulse">
-            <div className="h-6 bg-gray-200 rounded w-1/2 mb-3" />
-            <div className="h-10 bg-gray-100 rounded w-1/3" />
-        </div>
-    );
-}
-
-function SkeletonSessionCard() {
-    return (
-        <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-xs animate-pulse">
-            <div className="flex justify-between items-start mb-3">
-                <div className="min-w-0 flex-1">
-                    <div className="h-5 bg-gray-200 rounded w-2/3 mb-2" />
-                    <div className="h-4 bg-gray-100 rounded w-1/3" />
-                </div>
-                <div className="flex items-center gap-2 ml-4 shrink-0">
-                    <div className="h-8 w-16 bg-gray-100 rounded" />
-                    <div className="h-8 w-16 bg-gray-100 rounded" />
-                </div>
-            </div>
-            <div className="h-5 w-20 bg-gray-100 rounded" />
         </div>
     );
 }

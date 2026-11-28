@@ -1,6 +1,7 @@
 import { delay, http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import type { Session } from '@/backend_node/types/session';
+import type { SessionDetails } from '@/lib/api';
 
 // A fake of what the dashboard talks to: the page server's `/runtime-config.json` and the
 // desktop app's Express bridge (`backend_node`). Each route answers the way `backend_node` does,
@@ -27,6 +28,8 @@ type DesktopState = {
     /** `null`: the desktop has no signed-in user, and `/api/user/profile` answers 404. */
     user: DesktopUser | null;
     sessions: Session[];
+    /** What `GET /api/conversations/:sessionId` returns, by session id; a missing id answers 404. */
+    details: Record<string, SessionDetails>;
     /** What `/api/conversations/stats` counts from the sessions' user messages. */
     userQuestionCount: number;
 };
@@ -70,6 +73,7 @@ const initialState = (): DesktopState => ({
     mode: 'electron',
     user: makeUser(),
     sessions: [],
+    details: {},
     userQuestionCount: 0,
 });
 
@@ -124,6 +128,23 @@ export const handlers = [
     http.get(api('/api/conversations/stats'), () => {
         const totalMeetingSeconds = ofType('listen').reduce((sum, s) => sum + Math.max(0, (s.ended_at || NOW) - s.started_at), 0);
         return HttpResponse.json({ totalMeetingSeconds, totalQuestions: desktop.userQuestionCount });
+    }),
+
+    /** Title search; the summary scopes match every session, as the test sessions have no summary index. */
+    http.get(api('/api/conversations/search/page'), ({ request }) => {
+        const url = new URL(request.url);
+        const q = (url.searchParams.get('q') || '').toLowerCase();
+        const scope = url.searchParams.get('scope') || 'title';
+        const matches = desktop.sessions.filter(s => scope !== 'title' || (s.title || '').toLowerCase().includes(q));
+        return HttpResponse.json(page({ sessions: matches, url }));
+    }),
+
+    http.get(api('/api/conversations/:sessionId'), ({ params }) => {
+        const details = typeof params.sessionId === 'string' ? desktop.details[params.sessionId] : undefined;
+        if (!details) {
+            return HttpResponse.json({ error: 'Session not found' }, { status: 404 });
+        }
+        return HttpResponse.json(details);
     }),
 
     http.put(api('/api/conversations/:sessionId'), async ({ params, request }) => {

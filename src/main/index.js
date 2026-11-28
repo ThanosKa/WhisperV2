@@ -574,7 +574,7 @@ function setupWebDataHandlers() {
                 case 'update-preset':
                     // Adapter injects UID
                     result = await presetRepository.update({ id: payload.id, changes: payload.data });
-                    settingsService.notifyPresetUpdate('updated', payload.id, payload.data.title);
+                    settingsService.notifyPresetUpdate({ action: 'updated', presetId: payload.id, title: payload.data.title });
                     break;
 
                 // BATCH

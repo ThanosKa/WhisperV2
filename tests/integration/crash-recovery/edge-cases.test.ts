@@ -64,10 +64,10 @@ vi.mock('../../../src/main/features/listen/stt/sttService', () => ({ default: St
 
 vi.mock('../../../src/main/features/listen/summary/summaryService', () => ({ default: mockSummaryService }));
 
+const windowPoolGet = vi.hoisted(() => vi.fn<(name: string) => object | null | undefined>(() => mockWindow));
+
 vi.mock('../../../src/main/window/windowManager', () => ({
-    windowPool: {
-        get: vi.fn(() => mockWindow),
-    },
+    windowPool: { get: windowPoolGet },
 }));
 
 describe('Crash Recovery - Edge Cases', () => {
@@ -78,8 +78,7 @@ describe('Crash Recovery - Edge Cases', () => {
         listenService.currentSessionId = null;
         mockAuthService.getCurrentUserId.mockReturnValue('test-user-id');
 
-        const windowManager = await import('../../../src/main/window/windowManager');
-        vi.mocked(windowManager.windowPool.get).mockImplementation(() => mockWindow);
+        windowPoolGet.mockImplementation(() => mockWindow);
         mockWindow.isDestroyed.mockReturnValue(false);
 
         SttServiceMock.mockImplementation(function () {
@@ -145,8 +144,7 @@ describe('Crash Recovery - Edge Cases', () => {
 
         const transcripts = [{ id: 1, speaker: 'User', text: 'Test', timestamp: 1000 }];
 
-        const { windowPool } = await import('../../../src/main/window/windowManager');
-        vi.mocked(windowPool.get).mockReturnValue(null); // Window not ready
+        windowPoolGet.mockReturnValue(null); // Window not ready
 
         mockSessionRepo.findLatestUnfinishedListen.mockReturnValue(session);
         mockTranscriptRepo.getAllTranscriptsBySessionId.mockResolvedValue(transcripts);
@@ -182,8 +180,7 @@ describe('Crash Recovery - Edge Cases', () => {
             webContents: { send: vi.fn() },
         };
 
-        const { windowPool } = await import('../../../src/main/window/windowManager');
-        vi.mocked(windowPool.get).mockReturnValue(headerWindow);
+        windowPoolGet.mockReturnValue(headerWindow);
 
         // Should block and notify header
         expect(listenService.strandedSession).not.toBeNull();

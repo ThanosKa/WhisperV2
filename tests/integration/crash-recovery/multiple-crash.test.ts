@@ -66,10 +66,10 @@ vi.mock('../../../src/main/features/listen/stt/sttService', () => ({ default: St
 
 vi.mock('../../../src/main/features/listen/summary/summaryService', () => ({ default: mockSummaryService }));
 
+const windowPoolGet = vi.hoisted(() => vi.fn<(name: string) => object | null | undefined>(() => mockWindow));
+
 vi.mock('../../../src/main/window/windowManager', () => ({
-    windowPool: {
-        get: vi.fn(() => mockWindow),
-    },
+    windowPool: { get: windowPoolGet },
 }));
 
 describe('Crash Recovery - Multiple Crash Scenarios', () => {
@@ -80,8 +80,7 @@ describe('Crash Recovery - Multiple Crash Scenarios', () => {
         listenService.currentSessionId = null;
         mockAuthService.getCurrentUserId.mockReturnValue('test-user-id');
 
-        const windowManager = await import('../../../src/main/window/windowManager');
-        vi.mocked(windowManager.windowPool.get).mockImplementation(() => mockWindow);
+        windowPoolGet.mockImplementation(() => mockWindow);
         mockWindow.isDestroyed.mockReturnValue(false);
 
         SttServiceMock.mockImplementation(function () {

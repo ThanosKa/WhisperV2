@@ -87,19 +87,19 @@ describe('AskService', () => {
 
     describe('_resolveProfileForIntent', () => {
         test('resolves meeting_next profile for next intent', () => {
-            const result = askService._resolveProfileForIntent('next', 'meeting');
+            const result = askService._resolveProfileForIntent({ intent: 'next', presetId: 'meeting' });
             expect(result.profileToUse).toBe('meeting_next');
             expect(result.useConversationContext).toBe(true);
         });
 
         test('resolves sales_objection profile for objection intent', () => {
-            const result = askService._resolveProfileForIntent('objection', 'sales');
+            const result = askService._resolveProfileForIntent({ intent: 'objection', presetId: 'sales' });
             expect(result.profileToUse).toBe('sales_objection');
             expect(result.useConversationContext).toBe(true);
         });
 
         test('disables conversation context for define intent', () => {
-            const result = askService._resolveProfileForIntent('define', 'meeting');
+            const result = askService._resolveProfileForIntent({ intent: 'define', presetId: 'meeting' });
             expect(result.useConversationContext).toBe(false);
         });
     });
@@ -197,7 +197,7 @@ describe('AskService', () => {
                 },
             });
 
-            await askService.sendMessage('Test prompt', [], null, true);
+            await askService.sendMessage({ userPrompt: 'Test prompt', conversationHistory: [], presetId: null, useScreenCapture: true });
 
             expect(electronMock.desktopCapturer.getSources).toHaveBeenCalled();
         });
@@ -220,7 +220,7 @@ describe('AskService', () => {
                 },
             });
 
-            await askService.sendMessage('Assist me', [], null, true);
+            await askService.sendMessage({ userPrompt: 'Assist me', conversationHistory: [], presetId: null, useScreenCapture: true });
 
             expect(electronMock.desktopCapturer.getSources).toHaveBeenCalled();
         });
@@ -243,7 +243,7 @@ describe('AskService', () => {
                 },
             });
 
-            await askService.sendMessage('Assist me', [], null, false);
+            await askService.sendMessage({ userPrompt: 'Assist me', conversationHistory: [], presetId: null, useScreenCapture: false });
 
             expect(electronMock.desktopCapturer.getSources).not.toHaveBeenCalled();
         });
@@ -266,7 +266,7 @@ describe('AskService', () => {
                 },
             });
 
-            await askService.sendMessage('Test prompt', [], null, false);
+            await askService.sendMessage({ userPrompt: 'Test prompt', conversationHistory: [], presetId: null, useScreenCapture: false });
 
             expect(electronMock.desktopCapturer.getSources).not.toHaveBeenCalled();
         });
@@ -289,7 +289,7 @@ describe('AskService', () => {
                 },
             });
 
-            await askService.sendMessage('What is the weather?', [], null, false);
+            await askService.sendMessage({ userPrompt: 'What is the weather?', conversationHistory: [], presetId: null, useScreenCapture: false });
 
             expect(electronMock.desktopCapturer.getSources).not.toHaveBeenCalled();
         });
@@ -348,30 +348,30 @@ describe('AskService', () => {
     describe('Role Context Passing', () => {
         describe('_resolveProfileForIntent - shouldIncludeRole flag', () => {
             test('returns shouldIncludeRole=true for next intent', () => {
-                const result = askService._resolveProfileForIntent('next', 'sales');
+                const result = askService._resolveProfileForIntent({ intent: 'next', presetId: 'sales' });
                 expect(result).toHaveProperty('shouldIncludeRole', true);
                 expect(result.profileToUse).toBe('sales_next');
             });
 
             test('returns shouldIncludeRole=true for email intent', () => {
-                const result = askService._resolveProfileForIntent('email', 'recruiting');
+                const result = askService._resolveProfileForIntent({ intent: 'email', presetId: 'recruiting' });
                 expect(result).toHaveProperty('shouldIncludeRole', true);
                 expect(result.profileToUse).toBe('recruiting_email');
             });
 
             test('returns shouldIncludeRole=false for define intent', () => {
-                const result = askService._resolveProfileForIntent('define', 'sales');
+                const result = askService._resolveProfileForIntent({ intent: 'define', presetId: 'sales' });
                 expect(result).toHaveProperty('shouldIncludeRole', false);
                 expect(result.useConversationContext).toBe(false);
             });
 
             test('returns shouldIncludeRole=false for recap intent', () => {
-                const result = askService._resolveProfileForIntent('recap', 'meeting');
+                const result = askService._resolveProfileForIntent({ intent: 'recap', presetId: 'meeting' });
                 expect(result).toHaveProperty('shouldIncludeRole', false);
             });
 
             test('returns shouldIncludeRole=false for summary intent', () => {
-                const result = askService._resolveProfileForIntent('summary', 'sales');
+                const result = askService._resolveProfileForIntent({ intent: 'summary', presetId: 'sales' });
                 expect(result).toHaveProperty('shouldIncludeRole', false);
             });
         });
@@ -393,7 +393,7 @@ describe('AskService', () => {
 
                 askService.state.useScreenCapture = false;
 
-                await askService.sendMessage('✨ What should I say next?', ['me: hi', 'them: hello'], 'sales', false);
+                await askService.sendMessage({ userPrompt: '✨ What should I say next?', conversationHistory: ['me: hi', 'them: hello'], presetId: 'sales', useScreenCapture: false });
 
                 expect(stream).toHaveBeenCalledWith({
                     payload: expect.objectContaining({
@@ -423,7 +423,7 @@ describe('AskService', () => {
 
                 askService.state.useScreenCapture = false;
 
-                await askService.sendMessage('✉️ Draft a follow-up email', ['me: interview went well'], 'recruiting', false);
+                await askService.sendMessage({ userPrompt: '✉️ Draft a follow-up email', conversationHistory: ['me: interview went well'], presetId: 'recruiting', useScreenCapture: false });
 
                 expect(stream).toHaveBeenCalledWith({
                     payload: expect.objectContaining({
@@ -452,7 +452,7 @@ describe('AskService', () => {
 
                 askService.state.useScreenCapture = false;
 
-                await askService.sendMessage('📘 Define API', [], 'sales', false);
+                await askService.sendMessage({ userPrompt: '📘 Define API', conversationHistory: [], presetId: 'sales', useScreenCapture: false });
 
                 const callArgs = firstStreamPayload();
                 expect(callArgs).not.toHaveProperty('role');
@@ -475,7 +475,7 @@ describe('AskService', () => {
 
                 askService.state.useScreenCapture = false;
 
-                await askService.sendMessage('🗒️ Recap meeting so far', ['me: discussed pricing'], 'sales', false);
+                await askService.sendMessage({ userPrompt: '🗒️ Recap meeting so far', conversationHistory: ['me: discussed pricing'], presetId: 'sales', useScreenCapture: false });
 
                 const callArgs = firstStreamPayload();
                 expect(callArgs).not.toHaveProperty('role');
@@ -498,7 +498,7 @@ describe('AskService', () => {
 
                 askService.state.useScreenCapture = false;
 
-                await askService.sendMessage('📝 Show summary', ['me: candidate looks great'], 'recruiting', false);
+                await askService.sendMessage({ userPrompt: '📝 Show summary', conversationHistory: ['me: candidate looks great'], presetId: 'recruiting', useScreenCapture: false });
 
                 const callArgs = firstStreamPayload();
                 expect(callArgs).not.toHaveProperty('role');
@@ -522,7 +522,7 @@ describe('AskService', () => {
                 askService.state.useScreenCapture = false;
                 askService._forceDefaultProfileOnce = true;
 
-                await askService.sendMessage('Generic question', ['me: some context'], null, false);
+                await askService.sendMessage({ userPrompt: 'Generic question', conversationHistory: ['me: some context'], presetId: null, useScreenCapture: false });
 
                 const callArgs = firstStreamPayload();
                 expect(callArgs).not.toHaveProperty('role');
@@ -545,7 +545,7 @@ describe('AskService', () => {
                 askService.state.useScreenCapture = false;
                 askService._forceDefaultProfileOnce = true;
 
-                await askService.sendMessage('Help me', ['me: conversation history'], null, false);
+                await askService.sendMessage({ userPrompt: 'Help me', conversationHistory: ['me: conversation history'], presetId: null, useScreenCapture: false });
 
                 const callArgs = firstStreamPayload();
                 expect(callArgs).not.toHaveProperty('role');
@@ -571,7 +571,7 @@ describe('AskService', () => {
 
                 askService.state.useScreenCapture = false;
 
-                await askService.sendMessage('✨ What should I say next?', [], 'sales', false);
+                await askService.sendMessage({ userPrompt: '✨ What should I say next?', conversationHistory: [], presetId: 'sales', useScreenCapture: false });
 
                 const callArgs = firstStreamPayload();
                 expect(callArgs).not.toHaveProperty('role');
@@ -598,7 +598,7 @@ describe('AskService', () => {
 
                 askService.state.useScreenCapture = false;
 
-                await askService.sendMessage('✨ What should I say next?', ['me: hi', 'them: hello'], 'sales', false);
+                await askService.sendMessage({ userPrompt: '✨ What should I say next?', conversationHistory: ['me: hi', 'them: hello'], presetId: 'sales', useScreenCapture: false });
 
                 const callArgs = firstStreamPayload();
                 expect(callArgs.role).toBe('You are a sales assistant.');

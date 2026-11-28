@@ -87,7 +87,7 @@ describe('AskService - Web Search Integration', () => {
 
             askService.state.useScreenCapture = false; // Disable screenshot to simplify test
 
-            await askService.sendMessage('What is Apple stock price?', [], null, false, true); // webSearchEnabled=true
+            await askService.sendMessage({ userPrompt: 'What is Apple stock price?', conversationHistory: [], presetId: null, useScreenCapture: false, webSearchEnabled: true }); // webSearchEnabled=true
 
             expect(stream).toHaveBeenCalled();
             const callArgs = firstStreamPayload();
@@ -104,7 +104,7 @@ describe('AskService - Web Search Integration', () => {
 
             askService.state.useScreenCapture = false;
 
-            await askService.sendMessage('🌐 Search: Latest Stock Price | AAPL stock price', [], null, false, false);
+            await askService.sendMessage({ userPrompt: '🌐 Search: Latest Stock Price | AAPL stock price', conversationHistory: [], presetId: null, useScreenCapture: false, webSearchEnabled: false });
 
             expect(stream).toHaveBeenCalled();
             const callArgs = firstStreamPayload();
@@ -121,7 +121,7 @@ describe('AskService - Web Search Integration', () => {
 
             askService.state.useScreenCapture = false;
 
-            await askService.sendMessage('🌐 Search: Latest Stock Price | AAPL stock price December 2025', [], null, false, false);
+            await askService.sendMessage({ userPrompt: '🌐 Search: Latest Stock Price | AAPL stock price December 2025', conversationHistory: [], presetId: null, useScreenCapture: false, webSearchEnabled: false });
 
             expect(stream).toHaveBeenCalled();
             const callArgs = firstStreamPayload();
@@ -141,7 +141,7 @@ describe('AskService - Web Search Integration', () => {
 
             askService.state.useScreenCapture = false;
 
-            await askService.sendMessage('What is the weather?', [], null, false, false); // webSearchEnabled=false
+            await askService.sendMessage({ userPrompt: 'What is the weather?', conversationHistory: [], presetId: null, useScreenCapture: false, webSearchEnabled: false }); // webSearchEnabled=false
 
             expect(stream).toHaveBeenCalled();
             const callArgs = firstStreamPayload();
@@ -164,7 +164,7 @@ describe('AskService - Web Search Integration', () => {
 
             askService.state.useScreenCapture = false;
 
-            await askService.sendMessage('Test search', [], null, false, true);
+            await askService.sendMessage({ userPrompt: 'Test search', conversationHistory: [], presetId: null, useScreenCapture: false, webSearchEnabled: true });
 
             // Verify isSearching was set to true at some point
             // Check IPC broadcasts for search state
@@ -188,7 +188,7 @@ describe('AskService - Web Search Integration', () => {
 
             askService.state.useScreenCapture = false;
 
-            await askService.sendMessage('Test search', [], null, false, true);
+            await askService.sendMessage({ userPrompt: 'Test search', conversationHistory: [], presetId: null, useScreenCapture: false, webSearchEnabled: true });
 
             // Check IPC broadcasts for searchQuery
             const stateBroadcasts = askWindow.webContents.send.mock.calls.filter(call => call[0] === 'ask:stateUpdate').map(call => call[1]);
@@ -219,7 +219,7 @@ describe('AskService - Web Search Integration', () => {
 
             askService.state.useScreenCapture = false;
 
-            await askService.sendMessage('Test search', [], null, false, true);
+            await askService.sendMessage({ userPrompt: 'Test search', conversationHistory: [], presetId: null, useScreenCapture: false, webSearchEnabled: true });
 
             // Check final state has citations and isSearching=false
             const stateBroadcasts = askWindow.webContents.send.mock.calls.filter(call => call[0] === 'ask:stateUpdate').map(call => call[1]);
@@ -247,7 +247,7 @@ describe('AskService - Web Search Integration', () => {
 
             askService.state.useScreenCapture = false;
 
-            await askService.sendMessage('Test search', [], null, false, true);
+            await askService.sendMessage({ userPrompt: 'Test search', conversationHistory: [], presetId: null, useScreenCapture: false, webSearchEnabled: true });
 
             // After content arrives, isSearching should transition to false
             const stateBroadcasts = askWindow.webContents.send.mock.calls.filter(call => call[0] === 'ask:stateUpdate').map(call => call[1]);
@@ -276,7 +276,7 @@ describe('AskService - Web Search Integration', () => {
 
             askService.state.useScreenCapture = false;
 
-            await askService.sendMessage('Test search', [], null, false, true);
+            await askService.sendMessage({ userPrompt: 'Test search', conversationHistory: [], presetId: null, useScreenCapture: false, webSearchEnabled: true });
 
             // Verify IPC was called multiple times with ask:stateUpdate
             const stateUpdateCalls = askWindow.webContents.send.mock.calls.filter(call => call[0] === 'ask:stateUpdate');
@@ -326,7 +326,7 @@ describe('AskService - Web Search Integration', () => {
 
             askService.state.useScreenCapture = false;
 
-            await askService.sendMessage('Tell me about Tesla', [], null, false, true);
+            await askService.sendMessage({ userPrompt: 'Tell me about Tesla', conversationHistory: [], presetId: null, useScreenCapture: false, webSearchEnabled: true });
 
             // Verify that we received multiple searching events
             expect(searchEventCount).toBeGreaterThanOrEqual(2);
@@ -345,7 +345,7 @@ describe('AskService - Web Search Integration', () => {
 
             askService.state.useScreenCapture = false;
 
-            await askService.sendMessage('Tell me about Tesla', [], null, false, true);
+            await askService.sendMessage({ userPrompt: 'Tell me about Tesla', conversationHistory: [], presetId: null, useScreenCapture: false, webSearchEnabled: true });
 
             // Final state should have accumulated content from both searches
             expect(askService.state.currentResponse).toContain('Tesla at $481');
@@ -367,7 +367,7 @@ describe('AskService - Web Search Integration', () => {
 
             askService.state.useScreenCapture = false;
 
-            await askService.sendMessage('Test search', [], null, false, true);
+            await askService.sendMessage({ userPrompt: 'Test search', conversationHistory: [], presetId: null, useScreenCapture: false, webSearchEnabled: true });
 
             // Verify searchQuery was NOT set to the invalid object
             // It should remain null (unchanged) when invalid query is received
@@ -393,7 +393,7 @@ describe('AskService - Web Search Integration', () => {
 
             askService.state.useScreenCapture = false;
 
-            await askService.sendMessage('Complex query', [], null, false, true);
+            await askService.sendMessage({ userPrompt: 'Complex query', conversationHistory: [], presetId: null, useScreenCapture: false, webSearchEnabled: true });
 
             // Final citations should include all sources
             expect(askService.state.citations).toHaveLength(2);

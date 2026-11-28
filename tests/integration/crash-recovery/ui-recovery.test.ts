@@ -86,14 +86,14 @@ vi.mock('../../../src/main/features/listen/stt/sttService', () => ({ default: St
 
 vi.mock('../../../src/main/features/listen/summary/summaryService', () => ({ default: mockSummaryService }));
 
-vi.mock('../../../src/main/window/windowManager', () => ({
-    windowPool: {
-        get: vi.fn((name: string) => {
+const windowPoolGet = vi.hoisted(() => vi.fn<(name: string) => object | null | undefined>((name: string) => {
             if (name === 'header') return mockHeaderWindow;
             if (name === 'listen') return mockListenWindow;
             return null;
-        }),
-    },
+        }));
+
+vi.mock('../../../src/main/window/windowManager', () => ({
+    windowPool: { get: windowPoolGet },
 }));
 
 describe('Crash Recovery - UI Recovery', () => {
@@ -106,8 +106,7 @@ describe('Crash Recovery - UI Recovery', () => {
         mockSessionRepo.end.mockResolvedValue(undefined);
         listenService._generateAndSaveComprehensiveSummary = vi.fn(async () => {});
 
-        const windowManager = await import('../../../src/main/window/windowManager');
-        vi.mocked(windowManager.windowPool.get).mockImplementation((name: string) => {
+        windowPoolGet.mockImplementation((name: string) => {
             if (name === 'header') return mockHeaderWindow;
             if (name === 'listen') return mockListenWindow;
             return null;

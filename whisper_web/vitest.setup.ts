@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterAll, afterEach, beforeEach } from 'vitest';
-import { __resetApiTestState } from '@/utils/api';
+import { __resetApiTestState } from '@/lib/api';
 import { resetDesktop, sentRequests, server } from './__tests__/support/desktop';
 import { installIntersectionObserver } from './__tests__/support/intersection-observer';
 

@@ -1,7 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { apiCall, deleteSession, getConversationStats, getMeetingsPage, getUserProfile } from '@/utils/api';
-import { type DevAiMessage, setSessionDetailsMock, setSessionsMock } from '@/utils/devMock';
+import { apiCall, deleteSession, getConversationStats, getMeetingsPage, getUserProfile } from '@/lib/api';
+import { type DevAiMessage, setSessionDetailsMock, setSessionsMock } from '@/lib/devMock';
 import { API_URL, makeMeeting, makeUser, server } from '../support/desktop';
 
 describe('api in dev mock mode', () => {

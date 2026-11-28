@@ -1,10 +1,10 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { getUserProfile } from '@/utils/api';
+import { getUserProfile } from '@/lib/api';
 import { RefreshCw, User, Check } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
-import { isDevMockEnabled } from '@/utils/devMock';
+import { isDevMockEnabled } from '@/lib/devMock';
 
 export default function SyncPage() {
     const router = useRouter();

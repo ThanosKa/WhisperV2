@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { ChevronDown, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { getPresets, updatePreset, type PromptPreset } from '@/utils/api';
+import { getPresets, updatePreset, type PromptPreset } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
 export default function PersonalizePage() {

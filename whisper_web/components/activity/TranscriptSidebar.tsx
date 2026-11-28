@@ -6,7 +6,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MessageBubble } from './MessageBubble';
-import { type Transcript, type AiMessage } from '@/utils/api';
+import { type Transcript, type AiMessage } from '@/lib/api';
 
 interface UsageEntry {
     question: AiMessage;

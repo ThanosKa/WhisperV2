@@ -34,32 +34,6 @@ function createApp(eventBridge: EventEmitter) {
     app.use('/api/conversations', require('./routes/conversations'));
     app.use('/api/presets', require('./routes/presets'));
 
-    app.get('/api/sync/status', (_req: Request, res: Response) => {
-        res.json({
-            status: 'online',
-            timestamp: new Date().toISOString(),
-            version: '1.0.0',
-        });
-    });
-
-    app.post('/api/desktop/set-user', (req: Request, res: Response) => {
-        res.json({
-            success: true,
-            message: 'Direct IPC communication is now used. This endpoint is deprecated.',
-            user: req.body,
-            deprecated: true,
-        });
-    });
-
-    app.get('/api/desktop/status', (_req: Request, res: Response) => {
-        res.json({
-            connected: true,
-            current_user: null,
-            communication_method: 'IPC',
-            file_based_deprecated: true,
-        });
-    });
-
     return app;
 }
 

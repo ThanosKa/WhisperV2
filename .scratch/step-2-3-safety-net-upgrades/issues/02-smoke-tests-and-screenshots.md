@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** claimed
+**Status:** resolved
 
 **Label:** ready-for-agent
 
@@ -18,7 +18,7 @@
 - [x] The suite passes three runs in a row with no change, so it is not flaky
 - [x] No app code changes, except a hook already recorded in ticket 01
 - [x] The baseline (Electron suite, root Jest, `whisper_web` Jest, lint and type-check counts) is saved to this spec's `assets/` folder
-- [ ] Work on its own branch, merged into `dev` through a pull request
+- [x] Work on its own branch, merged into `dev` through a pull request (PR #8; review fixes in the closing PR)
 
 ## Comments
 

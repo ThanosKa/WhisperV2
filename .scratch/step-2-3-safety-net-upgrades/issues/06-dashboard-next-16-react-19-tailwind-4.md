@@ -4,7 +4,7 @@
 
 **Blocked by:** 03, 04
 
-**Status:** claimed
+**Status:** resolved
 
 **Label:** ready-for-agent
 
@@ -17,7 +17,7 @@
 - [x] The ticket 03 script takes "after" screenshots; each page is compared by eye with its "before" image, with a pixel diff to point at differences, and every difference is fixed. The after images are saved in `assets/`
 - [x] `whisper_web` Jest, lint and type-check pass with the ticket 02 counts
 - [x] The Electron suite still passes (main serves the dashboard export). Note: deferred to the end-of-spec run (owner, 2026-11-28)
-- [ ] Work on its own branch, merged into `dev` through a pull request
+- [x] Work on its own branch, merged into `dev` through a pull request (PR #13; review fixes in the closing PR)
 
 ## Comments
 

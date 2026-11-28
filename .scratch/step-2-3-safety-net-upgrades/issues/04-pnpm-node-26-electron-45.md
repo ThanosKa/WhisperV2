@@ -4,7 +4,7 @@
 
 **Blocked by:** 01, 02
 
-**Status:** claimed
+**Status:** resolved
 
 **Label:** ready-for-agent
 
@@ -21,7 +21,7 @@
 - [x] A fresh clone installs with `pnpm install --frozen-lockfile` on Node 26 (one-off check saved in `assets/`)
 - [x] The Electron suite passes against the ticket 02 screenshots. A screenshot that fails only on anti-aliasing is re-baselined once, with the diff image and the reason saved in `assets/`; any other difference is fixed
 - [x] Both Jest suites, `whisper_web` lint and type-check give the ticket 02 counts
-- [ ] Work on its own branch, merged into `dev` through a pull request
+- [x] Work on its own branch, merged into `dev` through a pull request (PR #10; review fixes in the closing PR)
 
 ## Comments
 

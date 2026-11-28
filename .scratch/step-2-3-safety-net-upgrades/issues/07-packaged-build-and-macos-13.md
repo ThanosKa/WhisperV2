@@ -4,7 +4,7 @@
 
 **Blocked by:** 04
 
-**Status:** claimed
+**Status:** resolved
 
 **Label:** ready-for-agent
 
@@ -16,7 +16,7 @@
 - [x] A local macOS build without publishing produces a `latest-mac.yml` containing `minimumSystemVersion: 22.0.0` (Darwin 22 is macOS 13), through `electron-builder` config if the installed version supports it with that value, otherwise through a release step that adds it before upload. The file is saved in `assets/` as proof
 - [x] Nothing is published or released
 - [x] The Electron suite against the development app, both Jest suites, `whisper_web` lint and type-check still pass. Both Jest suites, lint and type-check pass; the Electron suite is deferred to the end-of-spec run (owner, 2026-11-28)
-- [ ] Work on its own branch, merged into `dev` through a pull request
+- [x] Work on its own branch, merged into `dev` through a pull request (PR #12; review fixes in the closing PR)
 
 ## Comments
 

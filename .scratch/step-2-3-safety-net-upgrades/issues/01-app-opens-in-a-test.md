@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** claimed
+**Status:** resolved
 
 **Label:** ready-for-agent
 
@@ -20,7 +20,7 @@
 - [x] The test is TypeScript, lives in today's e2e folder, and `test:e2e` runs it
 - [x] The four empty e2e files and their unused launch helper are deleted
 - [x] Root Jest and `whisper_web` Jest, lint and type-check give the step-1 counts
-- [ ] Work on its own branch, merged into `dev` through a pull request
+- [x] Work on its own branch, merged into `dev` through a pull request (PR #7; review fixes in the closing PR)
 
 ## Comments
 

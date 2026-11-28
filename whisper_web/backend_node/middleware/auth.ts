@@ -12,4 +12,5 @@ export function identifyUser(req: Request, _res: Response, next: NextFunction): 
     next();
 }
 
-export default { identifyUser };
+const authMiddleware = { identifyUser };
+export default authMiddleware;

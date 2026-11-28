@@ -16,7 +16,7 @@
 - [x] The Tailwind 4 upgrade tool is run
 - [x] The ticket 03 script takes "after" screenshots; each page is compared by eye with its "before" image, with a pixel diff to point at differences, and every difference is fixed. The after images are saved in `assets/`
 - [x] `whisper_web` Jest, lint and type-check pass with the ticket 02 counts
-- [ ] The Electron suite still passes (main serves the dashboard export). Note: deferred to the end-of-spec run (owner, 2026-11-28)
+- [x] The Electron suite still passes (main serves the dashboard export). Note: deferred to the end-of-spec run (owner, 2026-11-28)
 - [ ] Work on its own branch, merged into `dev` through a pull request
 
 ## Comments
@@ -157,3 +157,7 @@ app/layout.tsx(1,8): error TS2882: Cannot find module or type declarations for s
 - type-check: exit 0
 - lint: clean
 - `whisper_web` Jest: 49 passed
+
+### 2026-11-28, end-of-spec run (branch `step-2-3-end-run`, `dev` at 7ab4197)
+
+End-of-spec run 2026-11-28: passed. The Electron suite against the development app, after `pnpm run build:all` (which builds the dashboard export main serves): 10 of 10 passed in one full run. `whisper_web` Jest 49 passed, lint clean, type-check exit 0.

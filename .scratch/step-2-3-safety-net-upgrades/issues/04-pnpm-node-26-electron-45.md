@@ -19,7 +19,7 @@
 - [x] Checked and recorded: whether user ids can contain `.` or `[` (`electron-store` 12 throws on those keys), and the glibc floor of the `better-sqlite3` Linux binaries
 - [x] The `aec` entry in `.gitmodules` is deleted; the vendored `aec.js` stays
 - [x] A fresh clone installs with `pnpm install --frozen-lockfile` on Node 26 (one-off check saved in `assets/`)
-- [ ] The Electron suite passes against the ticket 02 screenshots. A screenshot that fails only on anti-aliasing is re-baselined once, with the diff image and the reason saved in `assets/`; any other difference is fixed
+- [x] The Electron suite passes against the ticket 02 screenshots. A screenshot that fails only on anti-aliasing is re-baselined once, with the diff image and the reason saved in `assets/`; any other difference is fixed
 - [x] Both Jest suites, `whisper_web` lint and type-check give the ticket 02 counts
 - [ ] Work on its own branch, merged into `dev` through a pull request
 
@@ -120,3 +120,7 @@
   - None of these reproduced on demand in isolation. The end-of-spec run should look at these first.
 
 **Tried and dropped (owner's focus request).** The suite steals focus on the owner's Mac. A no-focus patch in `main-preload.js` failed: Electron's `BrowserWindow` export cannot be redefined ("Cannot redefine property: BrowserWindow"), so the class could not be swapped. The owner then dropped the request, and the change was reverted, nothing committed.
+
+### 2026-11-28, end-of-spec run (branch `step-2-3-end-run`, `dev` at 7ab4197)
+
+End-of-spec run 2026-11-28: passed. Development app, one full run of `pnpm run test:e2e`: 10 of 10 passed (4 smoke tests, 6 screenshots) in 46.9 s, against the ticket 02 baselines plus this ticket's re-baseline (`a1943b2`). No test was rerun and nothing was changed. The Screenshot-window fix `744cf66` passed in full runs on both the development app and the packaged app (ticket 07). Load average 4.5 at the start.

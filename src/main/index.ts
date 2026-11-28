@@ -40,8 +40,7 @@ const customUrlLog = logger.child({ module: 'CustomUrl' });
 const authLog = logger.child({ module: 'Auth' });
 const updaterLog = logger.child({ module: 'AutoUpdater' });
 
-// Ensure consistent app name so protocol prompts say "Open Whisper" even in dev
-app.setName('Whisper');
+// The app name and the single-instance lock are set by ./entry before this module loads.
 
 // -------------------------------------------------
 //  auto-register protocol for dev (Windows only)
@@ -66,14 +65,7 @@ if (process.platform === 'win32' && !app.isPackaged) {
     }
 }
 
-// Ensure single instance and register handlers BEFORE any argv parsing or protocol work
-const gotTheLock = app.requestSingleInstanceLock();
-if (!gotTheLock) {
-    app.quit();
-    process.exit(0);
-}
-
-// Setup protocol after single instance lock so second-instance events are caught correctly
+// Setup protocol after single instance lock (./entry) so second-instance events are caught correctly
 setupProtocolHandling();
 
 // Global variables

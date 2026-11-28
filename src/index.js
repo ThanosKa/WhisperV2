@@ -746,6 +746,15 @@ function handlePersonalizeFromUrl(params) {
     }
 }
 
+// Express 5 passes a listen error to the callback instead of throwing it.
+function listenOn({ expressApp, port }) {
+    return new Promise((resolve, reject) => {
+        const server = expressApp.listen(port, '127.0.0.1', err => (err ? reject(err) : resolve(server)));
+        server.on('error', reject);
+        app.once('before-quit', () => server.close());
+    });
+}
+
 async function startWebStack() {
     console.log('NODE_ENV =', process.env.NODE_ENV);
     const isDev = !app.isPackaged;
@@ -824,22 +833,14 @@ async function startWebStack() {
 
     frontSrv.use(express.static(staticDir));
 
-    const frontendServer = await new Promise((resolve, reject) => {
-        const server = frontSrv.listen(frontendPort, '127.0.0.1', err => (err ? reject(err) : resolve(server)));
-        server.on('error', reject);
-        app.once('before-quit', () => server.close());
-    });
+    await listenOn({ expressApp: frontSrv, port: frontendPort });
 
     console.log(`✅ Frontend server started on http://localhost:${frontendPort}`);
 
     const apiSrv = express();
     apiSrv.use(nodeApi);
 
-    const apiServer = await new Promise((resolve, reject) => {
-        const server = apiSrv.listen(apiPort, '127.0.0.1', err => (err ? reject(err) : resolve(server)));
-        server.on('error', reject);
-        app.once('before-quit', () => server.close());
-    });
+    await listenOn({ expressApp: apiSrv, port: apiPort });
 
     console.log(`✅ API server started on http://localhost:${apiPort}`);
 

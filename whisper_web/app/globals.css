@@ -80,6 +80,31 @@
   }
 }
 
+/*
+  space-x-* and space-y-* as Tailwind 3 drew them. Tailwind 4 puts the gap after every child but the last,
+  with a zero-specificity selector; Tailwind 3 put it before every child but the first, with a stronger one.
+  The two differ in flex rows, with inline children and with children that set their own margins (the settings
+  profile header grew 6px). The first rule takes away Tailwind 4's margin, the others put back Tailwind 3's,
+  for each value the dashboard uses.
+*/
+@layer utilities {
+  :where(.space-y-0, .space-y-1, .space-y-1\.5, .space-y-2, .space-y-3, .space-y-4, .space-y-8) > :where(:not(:last-child)) {
+    margin-block-end: 0;
+  }
+  :where(.space-x-2, .space-x-10) > :where(:not(:last-child)) {
+    margin-inline-end: 0;
+  }
+  .space-y-0 > :not([hidden]) ~ :not([hidden]) { margin-top: 0; margin-bottom: 0; }
+  .space-y-1 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(var(--spacing) * 1); margin-bottom: 0; }
+  .space-y-1\.5 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(var(--spacing) * 1.5); margin-bottom: 0; }
+  .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(var(--spacing) * 2); margin-bottom: 0; }
+  .space-y-3 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(var(--spacing) * 3); margin-bottom: 0; }
+  .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(var(--spacing) * 4); margin-bottom: 0; }
+  .space-y-8 > :not([hidden]) ~ :not([hidden]) { margin-top: calc(var(--spacing) * 8); margin-bottom: 0; }
+  .space-x-2 > :not([hidden]) ~ :not([hidden]) { margin-right: 0; margin-left: calc(var(--spacing) * 2); }
+  .space-x-10 > :not([hidden]) ~ :not([hidden]) { margin-right: 0; margin-left: calc(var(--spacing) * 10); }
+}
+
 @utility text-balance {
   text-wrap: balance;
 }

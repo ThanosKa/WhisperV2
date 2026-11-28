@@ -1,83 +1,91 @@
-const { describe, test, expect, beforeEach, jest: jestModule } = require('@jest/globals');
+import { beforeEach, describe, expect, test, vi } from 'vitest';
+import listenService from '../../../src/main/features/listen/listenService';
 
-const mockSessionRepo = {
-    findLatestUnfinishedListen: jestModule.fn(),
-};
+const { mockSessionRepo, mockTranscriptRepo, mockInsightsRepo, mockAuthService, mockSummaryService, mockWindow, SttServiceMock } = vi.hoisted(() => {
+    const mockSessionRepo = {
+        findLatestUnfinishedListen: vi.fn(),
+    };
+    const mockTranscriptRepo = {
+        getAllTranscriptsBySessionId: vi.fn(),
+    };
+    const mockInsightsRepo = {
+        getAllInsightsBySessionId: vi.fn(),
+    };
+    const mockAuthService = {
+        getCurrentUserId: vi.fn((): string | null => 'test-user-id'),
+    };
+    const mockSummaryService = {
+        setCallbacks: vi.fn(),
+        setSessionId: vi.fn(),
+        hydrateConversation: vi.fn(),
+        hydrateInsights: vi.fn(),
+        selectedPresetId: 'meeting',
+    };
+    const mockWindow = {
+        isDestroyed: vi.fn(() => false),
+        webContents: { send: vi.fn() },
+    };
+    // listenService builds its STT service when the module loads, so the stand-in needs a working
+    // implementation from the start; each test sets its own again.
+    const SttServiceMock = vi.fn(function SttService(): Record<string, unknown> {
+        return {
+            setCallbacks: vi.fn(),
+            initializeSttSessions: vi.fn(async () => true),
+            closeSessions: vi.fn(async () => true),
+        };
+    });
 
-const mockTranscriptRepo = {
-    getAllTranscriptsBySessionId: jestModule.fn(),
-};
+    return { mockSessionRepo, mockTranscriptRepo, mockInsightsRepo, mockAuthService, mockSummaryService, mockWindow, SttServiceMock };
+});
 
-const mockInsightsRepo = {
-    getAllInsightsBySessionId: jestModule.fn(),
-};
-
-const mockAuthService = {
-    getCurrentUserId: jestModule.fn(() => 'test-user-id'),
-};
-
-jestModule.mock('../../../src/main/features/common/repositories/session', () => ({
-    findLatestUnfinishedListen: () => mockSessionRepo.findLatestUnfinishedListen(),
+vi.mock('../../../src/main/features/common/repositories/session', () => ({
+    default: {
+        findLatestUnfinishedListen: () => mockSessionRepo.findLatestUnfinishedListen(),
+    },
 }));
 
-jestModule.mock('../../../src/main/features/common/services/authService', () => mockAuthService);
+vi.mock('../../../src/main/features/common/services/authService', () => ({ default: mockAuthService }));
 
-jestModule.mock('../../../src/main/features/listen/stt/repositories', () => ({
-    getAllTranscriptsBySessionId: sessionId => mockTranscriptRepo.getAllTranscriptsBySessionId(sessionId),
+vi.mock('../../../src/main/features/listen/stt/repositories', () => ({
+    default: {
+        getAllTranscriptsBySessionId: (sessionId: string) => mockTranscriptRepo.getAllTranscriptsBySessionId(sessionId),
+    },
 }));
 
-jestModule.mock('../../../src/main/features/listen/summary/repositories', () => ({
-    getAllInsightsBySessionId: sessionId => mockInsightsRepo.getAllInsightsBySessionId(sessionId),
+vi.mock('../../../src/main/features/listen/summary/repositories', () => ({
+    default: {
+        getAllInsightsBySessionId: (sessionId: string) => mockInsightsRepo.getAllInsightsBySessionId(sessionId),
+    },
 }));
 
-jestModule.mock('../../../src/main/features/listen/stt/sttService', () =>
-    jestModule.fn().mockImplementation(() => ({
-        setCallbacks: jestModule.fn(),
-        initializeSttSessions: jestModule.fn(async () => true),
-    }))
-);
+vi.mock('../../../src/main/features/listen/stt/sttService', () => ({ default: SttServiceMock }));
 
-const mockSummaryService = {
-    setCallbacks: jestModule.fn(),
-    setSessionId: jestModule.fn(),
-    hydrateConversation: jestModule.fn(),
-    hydrateInsights: jestModule.fn(),
-    selectedPresetId: 'meeting',
-};
+vi.mock('../../../src/main/features/listen/summary/summaryService', () => ({ default: mockSummaryService }));
 
-jestModule.mock('../../../src/main/features/listen/summary/summaryService', () => mockSummaryService);
-
-const mockWindow = {
-    isDestroyed: jestModule.fn(() => false),
-    webContents: { send: jestModule.fn() },
-};
-
-jestModule.mock('../../../src/main/window/windowManager', () => ({
+vi.mock('../../../src/main/window/windowManager', () => ({
     windowPool: {
-        get: jestModule.fn(() => mockWindow),
+        get: vi.fn(() => mockWindow),
     },
 }));
 
 describe('Crash Recovery - Insights Recovery', () => {
-    let listenService;
-
-    beforeEach(() => {
-        jestModule.clearAllMocks();
-        listenService = require('../../../src/main/features/listen/listenService');
+    beforeEach(async () => {
+        vi.clearAllMocks();
         listenService.strandedSession = null;
         listenService.isRecoveryDismissed = false;
         listenService.currentSessionId = null;
         mockAuthService.getCurrentUserId.mockReturnValue('test-user-id');
 
-        const windowManager = require('../../../src/main/window/windowManager');
-        windowManager.windowPool.get.mockImplementation(() => mockWindow);
+        const windowManager = await import('../../../src/main/window/windowManager');
+        vi.mocked(windowManager.windowPool.get).mockImplementation(() => mockWindow);
         mockWindow.isDestroyed.mockReturnValue(false);
 
-        const SttService = require('../../../src/main/features/listen/stt/sttService');
-        SttService.mockImplementation(() => ({
-            setCallbacks: jestModule.fn(),
-            initializeSttSessions: jestModule.fn(async () => true),
-        }));
+        SttServiceMock.mockImplementation(function () {
+            return {
+                setCallbacks: vi.fn(),
+                initializeSttSessions: vi.fn(async () => true),
+            };
+        });
     });
 
     test('should recover single insight round', async () => {
@@ -106,8 +114,8 @@ describe('Crash Recovery - Insights Recovery', () => {
         const result = await listenService.findStrandedSession();
 
         expect(result).not.toBeNull();
-        expect(result.insights).toHaveLength(1);
-        expect(result.insights[0].payload.summary).toHaveLength(1);
+        expect(result?.insights).toHaveLength(1);
+        expect(result?.insights[0].payload.summary).toHaveLength(1);
     });
 
     test('should recover ALL insight rounds (not just latest)', async () => {
@@ -147,9 +155,9 @@ describe('Crash Recovery - Insights Recovery', () => {
 
         const result = await listenService.findStrandedSession();
 
-        expect(result.insights).toHaveLength(3);
-        expect(result.insights[0].payload.summary).toHaveLength(1);
-        expect(result.insights[2].payload.summary).toHaveLength(3);
+        expect(result?.insights).toHaveLength(3);
+        expect(result?.insights[0].payload.summary).toHaveLength(1);
+        expect(result?.insights[2].payload.summary).toHaveLength(3);
     });
 
     test('should send insights to UI in correct order', async () => {
@@ -186,8 +194,8 @@ describe('Crash Recovery - Insights Recovery', () => {
 
         const summaryCalls = mockWindow.webContents.send.mock.calls.filter(call => call[0] === 'summary-update');
         expect(summaryCalls).toHaveLength(2);
-        expect(summaryCalls[0][1]).toMatchObject({ summary: ['Second'] });
-        expect(summaryCalls[1][1]).toMatchObject({ summary: ['First'] });
+        expect(summaryCalls[0]?.[1]).toMatchObject({ summary: ['Second'] });
+        expect(summaryCalls[1]?.[1]).toMatchObject({ summary: ['First'] });
     });
 
     test('should hydrate insights in backend (summaryService state)', async () => {
@@ -216,7 +224,7 @@ describe('Crash Recovery - Insights Recovery', () => {
         listenService.strandedSession = await listenService.findStrandedSession();
         await listenService.resumeStrandedSession();
 
-        expect(mockSummaryService.hydrateInsights).toHaveBeenCalledWith(insights[0].payload);
+        expect(mockSummaryService.hydrateInsights).toHaveBeenCalledWith(insights[0]?.payload);
     });
 
     test('should handle session with transcripts but NO insights', async () => {
@@ -237,7 +245,7 @@ describe('Crash Recovery - Insights Recovery', () => {
         const result = await listenService.findStrandedSession();
 
         expect(result).not.toBeNull();
-        expect(result.insights).toHaveLength(0);
+        expect(result?.insights).toHaveLength(0);
     });
 
     test('should use latest insight for backend state restoration', async () => {
@@ -273,7 +281,7 @@ describe('Crash Recovery - Insights Recovery', () => {
         await listenService.resumeStrandedSession();
 
         // Should hydrate the latest (last) insight
-        expect(mockSummaryService.hydrateInsights).toHaveBeenCalledWith(insights[1].payload);
+        expect(mockSummaryService.hydrateInsights).toHaveBeenCalledWith(insights[1]?.payload);
     });
 
     test('should append all insights to UI history', async () => {
@@ -316,9 +324,9 @@ describe('Crash Recovery - Insights Recovery', () => {
 
         const summaryCalls = mockWindow.webContents.send.mock.calls.filter(call => call[0] === 'summary-update');
         expect(summaryCalls).toHaveLength(3);
-        expect(summaryCalls[0][1]).toMatchObject({ summary: ['C'] });
-        expect(summaryCalls[1][1]).toMatchObject({ summary: ['B'] });
-        expect(summaryCalls[2][1]).toMatchObject({ summary: ['A'] });
+        expect(summaryCalls[0]?.[1]).toMatchObject({ summary: ['C'] });
+        expect(summaryCalls[1]?.[1]).toMatchObject({ summary: ['B'] });
+        expect(summaryCalls[2]?.[1]).toMatchObject({ summary: ['A'] });
     });
 
     test('should recover all insights after 2nd crash including all rounds', async () => {
@@ -346,9 +354,9 @@ describe('Crash Recovery - Insights Recovery', () => {
 
         const result = await listenService.findStrandedSession();
 
-        expect(result.insights).toHaveLength(5);
-        expect(result.insights[0].payload.summary).toEqual(['Crash1-A']);
-        expect(result.insights[4].payload.summary).toEqual(['Crash2-C']);
+        expect(result?.insights).toHaveLength(5);
+        expect(result?.insights[0].payload.summary).toEqual(['Crash1-A']);
+        expect(result?.insights[4].payload.summary).toEqual(['Crash2-C']);
     });
 
     test('should recover all insights after 3rd crash including all rounds', async () => {
@@ -378,8 +386,8 @@ describe('Crash Recovery - Insights Recovery', () => {
 
         const result = await listenService.findStrandedSession();
 
-        expect(result.insights).toHaveLength(7);
-        expect(result.insights[0].payload.summary).toEqual(['C1-A']);
-        expect(result.insights[6].payload.summary).toEqual(['C3-B']);
+        expect(result?.insights).toHaveLength(7);
+        expect(result?.insights[0].payload.summary).toEqual(['C1-A']);
+        expect(result?.insights[6].payload.summary).toEqual(['C3-B']);
     });
 });

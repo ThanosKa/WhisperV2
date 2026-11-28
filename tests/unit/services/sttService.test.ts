@@ -1,28 +1,29 @@
-const { describe, test, expect, beforeEach } = require('@jest/globals');
+import { beforeEach, describe, expect, test, vi } from 'vitest';
+import SttService from '../../../src/main/features/listen/stt/sttService';
 
-jest.mock('../../../src/main/window/windowManager', () => ({
+vi.mock('../../../src/main/window/windowManager', () => ({
     windowPool: new Map(),
 }));
 
-jest.mock('../../../src/main/features/common/config/config', () => ({
-    get: jest.fn(key => {
-        if (key === 'utteranceSilenceMs') return 800;
-        if (key === 'maxUtteranceChars') return 50;
-        return undefined;
-    }),
+vi.mock('../../../src/main/features/common/config/config', () => ({
+    default: {
+        get: vi.fn((key: string) => {
+            if (key === 'utteranceSilenceMs') return 800;
+            if (key === 'maxUtteranceChars') return 50;
+            return undefined;
+        }),
+    },
 }));
 
-jest.mock('../../../src/main/features/common/services/authService', () => ({}));
-
-const SttService = require('../../../src/main/features/listen/stt/sttService');
+vi.mock('../../../src/main/features/common/services/authService', () => ({ default: {} }));
 
 describe('SttService utterance segmentation', () => {
-    let service;
+    let service: SttService;
 
     beforeEach(() => {
         service = new SttService();
-        service.sendToRenderer = jest.fn();
-        service.onTranscriptionComplete = jest.fn();
+        service.sendToRenderer = vi.fn();
+        service.onTranscriptionComplete = vi.fn();
     });
 
     test('forces splits when partial text exceeds configured limit', () => {
@@ -35,8 +36,8 @@ describe('SttService utterance segmentation', () => {
         });
 
         expect(service.onTranscriptionComplete).toHaveBeenCalled();
-        const emittedLengths = service.onTranscriptionComplete.mock.calls.map(([, text]) => text.length);
-        emittedLengths.forEach(len => expect(len).toBeLessThanOrEqual(50));
+        const emittedLengths = service.onTranscriptionComplete.mock.calls.map(([, text]: [unknown, string]) => text.length);
+        emittedLengths.forEach((len: number) => expect(len).toBeLessThanOrEqual(50));
 
         expect(remainder.length).toBeLessThanOrEqual(50);
         expect(service.meCommittedLength).toBe(longText.length - remainder.length);
@@ -80,7 +81,7 @@ describe('SttService utterance segmentation', () => {
         });
 
         expect(service.onTranscriptionComplete).toHaveBeenCalledTimes(4);
-        service.onTranscriptionComplete.mock.calls.forEach(([, text]) => {
+        service.onTranscriptionComplete.mock.calls.forEach(([, text]: [unknown, string]) => {
             expect(text.length).toBeLessThanOrEqual(50);
         });
         expect(remainder.length).toBeLessThanOrEqual(50);

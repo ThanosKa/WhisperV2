@@ -1,42 +1,42 @@
+import { vi } from 'vitest';
+
 const createSessionRepository = () => ({
-    setAuthService: jest.fn(),
-    create: jest.fn(async () => 1),
-    getById: jest.fn(async id => ({ id, uid: 'test-user', title: 'Test Session' })),
-    getAllByUserId: jest.fn(async () => []),
-    update: jest.fn(async () => ({ success: true })),
-    updateTitle: jest.fn(async () => ({ success: true })),
-    updateType: jest.fn(async () => ({ success: true })),
-    delete: jest.fn(async () => ({ success: true })),
-    deleteWithRelatedData: jest.fn(async () => ({ success: true })),
-    getOrCreateActive: jest.fn(async () => 1),
-    end: jest.fn(async () => ({ success: true })),
-    endAllActiveSessions: jest.fn(async () => ({ success: true })),
-    touch: jest.fn(async () => ({ success: true })),
+    setAuthService: vi.fn(),
+    create: vi.fn(async () => 1),
+    getById: vi.fn(async (id: number) => ({ id, uid: 'test-user', title: 'Test Session' })),
+    getAllByUserId: vi.fn(async () => []),
+    update: vi.fn(async () => ({ success: true })),
+    updateTitle: vi.fn(async () => ({ success: true })),
+    updateType: vi.fn(async () => ({ success: true })),
+    delete: vi.fn(async () => ({ success: true })),
+    deleteWithRelatedData: vi.fn(async () => ({ success: true })),
+    getOrCreateActive: vi.fn(async () => 1),
+    end: vi.fn(async () => ({ success: true })),
+    endAllActiveSessions: vi.fn(async () => ({ success: true })),
+    touch: vi.fn(async () => ({ success: true })),
 });
 
 const createAskRepository = () => ({
-    addAiMessage: jest.fn(async () => ({ success: true })),
-    getAllAiMessagesBySessionId: jest.fn(async () => []),
+    addAiMessage: vi.fn(async () => ({ success: true })),
+    getAllAiMessagesBySessionId: vi.fn(async () => []),
 });
 
 const createSttRepository = () => ({
-    addTranscript: jest.fn(async () => ({ success: true })),
-    getAllTranscriptsBySessionId: jest.fn(async () => [
-        { id: 1, speaker: 'User', text: 'Test transcript', timestamp: Date.now() },
-    ]),
+    addTranscript: vi.fn(async () => ({ success: true })),
+    getAllTranscriptsBySessionId: vi.fn(async () => [{ id: 1, speaker: 'User', text: 'Test transcript', timestamp: Date.now() }]),
 });
 
 const createUserRepository = () => ({
-    findOrCreate: jest.fn(async () => ({ success: true })),
+    findOrCreate: vi.fn(async () => ({ success: true })),
 });
 
 const createPresetRepository = () => ({
-    getPresets: jest.fn(async () => []),
-    getPresetTemplates: jest.fn(async () => []),
-    update: jest.fn(async () => ({ success: true })),
+    getPresets: vi.fn(async () => []),
+    getPresetTemplates: vi.fn(async () => []),
+    update: vi.fn(async () => ({ success: true })),
 });
 
-module.exports = {
+export const repositoryMocks = {
     sessionRepository: createSessionRepository(),
     askRepository: createAskRepository(),
     sttRepository: createSttRepository(),

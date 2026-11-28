@@ -1,60 +1,64 @@
-const { describe, test, expect, beforeEach, afterEach } = require('@jest/globals');
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import {
+    createSearchStreamReader,
+    createSequentialSearchStream,
+    createSimpleSearchStream,
+    firstStreamPayload,
+    stream,
+} from '../../mocks/llmClient.mock';
 
-jest.mock('../../../src/main/features/common/ai/llmClient', () => require('../../mocks/llmClient.mock'));
-jest.mock('../../../src/main/features/common/repositories/session', () => require('../../mocks/database.mock').sessionRepository);
-jest.mock('../../../src/main/features/ask/repositories', () => require('../../mocks/database.mock').askRepository);
-
-// Mock listenService
-jest.mock('../../../src/main/features/listen/listenService', () => ({
-    getConversationHistory: jest.fn(() => []),
-    getCurrentSessionData: jest.fn(() => ({ sessionId: 'test-session-id' })),
-}));
-
-// Mock summaryService for role context tests
-const mockSummaryService = {
-    selectedRoleText: '',
-    selectedPresetId: null,
-    getCurrentContext: jest.fn(() => ({
-        definedTerms: [],
-        detectedQuestions: [],
-        analysisProfile: 'meeting_analysis',
-    })),
-};
-jest.mock('../../../src/main/features/listen/summary/summaryService', () => mockSummaryService);
-
-// Mock windowManager
-jest.mock('../../../src/main/window/windowManager', () => {
+// Mutable objects, so test changes are visible to the code under test.
+const { mockSummaryService, listenServiceMock, askWindow, headerWindow } = vi.hoisted(() => {
     const createMockWindow = () => ({
-        isDestroyed: jest.fn(() => false),
-        isVisible: jest.fn(() => true),
+        isDestroyed: vi.fn(() => false),
+        isVisible: vi.fn(() => true),
         webContents: {
-            send: jest.fn(),
-            isDestroyed: jest.fn(() => false),
+            send: vi.fn(),
+            isDestroyed: vi.fn(() => false),
         },
     });
 
-    const askWindow = createMockWindow();
-    const headerWindow = createMockWindow();
-
     return {
-        windowPool: new Map([
-            ['ask', askWindow],
-            ['header', headerWindow],
-        ]),
-        __mockAskWindow: askWindow,
-        __mockHeaderWindow: headerWindow,
+        mockSummaryService: {
+            selectedRoleText: '',
+            selectedPresetId: null as string | null,
+            getCurrentContext: vi.fn(() => ({
+                definedTerms: [] as string[],
+                detectedQuestions: [] as string[],
+                analysisProfile: 'meeting_analysis',
+            })),
+        },
+        listenServiceMock: {
+            getConversationHistory: vi.fn((): string[] => []),
+            getCurrentSessionData: vi.fn(() => ({ sessionId: 'test-session-id' })),
+        },
+        askWindow: createMockWindow(),
+        headerWindow: createMockWindow(),
     };
 });
 
-describe('AskService - Web Search Integration', () => {
-    let askService;
-    let llmClient;
-    let windowManager;
-    let mockAskWindow;
+vi.mock('../../../src/main/features/common/ai/llmClient', () => import('../../mocks/llmClient.mock'));
+vi.mock('../../../src/main/features/common/repositories/session', async () => ({
+    default: (await import('../../mocks/database.mock')).repositoryMocks.sessionRepository,
+}));
+vi.mock('../../../src/main/features/ask/repositories', async () => ({
+    default: (await import('../../mocks/database.mock')).repositoryMocks.askRepository,
+}));
+vi.mock('../../../src/main/features/listen/listenService', () => ({ default: listenServiceMock }));
+vi.mock('../../../src/main/features/listen/summary/summaryService', () => ({ default: mockSummaryService }));
+vi.mock('../../../src/main/window/windowManager', () => ({
+    windowPool: new Map([
+        ['ask', askWindow],
+        ['header', headerWindow],
+    ]),
+}));
 
-    beforeEach(() => {
-        jest.clearAllMocks();
-        jest.resetModules();
+describe('AskService - Web Search Integration', () => {
+    let askService: typeof import('../../../src/main/features/ask/askService').default;
+
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        vi.resetModules();
 
         // Reset mockSummaryService properties
         mockSummaryService.selectedRoleText = '';
@@ -65,21 +69,16 @@ describe('AskService - Web Search Integration', () => {
             analysisProfile: 'meeting_analysis',
         });
 
-        askService = require('../../../src/main/features/ask/askService');
-        llmClient = require('../../../src/main/features/common/ai/llmClient');
-        windowManager = require('../../../src/main/window/windowManager');
-        mockAskWindow = windowManager.__mockAskWindow;
+        askService = (await import('../../../src/main/features/ask/askService')).default;
     });
 
     afterEach(() => {
-        jest.restoreAllMocks();
+        vi.restoreAllMocks();
     });
 
     describe('Payload Construction for Web Search', () => {
         test('includes forceSearch=true when webSearchEnabled=true', async () => {
-            const { createSimpleSearchStream } = require('../../mocks/llmClient.mock');
-
-            llmClient.stream.mockResolvedValueOnce({
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () => createSimpleSearchStream(),
@@ -90,15 +89,13 @@ describe('AskService - Web Search Integration', () => {
 
             await askService.sendMessage('What is Apple stock price?', [], null, false, true); // webSearchEnabled=true
 
-            expect(llmClient.stream).toHaveBeenCalled();
-            const callArgs = llmClient.stream.mock.calls[0][0];
+            expect(stream).toHaveBeenCalled();
+            const callArgs = firstStreamPayload();
             expect(callArgs).toHaveProperty('forceSearch', true);
         });
 
         test('includes forceSearch=true when prompt starts with "🌐 Search:"', async () => {
-            const { createSimpleSearchStream } = require('../../mocks/llmClient.mock');
-
-            llmClient.stream.mockResolvedValueOnce({
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () => createSimpleSearchStream(),
@@ -109,15 +106,13 @@ describe('AskService - Web Search Integration', () => {
 
             await askService.sendMessage('🌐 Search: Latest Stock Price | AAPL stock price', [], null, false, false);
 
-            expect(llmClient.stream).toHaveBeenCalled();
-            const callArgs = llmClient.stream.mock.calls[0][0];
+            expect(stream).toHaveBeenCalled();
+            const callArgs = firstStreamPayload();
             expect(callArgs).toHaveProperty('forceSearch', true);
         });
 
         test('parses suggested search format: "🌐 Search: Label | Query"', async () => {
-            const { createSimpleSearchStream } = require('../../mocks/llmClient.mock');
-
-            llmClient.stream.mockResolvedValueOnce({
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () => createSimpleSearchStream(),
@@ -128,8 +123,8 @@ describe('AskService - Web Search Integration', () => {
 
             await askService.sendMessage('🌐 Search: Latest Stock Price | AAPL stock price December 2025', [], null, false, false);
 
-            expect(llmClient.stream).toHaveBeenCalled();
-            const callArgs = llmClient.stream.mock.calls[0][0];
+            expect(stream).toHaveBeenCalled();
+            const callArgs = firstStreamPayload();
 
             // The userContent should be the query part (after |)
             expect(callArgs.userContent).toBe('AAPL stock price December 2025');
@@ -137,9 +132,7 @@ describe('AskService - Web Search Integration', () => {
         });
 
         test('omits forceSearch when webSearchEnabled=false and not suggested search', async () => {
-            const { createSimpleSearchStream } = require('../../mocks/llmClient.mock');
-
-            llmClient.stream.mockResolvedValueOnce({
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () => createSimpleSearchStream(),
@@ -150,17 +143,15 @@ describe('AskService - Web Search Integration', () => {
 
             await askService.sendMessage('What is the weather?', [], null, false, false); // webSearchEnabled=false
 
-            expect(llmClient.stream).toHaveBeenCalled();
-            const callArgs = llmClient.stream.mock.calls[0][0];
+            expect(stream).toHaveBeenCalled();
+            const callArgs = firstStreamPayload();
             expect(callArgs).not.toHaveProperty('forceSearch');
         });
     });
 
     describe('SSE Event Parsing from Server', () => {
         test('handles {status: "searching"} event: sets isSearching=true', async () => {
-            const { createSearchStreamReader } = require('../../mocks/llmClient.mock');
-
-            llmClient.stream.mockResolvedValueOnce({
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () =>
@@ -177,18 +168,14 @@ describe('AskService - Web Search Integration', () => {
 
             // Verify isSearching was set to true at some point
             // Check IPC broadcasts for search state
-            const stateBroadcasts = mockAskWindow.webContents.send.mock.calls
-                .filter(call => call[0] === 'ask:stateUpdate')
-                .map(call => call[1]);
+            const stateBroadcasts = askWindow.webContents.send.mock.calls.filter(call => call[0] === 'ask:stateUpdate').map(call => call[1]);
 
             const searchingState = stateBroadcasts.find(state => state.isSearching === true);
             expect(searchingState).toBeDefined();
         });
 
         test('handles {status: "searching", query: "..."} event: updates searchQuery', async () => {
-            const { createSearchStreamReader } = require('../../mocks/llmClient.mock');
-
-            llmClient.stream.mockResolvedValueOnce({
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () =>
@@ -204,9 +191,7 @@ describe('AskService - Web Search Integration', () => {
             await askService.sendMessage('Test search', [], null, false, true);
 
             // Check IPC broadcasts for searchQuery
-            const stateBroadcasts = mockAskWindow.webContents.send.mock.calls
-                .filter(call => call[0] === 'ask:stateUpdate')
-                .map(call => call[1]);
+            const stateBroadcasts = askWindow.webContents.send.mock.calls.filter(call => call[0] === 'ask:stateUpdate').map(call => call[1]);
 
             const queryState = stateBroadcasts.find(state => state.searchQuery === 'Apple stock');
             expect(queryState).toBeDefined();
@@ -214,14 +199,12 @@ describe('AskService - Web Search Integration', () => {
         });
 
         test('handles {citations: [...]} event: stores citations, sets isSearching=false', async () => {
-            const { createSearchStreamReader } = require('../../mocks/llmClient.mock');
-
             const mockCitations = [
                 { url: 'https://example.com', title: 'Example Source' },
                 { url: 'https://test.com', title: 'Test Source' },
             ];
 
-            llmClient.stream.mockResolvedValueOnce({
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () =>
@@ -239,9 +222,7 @@ describe('AskService - Web Search Integration', () => {
             await askService.sendMessage('Test search', [], null, false, true);
 
             // Check final state has citations and isSearching=false
-            const stateBroadcasts = mockAskWindow.webContents.send.mock.calls
-                .filter(call => call[0] === 'ask:stateUpdate')
-                .map(call => call[1]);
+            const stateBroadcasts = askWindow.webContents.send.mock.calls.filter(call => call[0] === 'ask:stateUpdate').map(call => call[1]);
 
             const citationState = stateBroadcasts.find(state => state.citations && state.citations.length > 0);
             expect(citationState).toBeDefined();
@@ -251,9 +232,7 @@ describe('AskService - Web Search Integration', () => {
         });
 
         test('handles content tokens after searching: transitions to searchCompleted=true', async () => {
-            const { createSearchStreamReader } = require('../../mocks/llmClient.mock');
-
-            llmClient.stream.mockResolvedValueOnce({
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () =>
@@ -271,9 +250,7 @@ describe('AskService - Web Search Integration', () => {
             await askService.sendMessage('Test search', [], null, false, true);
 
             // After content arrives, isSearching should transition to false
-            const stateBroadcasts = mockAskWindow.webContents.send.mock.calls
-                .filter(call => call[0] === 'ask:stateUpdate')
-                .map(call => call[1]);
+            const stateBroadcasts = askWindow.webContents.send.mock.calls.filter(call => call[0] === 'ask:stateUpdate').map(call => call[1]);
 
             // Find state after content started streaming
             const contentState = stateBroadcasts.find(state => state.currentResponse && state.currentResponse.includes('Apple'));
@@ -285,9 +262,7 @@ describe('AskService - Web Search Integration', () => {
         });
 
         test('broadcasts state updates via _broadcastState() after each event', async () => {
-            const { createSearchStreamReader } = require('../../mocks/llmClient.mock');
-
-            llmClient.stream.mockResolvedValueOnce({
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () =>
@@ -304,7 +279,7 @@ describe('AskService - Web Search Integration', () => {
             await askService.sendMessage('Test search', [], null, false, true);
 
             // Verify IPC was called multiple times with ask:stateUpdate
-            const stateUpdateCalls = mockAskWindow.webContents.send.mock.calls.filter(call => call[0] === 'ask:stateUpdate');
+            const stateUpdateCalls = askWindow.webContents.send.mock.calls.filter(call => call[0] === 'ask:stateUpdate');
 
             expect(stateUpdateCalls.length).toBeGreaterThan(0);
 
@@ -317,11 +292,9 @@ describe('AskService - Web Search Integration', () => {
 
     describe('Sequential Searches (ReAct Loop)', () => {
         test('handles multiple {status: "searching"} events in single stream', async () => {
-            const { createSearchStreamReader } = require('../../mocks/llmClient.mock');
-
             let searchEventCount = 0;
 
-            llmClient.stream.mockResolvedValueOnce({
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () => {
@@ -363,9 +336,7 @@ describe('AskService - Web Search Integration', () => {
         });
 
         test('accumulates content between multiple searches without clearing', async () => {
-            const { createSequentialSearchStream } = require('../../mocks/llmClient.mock');
-
-            llmClient.stream.mockResolvedValueOnce({
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () => createSequentialSearchStream(),
@@ -382,9 +353,7 @@ describe('AskService - Web Search Integration', () => {
         });
 
         test('rejects query if it is not a string (defensive check)', async () => {
-            const { createSearchStreamReader } = require('../../mocks/llmClient.mock');
-
-            llmClient.stream.mockResolvedValueOnce({
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () =>
@@ -406,10 +375,8 @@ describe('AskService - Web Search Integration', () => {
         });
 
         test('final citations array includes all sources from all searches', async () => {
-            const { createSearchStreamReader } = require('../../mocks/llmClient.mock');
-
             // Custom stream with multiple citations from different searches
-            llmClient.stream.mockResolvedValueOnce({
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () =>
@@ -430,8 +397,8 @@ describe('AskService - Web Search Integration', () => {
 
             // Final citations should include all sources
             expect(askService.state.citations).toHaveLength(2);
-            expect(askService.state.citations[0].url).toBe('https://a.com');
-            expect(askService.state.citations[1].url).toBe('https://b.com');
+            expect(askService.state.citations).toHaveProperty('0.url', 'https://a.com');
+            expect(askService.state.citations).toHaveProperty('1.url', 'https://b.com');
         });
     });
 });

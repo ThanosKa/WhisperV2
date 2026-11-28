@@ -1,67 +1,94 @@
-const { describe, test, expect, beforeEach, jest: jestModule } = require('@jest/globals');
+import { beforeEach, describe, expect, test, vi } from 'vitest';
+import listenService from '../../../src/main/features/listen/listenService';
 
-const mockSessionRepo = {
-    findLatestUnfinishedListen: jestModule.fn(),
-    end: jestModule.fn(),
-};
+const {
+    mockSessionRepo,
+    mockTranscriptRepo,
+    mockInsightsRepo,
+    mockAuthService,
+    mockSummaryService,
+    mockHeaderWindow,
+    mockListenWindow,
+    SttServiceMock,
+} = vi.hoisted(() => {
+    const mockSessionRepo = {
+        findLatestUnfinishedListen: vi.fn(),
+        end: vi.fn(),
+    };
+    const mockTranscriptRepo = {
+        getAllTranscriptsBySessionId: vi.fn(),
+    };
+    const mockInsightsRepo = {
+        getAllInsightsBySessionId: vi.fn(),
+    };
+    const mockAuthService = {
+        getCurrentUserId: vi.fn((): string | null => 'test-user-id'),
+    };
+    const mockSummaryService = {
+        setCallbacks: vi.fn(),
+        setSessionId: vi.fn(),
+        hydrateConversation: vi.fn(),
+        hydrateInsights: vi.fn(),
+        selectedPresetId: 'meeting',
+    };
+    const mockHeaderWindow = {
+        isDestroyed: vi.fn(() => false),
+        webContents: { send: vi.fn() },
+    };
+    const mockListenWindow = {
+        isDestroyed: vi.fn(() => false),
+        webContents: { send: vi.fn() },
+    };
+    // listenService builds its STT service when the module loads, so the stand-in needs a working
+    // implementation from the start; each test sets its own again.
+    const SttServiceMock = vi.fn(function SttService(): Record<string, unknown> {
+        return {
+            setCallbacks: vi.fn(),
+            initializeSttSessions: vi.fn(async () => true),
+            closeSessions: vi.fn(async () => true),
+        };
+    });
 
-const mockTranscriptRepo = {
-    getAllTranscriptsBySessionId: jestModule.fn(),
-};
+    return {
+        mockSessionRepo,
+        mockTranscriptRepo,
+        mockInsightsRepo,
+        mockAuthService,
+        mockSummaryService,
+        mockHeaderWindow,
+        mockListenWindow,
+        SttServiceMock,
+    };
+});
 
-const mockInsightsRepo = {
-    getAllInsightsBySessionId: jestModule.fn(),
-};
-
-const mockAuthService = {
-    getCurrentUserId: jestModule.fn(() => 'test-user-id'),
-};
-
-jestModule.mock('../../../src/main/features/common/repositories/session', () => ({
-    findLatestUnfinishedListen: () => mockSessionRepo.findLatestUnfinishedListen(),
-    end: id => mockSessionRepo.end(id),
+vi.mock('../../../src/main/features/common/repositories/session', () => ({
+    default: {
+        findLatestUnfinishedListen: () => mockSessionRepo.findLatestUnfinishedListen(),
+        end: (id: string) => mockSessionRepo.end(id),
+    },
 }));
 
-jestModule.mock('../../../src/main/features/common/services/authService', () => mockAuthService);
+vi.mock('../../../src/main/features/common/services/authService', () => ({ default: mockAuthService }));
 
-jestModule.mock('../../../src/main/features/listen/stt/repositories', () => ({
-    getAllTranscriptsBySessionId: sessionId => mockTranscriptRepo.getAllTranscriptsBySessionId(sessionId),
+vi.mock('../../../src/main/features/listen/stt/repositories', () => ({
+    default: {
+        getAllTranscriptsBySessionId: (sessionId: string) => mockTranscriptRepo.getAllTranscriptsBySessionId(sessionId),
+    },
 }));
 
-jestModule.mock('../../../src/main/features/listen/summary/repositories', () => ({
-    getAllInsightsBySessionId: sessionId => mockInsightsRepo.getAllInsightsBySessionId(sessionId),
+vi.mock('../../../src/main/features/listen/summary/repositories', () => ({
+    default: {
+        getAllInsightsBySessionId: (sessionId: string) => mockInsightsRepo.getAllInsightsBySessionId(sessionId),
+    },
 }));
 
-jestModule.mock('../../../src/main/features/listen/stt/sttService', () =>
-    jestModule.fn().mockImplementation(() => ({
-        setCallbacks: jestModule.fn(),
-        initializeSttSessions: jestModule.fn(async () => true),
-    }))
-);
+vi.mock('../../../src/main/features/listen/stt/sttService', () => ({ default: SttServiceMock }));
 
-const mockSummaryService = {
-    setCallbacks: jestModule.fn(),
-    setSessionId: jestModule.fn(),
-    hydrateConversation: jestModule.fn(),
-    hydrateInsights: jestModule.fn(),
-    selectedPresetId: 'meeting',
-};
+vi.mock('../../../src/main/features/listen/summary/summaryService', () => ({ default: mockSummaryService }));
 
-jestModule.mock('../../../src/main/features/listen/summary/summaryService', () => mockSummaryService);
-
-const mockHeaderWindow = {
-    isDestroyed: jestModule.fn(() => false),
-    webContents: { send: jestModule.fn() },
-};
-
-const mockListenWindow = {
-    isDestroyed: jestModule.fn(() => false),
-    webContents: { send: jestModule.fn() },
-};
-
-jestModule.mock('../../../src/main/window/windowManager', () => ({
+vi.mock('../../../src/main/window/windowManager', () => ({
     windowPool: {
-        get: jestModule.fn(name => {
+        get: vi.fn((name: string) => {
             if (name === 'header') return mockHeaderWindow;
             if (name === 'listen') return mockListenWindow;
             return null;
@@ -70,20 +97,17 @@ jestModule.mock('../../../src/main/window/windowManager', () => ({
 }));
 
 describe('Crash Recovery - UI Recovery', () => {
-    let listenService;
-
-    beforeEach(() => {
-        jestModule.clearAllMocks();
-        listenService = require('../../../src/main/features/listen/listenService');
+    beforeEach(async () => {
+        vi.clearAllMocks();
         listenService.strandedSession = null;
         listenService.isRecoveryDismissed = false;
         listenService.currentSessionId = null;
         mockAuthService.getCurrentUserId.mockReturnValue('test-user-id');
-        mockSessionRepo.end.mockResolvedValue();
-        listenService._generateAndSaveComprehensiveSummary = jestModule.fn(async () => {});
+        mockSessionRepo.end.mockResolvedValue(undefined);
+        listenService._generateAndSaveComprehensiveSummary = vi.fn(async () => {});
 
-        const windowManager = require('../../../src/main/window/windowManager');
-        windowManager.windowPool.get.mockImplementation(name => {
+        const windowManager = await import('../../../src/main/window/windowManager');
+        vi.mocked(windowManager.windowPool.get).mockImplementation((name: string) => {
             if (name === 'header') return mockHeaderWindow;
             if (name === 'listen') return mockListenWindow;
             return null;
@@ -91,11 +115,12 @@ describe('Crash Recovery - UI Recovery', () => {
         mockHeaderWindow.isDestroyed.mockReturnValue(false);
         mockListenWindow.isDestroyed.mockReturnValue(false);
 
-        const SttService = require('../../../src/main/features/listen/stt/sttService');
-        SttService.mockImplementation(() => ({
-            setCallbacks: jestModule.fn(),
-            initializeSttSessions: jestModule.fn(async () => true),
-        }));
+        SttServiceMock.mockImplementation(function () {
+            return {
+                setCallbacks: vi.fn(),
+                initializeSttSessions: vi.fn(async () => true),
+            };
+        });
     });
 
     test('should show recovery prompt in header on startup', async () => {
@@ -266,7 +291,7 @@ describe('Crash Recovery - UI Recovery', () => {
         const calls = mockListenWindow.webContents.send.mock.calls;
         const captureCall = calls.find(call => call[0] === 'change-listen-capture-state');
         expect(captureCall).toBeDefined();
-        expect(captureCall[1]).toMatchObject({ status: 'start' });
+        expect(captureCall?.[1]).toMatchObject({ status: 'start' });
     });
 
     test('should send session-state-changed event after resume', async () => {
@@ -290,7 +315,7 @@ describe('Crash Recovery - UI Recovery', () => {
         const calls = mockListenWindow.webContents.send.mock.calls;
         const sessionStateCall = calls.find(call => call[0] === 'session-state-changed');
         expect(sessionStateCall).toBeDefined();
-        expect(sessionStateCall[1]).toMatchObject({ isActive: true, mode: 'resume' });
+        expect(sessionStateCall?.[1]).toMatchObject({ isActive: true, mode: 'resume' });
     });
 
     test('should allow continuing transcription after resume', async () => {

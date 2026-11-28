@@ -1,7 +1,7 @@
-const { describe, test, expect, beforeEach, afterEach } = require('@jest/globals');
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-jest.mock('../../../src/main/features/common/config/config', () => {
-    const values = {
+vi.mock('../../../src/main/features/common/config/config', () => {
+    const values: Record<string, unknown> = {
         smartTrigger: {
             enabled: true,
             minTokenCount: 12,
@@ -13,36 +13,38 @@ jest.mock('../../../src/main/features/common/config/config', () => {
     };
 
     return {
-        get: jest.fn(key => values[key]),
-        set: jest.fn((key, value) => {
-            values[key] = value;
-        }),
+        default: {
+            get: vi.fn((key: string) => values[key]),
+            set: vi.fn((key: string, value: unknown) => {
+                values[key] = value;
+            }),
+        },
     };
 });
 
-jest.mock('../../../src/main/features/common/ai/llmClient', () => ({
-    chat: jest.fn().mockResolvedValue({}),
+vi.mock('../../../src/main/features/common/ai/llmClient', () => ({
+    chat: vi.fn().mockResolvedValue({}),
 }));
 
 describe('SummaryService smart trigger batching', () => {
-    let summaryService;
-    let config;
-    let makeOutlineSpy;
+    let summaryService: typeof import('../../../src/main/features/listen/summary/summaryService').default;
+    let config: typeof import('../../../src/main/features/common/config/config').default;
+    let makeOutlineSpy: ReturnType<typeof vi.spyOn>;
 
-    const shortUtterance = speaker => `${speaker}: ok`;
-    const mediumUtterance = speaker => `${speaker}: ${'word '.repeat(5).trim()}`;
-    const longUtterance = speaker => `${speaker}: ${'detailed insight '.repeat(8).trim()}`; // > 80 chars
+    const shortUtterance = (speaker: string) => `${speaker}: ok`;
+    const mediumUtterance = (speaker: string) => `${speaker}: ${'word '.repeat(5).trim()}`;
+    const longUtterance = (speaker: string) => `${speaker}: ${'detailed insight '.repeat(8).trim()}`; // > 80 chars
 
-    const seedHistory = lines => {
+    const seedHistory = (lines: string[]) => {
         summaryService.conversationHistory = [...lines];
         summaryService.lastAnalyzedIndex = 0;
         summaryService.batchTimer = null;
     };
 
-    beforeEach(() => {
-        jest.resetModules();
-        jest.clearAllMocks();
-        config = require('../../../src/main/features/common/config/config');
+    beforeEach(async () => {
+        vi.resetModules();
+        vi.clearAllMocks();
+        config = (await import('../../../src/main/features/common/config/config')).default;
         config.set('smartTrigger', {
             enabled: true,
             minTokenCount: 12,
@@ -51,13 +53,11 @@ describe('SummaryService smart trigger batching', () => {
         });
         config.set('analysisStep', 5);
         config.set('recapStep', 15);
-        summaryService = require('../../../src/main/features/listen/summary/summaryService');
+        summaryService = (await import('../../../src/main/features/listen/summary/summaryService')).default;
         summaryService.resetConversationHistory();
-        summaryService.sendToRenderer = jest.fn();
-        summaryService.onAnalysisComplete = jest.fn();
-        makeOutlineSpy = jest
-            .spyOn(summaryService, 'makeOutlineAndRequests')
-            .mockResolvedValue({ summary: [], actions: [], followUps: [] });
+        summaryService.sendToRenderer = vi.fn();
+        summaryService.onAnalysisComplete = vi.fn();
+        makeOutlineSpy = vi.spyOn(summaryService, 'makeOutlineAndRequests').mockResolvedValue({ summary: [], actions: [], followUps: [] });
     });
 
     afterEach(() => {

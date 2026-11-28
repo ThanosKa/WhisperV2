@@ -1,87 +1,95 @@
-const { describe, test, expect, beforeEach, jest: jestModule } = require('@jest/globals');
+import { beforeEach, describe, expect, test, vi } from 'vitest';
+import listenService from '../../../src/main/features/listen/listenService';
 
-const mockSessionRepo = {
-    findLatestUnfinishedListen: jestModule.fn(),
-    end: jestModule.fn(),
-};
+const { mockSessionRepo, mockTranscriptRepo, mockInsightsRepo, mockAuthService, mockSummaryService, mockWindow, SttServiceMock } = vi.hoisted(() => {
+    const mockSessionRepo = {
+        findLatestUnfinishedListen: vi.fn(),
+        end: vi.fn(),
+    };
+    const mockTranscriptRepo = {
+        getAllTranscriptsBySessionId: vi.fn(),
+    };
+    const mockInsightsRepo = {
+        getAllInsightsBySessionId: vi.fn(),
+        saveInsight: vi.fn(),
+    };
+    const mockAuthService = {
+        getCurrentUserId: vi.fn((): string | null => 'test-user-id'),
+    };
+    const mockSummaryService = {
+        setCallbacks: vi.fn(),
+        setSessionId: vi.fn(),
+        hydrateConversation: vi.fn(),
+        hydrateInsights: vi.fn(),
+        selectedPresetId: 'meeting',
+    };
+    const mockWindow = {
+        isDestroyed: vi.fn(() => false),
+        webContents: { send: vi.fn() },
+    };
+    // listenService builds its STT service when the module loads, so the stand-in needs a working
+    // implementation from the start; each test sets its own again.
+    const SttServiceMock = vi.fn(function SttService(): Record<string, unknown> {
+        return {
+            setCallbacks: vi.fn(),
+            initializeSttSessions: vi.fn(async () => true),
+            closeSessions: vi.fn(async () => true),
+        };
+    });
 
-const mockTranscriptRepo = {
-    getAllTranscriptsBySessionId: jestModule.fn(),
-};
+    return { mockSessionRepo, mockTranscriptRepo, mockInsightsRepo, mockAuthService, mockSummaryService, mockWindow, SttServiceMock };
+});
 
-const mockInsightsRepo = {
-    getAllInsightsBySessionId: jestModule.fn(),
-    saveInsight: jestModule.fn(),
-};
-
-const mockAuthService = {
-    getCurrentUserId: jestModule.fn(() => 'test-user-id'),
-};
-
-jestModule.mock('../../../src/main/features/common/repositories/session', () => ({
-    findLatestUnfinishedListen: () => mockSessionRepo.findLatestUnfinishedListen(),
-    end: (id) => mockSessionRepo.end(id),
+vi.mock('../../../src/main/features/common/repositories/session', () => ({
+    default: {
+        findLatestUnfinishedListen: () => mockSessionRepo.findLatestUnfinishedListen(),
+        end: (id: string) => mockSessionRepo.end(id),
+    },
 }));
 
-jestModule.mock('../../../src/main/features/common/services/authService', () => mockAuthService);
+vi.mock('../../../src/main/features/common/services/authService', () => ({ default: mockAuthService }));
 
-jestModule.mock('../../../src/main/features/listen/stt/repositories', () => ({
-    getAllTranscriptsBySessionId: (sessionId) => mockTranscriptRepo.getAllTranscriptsBySessionId(sessionId),
+vi.mock('../../../src/main/features/listen/stt/repositories', () => ({
+    default: {
+        getAllTranscriptsBySessionId: (sessionId: string) => mockTranscriptRepo.getAllTranscriptsBySessionId(sessionId),
+    },
 }));
 
-jestModule.mock('../../../src/main/features/listen/summary/repositories', () => ({
-    getAllInsightsBySessionId: (sessionId) => mockInsightsRepo.getAllInsightsBySessionId(sessionId),
-    saveInsight: (data) => mockInsightsRepo.saveInsight(data),
+vi.mock('../../../src/main/features/listen/summary/repositories', () => ({
+    default: {
+        getAllInsightsBySessionId: (sessionId: string) => mockInsightsRepo.getAllInsightsBySessionId(sessionId),
+        saveInsight: (data: unknown) => mockInsightsRepo.saveInsight(data),
+    },
 }));
 
-jestModule.mock('../../../src/main/features/listen/stt/sttService', () =>
-    jestModule.fn().mockImplementation(() => ({
-        setCallbacks: jestModule.fn(),
-        initializeSttSessions: jestModule.fn(async () => true),
-    }))
-);
+vi.mock('../../../src/main/features/listen/stt/sttService', () => ({ default: SttServiceMock }));
 
-const mockSummaryService = {
-    setCallbacks: jestModule.fn(),
-    setSessionId: jestModule.fn(),
-    hydrateConversation: jestModule.fn(),
-    hydrateInsights: jestModule.fn(),
-    selectedPresetId: 'meeting',
-};
+vi.mock('../../../src/main/features/listen/summary/summaryService', () => ({ default: mockSummaryService }));
 
-jestModule.mock('../../../src/main/features/listen/summary/summaryService', () => mockSummaryService);
-
-const mockWindow = {
-    isDestroyed: jestModule.fn(() => false),
-    webContents: { send: jestModule.fn() },
-};
-
-jestModule.mock('../../../src/main/window/windowManager', () => ({
+vi.mock('../../../src/main/window/windowManager', () => ({
     windowPool: {
-        get: jestModule.fn(() => mockWindow),
+        get: vi.fn(() => mockWindow),
     },
 }));
 
 describe('Crash Recovery - Multiple Crash Scenarios', () => {
-    let listenService;
-
-    beforeEach(() => {
-        jestModule.clearAllMocks();
-        listenService = require('../../../src/main/features/listen/listenService');
+    beforeEach(async () => {
+        vi.clearAllMocks();
         listenService.strandedSession = null;
         listenService.isRecoveryDismissed = false;
         listenService.currentSessionId = null;
         mockAuthService.getCurrentUserId.mockReturnValue('test-user-id');
 
-        const windowManager = require('../../../src/main/window/windowManager');
-        windowManager.windowPool.get.mockImplementation(() => mockWindow);
+        const windowManager = await import('../../../src/main/window/windowManager');
+        vi.mocked(windowManager.windowPool.get).mockImplementation(() => mockWindow);
         mockWindow.isDestroyed.mockReturnValue(false);
 
-        const SttService = require('../../../src/main/features/listen/stt/sttService');
-        SttService.mockImplementation(() => ({
-            setCallbacks: jestModule.fn(),
-            initializeSttSessions: jestModule.fn(async () => true),
-        }));
+        SttServiceMock.mockImplementation(function () {
+            return {
+                setCallbacks: vi.fn(),
+                initializeSttSessions: vi.fn(async () => true),
+            };
+        });
     });
 
     test('should handle Crash → Resume → Continue → Crash 2 → Resume', async () => {
@@ -114,8 +122,8 @@ describe('Crash Recovery - Multiple Crash Scenarios', () => {
 
         // First recovery
         const firstRecovery = await listenService.findStrandedSession();
-        expect(firstRecovery.transcripts).toHaveLength(2);
-        expect(firstRecovery.insights).toHaveLength(1);
+        expect(firstRecovery?.transcripts).toHaveLength(2);
+        expect(firstRecovery?.insights).toHaveLength(1);
 
         // Simulate continuing session and generating more insights
         insights.push({
@@ -137,8 +145,8 @@ describe('Crash Recovery - Multiple Crash Scenarios', () => {
 
         // Second recovery
         const secondRecovery = await listenService.findStrandedSession();
-        expect(secondRecovery.transcripts).toHaveLength(4);
-        expect(secondRecovery.insights).toHaveLength(2);
+        expect(secondRecovery?.transcripts).toHaveLength(4);
+        expect(secondRecovery?.insights).toHaveLength(2);
     });
 
     test('should recover all insights after Crash 1 (2 insights) → Crash 2 (3 more insights)', async () => {
@@ -168,9 +176,7 @@ describe('Crash Recovery - Multiple Crash Scenarios', () => {
         await listenService.resumeStrandedSession();
 
         // Should send all 5 insights to UI
-        const summaryUpdateCalls = mockWindow.webContents.send.mock.calls.filter(
-            call => call[0] === 'summary-update'
-        );
+        const summaryUpdateCalls = mockWindow.webContents.send.mock.calls.filter(call => call[0] === 'summary-update');
         expect(summaryUpdateCalls).toHaveLength(5);
     });
 
@@ -184,16 +190,14 @@ describe('Crash Recovery - Multiple Crash Scenarios', () => {
         };
 
         // First crash: transcripts but no insights
-        let transcripts = [
-            { id: 1, speaker: 'User', text: 'Before insights', timestamp: 1000 },
-        ];
+        let transcripts = [{ id: 1, speaker: 'User', text: 'Before insights', timestamp: 1000 }];
 
         mockSessionRepo.findLatestUnfinishedListen.mockReturnValue(session);
         mockTranscriptRepo.getAllTranscriptsBySessionId.mockResolvedValue(transcripts);
         mockInsightsRepo.getAllInsightsBySessionId.mockReturnValue([]);
 
         const firstRecovery = await listenService.findStrandedSession();
-        expect(firstRecovery.insights).toHaveLength(0);
+        expect(firstRecovery?.insights).toHaveLength(0);
 
         // After resume, insights are generated
         const insights = [
@@ -209,8 +213,8 @@ describe('Crash Recovery - Multiple Crash Scenarios', () => {
         mockInsightsRepo.getAllInsightsBySessionId.mockReturnValue(insights);
 
         const secondRecovery = await listenService.findStrandedSession();
-        expect(secondRecovery.transcripts).toHaveLength(1);
-        expect(secondRecovery.insights).toHaveLength(1);
+        expect(secondRecovery?.transcripts).toHaveLength(1);
+        expect(secondRecovery?.insights).toHaveLength(1);
     });
 
     test('should handle rapid crashes (3+ in succession)', async () => {
@@ -235,7 +239,7 @@ describe('Crash Recovery - Multiple Crash Scenarios', () => {
         mockInsightsRepo.getAllInsightsBySessionId.mockReturnValue(insights);
 
         const recovery = await listenService.findStrandedSession();
-        expect(recovery.insights).toHaveLength(3);
+        expect(recovery?.insights).toHaveLength(3);
     });
 
     test('should handle crash during insight generation (mid-LLM call)', async () => {
@@ -247,9 +251,7 @@ describe('Crash Recovery - Multiple Crash Scenarios', () => {
             ended_at: null,
         };
 
-        const transcripts = [
-            { id: 1, speaker: 'User', text: 'Test', timestamp: 1000 },
-        ];
+        const transcripts = [{ id: 1, speaker: 'User', text: 'Test', timestamp: 1000 }];
         // Partial insights before crash
         const insights = [
             {
@@ -265,7 +267,7 @@ describe('Crash Recovery - Multiple Crash Scenarios', () => {
         mockInsightsRepo.getAllInsightsBySessionId.mockReturnValue(insights);
 
         const recovery = await listenService.findStrandedSession();
-        expect(recovery.insights).toHaveLength(1);
+        expect(recovery?.insights).toHaveLength(1);
         // Should still recover what was saved before crash
     });
 
@@ -279,16 +281,14 @@ describe('Crash Recovery - Multiple Crash Scenarios', () => {
         };
 
         // Partial transcripts before crash
-        const transcripts = [
-            { id: 1, speaker: 'User', text: 'Partial transcript...', timestamp: 1000 },
-        ];
+        const transcripts = [{ id: 1, speaker: 'User', text: 'Partial transcript...', timestamp: 1000 }];
 
         mockSessionRepo.findLatestUnfinishedListen.mockReturnValue(session);
         mockTranscriptRepo.getAllTranscriptsBySessionId.mockResolvedValue(transcripts);
         mockInsightsRepo.getAllInsightsBySessionId.mockReturnValue([]);
 
         const recovery = await listenService.findStrandedSession();
-        expect(recovery.transcripts).toHaveLength(1);
+        expect(recovery?.transcripts).toHaveLength(1);
         // Should recover partial transcripts
     });
 
@@ -327,4 +327,3 @@ describe('Crash Recovery - Multiple Crash Scenarios', () => {
         expect(mockWindow.webContents.send).toHaveBeenCalled();
     });
 });
-

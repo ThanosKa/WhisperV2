@@ -1,9 +1,9 @@
-const { spawnSync } = require('node:child_process');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const { describe, test, expect, beforeEach, afterEach } = require('@jest/globals');
-const { releaseMac } = require('../../../scripts/release-mac');
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { releaseMac } from '../../../scripts/release-mac';
 
 const RELEASE_FILES = [
     'latest-mac.yml',
@@ -14,9 +14,9 @@ const RELEASE_FILES = [
 ];
 
 describe('releaseMac', () => {
-    let distDir;
+    let distDir: string;
 
-    const writeDist = ({ names }) => {
+    const writeDist = ({ names }: { names: string[] }) => {
         for (const name of names) fs.writeFileSync(path.join(distDir, name), name);
     };
 
@@ -36,11 +36,11 @@ describe('releaseMac', () => {
 
     test('uploads the release files and nothing else from the output folder', async () => {
         writeDist({ names: [...RELEASE_FILES, 'builder-debug.yml', 'latest.yml'] });
-        const uploads = [];
+        const uploads: string[] = [];
 
         await releaseMac({
             distDir,
-            publish: async ({ files }) => {
+            publish: async ({ files }: { files: string[] }) => {
                 uploads.push(...files);
                 return files;
             },
@@ -51,15 +51,15 @@ describe('releaseMac', () => {
 
     test('uploads nothing when a release file is missing', async () => {
         writeDist({ names: RELEASE_FILES.filter(name => !name.endsWith('-mac.zip.blockmap')) });
-        const publish = jest.fn(async ({ files }) => files);
+        const publish = vi.fn(async ({ files }: { files: string[] }) => files);
 
         await expect(releaseMac({ distDir, publish })).rejects.toThrow('*-mac.zip.blockmap');
         expect(publish).not.toHaveBeenCalled();
     });
 
     test('the command exits non-zero when the output folder holds no release', () => {
-        const { GH_TOKEN, GITHUB_TOKEN, GITHUB_RELEASE_TOKEN, ...env } = process.env;
-        const result = spawnSync(process.execPath, [path.join(__dirname, '../../../scripts/release-mac.js'), distDir], {
+        const { GH_TOKEN: _a, GITHUB_TOKEN: _b, GITHUB_RELEASE_TOKEN: _c, ...env } = process.env;
+        const result = spawnSync(process.execPath, [path.join(import.meta.dirname, '../../../scripts/release-mac.js'), distDir], {
             env,
             encoding: 'utf8',
         });

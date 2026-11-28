@@ -1,57 +1,59 @@
-const { describe, test, expect, beforeEach } = require('@jest/globals');
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { firstStreamPayload, stream } from '../../mocks/llmClient.mock';
+import { electronMock } from '../../setup/electronMocks';
 
-jest.mock('../../../src/main/features/common/ai/llmClient', () => require('../../mocks/llmClient.mock'));
-jest.mock('../../../src/main/features/common/repositories/session', () => require('../../mocks/database.mock').sessionRepository);
-jest.mock('../../../src/main/features/ask/repositories', () => require('../../mocks/database.mock').askRepository);
-
-// Mock listenService for toggleAskButton tests
-jest.mock('../../../src/main/features/listen/listenService', () => ({
-    getConversationHistory: jest.fn(() => []),
-    getCurrentSessionData: jest.fn(() => ({ sessionId: 'test-session-id' })),
-}));
-
-// Mock summaryService for role context tests
-// Use a mutable object so test mutations are visible to code under test
-const mockSummaryService = {
-    selectedRoleText: '',
-    selectedPresetId: null,
-    getCurrentContext: jest.fn(() => ({
-        definedTerms: [],
-        detectedQuestions: [],
-        analysisProfile: 'meeting_analysis',
-    })),
-};
-jest.mock('../../../src/main/features/listen/summary/summaryService', () => mockSummaryService);
-
-jest.mock('../../../src/main/window/windowManager', () => {
+// Mutable objects, so test changes are visible to the code under test.
+const { mockSummaryService, listenServiceMock, askWindow, headerWindow } = vi.hoisted(() => {
     const createMockWindow = () => ({
-        isDestroyed: jest.fn(() => false),
-        isVisible: jest.fn(() => true),
+        isDestroyed: vi.fn(() => false),
+        isVisible: vi.fn(() => true),
         webContents: {
-            send: jest.fn(),
-            isDestroyed: jest.fn(() => false),
+            send: vi.fn(),
+            isDestroyed: vi.fn(() => false),
         },
     });
 
-    const askWindow = createMockWindow();
-    const headerWindow = createMockWindow();
-
     return {
-        windowPool: new Map([
-            ['ask', askWindow],
-            ['header', headerWindow],
-        ]),
-        __mockAskWindow: askWindow,
-        __mockHeaderWindow: headerWindow,
+        mockSummaryService: {
+            selectedRoleText: '',
+            selectedPresetId: null as string | null,
+            getCurrentContext: vi.fn(() => ({
+                definedTerms: [] as string[],
+                detectedQuestions: [] as string[],
+                analysisProfile: 'meeting_analysis',
+            })),
+        },
+        listenServiceMock: {
+            getConversationHistory: vi.fn((): string[] => []),
+            getCurrentSessionData: vi.fn(() => ({ sessionId: 'test-session-id' })),
+        },
+        askWindow: createMockWindow(),
+        headerWindow: createMockWindow(),
     };
 });
 
-describe('AskService', () => {
-    let askService;
+vi.mock('../../../src/main/features/common/ai/llmClient', () => import('../../mocks/llmClient.mock'));
+vi.mock('../../../src/main/features/common/repositories/session', async () => ({
+    default: (await import('../../mocks/database.mock')).repositoryMocks.sessionRepository,
+}));
+vi.mock('../../../src/main/features/ask/repositories', async () => ({
+    default: (await import('../../mocks/database.mock')).repositoryMocks.askRepository,
+}));
+vi.mock('../../../src/main/features/listen/listenService', () => ({ default: listenServiceMock }));
+vi.mock('../../../src/main/features/listen/summary/summaryService', () => ({ default: mockSummaryService }));
+vi.mock('../../../src/main/window/windowManager', () => ({
+    windowPool: new Map([
+        ['ask', askWindow],
+        ['header', headerWindow],
+    ]),
+}));
 
-    beforeEach(() => {
-        jest.clearAllMocks();
-        jest.resetModules();
+describe('AskService', () => {
+    let askService: typeof import('../../../src/main/features/ask/askService').default;
+
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        vi.resetModules();
 
         // Reset mockSummaryService properties for test isolation
         mockSummaryService.selectedRoleText = '';
@@ -62,7 +64,7 @@ describe('AskService', () => {
             analysisProfile: 'meeting_analysis',
         });
 
-        askService = require('../../../src/main/features/ask/askService');
+        askService = (await import('../../../src/main/features/ask/askService')).default;
     });
 
     describe('_detectIntentFromClickPill', () => {
@@ -121,7 +123,7 @@ describe('AskService', () => {
     describe('interruptStream', () => {
         test('aborts an in-flight stream and updates state', () => {
             askService.abortController = new AbortController();
-            const abortSpy = jest.spyOn(askService.abortController, 'abort');
+            const abortSpy = vi.spyOn(askService.abortController, 'abort');
             askService.state.isStreaming = true;
             askService.state.interrupted = false;
 
@@ -134,42 +136,22 @@ describe('AskService', () => {
     });
 
     describe('useScreenCapture', () => {
-        let mockDesktopCapturer;
-        let mockExecFile;
-        let originalPlatform;
+        let originalPlatform: NodeJS.Platform;
 
         beforeEach(() => {
-            jest.clearAllMocks();
-            // Mock desktopCapturer for non-darwin platforms
-            const { desktopCapturer } = require('electron');
-            mockDesktopCapturer = desktopCapturer;
-            mockDesktopCapturer.getSources = jest.fn(async () => [
+            vi.clearAllMocks();
+            // These tests run the non-darwin path, which captures the screen through desktopCapturer.
+            electronMock.desktopCapturer.getSources.mockImplementation(async () => [
                 {
                     id: 'screen:0:0',
                     name: 'Screen 1',
                     display_id: '0',
                     thumbnail: {
-                        toJPEG: jest.fn(() => Buffer.from('mock-image-data')),
-                        getSize: jest.fn(() => ({ width: 1920, height: 1080 })),
+                        toJPEG: vi.fn(() => Buffer.from('mock-image-data')),
+                        getSize: vi.fn(() => ({ width: 1920, height: 1080 })),
                     },
                 },
             ]);
-
-            // Mock execFile for darwin platform
-            const childProcess = require('child_process');
-            const util = require('util');
-            mockExecFile = jest.fn(async () => ({ stdout: '', stderr: '' }));
-            jest.spyOn(util, 'promisify').mockImplementation((fn) => {
-                if (fn === childProcess.execFile) {
-                    return mockExecFile;
-                }
-                return fn;
-            });
-
-            // Mock fs.promises for darwin screenshot path
-            const fs = require('fs');
-            jest.spyOn(fs.promises, 'readFile').mockResolvedValue(Buffer.from('mock-image-data'));
-            jest.spyOn(fs.promises, 'unlink').mockResolvedValue();
 
             // Store original platform
             originalPlatform = process.platform;
@@ -180,7 +162,7 @@ describe('AskService', () => {
                 value: originalPlatform,
                 writable: true,
             });
-            jest.restoreAllMocks();
+            vi.restoreAllMocks();
         });
 
         test('defaults to true on initialization', () => {
@@ -205,9 +187,8 @@ describe('AskService', () => {
             askService._forceDefaultProfileOnce = true;
             askService.state.useScreenCapture = true;
 
-            // Mock llmClient.stream to avoid actual API call
-            const llmClient = require('../../../src/main/features/common/ai/llmClient');
-            llmClient.stream.mockResolvedValueOnce({
+            // Mock stream to avoid actual API call
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () => ({
@@ -218,7 +199,7 @@ describe('AskService', () => {
 
             await askService.sendMessage('Test prompt', [], null, true);
 
-            expect(mockDesktopCapturer.getSources).toHaveBeenCalled();
+            expect(electronMock.desktopCapturer.getSources).toHaveBeenCalled();
         });
 
         test('sendMessage captures screenshot when useScreenCapture=true and prompt is "Assist me"', async () => {
@@ -230,8 +211,7 @@ describe('AskService', () => {
             askService._forceDefaultProfileOnce = false;
             askService.state.useScreenCapture = true;
 
-            const llmClient = require('../../../src/main/features/common/ai/llmClient');
-            llmClient.stream.mockResolvedValueOnce({
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () => ({
@@ -242,7 +222,7 @@ describe('AskService', () => {
 
             await askService.sendMessage('Assist me', [], null, true);
 
-            expect(mockDesktopCapturer.getSources).toHaveBeenCalled();
+            expect(electronMock.desktopCapturer.getSources).toHaveBeenCalled();
         });
 
         test('sendMessage does not capture screenshot when useScreenCapture=false even with "Assist me"', async () => {
@@ -254,8 +234,7 @@ describe('AskService', () => {
             askService._forceDefaultProfileOnce = false;
             askService.state.useScreenCapture = false;
 
-            const llmClient = require('../../../src/main/features/common/ai/llmClient');
-            llmClient.stream.mockResolvedValueOnce({
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () => ({
@@ -266,7 +245,7 @@ describe('AskService', () => {
 
             await askService.sendMessage('Assist me', [], null, false);
 
-            expect(mockDesktopCapturer.getSources).not.toHaveBeenCalled();
+            expect(electronMock.desktopCapturer.getSources).not.toHaveBeenCalled();
         });
 
         test('sendMessage does not capture screenshot when useScreenCapture=false even with forceDefaultProfileOnce=true', async () => {
@@ -278,8 +257,7 @@ describe('AskService', () => {
             askService._forceDefaultProfileOnce = true;
             askService.state.useScreenCapture = false;
 
-            const llmClient = require('../../../src/main/features/common/ai/llmClient');
-            llmClient.stream.mockResolvedValueOnce({
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () => ({
@@ -290,7 +268,7 @@ describe('AskService', () => {
 
             await askService.sendMessage('Test prompt', [], null, false);
 
-            expect(mockDesktopCapturer.getSources).not.toHaveBeenCalled();
+            expect(electronMock.desktopCapturer.getSources).not.toHaveBeenCalled();
         });
 
         test('sendMessage does not capture screenshot for regular prompts when useScreenCapture=false', async () => {
@@ -302,8 +280,7 @@ describe('AskService', () => {
             askService._forceDefaultProfileOnce = false;
             askService.state.useScreenCapture = false;
 
-            const llmClient = require('../../../src/main/features/common/ai/llmClient');
-            llmClient.stream.mockResolvedValueOnce({
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () => ({
@@ -314,7 +291,7 @@ describe('AskService', () => {
 
             await askService.sendMessage('What is the weather?', [], null, false);
 
-            expect(mockDesktopCapturer.getSources).not.toHaveBeenCalled();
+            expect(electronMock.desktopCapturer.getSources).not.toHaveBeenCalled();
         });
 
         test('toggleAskButton respects state.useScreenCapture when sending "Assist me"', async () => {
@@ -323,14 +300,12 @@ describe('AskService', () => {
                 writable: true,
             });
 
-            const listenService = require('../../../src/main/features/listen/listenService');
-            listenService.getConversationHistory.mockReturnValue([]);
+            listenServiceMock.getConversationHistory.mockReturnValue([]);
 
             askService.state.useScreenCapture = false;
             askService.state.showTextInput = true;
 
-            const llmClient = require('../../../src/main/features/common/ai/llmClient');
-            llmClient.stream.mockResolvedValueOnce({
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () => ({
@@ -341,7 +316,7 @@ describe('AskService', () => {
 
             await askService.toggleAskButton(true);
 
-            expect(mockDesktopCapturer.getSources).not.toHaveBeenCalled();
+            expect(electronMock.desktopCapturer.getSources).not.toHaveBeenCalled();
         });
 
         test('toggleAskButton captures screenshot when state.useScreenCapture=true', async () => {
@@ -350,14 +325,12 @@ describe('AskService', () => {
                 writable: true,
             });
 
-            const listenService = require('../../../src/main/features/listen/listenService');
-            listenService.getConversationHistory.mockReturnValue([]);
+            listenServiceMock.getConversationHistory.mockReturnValue([]);
 
             askService.state.useScreenCapture = true;
             askService.state.showTextInput = true;
 
-            const llmClient = require('../../../src/main/features/common/ai/llmClient');
-            llmClient.stream.mockResolvedValueOnce({
+            stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
                     getReader: () => ({
@@ -368,7 +341,7 @@ describe('AskService', () => {
 
             await askService.toggleAskButton(true);
 
-            expect(mockDesktopCapturer.getSources).toHaveBeenCalled();
+            expect(electronMock.desktopCapturer.getSources).toHaveBeenCalled();
         });
     });
 
@@ -376,30 +349,30 @@ describe('AskService', () => {
         describe('_resolveProfileForIntent - shouldIncludeRole flag', () => {
             test('returns shouldIncludeRole=true for next intent', () => {
                 const result = askService._resolveProfileForIntent('next', 'sales');
-                expect(result.shouldIncludeRole).toBe(true);
+                expect(result).toHaveProperty('shouldIncludeRole', true);
                 expect(result.profileToUse).toBe('sales_next');
             });
 
             test('returns shouldIncludeRole=true for email intent', () => {
                 const result = askService._resolveProfileForIntent('email', 'recruiting');
-                expect(result.shouldIncludeRole).toBe(true);
+                expect(result).toHaveProperty('shouldIncludeRole', true);
                 expect(result.profileToUse).toBe('recruiting_email');
             });
 
             test('returns shouldIncludeRole=false for define intent', () => {
                 const result = askService._resolveProfileForIntent('define', 'sales');
-                expect(result.shouldIncludeRole).toBe(false);
+                expect(result).toHaveProperty('shouldIncludeRole', false);
                 expect(result.useConversationContext).toBe(false);
             });
 
             test('returns shouldIncludeRole=false for recap intent', () => {
                 const result = askService._resolveProfileForIntent('recap', 'meeting');
-                expect(result.shouldIncludeRole).toBe(false);
+                expect(result).toHaveProperty('shouldIncludeRole', false);
             });
 
             test('returns shouldIncludeRole=false for summary intent', () => {
                 const result = askService._resolveProfileForIntent('summary', 'sales');
-                expect(result.shouldIncludeRole).toBe(false);
+                expect(result).toHaveProperty('shouldIncludeRole', false);
             });
         });
 
@@ -409,8 +382,7 @@ describe('AskService', () => {
                 mockSummaryService.selectedRoleText = 'You are a sales assistant helping sell CRM software.';
                 mockSummaryService.selectedPresetId = 'sales';
 
-                const llmClient = require('../../../src/main/features/common/ai/llmClient');
-                llmClient.stream.mockResolvedValueOnce({
+                stream.mockResolvedValueOnce({
                     headers: new Map(),
                     body: {
                         getReader: () => ({
@@ -423,7 +395,7 @@ describe('AskService', () => {
 
                 await askService.sendMessage('✨ What should I say next?', ['me: hi', 'them: hello'], 'sales', false);
 
-                expect(llmClient.stream).toHaveBeenCalledWith(
+                expect(stream).toHaveBeenCalledWith(
                     expect.objectContaining({
                         profile: 'sales_next',
                         role: 'You are a sales assistant helping sell CRM software.',
@@ -440,8 +412,7 @@ describe('AskService', () => {
                 mockSummaryService.selectedRoleText = 'You are a recruiting assistant.';
                 mockSummaryService.selectedPresetId = 'recruiting';
 
-                const llmClient = require('../../../src/main/features/common/ai/llmClient');
-                llmClient.stream.mockResolvedValueOnce({
+                stream.mockResolvedValueOnce({
                     headers: new Map(),
                     body: {
                         getReader: () => ({
@@ -454,7 +425,7 @@ describe('AskService', () => {
 
                 await askService.sendMessage('✉️ Draft a follow-up email', ['me: interview went well'], 'recruiting', false);
 
-                expect(llmClient.stream).toHaveBeenCalledWith(
+                expect(stream).toHaveBeenCalledWith(
                     expect.objectContaining({
                         profile: 'recruiting_email',
                         role: 'You are a recruiting assistant.',
@@ -470,8 +441,7 @@ describe('AskService', () => {
                 mockSummaryService.selectedRoleText = 'You are a sales assistant.';
                 mockSummaryService.selectedPresetId = 'sales';
 
-                const llmClient = require('../../../src/main/features/common/ai/llmClient');
-                llmClient.stream.mockResolvedValueOnce({
+                stream.mockResolvedValueOnce({
                     headers: new Map(),
                     body: {
                         getReader: () => ({
@@ -484,7 +454,7 @@ describe('AskService', () => {
 
                 await askService.sendMessage('📘 Define API', [], 'sales', false);
 
-                const callArgs = llmClient.stream.mock.calls[0][0];
+                const callArgs = firstStreamPayload();
                 expect(callArgs).not.toHaveProperty('role');
                 expect(callArgs.profile).toBe('sales_define');
             });
@@ -494,8 +464,7 @@ describe('AskService', () => {
                 mockSummaryService.selectedRoleText = 'You are a sales assistant.';
                 mockSummaryService.selectedPresetId = 'sales';
 
-                const llmClient = require('../../../src/main/features/common/ai/llmClient');
-                llmClient.stream.mockResolvedValueOnce({
+                stream.mockResolvedValueOnce({
                     headers: new Map(),
                     body: {
                         getReader: () => ({
@@ -508,7 +477,7 @@ describe('AskService', () => {
 
                 await askService.sendMessage('🗒️ Recap meeting so far', ['me: discussed pricing'], 'sales', false);
 
-                const callArgs = llmClient.stream.mock.calls[0][0];
+                const callArgs = firstStreamPayload();
                 expect(callArgs).not.toHaveProperty('role');
                 expect(callArgs.profile).toBe('sales_recap');
             });
@@ -518,8 +487,7 @@ describe('AskService', () => {
                 mockSummaryService.selectedRoleText = 'You are a recruiting assistant.';
                 mockSummaryService.selectedPresetId = 'recruiting';
 
-                const llmClient = require('../../../src/main/features/common/ai/llmClient');
-                llmClient.stream.mockResolvedValueOnce({
+                stream.mockResolvedValueOnce({
                     headers: new Map(),
                     body: {
                         getReader: () => ({
@@ -532,7 +500,7 @@ describe('AskService', () => {
 
                 await askService.sendMessage('📝 Show summary', ['me: candidate looks great'], 'recruiting', false);
 
-                const callArgs = llmClient.stream.mock.calls[0][0];
+                const callArgs = firstStreamPayload();
                 expect(callArgs).not.toHaveProperty('role');
             });
         });
@@ -542,8 +510,7 @@ describe('AskService', () => {
                 // Set mock properties directly
                 mockSummaryService.selectedRoleText = 'You are a sales assistant.';
 
-                const llmClient = require('../../../src/main/features/common/ai/llmClient');
-                llmClient.stream.mockResolvedValueOnce({
+                stream.mockResolvedValueOnce({
                     headers: new Map(),
                     body: {
                         getReader: () => ({
@@ -557,7 +524,7 @@ describe('AskService', () => {
 
                 await askService.sendMessage('Generic question', ['me: some context'], null, false);
 
-                const callArgs = llmClient.stream.mock.calls[0][0];
+                const callArgs = firstStreamPayload();
                 expect(callArgs).not.toHaveProperty('role');
                 expect(callArgs.profile).toBe('whisper');
             });
@@ -566,8 +533,7 @@ describe('AskService', () => {
                 // Set mock properties directly
                 mockSummaryService.selectedRoleText = 'You are a sales assistant.';
 
-                const llmClient = require('../../../src/main/features/common/ai/llmClient');
-                llmClient.stream.mockResolvedValueOnce({
+                stream.mockResolvedValueOnce({
                     headers: new Map(),
                     body: {
                         getReader: () => ({
@@ -581,7 +547,7 @@ describe('AskService', () => {
 
                 await askService.sendMessage('Help me', ['me: conversation history'], null, false);
 
-                const callArgs = llmClient.stream.mock.calls[0][0];
+                const callArgs = firstStreamPayload();
                 expect(callArgs).not.toHaveProperty('role');
                 expect(callArgs.context).toHaveProperty('transcript');
                 expect(callArgs.context.transcript).toContain('conversation history');
@@ -594,8 +560,7 @@ describe('AskService', () => {
                 mockSummaryService.selectedRoleText = '';
                 mockSummaryService.selectedPresetId = 'sales';
 
-                const llmClient = require('../../../src/main/features/common/ai/llmClient');
-                llmClient.stream.mockResolvedValueOnce({
+                stream.mockResolvedValueOnce({
                     headers: new Map(),
                     body: {
                         getReader: () => ({
@@ -608,7 +573,7 @@ describe('AskService', () => {
 
                 await askService.sendMessage('✨ What should I say next?', [], 'sales', false);
 
-                const callArgs = llmClient.stream.mock.calls[0][0];
+                const callArgs = firstStreamPayload();
                 expect(callArgs).not.toHaveProperty('role');
             });
 
@@ -622,8 +587,7 @@ describe('AskService', () => {
                     analysisProfile: 'sales_analysis',
                 });
 
-                const llmClient = require('../../../src/main/features/common/ai/llmClient');
-                llmClient.stream.mockResolvedValueOnce({
+                stream.mockResolvedValueOnce({
                     headers: new Map(),
                     body: {
                         getReader: () => ({
@@ -636,7 +600,7 @@ describe('AskService', () => {
 
                 await askService.sendMessage('✨ What should I say next?', ['me: hi', 'them: hello'], 'sales', false);
 
-                const callArgs = llmClient.stream.mock.calls[0][0];
+                const callArgs = firstStreamPayload();
                 expect(callArgs.role).toBe('You are a sales assistant.');
                 expect(callArgs.context.previousItems).toContain('📘 Define API');
                 expect(callArgs.context.previousItems).toContain('📘 Define SaaS');

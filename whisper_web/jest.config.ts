@@ -13,7 +13,6 @@ const config: Config = {
         '^@/(.*)$': '<rootDir>/$1',
     },
     testMatch: ['**/__tests__/**/*.test.[jt]s?(x)', '**/?(*.)+(spec|test).[jt]s?(x)'],
-    testPathIgnorePatterns: ['<rootDir>/e2e/'],
     // verbose: true,
     collectCoverageFrom: [
         'app/**/*.{js,jsx,ts,tsx}',

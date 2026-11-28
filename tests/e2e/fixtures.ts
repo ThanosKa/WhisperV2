@@ -55,7 +55,9 @@ export const test = base.extend<Fixtures>({
         const launched: ElectronApplication[] = [];
         await use(async () => {
             const electronApp = await electron.launch({
-                args: ['-r', MAIN_PRELOAD, APP_ROOT],
+                // Scale 1 on any display, so screenshots have the same pixels on every Mac. Chromium
+                // reads this switch at start, so it goes on the command line, not in the preload.
+                args: ['--force-device-scale-factor=1', '-r', MAIN_PRELOAD, APP_ROOT],
                 env: {
                     ...process.env,
                     WHISPER_E2E_USER_DATA: userDataDir,
@@ -69,9 +71,13 @@ export const test = base.extend<Fixtures>({
             launched.push(electronApp);
             return electronApp;
         });
+        // The apps close before the fake server (a fixture they depend on) stops.
         for (const electronApp of launched) {
             await electronApp.close();
         }
+        // The main-process preload writes every uncaught exception in main to this file.
+        const mainErrors = await fs.readFile(path.join(userDataDir, 'e2e-main-errors.log'), 'utf8').catch(() => '');
+        expect(mainErrors, 'uncaught exceptions in the main process').toBe('');
     },
     electronApp: async ({ launchApp }, use) => {
         await use(await launchApp());

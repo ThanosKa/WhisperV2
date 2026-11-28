@@ -16,13 +16,26 @@ async function listenUntilTranscript({ electronApp, headerWindow }: { electronAp
     return listenWindow;
 }
 
-// Stop, then Done. Done asks the LLM for a summary in the background; wait for that request,
-// so the app is not closed in the middle of it.
-async function finishListening({ headerWindow, fakeServer }: { headerWindow: Page; fakeServer: FakeServer }) {
+// Stop, then Done, then wait until the Listen window has finished hiding and the summary request
+// that Done sends in the background has arrived. Closing the app during the 250 ms fade-out makes
+// the app throw in main (see ticket 02's comments), so the test waits, as a user would.
+async function finishListening({
+    electronApp,
+    headerWindow,
+    listenWindow,
+    fakeServer,
+}: {
+    electronApp: ElectronApplication;
+    headerWindow: Page;
+    listenWindow: Page;
+    fakeServer: FakeServer;
+}) {
     await listenButton(headerWindow).click();
     await expect(listenButton(headerWindow)).toHaveClass(/paused/);
     await headerWindow.locator('main-header .listen-button.done').click();
     await expect(listenButton(headerWindow)).not.toHaveClass(/paused|active/);
+    const listenBrowserWindow = await electronApp.browserWindow(listenWindow);
+    await expect.poll(() => listenBrowserWindow.evaluate(win => win.isVisible())).toBe(false);
     await expect.poll(() => fakeServer.llmRequests.some(({ route }) => route === 'chat')).toBe(true);
 }
 
@@ -47,8 +60,8 @@ test('Ask streams the answer to a typed question', async ({ electronApp, headerW
 });
 
 test('Listen shows the transcript and saves the session', async ({ electronApp, headerWindow, fakeServer, userDataDir }) => {
-    await listenUntilTranscript({ electronApp, headerWindow });
-    await finishListening({ headerWindow, fakeServer });
+    const listenWindow = await listenUntilTranscript({ electronApp, headerWindow });
+    await finishListening({ electronApp, headerWindow, listenWindow, fakeServer });
     await electronApp.close();
 
     const sessions = await queryDatabase({
@@ -65,10 +78,11 @@ test('Listen shows the transcript and saves the session', async ({ electronApp, 
 test('the analysis preset chosen in Listen is still chosen after a restart', async ({ launchApp, fakeServer }) => {
     const firstRun = await launchApp();
     const firstHeader = await findWindow({ electronApp: firstRun, view: 'header' });
-    const firstPreset = (await listenUntilTranscript({ electronApp: firstRun, headerWindow: firstHeader })).locator('.preset-select');
+    const firstListen = await listenUntilTranscript({ electronApp: firstRun, headerWindow: firstHeader });
+    const firstPreset = firstListen.locator('.preset-select');
     await expect(firstPreset).toHaveValue('meetings');
     await firstPreset.selectOption('recruiting');
-    await finishListening({ headerWindow: firstHeader, fakeServer });
+    await finishListening({ electronApp: firstRun, headerWindow: firstHeader, listenWindow: firstListen, fakeServer });
     await firstRun.close();
 
     const secondRun = await launchApp();

@@ -12,7 +12,18 @@ const readEnv = name => {
     return value;
 };
 
-app.setPath('userData', readEnv('WHISPER_E2E_USER_DATA'));
+const userDataDir = readEnv('WHISPER_E2E_USER_DATA');
+app.setPath('userData', userDataDir);
+
+// Uncaught exceptions in main: Electron's default is a modal "A JavaScript error occurred in the
+// main process" box, which stays on the screen and blocks the app from quitting. Write each one to
+// a file in the throwaway profile instead; the fixture fails the test on any line in it.
+const fs = require('fs');
+const path = require('path');
+const mainErrorsFile = path.join(userDataDir, 'e2e-main-errors.log');
+process.on('uncaughtException', error => {
+    fs.appendFileSync(mainErrorsFile, `${error && error.stack ? error.stack : String(error)}\n---\n`);
+});
 
 // macOS permission check: answer for the microphone and the screen without asking the OS.
 const realGetMediaAccessStatus = systemPreferences.getMediaAccessStatus.bind(systemPreferences);
@@ -50,3 +61,10 @@ childProcess.spawn = function spawn(command, args, ...rest) {
     }
     return realSpawn.call(this, command, args, ...rest);
 };
+
+// Displays: show the app one display, so the Settings window does not list the monitors that
+// happen to be plugged in, and its screenshot is the same on any Mac.
+app.whenReady().then(() => {
+    const { screen } = require('electron');
+    screen.getAllDisplays = () => [screen.getPrimaryDisplay()];
+});

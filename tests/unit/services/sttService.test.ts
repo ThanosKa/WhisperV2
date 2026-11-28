@@ -19,11 +19,12 @@ vi.mock('../../../src/main/features/common/services/authService', () => ({ defau
 
 describe('SttService utterance segmentation', () => {
     let service: SttService;
+    const onTranscriptionComplete = vi.fn((_utterance: { speaker: string; text: string }) => undefined);
 
     beforeEach(() => {
         service = new SttService();
         service.sendToRenderer = vi.fn();
-        service.onTranscriptionComplete = vi.fn();
+        service.setCallbacks({ onTranscriptionComplete, onStatusUpdate: vi.fn(), onQuotaExceeded: vi.fn() });
     });
 
     test('forces splits when partial text exceeds configured limit', () => {
@@ -35,8 +36,8 @@ describe('SttService utterance segmentation', () => {
             committedKey: 'meCommittedLength',
         });
 
-        expect(service.onTranscriptionComplete).toHaveBeenCalled();
-        const emittedLengths = service.onTranscriptionComplete.mock.calls.map(([, text]: [unknown, string]) => text.length);
+        expect(onTranscriptionComplete).toHaveBeenCalled();
+        const emittedLengths = onTranscriptionComplete.mock.calls.map(([{ text }]) => text.length);
         emittedLengths.forEach((len: number) => expect(len).toBeLessThanOrEqual(50));
 
         expect(remainder.length).toBeLessThanOrEqual(50);
@@ -52,7 +53,7 @@ describe('SttService utterance segmentation', () => {
             committedKey: 'meCommittedLength',
         });
 
-        expect(service.onTranscriptionComplete).not.toHaveBeenCalled();
+        expect(onTranscriptionComplete).not.toHaveBeenCalled();
         expect(remainder).toBe(shortText);
         expect(service.meCommittedLength).toBe(0);
     });
@@ -66,7 +67,7 @@ describe('SttService utterance segmentation', () => {
             committedKey: 'themCommittedLength',
         });
 
-        expect(service.onTranscriptionComplete).not.toHaveBeenCalled();
+        expect(onTranscriptionComplete).not.toHaveBeenCalled();
         expect(remainder).toBe(shortText);
         expect(service.themCommittedLength).toBe(0);
     });
@@ -80,8 +81,8 @@ describe('SttService utterance segmentation', () => {
             committedKey: 'meCommittedLength',
         });
 
-        expect(service.onTranscriptionComplete).toHaveBeenCalledTimes(4);
-        service.onTranscriptionComplete.mock.calls.forEach(([, text]: [unknown, string]) => {
+        expect(onTranscriptionComplete).toHaveBeenCalledTimes(4);
+        onTranscriptionComplete.mock.calls.forEach(([{ text }]) => {
             expect(text.length).toBeLessThanOrEqual(50);
         });
         expect(remainder.length).toBeLessThanOrEqual(50);

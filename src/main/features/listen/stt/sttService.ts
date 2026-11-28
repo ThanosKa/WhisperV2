@@ -1,57 +1,104 @@
-import { spawn } from 'child_process';
+import { spawn, type ChildProcessByStdio } from 'child_process';
 import { randomUUID } from 'crypto';
+import type { Readable } from 'stream';
 import WebSocket from 'ws';
+import { z } from 'zod';
 import authService from '../../common/services/authService';
 import { app } from 'electron';
 import path from 'path';
 import config from '../../common/config/config';
 import { env } from '../../common/config/env';
+import { logger } from '../../common/utils/logger';
 import { windowPool } from '../../../window/windowManager';
 
-const COMPLETION_DEBOUNCE_MS = config.get('utteranceSilenceMs') ?? 800;
+const log = logger.child({ module: 'SttService' });
+
 const MAX_UTTERANCE_CHARS = (() => {
     const value = Number(config.get('maxUtteranceChars'));
     return Number.isFinite(value) && value > 0 ? value : 0;
 })();
 const DB_FALLBACK_MS = 3000;
 const DEFAULT_RELAY_URL = env.STT_RELAY_URL ?? config.get('sttRelayUrl');
+const DEFAULT_MIME_TYPE = 'audio/pcm;rate=16000';
+
+export type Speaker = 'Me' | 'Them';
+type RelayStream = 'me' | 'them';
+type CommittedKey = 'meCommittedLength' | 'themCommittedLength';
+
+// A message from the STT relay (`../websocket`), with the fields this service reads. The relay
+// also sends fields nobody reads here (session ids, quota status); those are dropped.
+const RelayMessageSchema = z.object({
+    type: z.string().optional(),
+    stream: z.string().optional(),
+    speaker: z.string().optional(),
+    text: z.string().optional(),
+    promptTokens: z.number().optional(),
+    candidateTokens: z.number().optional(),
+    message: z.string().optional(),
+    code: z.string().optional(),
+});
+
+export type RelayMessage = z.infer<typeof RelayMessageSchema>;
+
+// One relay event as the per-speaker handlers read it.
+type StreamMessage = {
+    serverContent: {
+        inputTranscription?: { text: string };
+        turnComplete?: boolean;
+        usageMetadata?: { promptTokenCount: number | undefined; candidatesTokenCount: number | undefined };
+    };
+};
+
+export type AudioPayload = { audio: { data: string; mimeType: string } };
+
+export type AudioContent = { data: string; mimeType?: string | undefined };
+
+type RelaySession = {
+    sendRealtimeInput: (payload: AudioPayload) => Promise<void>;
+    close: () => Promise<void>;
+};
+
+export type SttCallbacks = {
+    onTranscriptionComplete: ({ speaker, text }: { speaker: Speaker; text: string }) => void;
+    onStatusUpdate: (status: string) => void;
+    onQuotaExceeded: (resetAt: string) => void;
+};
+
+type SystemAudioProcess = ChildProcessByStdio<null, Readable, Readable>;
 
 class SttService {
-    constructor() {
-        this.meSttSession = null;
-        this.themSttSession = null;
-        // Current utterance variables are not needed for relay; we rely on buffered partials
+    meSttSession: RelaySession | null = null;
+    themSttSession: RelaySession | null = null;
+    // Current utterance variables are not needed for relay; we rely on buffered partials
 
-        // Turn-completion debouncing
-        this.meCompletionBuffer = '';
-        this.themCompletionBuffer = '';
-        this.meCompletionTimer = null;
-        this.themCompletionTimer = null;
-        this.meCommittedLength = 0;
-        this.themCommittedLength = 0;
+    // Turn-completion debouncing
+    meCompletionBuffer = '';
+    themCompletionBuffer = '';
+    meCompletionTimer: NodeJS.Timeout | null = null;
+    themCompletionTimer: NodeJS.Timeout | null = null;
+    meCommittedLength = 0;
+    themCommittedLength = 0;
 
-        // System audio capture
-        this.systemAudioProc = null;
+    // System audio capture
+    systemAudioProc: SystemAudioProcess | null = null;
 
-        // Callbacks
-        this.onTranscriptionComplete = null;
-        this.onStatusUpdate = null;
+    // Callbacks
+    onTranscriptionComplete: SttCallbacks['onTranscriptionComplete'] | null = null;
+    onStatusUpdate: SttCallbacks['onStatusUpdate'] | null = null;
+    onQuotaExceeded: SttCallbacks['onQuotaExceeded'] | null = null;
 
-        // Model/provider info is no longer needed on client; relay abstracts providers
+    // Relay connection state
+    relaySocket: WebSocket | null = null;
+    relaySessionId: string | null = null;
+    relayReady = false;
 
-        // Relay connection state
-        this.relaySocket = null;
-        this.relaySessionId = null;
-        this.relayReady = false;
-    }
-
-    setCallbacks({ onTranscriptionComplete, onStatusUpdate, onQuotaExceeded }) {
+    setCallbacks({ onTranscriptionComplete, onStatusUpdate, onQuotaExceeded }: SttCallbacks): void {
         this.onTranscriptionComplete = onTranscriptionComplete;
         this.onStatusUpdate = onStatusUpdate;
         this.onQuotaExceeded = onQuotaExceeded;
     }
 
-    sendToRenderer(channel, data) {
+    sendToRenderer({ channel, data }: { channel: string; data: unknown }): void {
         // Send Listen-related events only to Listen window (prevent Ask window conflicts)
         const listenWindow = windowPool?.get('listen');
 
@@ -60,54 +107,39 @@ class SttService {
         }
     }
 
-    async handleSendSystemAudioContent(data, mimeType) {
-        try {
-            await this.sendSystemAudioContent(data, mimeType);
-            this.sendToRenderer('system-audio-data', { data });
-            return { success: true };
-        } catch (error) {
-            console.error('Error sending system audio:', error);
-            return { success: false, error: error.message };
-        }
-    }
-
-    flushMeCompletion(sendToUI = true) {
+    flushMeCompletion(sendToUI = true): void {
         const rawText = this.meCompletionBuffer || '';
-        const uncommitted = rawText.slice(this.meCommittedLength).trim();
-        const finalText = uncommitted;
+        const finalText = rawText.slice(this.meCommittedLength).trim();
         if (!finalText) return;
 
-        this._emitFinalUtterance('Me', finalText, sendToUI);
+        this._emitFinalUtterance({ speaker: 'Me', text: finalText, sendToUI });
 
         this.meCompletionBuffer = '';
         this.meCompletionTimer = null;
         this.meCommittedLength = 0;
-        // Reset state
 
         if (this.onStatusUpdate) {
             this.onStatusUpdate('Listening...');
         }
     }
 
-    flushThemCompletion(sendToUI = true) {
+    flushThemCompletion(sendToUI = true): void {
         const rawText = this.themCompletionBuffer || '';
-        const uncommitted = rawText.slice(this.themCommittedLength).trim();
-        const finalText = uncommitted;
+        const finalText = rawText.slice(this.themCommittedLength).trim();
         if (!finalText) return;
 
-        this._emitFinalUtterance('Them', finalText, sendToUI);
+        this._emitFinalUtterance({ speaker: 'Them', text: finalText, sendToUI });
 
         this.themCompletionBuffer = '';
         this.themCompletionTimer = null;
         this.themCommittedLength = 0;
-        // Reset state
 
         if (this.onStatusUpdate) {
             this.onStatusUpdate('Listening...');
         }
     }
 
-    _handlePartialSegmentation({ speakerLabel, textChunk, committedKey }) {
+    _handlePartialSegmentation({ speakerLabel, textChunk, committedKey }: { speakerLabel: Speaker; textChunk: string; committedKey: CommittedKey }): string {
         if (!textChunk) return '';
         if (!MAX_UTTERANCE_CHARS) {
             this[committedKey] = 0;
@@ -118,7 +150,7 @@ class SttService {
         committedLength = Math.max(0, Math.min(committedLength, textChunk.length));
 
         while (textChunk.length - committedLength > MAX_UTTERANCE_CHARS) {
-            const splitIndex = this._findSplitIndex(textChunk, committedLength);
+            const splitIndex = this._findSplitIndex({ text: textChunk, startIdx: committedLength });
             if (splitIndex <= committedLength) {
                 // Safety: avoid infinite loops by hard-advancing at least the limit
                 committedLength = Math.min(textChunk.length, committedLength + MAX_UTTERANCE_CHARS);
@@ -126,10 +158,11 @@ class SttService {
                 const segment = textChunk.slice(committedLength, splitIndex).trim();
                 committedLength = splitIndex;
                 if (segment) {
-                    console.log(
-                        `[SttService] Forced utterance split (${speakerLabel}) - ${segment.length} chars (limit ${MAX_UTTERANCE_CHARS})`
+                    log.info(
+                        { relaySessionId: this.relaySessionId, speaker: speakerLabel, chars: segment.length, limit: MAX_UTTERANCE_CHARS },
+                        'Forced utterance split'
                     );
-                    this._emitFinalUtterance(speakerLabel, segment, true);
+                    this._emitFinalUtterance({ speaker: speakerLabel, text: segment, sendToUI: true });
                 }
             }
         }
@@ -138,7 +171,7 @@ class SttService {
         return textChunk.slice(committedLength);
     }
 
-    _findSplitIndex(text, startIdx) {
+    _findSplitIndex({ text, startIdx }: { text: string; startIdx: number }): number {
         const hardLimit = Math.min(text.length, startIdx + MAX_UTTERANCE_CHARS);
         if (hardLimit <= startIdx) {
             return startIdx;
@@ -158,51 +191,36 @@ class SttService {
         return hardLimit;
     }
 
-    _emitFinalUtterance(speaker, text, sendToUI = true) {
+    _emitFinalUtterance({ speaker, text, sendToUI = true }: { speaker: Speaker; text: string; sendToUI?: boolean }): void {
         const finalText = (text || '').trim();
         if (!finalText) return;
 
         if (this.onTranscriptionComplete) {
-            this.onTranscriptionComplete(speaker, finalText);
+            this.onTranscriptionComplete({ speaker, text: finalText });
         }
 
         if (sendToUI) {
-            this.sendToRenderer('stt-update', {
-                speaker,
-                text: finalText,
-                isPartial: false,
-                isFinal: true,
-                timestamp: Date.now(),
+            this.sendToRenderer({
+                channel: 'stt-update',
+                data: {
+                    speaker,
+                    text: finalText,
+                    isPartial: false,
+                    isFinal: true,
+                    timestamp: Date.now(),
+                },
             });
         }
     }
 
-    debounceMeCompletion(text) {
-        // Soniox sends full rewrites - replace buffer instead of concatenating
-        this.meCompletionBuffer = text;
-
-        if (this.meCompletionTimer) clearTimeout(this.meCompletionTimer);
-        this.meCompletionTimer = setTimeout(() => this.flushMeCompletion(), COMPLETION_DEBOUNCE_MS);
-    }
-
-    debounceThemCompletion(text) {
-        // Soniox sends full rewrites - replace buffer instead of concatenating
-        this.themCompletionBuffer = text;
-
-        if (this.themCompletionTimer) clearTimeout(this.themCompletionTimer);
-        this.themCompletionTimer = setTimeout(() => this.flushThemCompletion(), COMPLETION_DEBOUNCE_MS);
-    }
-
-    async initializeSttSessions(language = 'en') {
+    async initializeSttSessions(language = 'en'): Promise<true> {
         const effectiveLanguage = env.OPENAI_TRANSCRIBE_LANG || language || 'en';
 
-        console.log('[SttService] Initializing STT relay');
+        log.info({ language: effectiveLanguage }, 'Initializing STT relay');
 
-        const handleMeMessage = message => {
-            if (!message || typeof message !== 'object') return;
-
+        const handleMeMessage = (message: StreamMessage) => {
             // Turn complete flush
-            if (message.serverContent?.turnComplete) {
+            if (message.serverContent.turnComplete) {
                 if (this.meCompletionTimer) {
                     clearTimeout(this.meCompletionTimer);
                     this.flushMeCompletion();
@@ -210,7 +228,7 @@ class SttService {
                 return;
             }
 
-            const transcription = message.serverContent?.inputTranscription;
+            const transcription = message.serverContent.inputTranscription;
             const textChunk = transcription?.text || '';
             const trimmed = textChunk.trim();
             if (!transcription || !trimmed || trimmed === '<noise>' || trimmed === '<end>') return;
@@ -224,12 +242,15 @@ class SttService {
             });
 
             if (remainder) {
-                this.sendToRenderer('stt-update', {
-                    speaker: 'Me',
-                    text: remainder,
-                    isPartial: true,
-                    isFinal: false,
-                    timestamp: Date.now(),
+                this.sendToRenderer({
+                    channel: 'stt-update',
+                    data: {
+                        speaker: 'Me',
+                        text: remainder,
+                        isPartial: true,
+                        isFinal: false,
+                        timestamp: Date.now(),
+                    },
                 });
             }
 
@@ -239,26 +260,18 @@ class SttService {
                 // Fallback: Save to DB if no TURN_COMPLETE received after long pause
                 this.flushMeCompletion(false); // Save to DB but don't send FINAL to UI
             }, DB_FALLBACK_MS); // 3 second fallback for DB save only
-
-            if (message?.serverContent?.usageMetadata) {
-                console.log('[STT - Me] Tokens In:', message.serverContent.usageMetadata.promptTokenCount);
-                console.log('[STT - Me] Tokens Out:', message.serverContent.usageMetadata.candidatesTokenCount);
-            }
-
-            if (message.error) {
-                console.error('[Me] STT Session Error:', message.error);
-            }
         };
 
-        const handleThemMessage = message => {
-            if (!message || typeof message !== 'object') return;
-
-            if (message?.serverContent?.usageMetadata) {
-                console.log('[STT - Them] Tokens In:', message.serverContent.usageMetadata.promptTokenCount);
-                console.log('[STT - Them] Tokens Out:', message.serverContent.usageMetadata.candidatesTokenCount);
+        const handleThemMessage = (message: StreamMessage) => {
+            const usage = message.serverContent.usageMetadata;
+            if (usage) {
+                log.info(
+                    { relaySessionId: this.relaySessionId, tokensIn: usage.promptTokenCount, tokensOut: usage.candidatesTokenCount },
+                    'Them stream usage'
+                );
             }
 
-            if (message.serverContent?.turnComplete) {
+            if (message.serverContent.turnComplete) {
                 if (this.themCompletionTimer) {
                     clearTimeout(this.themCompletionTimer);
                     this.flushThemCompletion();
@@ -266,7 +279,7 @@ class SttService {
                 return;
             }
 
-            const transcription = message.serverContent?.inputTranscription;
+            const transcription = message.serverContent.inputTranscription;
             const textChunk = transcription?.text || '';
             const trimmed = textChunk.trim();
             if (!transcription || !trimmed || trimmed === '<noise>' || trimmed === '<end>') return;
@@ -280,12 +293,15 @@ class SttService {
             });
 
             if (remainder) {
-                this.sendToRenderer('stt-update', {
-                    speaker: 'Them',
-                    text: remainder,
-                    isPartial: true,
-                    isFinal: false,
-                    timestamp: Date.now(),
+                this.sendToRenderer({
+                    channel: 'stt-update',
+                    data: {
+                        speaker: 'Them',
+                        text: remainder,
+                        isPartial: true,
+                        isFinal: false,
+                        timestamp: Date.now(),
+                    },
                 });
             }
 
@@ -295,10 +311,6 @@ class SttService {
                 // Fallback: Save to DB if no TURN_COMPLETE received after long pause
                 this.flushThemCompletion(false); // Save to DB but don't send FINAL to UI
             }, DB_FALLBACK_MS); // 3 second fallback for DB save only
-
-            if (message.error) {
-                console.error('[Them] STT Session Error:', message.error);
-            }
         };
 
         await this._openRelayConnection({
@@ -307,33 +319,37 @@ class SttService {
             handleThemMessage: handleThemMessage,
         });
 
-        console.log('✅ STT relay connected successfully.');
+        log.info({ relaySessionId: this.relaySessionId }, 'STT relay connected');
 
         return true;
     }
 
-    async renewSessions() {
-        console.log('[SttService] renewSessions skipped - relay handles upstream renewal.');
-    }
-
-    async sendMicAudioContent(data, mimeType) {
+    async sendMicAudioContent({ data, mimeType }: AudioContent): Promise<void> {
         if (!this.meSttSession) {
             throw new Error('User STT session not active');
         }
-        const payload = { audio: { data, mimeType: mimeType || 'audio/pcm;rate=16000' } };
+        const payload = { audio: { data, mimeType: mimeType || DEFAULT_MIME_TYPE } };
         await this.meSttSession.sendRealtimeInput(payload);
     }
 
-    async sendSystemAudioContent(data, mimeType) {
+    async sendSystemAudioContent({ data, mimeType }: AudioContent): Promise<{ success: true }> {
         if (!this.themSttSession) {
             throw new Error('Them STT session not active');
         }
-        const payload = { audio: { data, mimeType: mimeType || 'audio/pcm;rate=16000' } };
+        const payload = { audio: { data, mimeType: mimeType || DEFAULT_MIME_TYPE } };
         await this.themSttSession.sendRealtimeInput(payload);
         return { success: true };
     }
 
-    async _openRelayConnection({ language, handleMeMessage, handleThemMessage }) {
+    async _openRelayConnection({
+        language,
+        handleMeMessage,
+        handleThemMessage,
+    }: {
+        language: string;
+        handleMeMessage: (message: StreamMessage) => void;
+        handleThemMessage: (message: StreamMessage) => void;
+    }): Promise<true> {
         if (!DEFAULT_RELAY_URL) {
             throw new Error('STT relay URL is not configured.');
         }
@@ -349,7 +365,7 @@ class SttService {
             const relayUrl = DEFAULT_RELAY_URL;
             let settled = false;
 
-            console.log(`[SttService] Connecting to STT relay at ${relayUrl}`);
+            log.info({ relayUrl, language }, 'Connecting to STT relay');
 
             const settleResolve = () => {
                 if (!settled) {
@@ -358,17 +374,17 @@ class SttService {
                 }
             };
 
-            const settleReject = error => {
+            const settleReject = (error: unknown) => {
                 if (!settled) {
                     settled = true;
                     reject(error);
                 }
             };
 
-            const sessionUuid = authService.sessionUuid || null; // Direct access instead of authService?.getCurrentUser()?.sessionUuid
+            const sessionUuid = authService.sessionUuid || null;
             if (!sessionUuid) {
                 const error = new Error('STT relay connection blocked: missing authenticated session');
-                console.error('[SttService]', error.message);
+                log.error({ err: error }, 'STT relay connection blocked');
                 settleReject(error);
                 return;
             }
@@ -391,19 +407,25 @@ class SttService {
                 try {
                     socket.send(JSON.stringify(openPayload));
                 } catch (err) {
-                    console.error('[SttService] Failed to send OPEN payload to relay:', err.message || err);
+                    log.error({ err, relaySessionId: this.relaySessionId }, 'Failed to send OPEN payload to relay');
                     settleReject(err);
                 }
             });
 
-            socket.on('message', raw => {
-                let message;
+            socket.on('message', (raw: WebSocket.RawData) => {
+                let json: unknown;
                 try {
-                    message = JSON.parse(raw.toString());
+                    json = JSON.parse(raw.toString());
                 } catch (err) {
-                    console.warn('[SttService] Failed to parse relay payload:', err.message || err);
+                    log.warn({ err, relaySessionId: this.relaySessionId }, 'Failed to parse relay payload');
                     return;
                 }
+                const parsed = RelayMessageSchema.safeParse(json);
+                if (!parsed.success) {
+                    log.warn({ relaySessionId: this.relaySessionId, issues: z.prettifyError(parsed.error) }, 'Ignoring relay payload of unexpected shape');
+                    return;
+                }
+                const message = parsed.data;
 
                 const streamId = (message.stream || message.speaker || '').toLowerCase();
                 const dispatch = streamId === 'them' ? handleThemMessage : handleMeMessage;
@@ -419,7 +441,7 @@ class SttService {
                         break;
 
                     case 'PARTIAL':
-                        if (typeof dispatch === 'function' && message.text && message.text !== '<noise>') {
+                        if (message.text && message.text !== '<noise>') {
                             dispatch({
                                 serverContent: {
                                     inputTranscription: { text: message.text },
@@ -429,26 +451,25 @@ class SttService {
                         break;
 
                     case 'TURN_COMPLETE':
-                        if (typeof dispatch === 'function') {
-                            dispatch({ serverContent: { turnComplete: true } });
-                        }
+                        dispatch({ serverContent: { turnComplete: true } });
                         break;
 
                     case 'USAGE':
-                        if (typeof dispatch === 'function') {
-                            dispatch({
-                                serverContent: {
-                                    usageMetadata: {
-                                        promptTokenCount: message.promptTokens,
-                                        candidatesTokenCount: message.candidateTokens,
-                                    },
+                        dispatch({
+                            serverContent: {
+                                usageMetadata: {
+                                    promptTokenCount: message.promptTokens,
+                                    candidatesTokenCount: message.candidateTokens,
                                 },
-                            });
-                        }
+                            },
+                        });
                         break;
 
                     case 'ERROR':
-                        console.error('[SttService] Relay error:', message.message || message.code || message);
+                        log.error(
+                            { relaySessionId: this.relaySessionId, code: message.code, relayMessage: message.message },
+                            'Relay error'
+                        );
                         if (!this.relayReady) {
                             settleReject(new Error(message.message || 'Relay error'));
                         }
@@ -458,7 +479,7 @@ class SttService {
                         break;
 
                     case 'CLOSED':
-                        console.log('[SttService] Relay closed stream:', streamId || 'all');
+                        log.info({ relaySessionId: this.relaySessionId, stream: streamId || 'all' }, 'Relay closed stream');
                         break;
 
                     case 'ACK':
@@ -466,12 +487,12 @@ class SttService {
                         break;
 
                     default:
-                        console.log('[SttService] Relay event:', message.type);
+                        log.info({ relaySessionId: this.relaySessionId, type: message.type }, 'Relay event');
                 }
             });
 
-            socket.on('error', err => {
-                console.error('[SttService] Relay socket error:', err.message || err);
+            socket.on('error', (err: Error) => {
+                log.error({ err, relaySessionId: this.relaySessionId }, 'Relay socket error');
                 if (!this.relayReady) {
                     settleReject(err);
                 } else if (this.onStatusUpdate) {
@@ -479,15 +500,15 @@ class SttService {
                 }
             });
 
-            socket.on('close', (code, reason) => {
-                const reasonStr = reason?.toString() || '';
-                console.log('[SttService] Relay socket closed, code:', code, 'reason:', reasonStr);
+            socket.on('close', (code: number, reason: Buffer) => {
+                const reasonStr = reason.toString() || '';
+                log.info({ relaySessionId: this.relaySessionId, code, reason: reasonStr }, 'Relay socket closed');
 
                 // Handle STT quota exceeded (close code 4429)
                 if (code === 4429) {
                     const match = reasonStr.match(/resetAt=([^\s]+)/);
-                    const resetAt = match ? match[1] : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-                    console.log('[SttService] STT quota exceeded, resetAt:', resetAt);
+                    const resetAt = match?.[1] ?? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+                    log.info({ relaySessionId: this.relaySessionId, resetAt }, 'STT quota exceeded');
 
                     if (this.onQuotaExceeded) {
                         this.onQuotaExceeded(resetAt);
@@ -505,27 +526,27 @@ class SttService {
         });
     }
 
-    _installRelaySessions() {
+    _installRelaySessions(): void {
         const closeRelay = () => this._closeRelayConnection();
 
         this.meSttSession = {
-            sendRealtimeInput: payload => this._sendRelayAudio('me', payload),
+            sendRealtimeInput: async payload => this._sendRelayAudio({ stream: 'me', payload }),
             close: closeRelay,
         };
 
         this.themSttSession = {
-            sendRealtimeInput: payload => this._sendRelayAudio('them', payload),
+            sendRealtimeInput: async payload => this._sendRelayAudio({ stream: 'them', payload }),
             close: closeRelay,
         };
     }
 
-    _sendRelayAudio(stream, payload) {
+    _sendRelayAudio({ stream, payload }: { stream: RelayStream; payload: AudioPayload }): void {
         if (!this.relaySocket || this.relaySocket.readyState !== WebSocket.OPEN) {
             throw new Error('Relay connection not ready');
         }
 
-        const audioPayload = payload?.audio || {};
-        const data = audioPayload.data || payload?.data || payload;
+        const { data, mimeType } = payload.audio;
+        // IPC payloads are not parsed yet (ticket 07), so the type does not guarantee a string.
         if (!data || typeof data !== 'string') {
             throw new Error('Invalid audio payload');
         }
@@ -534,19 +555,19 @@ class SttService {
             type: 'AUDIO',
             sessionId: this.relaySessionId,
             stream,
-            mimeType: audioPayload.mimeType || payload?.mimeType || 'audio/pcm;rate=16000',
+            mimeType: mimeType || DEFAULT_MIME_TYPE,
             data,
         };
 
         try {
             this.relaySocket.send(JSON.stringify(message));
         } catch (err) {
-            console.error('[SttService] Failed to send audio to relay:', err.message || err);
+            log.error({ err, relaySessionId: this.relaySessionId, stream }, 'Failed to send audio to relay');
             throw err;
         }
     }
 
-    async _closeRelayConnection(sendClose = true) {
+    async _closeRelayConnection(sendClose = true): Promise<void> {
         if (!this.relaySocket) return;
 
         const socket = this.relaySocket;
@@ -555,20 +576,20 @@ class SttService {
             try {
                 socket.send(JSON.stringify({ type: 'CLOSE', sessionId: this.relaySessionId }));
             } catch (err) {
-                console.warn('[SttService] Failed to notify relay about close:', err.message || err);
+                log.warn({ err, relaySessionId: this.relaySessionId }, 'Failed to notify relay about close');
             }
         }
 
         try {
             socket.close();
         } catch (err) {
-            console.warn('[SttService] Error while closing relay socket:', err.message || err);
+            log.warn({ err, relaySessionId: this.relaySessionId }, 'Error while closing relay socket');
         }
 
         this._teardownRelayState();
     }
 
-    _teardownRelayState() {
+    _teardownRelayState(): void {
         this.relaySocket = null;
         this.relaySessionId = null;
         this.relayReady = false;
@@ -578,9 +599,9 @@ class SttService {
         this.themSttSession = null;
     }
 
-    killExistingSystemAudioDump() {
+    killExistingSystemAudioDump(): Promise<void> {
         return new Promise(resolve => {
-            console.log('Checking for existing SystemAudioDump processes...');
+            log.info('Checking for existing SystemAudioDump processes');
 
             const killProc = spawn('pkill', ['-f', 'SystemAudioDump'], {
                 stdio: 'ignore',
@@ -588,15 +609,15 @@ class SttService {
 
             killProc.on('close', code => {
                 if (code === 0) {
-                    console.log('Killed existing SystemAudioDump processes');
+                    log.info('Killed existing SystemAudioDump processes');
                 } else {
-                    console.log('No existing SystemAudioDump processes found');
+                    log.info('No existing SystemAudioDump processes found');
                 }
                 resolve();
             });
 
             killProc.on('error', err => {
-                console.log('Error checking for existing processes (this is normal):', err.message);
+                log.info({ err }, 'Error checking for existing SystemAudioDump processes (this is normal)');
                 resolve();
             });
 
@@ -607,28 +628,29 @@ class SttService {
         });
     }
 
-    async startMacOSAudioCapture() {
+    async startMacOSAudioCapture(): Promise<boolean> {
         if (process.platform !== 'darwin' || !this.themSttSession) return false;
 
         await this.killExistingSystemAudioDump();
-        console.log('Starting macOS audio capture for "Them"...');
+        log.info({ relaySessionId: this.relaySessionId }, 'Starting macOS audio capture for "Them"');
 
         const systemAudioPath = app.isPackaged
             ? path.join(process.resourcesPath, 'app.asar.unpacked', 'src', 'renderer', 'assets', 'SystemAudioDump')
             : path.join(app.getAppPath(), 'src', 'renderer', 'assets', 'SystemAudioDump');
 
-        console.log('SystemAudioDump path:', systemAudioPath);
+        log.info({ systemAudioPath }, 'SystemAudioDump path');
 
-        this.systemAudioProc = spawn(systemAudioPath, [], {
+        const systemAudioProc = spawn(systemAudioPath, [], {
             stdio: ['ignore', 'pipe', 'pipe'],
         });
+        this.systemAudioProc = systemAudioProc;
 
-        if (!this.systemAudioProc.pid) {
-            console.error('Failed to start SystemAudioDump');
+        if (!systemAudioProc.pid) {
+            log.error({ systemAudioPath }, 'Failed to start SystemAudioDump');
             return false;
         }
 
-        console.log('SystemAudioDump started with PID:', this.systemAudioProc.pid);
+        log.info({ pid: systemAudioProc.pid }, 'SystemAudioDump started');
 
         const CHUNK_DURATION = 0.1;
         const SAMPLE_RATE = 16000;
@@ -640,47 +662,47 @@ class SttService {
 
         // Payload always uses relay format
 
-        this.systemAudioProc.stdout.on('data', async data => {
+        systemAudioProc.stdout.on('data', async (data: Buffer) => {
             audioBuffer = Buffer.concat([audioBuffer, data]);
 
             while (audioBuffer.length >= CHUNK_SIZE) {
-                const chunk = audioBuffer.slice(0, CHUNK_SIZE);
-                audioBuffer = audioBuffer.slice(CHUNK_SIZE);
+                const chunk = audioBuffer.subarray(0, CHUNK_SIZE);
+                audioBuffer = audioBuffer.subarray(CHUNK_SIZE);
 
                 const monoChunk = CHANNELS === 2 ? this.convertStereoToMono(chunk) : chunk;
                 const base64Data = monoChunk.toString('base64');
 
-                this.sendToRenderer('system-audio-data', { data: base64Data });
+                this.sendToRenderer({ channel: 'system-audio-data', data: { data: base64Data } });
 
                 if (this.themSttSession) {
                     try {
-                        const payload = { audio: { data: base64Data, mimeType: 'audio/pcm;rate=16000' } };
+                        const payload = { audio: { data: base64Data, mimeType: DEFAULT_MIME_TYPE } };
                         await this.themSttSession.sendRealtimeInput(payload);
                     } catch (err) {
-                        console.error('Error sending system audio:', err.message);
+                        log.error({ err, relaySessionId: this.relaySessionId }, 'Error sending system audio');
                     }
                 }
             }
         });
 
-        this.systemAudioProc.stderr.on('data', data => {
-            console.error('SystemAudioDump stderr:', data.toString());
+        systemAudioProc.stderr.on('data', (data: Buffer) => {
+            log.error({ stderr: data.toString() }, 'SystemAudioDump stderr');
         });
 
-        this.systemAudioProc.on('close', code => {
-            console.log('SystemAudioDump process closed with code:', code);
+        systemAudioProc.on('close', code => {
+            log.info({ code }, 'SystemAudioDump process closed');
             this.systemAudioProc = null;
         });
 
-        this.systemAudioProc.on('error', err => {
-            console.error('SystemAudioDump process error:', err);
+        systemAudioProc.on('error', err => {
+            log.error({ err }, 'SystemAudioDump process error');
             this.systemAudioProc = null;
         });
 
         return true;
     }
 
-    convertStereoToMono(stereoBuffer) {
+    convertStereoToMono(stereoBuffer: Buffer): Buffer {
         const samples = stereoBuffer.length / 4;
         const monoBuffer = Buffer.alloc(samples * 2);
 
@@ -692,30 +714,20 @@ class SttService {
         return monoBuffer;
     }
 
-    stopMacOSAudioCapture() {
+    stopMacOSAudioCapture(): void {
         if (this.systemAudioProc) {
-            console.log('Stopping SystemAudioDump...');
+            log.info('Stopping SystemAudioDump');
             this.systemAudioProc.kill('SIGTERM');
             this.systemAudioProc = null;
         }
     }
 
-    isSessionActive() {
+    isSessionActive(): boolean {
         return !!this.meSttSession && !!this.themSttSession;
     }
 
-    async closeSessions() {
+    async closeSessions(): Promise<void> {
         this.stopMacOSAudioCapture();
-
-        // Clear heartbeat / renewal timers
-        if (this.keepAliveInterval) {
-            clearInterval(this.keepAliveInterval);
-            this.keepAliveInterval = null;
-        }
-        if (this.sessionRenewTimeout) {
-            clearTimeout(this.sessionRenewTimeout);
-            this.sessionRenewTimeout = null;
-        }
 
         // Clear timers
         if (this.meCompletionTimer) {
@@ -728,7 +740,7 @@ class SttService {
         }
 
         await this._closeRelayConnection();
-        console.log('All STT sessions closed.');
+        log.info('All STT sessions closed');
 
         // Reset state
         this.meCompletionBuffer = '';

@@ -31,9 +31,6 @@ const SettingsSchema = z.object({
 
 export type Settings = z.infer<typeof SettingsSchema>;
 
-// Unknown keys in the user's file (settings that no code reads any more) are dropped.
-const UserConfigSchema = SettingsSchema.partial();
-
 const DEFAULTS: Settings = {
     sttRelayUrl: 'wss://websocket-production-395f.up.railway.app',
     analysisStep: 1,
@@ -48,27 +45,44 @@ const DEFAULTS: Settings = {
     },
 };
 
+// The user's file is merged over the defaults key by key, as the untyped config did: each known key
+// that passes its schema applies, an invalid one keeps its default (and is logged), and keys no code
+// reads any more are ignored.
+export function settingsFromUserConfig({ userConfig }: { userConfig: unknown }): Settings {
+    const file = z.record(z.string(), z.unknown()).safeParse(userConfig);
+    if (!file.success) return SettingsSchema.parse(DEFAULTS);
+
+    const applied: Record<string, unknown> = {};
+    for (const [key, schema] of Object.entries(SettingsSchema.shape)) {
+        if (!(key in file.data)) continue;
+        const value = schema.safeParse(file.data[key]);
+        if (value.success) {
+            applied[key] = value.data;
+        } else {
+            log.warn({ key, issues: z.prettifyError(value.error) }, 'Ignoring invalid user config value');
+        }
+    }
+    return SettingsSchema.parse({ ...DEFAULTS, ...applied });
+}
+
 class Config {
     private config: Settings;
 
     constructor() {
-        this.config = SettingsSchema.parse({ ...DEFAULTS, ...this.loadUserConfig() });
+        this.config = settingsFromUserConfig({ userConfig: this.loadUserConfig() });
     }
 
-    private loadUserConfig(): z.infer<typeof UserConfigSchema> {
+    // The parsed JSON of ~/.whisper/config.json, or undefined when there is none or it is not JSON
+    private loadUserConfig(): unknown {
         try {
             const userConfigPath = this.getUserConfigPath();
-            if (!fs.existsSync(userConfigPath)) return {};
-            const parsed = UserConfigSchema.safeParse(JSON.parse(fs.readFileSync(userConfigPath, 'utf-8')));
-            if (!parsed.success) {
-                log.warn({ userConfigPath, issues: z.prettifyError(parsed.error) }, 'Ignoring invalid user config');
-                return {};
-            }
+            if (!fs.existsSync(userConfigPath)) return undefined;
+            const userConfig: unknown = JSON.parse(fs.readFileSync(userConfigPath, 'utf-8'));
             log.info({ userConfigPath }, 'User config loaded');
-            return parsed.data;
+            return userConfig;
         } catch (error) {
             log.warn({ error: errorMessage(error) }, 'Failed to load user config');
-            return {};
+            return undefined;
         }
     }
 

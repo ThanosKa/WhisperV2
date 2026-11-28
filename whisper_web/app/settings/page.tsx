@@ -3,7 +3,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/utils/auth';
+import { useAuth } from '@/lib/auth';
 import SettingsTabs from '@/components/settings/SettingsTabs';
 import { useRouter } from 'next/navigation';
 

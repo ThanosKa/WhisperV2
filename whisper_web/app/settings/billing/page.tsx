@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { Check, Cloud, HardDrive } from 'lucide-react';
-import { useRedirectIfNotAuth } from '@/utils/auth';
-import { useAuth } from '@/utils/auth';
+import { useRedirectIfNotAuth } from '@/lib/auth';
+import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';

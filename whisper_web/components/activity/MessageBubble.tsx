@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Copy, Check, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import Markdown from '@/components/Markdown';
+import Markdown from '@/components/activity/Markdown';
 
 interface MessageBubbleProps {
     content: string;

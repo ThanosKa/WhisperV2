@@ -2,20 +2,20 @@
 
 import { useState, useEffect, useRef, Suspense, useMemo } from 'react';
 import { cn } from '@/lib/utils';
-import { useRedirectIfNotAuth } from '@/utils/auth';
+import { useRedirectIfNotAuth } from '@/lib/auth';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
-import { type UserProfile, type SessionDetails, getSessionDetails, deleteSession, updateSessionTitle } from '@/utils/api';
+import { type UserProfile, type SessionDetails, getSessionDetails, deleteSession, updateSessionTitle } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import dynamic from 'next/dynamic';
 import { Sparkles, Copy, Check, Calendar, Timer } from 'lucide-react';
 import { TranscriptViewer } from '@/components/activity/TranscriptViewer';
 import { TranscriptSidebar } from '@/components/activity/TranscriptSidebar';
 
-const Markdown = dynamic(() => import('@/components/Markdown'), { ssr: false });
+const Markdown = dynamic(() => import('@/components/activity/Markdown'), { ssr: false });
 
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
     <section className="mb-8 rounded-lg border border-slate-200 bg-white px-6 py-5">

@@ -1,7 +1,7 @@
 'use client';
 
 import { ExternalLink } from 'lucide-react';
-import { useRedirectIfNotAuth } from '@/utils/auth';
+import { useRedirectIfNotAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import SettingsTabs from '@/components/settings/SettingsTabs';

@@ -1,6 +1,6 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { useAuth } from '@/utils/auth';
+import { useAuth } from '@/lib/auth';
 import { API_URL, sentRequests } from '../support/desktop';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));

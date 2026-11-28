@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
-import { useRedirectIfNotAuth } from '@/utils/auth';
+import { useRedirectIfNotAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
-import { type UserProfile, type Session, deleteSession, getConversationStats, updateSessionTitle, getMeetingsPage, getQuestionsPage } from '@/utils/api';
+import { type UserProfile, type Session, deleteSession, getConversationStats, updateSessionTitle, getMeetingsPage, getQuestionsPage } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Mic, MessageSquare, Timer } from 'lucide-react';
 

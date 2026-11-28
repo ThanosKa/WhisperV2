@@ -8,7 +8,7 @@ on:
 
 jobs:
     test:
-        name: Run Unit Tests
+        name: Type-check and test
         runs-on: macos-latest
 
         steps:
@@ -27,14 +27,13 @@ jobs:
             - name: Install dependencies
               run: pnpm install --frozen-lockfile
 
-            - name: Test desktop app
+            - name: Type-check
+              run: pnpm type-check
+
+            # Vitest for the app and the dashboard, then the Jest suites not yet moved to Vitest.
+            - name: Test
               run: pnpm test
 
-            - name: Test web app
-              run: pnpm --filter whisper-frontend test
-
+            # Until the oxlint setup adds the repo-wide lint step.
             - name: Lint web app
               run: pnpm run web:lint
-
-            - name: Type-check web app
-              run: pnpm run web:type-check

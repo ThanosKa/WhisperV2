@@ -12,7 +12,8 @@ const config: Config = {
     moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/$1',
     },
-    testMatch: ['**/__tests__/**/*.test.[jt]s?(x)', '**/?(*.)+(spec|test).[jt]s?(x)'],
+    // Only `__tests__/`: the other `*.test.tsx` files run on Vitest (ticket 08 moves these too).
+    testMatch: ['<rootDir>/__tests__/**/*.test.[jt]s?(x)'],
     // verbose: true,
     collectCoverageFrom: [
         'app/**/*.{js,jsx,ts,tsx}',

@@ -1,7 +1,7 @@
 // Configuration management for environment-based settings
-const os = require('os');
-const path = require('path');
-const fs = require('fs');
+import os from 'os';
+import path from 'path';
+import fs from 'fs';
 
 class Config {
     constructor() {
@@ -171,4 +171,4 @@ class Config {
 
 const config = new Config();
 
-module.exports = config;
+export default config;

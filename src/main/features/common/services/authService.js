@@ -1,7 +1,8 @@
-const { BrowserWindow, shell } = require('electron');
-const Store = require('electron-store').default;
-const sessionRepository = require('../repositories/session');
-const providerSettingsRepository = require('../repositories/providerSettings');
+import { BrowserWindow, shell } from 'electron';
+import Store from 'electron-store';
+import sessionRepository from '../repositories/session';
+import providerSettingsRepository from '../repositories/providerSettings';
+import userRepository from '../repositories/user';
 
 // Webapp configuration
 const WEBAPP_CONFIG = {
@@ -119,7 +120,6 @@ class AuthService {
         console.log(`[AuthService] User signed in:`, userProfile.uid);
 
         // Ensure the user exists in the local SQLite database
-        const userRepository = require('../repositories/user');
         try {
             await userRepository.findOrCreate(userProfile);
             console.log('[AuthService] User data synchronized with local database');
@@ -408,4 +408,4 @@ class AuthService {
 }
 
 const authService = new AuthService();
-module.exports = authService;
+export default authService;

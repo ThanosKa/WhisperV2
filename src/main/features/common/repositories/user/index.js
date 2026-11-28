@@ -1,11 +1,7 @@
-const sqliteRepository = require('./sqlite.repository');
-
-let authService = null;
+import * as sqliteRepository from './sqlite.repository';
+import authService from '../../services/authService';
 
 function getAuthService() {
-    if (!authService) {
-        authService = require('../../services/authService');
-    }
     return authService;
 }
 
@@ -81,6 +77,6 @@ const userRepositoryAdapter = {
     },
 };
 
-module.exports = {
+export default {
     ...userRepositoryAdapter,
 };

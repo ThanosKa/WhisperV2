@@ -1,4 +1,4 @@
-const { screen } = require('electron');
+import { screen } from 'electron';
 
 class SmoothMovementManager {
     constructor(windowPool) {
@@ -190,4 +190,4 @@ class SmoothMovementManager {
     }
 }
 
-module.exports = SmoothMovementManager;
+export default SmoothMovementManager;

@@ -1,4 +1,4 @@
-const sqliteRepository = require('./sqlite.repository');
+import * as sqliteRepository from './sqlite.repository';
 
 let authService = null;
 
@@ -76,4 +76,4 @@ const sessionRepositoryAdapter = {
     },
 };
 
-module.exports = sessionRepositoryAdapter;
+export default sessionRepositoryAdapter;

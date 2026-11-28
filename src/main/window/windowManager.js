@@ -1,11 +1,16 @@
-const { BrowserWindow, globalShortcut, screen, app, shell } = require('electron');
-const WindowLayoutManager = require('./windowLayoutManager');
-const SmoothMovementManager = require('./smoothMovementManager');
-const path = require('node:path');
-const os = require('os');
-const shortcutsService = require('../features/shortcuts/shortcutsService');
-const internalBridge = require('../bridge/internalBridge');
-const askService = require('../features/ask/askService');
+import { BrowserWindow, globalShortcut, screen, app, shell } from 'electron';
+import WindowLayoutManager from './windowLayoutManager';
+import SmoothMovementManager from './smoothMovementManager';
+import path from 'node:path';
+import os from 'os';
+import shortcutsService from '../features/shortcuts/shortcutsService';
+import internalBridge from '../bridge/internalBridge';
+import askService from '../features/ask/askService';
+
+// Main is bundled into out/main/: the preload is built into out/preload/, and the Lit renderer is
+// served from src/renderer/ with its esbuild bundles in public/build/ (build.js).
+const PRELOAD_PATH = path.join(__dirname, '../preload/preload.js');
+const RENDERER_APP_DIR = path.join(__dirname, '../../src/renderer/app');
 
 /* ────────────────[ UNIFIED CROSS-PLATFORM DESIGN ]─────────────── */
 // Liquid glass disabled for consistent cross-platform performance
@@ -724,7 +729,7 @@ function createFeatureWindows(header, namesToCreate) {
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-            preload: path.join(__dirname, '../preload.js'),
+            preload: PRELOAD_PATH,
         },
     };
 
@@ -754,7 +759,7 @@ function createFeatureWindows(header, namesToCreate) {
                 }
                 const listenLoadOptions = { query: { view: 'listen' } };
                 // Load content consistently across all platforms
-                listen.loadFile(path.join(__dirname, '../ui/app/content.html'), listenLoadOptions);
+                listen.loadFile(path.join(RENDERER_APP_DIR, 'content.html'), listenLoadOptions);
                 if (!app.isPackaged) {
                     listen.webContents.openDevTools({ mode: 'detach' });
                 }
@@ -779,7 +784,7 @@ function createFeatureWindows(header, namesToCreate) {
                 }
                 const askLoadOptions = { query: { view: 'ask' } };
                 // Load content consistently across all platforms
-                ask.loadFile(path.join(__dirname, '../ui/app/content.html'), askLoadOptions);
+                ask.loadFile(path.join(RENDERER_APP_DIR, 'content.html'), askLoadOptions);
 
                 // Open DevTools in development
                 if (!app.isPackaged) {
@@ -821,7 +826,7 @@ function createFeatureWindows(header, namesToCreate) {
                 }
                 const settingsLoadOptions = { query: { view: 'settings' } };
                 // Load content consistently across all platforms
-                settings.loadFile(path.join(__dirname, '../ui/app/content.html'), settingsLoadOptions).catch(console.error);
+                settings.loadFile(path.join(RENDERER_APP_DIR, 'content.html'), settingsLoadOptions).catch(console.error);
                 windowPool.set('settings', settings);
 
                 if (!app.isPackaged) {
@@ -845,7 +850,7 @@ function createFeatureWindows(header, namesToCreate) {
                     plan.setWindowButtonVisibility(false);
                 }
                 const planLoadOptions = { query: { view: 'plan' } };
-                plan.loadFile(path.join(__dirname, '../ui/app/content.html'), planLoadOptions).catch(console.error);
+                plan.loadFile(path.join(RENDERER_APP_DIR, 'content.html'), planLoadOptions).catch(console.error);
                 windowPool.set('plan', plan);
 
                 if (!app.isPackaged) {
@@ -874,7 +879,7 @@ function createFeatureWindows(header, namesToCreate) {
                     screenshot.setWindowButtonVisibility(false);
                 }
                 const screenshotLoadOptions = { query: { view: 'screenshot' } };
-                screenshot.loadFile(path.join(__dirname, '../ui/app/content.html'), screenshotLoadOptions).catch(console.error);
+                screenshot.loadFile(path.join(RENDERER_APP_DIR, 'content.html'), screenshotLoadOptions).catch(console.error);
                 windowPool.set('screenshot', screenshot);
 
                 if (!app.isPackaged) {
@@ -899,7 +904,7 @@ function createFeatureWindows(header, namesToCreate) {
                 if (process.platform === 'darwin') {
                     recoveryToast.setWindowButtonVisibility(false);
                 }
-                recoveryToast.loadFile(path.join(__dirname, '../ui/app/recovery-toast.html')).catch(console.error);
+                recoveryToast.loadFile(path.join(RENDERER_APP_DIR, 'recovery-toast.html')).catch(console.error);
                 windowPool.set('recoveryToast', recoveryToast);
 
                 console.log(`[WindowManager] Recovery toast window created`);
@@ -977,7 +982,7 @@ function createWindows() {
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
-            preload: path.join(__dirname, '../preload.js'),
+            preload: PRELOAD_PATH,
             backgroundThrottling: false,
             webSecurity: false,
             enableRemoteModule: false,
@@ -992,7 +997,7 @@ function createWindows() {
         header.setWindowButtonVisibility(false);
     }
     // Load content consistently across all platforms
-    header.loadFile(path.join(__dirname, '../ui/app/header.html'));
+    header.loadFile(path.join(RENDERER_APP_DIR, 'header.html'));
     windowPool.set('header', header);
     layoutManager = new WindowLayoutManager(windowPool);
     movementManager = new SmoothMovementManager(windowPool);
@@ -1099,7 +1104,7 @@ function forceShowPermissionOnboarding() {
     }
 }
 
-module.exports = {
+export {
     createWindows,
     windowPool,
     toggleContentProtection,

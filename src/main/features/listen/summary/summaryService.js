@@ -1,9 +1,13 @@
-const llmClient = require('../../common/ai/llmClient');
-const sessionRepository = require('../../common/repositories/session');
-const summaryRepository = require('./repositories');
-const config = require('../../common/config/config');
-const fs = require('fs');
-const path = require('path');
+import * as llmClient from '../../common/ai/llmClient';
+import sessionRepository from '../../common/repositories/session';
+import summaryRepository from './repositories';
+import config from '../../common/config/config';
+import * as mockAnalysisData from '../../common/mocks/mockAnalysisData';
+import * as settingsService from '../../settings/settingsService';
+import sttRepository from '../stt/repositories';
+import { windowPool } from '../../../window/windowManager';
+import fs from 'fs';
+import path from 'path';
 
 class SummaryService {
     constructor() {
@@ -31,7 +35,7 @@ class SummaryService {
         this.batchTimer = null; // For time fallback
 
         // Insights repository for crash recovery
-        this.insightsRepo = require('./repositories');
+        this.insightsRepo = summaryRepository;
 
         // Load mock convo data if needed (for mock STT)
         this.loadMockData();
@@ -40,7 +44,6 @@ class SummaryService {
     loadMockData() {
         try {
             // Import mock convo data - assume new file exists
-            const mockAnalysisData = require('../../common/mocks/mockAnalysisData');
             this.mockDataMap = mockAnalysisData.presetsToMock;
             console.log('[SummaryService] Mock STT convo data loaded:', Object.keys(this.mockDataMap));
         } catch (err) {
@@ -227,7 +230,6 @@ class SummaryService {
                 return { success: false, error: 'preset_not_found' };
             }
 
-            const settingsService = require('../../settings/settingsService');
             const presets = await settingsService.getPresets();
             const preset = Array.isArray(presets) ? presets.find(p => p && p.id === presetId) : null;
 
@@ -346,7 +348,6 @@ class SummaryService {
             // Also save mock transcripts to database like real STT
             if (this.currentSessionId) {
                 try {
-                    const sttRepository = require('../stt/repositories');
                     sttRepository.addTranscript({
                         sessionId: this.currentSessionId,
                         speaker: speaker,
@@ -388,7 +389,6 @@ class SummaryService {
     }
 
     sendToRenderer(channel, data) {
-        const { windowPool } = require('../../../window/windowManager');
         const listenWindow = windowPool?.get('listen');
 
         if (listenWindow && !listenWindow.isDestroyed()) {
@@ -1139,4 +1139,4 @@ PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (acti
 }
 
 const summaryService = new SummaryService();
-module.exports = summaryService;
+export default summaryService;

@@ -72,4 +72,4 @@ const presetsToMock = {
     },
 };
 
-module.exports = { presetsToMock };
+export { presetsToMock };

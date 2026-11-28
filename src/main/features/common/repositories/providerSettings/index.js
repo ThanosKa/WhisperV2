@@ -1,4 +1,4 @@
-const sqliteRepository = require('./sqlite.repository');
+import * as sqliteRepository from './sqlite.repository';
 
 function getBaseRepository() {
     // For now, we only have sqlite. This could be expanded later.
@@ -42,6 +42,6 @@ const providerSettingsRepositoryAdapter = {
     },
 };
 
-module.exports = {
+export default {
     ...providerSettingsRepositoryAdapter,
 };

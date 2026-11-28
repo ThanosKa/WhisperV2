@@ -1,5 +1,5 @@
-const sqliteRepository = require('./sqlite.repository');
-const authService = require('../../../common/services/authService');
+import * as sqliteRepository from './sqlite.repository';
+import authService from '../../../common/services/authService';
 
 function getBaseRepository() {
     // Always use SQLite for local-first data strategy
@@ -17,4 +17,4 @@ const sttRepositoryAdapter = {
     },
 };
 
-module.exports = sttRepositoryAdapter;
+export default sttRepositoryAdapter;

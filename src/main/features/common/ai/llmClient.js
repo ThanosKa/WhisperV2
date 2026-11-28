@@ -1,4 +1,4 @@
-const authService = require('../services/authService');
+import authService from '../services/authService';
 
 function getBaseUrl() {
     try {
@@ -88,4 +88,4 @@ async function stream(payload, { signal } = {}) {
     return response;
 }
 
-module.exports = { chat, stream };
+export { chat, stream };

@@ -1,4 +1,4 @@
-const sqliteClient = require('../../services/sqliteClient');
+import sqliteClient from '../../services/sqliteClient';
 
 function findOrCreate(user) {
     const db = sqliteClient.getDb();
@@ -86,7 +86,7 @@ function deleteById(uid) {
     }
 }
 
-module.exports = {
+export {
     findOrCreate,
     getById,
     update,

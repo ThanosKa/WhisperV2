@@ -1,4 +1,5 @@
-const sqliteClient = require('../../services/sqliteClient');
+import { randomUUID } from 'crypto';
+import sqliteClient from '../../services/sqliteClient';
 
 function getById(id) {
     const db = sqliteClient.getDb();
@@ -7,7 +8,7 @@ function getById(id) {
 
 function create(uid, type = 'ask') {
     const db = sqliteClient.getDb();
-    const sessionId = require('crypto').randomUUID();
+    const sessionId = randomUUID();
     const now = Math.floor(Date.now() / 1000);
     const query = `INSERT INTO sessions (id, uid, title, session_type, started_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`;
 
@@ -138,7 +139,7 @@ function findLatestUnfinishedListen(uid) {
     return db.prepare(query).get(uid);
 }
 
-module.exports = {
+export {
     getById,
     create,
     getAllByUserId,

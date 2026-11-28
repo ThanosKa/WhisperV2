@@ -1,6 +1,6 @@
-const sqliteRepository = require('./sqlite.repository');
-const insightsRepository = require('./insights.repository');
-const authService = require('../../../common/services/authService');
+import * as sqliteRepository from './sqlite.repository';
+import * as insightsRepository from './insights.repository';
+import authService from '../../../common/services/authService';
 
 function getBaseRepository() {
     // Always use SQLite for local-first data strategy
@@ -21,5 +21,5 @@ const summaryRepositoryAdapter = {
     getAllInsightsBySessionId: insightsRepository.getAllInsightsBySessionId,
 };
 
-module.exports = summaryRepositoryAdapter;
+export default summaryRepositoryAdapter;
 

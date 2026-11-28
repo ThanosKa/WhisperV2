@@ -1,10 +1,14 @@
-const { BrowserWindow } = require('electron');
-const SttService = require('./stt/sttService');
-const summaryService = require('./summary/summaryService');
-const authService = require('../common/services/authService');
-const sessionRepository = require('../common/repositories/session');
-const sttRepository = require('./stt/repositories');
-const internalBridge = require('../../bridge/internalBridge');
+import { BrowserWindow } from 'electron';
+import SttService from './stt/sttService';
+import summaryService from './summary/summaryService';
+import authService from '../common/services/authService';
+import sessionRepository from '../common/repositories/session';
+import sttRepository from './stt/repositories';
+import internalBridge from '../../bridge/internalBridge';
+import summaryRepository from './summary/repositories';
+import * as llmClient from '../common/ai/llmClient';
+import * as settingsService from '../settings/settingsService';
+import { windowPool } from '../../window/windowManager';
 
 class ListenService {
     constructor() {
@@ -45,7 +49,6 @@ class ListenService {
     }
 
     sendToRenderer(channel, data) {
-        const { windowPool } = require('../../window/windowManager');
         const listenWindow = windowPool?.get('listen');
 
         if (listenWindow && !listenWindow.isDestroyed()) {
@@ -73,8 +76,7 @@ class ListenService {
                 return null;
             }
 
-            const insightsRepo = require('./summary/repositories');
-            const allInsights = insightsRepo.getAllInsightsBySessionId(session.id);
+            const allInsights = summaryRepository.getAllInsightsBySessionId(session.id);
 
             console.log(`[Recovery] Found: ${transcripts.length} transcripts, ${allInsights?.length || 0} insight rounds`);
             return { session, transcripts, insights: allInsights };
@@ -94,7 +96,6 @@ class ListenService {
     }
 
     notifyHeaderOfStrandedSession(session) {
-        const { windowPool } = require('../../window/windowManager');
         const header = windowPool?.get('header');
         if (header && !header.isDestroyed()) {
             header.webContents.send('listen:stranded-session-detected', {
@@ -123,7 +124,6 @@ class ListenService {
     }
 
     async handleListenRequest(listenButtonText) {
-        const { windowPool } = require('../../window/windowManager');
         const listenWindow = windowPool.get('listen');
         const header = windowPool.get('header');
 
@@ -246,7 +246,6 @@ class ListenService {
         }
 
         // Notify header window
-        const { windowPool } = require('../../window/windowManager');
         const header = windowPool.get('header');
         if (header && !header.isDestroyed()) {
             header.webContents.send('stt:quotaExceeded', { resetAt });
@@ -311,7 +310,6 @@ class ListenService {
 
             // Apply persisted analysis preset selection (Phase 1)
             try {
-                const settingsService = require('../settings/settingsService');
                 const currentSettings = await settingsService.getSettings();
                 await this.summaryService.setAnalysisPreset(currentSettings?.analysisPresetId || 'meetings');
             } catch (e) {
@@ -490,9 +488,6 @@ class ListenService {
         // Prefer summary TL;DR, then fall back to transcript snippet;
         // if LLM available, ask for a short title in the transcript language.
         try {
-            const summaryRepository = require('./summary/repositories');
-            const sttRepository = require('./stt/repositories');
-            const llmClient = require('../common/ai/llmClient');
 
             // 1) Gather context
             let tldr = null;
@@ -547,9 +542,6 @@ class ListenService {
 
     async _generateAndSaveComprehensiveSummary(sessionId) {
         try {
-            const sttRepository = require('./stt/repositories');
-            const summaryRepository = require('./summary/repositories');
-            const llmClient = require('../common/ai/llmClient');
 
             // Get the full transcript
             console.log(`[ListenService] Looking for transcripts for session: ${sessionId}`);
@@ -570,7 +562,6 @@ class ListenService {
             }
 
             // Get current settings for analysis profile
-            const settingsService = require('../settings/settingsService');
             const currentSettings = await settingsService.getSettings();
             const analysisPresetId = currentSettings?.analysisPresetId || 'meetings';
 
@@ -677,7 +668,7 @@ class ListenService {
 
         // Send recovered transcripts to UI
         if (transcripts && transcripts.length > 0) {
-            const listenWindow = require('../../window/windowManager').windowPool?.get('listen');
+            const listenWindow = windowPool?.get('listen');
             if (listenWindow && !listenWindow.isDestroyed()) {
                 console.log(`[Recovery] Sending ${transcripts.length} transcripts to UI`);
                 transcripts.forEach(t => {
@@ -732,7 +723,7 @@ class ListenService {
         if (!sttReady) throw new Error('STT resume failed after retries');
 
         // Send restored insights to renderer
-        const listenWindow = require('../../window/windowManager').windowPool?.get('listen');
+        const listenWindow = windowPool?.get('listen');
         if (Array.isArray(insights) && insights.length > 0 && listenWindow && !listenWindow.isDestroyed()) {
             console.log(`[Recovery] Sending ${insights.length} insight rounds to UI`);
             // Reverse so newest arrives first (matches normal operation)
@@ -756,11 +747,9 @@ class ListenService {
         }
 
         // Show listen window
-        const internalBridge = require('../../bridge/internalBridge');
         internalBridge.emit('window:requestVisibility', { name: 'listen', visible: true });
 
         // Notify header to transition to inSession
-        const { windowPool } = require('../../window/windowManager');
         const header = windowPool.get('header');
         if (header) {
             header.webContents.send('listen:changeSessionResult', { success: true, nextStatus: 'inSession' });
@@ -845,4 +834,4 @@ class ListenService {
 }
 
 const listenService = new ListenService();
-module.exports = listenService;
+export default listenService;

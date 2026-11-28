@@ -117,4 +117,4 @@ const LATEST_SCHEMA = {
     },
 };
 
-module.exports = LATEST_SCHEMA;
+export default LATEST_SCHEMA;

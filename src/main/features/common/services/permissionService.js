@@ -1,4 +1,4 @@
-const { systemPreferences, shell, desktopCapturer } = require('electron');
+import { systemPreferences, shell, desktopCapturer } from 'electron';
 
 class PermissionService {
     async checkSystemPermissions() {
@@ -88,4 +88,4 @@ class PermissionService {
 }
 
 const permissionService = new PermissionService();
-module.exports = permissionService;
+export default permissionService;

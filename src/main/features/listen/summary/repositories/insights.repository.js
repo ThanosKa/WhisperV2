@@ -1,5 +1,5 @@
-const sqliteClient = require('../../../common/services/sqliteClient');
-const crypto = require('crypto');
+import sqliteClient from '../../../common/services/sqliteClient';
+import crypto from 'crypto';
 
 function saveInsight({ sessionId, analysisRound, payload }) {
     const db = sqliteClient.getDb();
@@ -27,5 +27,5 @@ function getAllInsightsBySessionId(sessionId) {
     }));
 }
 
-module.exports = { saveInsight, getAllInsightsBySessionId };
+export { saveInsight, getAllInsightsBySessionId };
 

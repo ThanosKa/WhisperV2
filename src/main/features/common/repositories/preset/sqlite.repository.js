@@ -1,4 +1,4 @@
-const sqliteClient = require('../../services/sqliteClient');
+import sqliteClient from '../../services/sqliteClient';
 
 function getPresets(uid) {
     const db = sqliteClient.getDb();
@@ -156,7 +156,7 @@ function update(id, { title, prompt, append_text }, uid) {
     return { changes: result.changes };
 }
 
-module.exports = {
+export {
     getPresets,
     getById,
     findUserPresetByTitle,

@@ -1,5 +1,5 @@
-const Database = require('better-sqlite3');
-const LATEST_SCHEMA = require('../config/schema');
+import Database from 'better-sqlite3';
+import LATEST_SCHEMA from '../config/schema';
 
 class SQLiteClient {
     constructor() {
@@ -233,4 +233,4 @@ class SQLiteClient {
 }
 
 const sqliteClient = new SQLiteClient();
-module.exports = sqliteClient;
+export default sqliteClient;

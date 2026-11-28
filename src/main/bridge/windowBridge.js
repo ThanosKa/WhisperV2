@@ -1,12 +1,10 @@
 // src/bridge/windowBridge.js
-const { ipcMain, shell } = require('electron');
+import { ipcMain, shell, BrowserWindow } from 'electron';
+import * as windowManager from '../window/windowManager';
 
 // Bridge only registers IPC handlers (no business logic)
-module.exports = {
+export default {
     initialize() {
-        // Require windowManager at initialization to resolve circular dependency
-        const windowManager = require('../window/windowManager');
-
         // Existing IPC handlers
         ipcMain.handle('toggle-content-protection', () => windowManager.toggleContentProtection());
         ipcMain.handle('resize-header-window', (event, args) => windowManager.resizeHeaderWindow(args));
@@ -58,7 +56,6 @@ module.exports = {
 
         // Auth events
         ipcMain.on('auth-started', event => {
-            const { BrowserWindow } = require('electron');
             BrowserWindow.getAllWindows().forEach(win => {
                 if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
                     win.webContents.send('auth-started');

@@ -1,4 +1,4 @@
-const sqliteClient = require('../../common/services/sqliteClient');
+import sqliteClient from '../../common/services/sqliteClient';
 
 function getPresets(uid) {
     const db = sqliteClient.getDb();
@@ -161,7 +161,7 @@ function setAutoUpdate(uid, isEnabled) {
     }
 }
 
-module.exports = {
+export {
     getPresets,
     getPresetTemplates,
     updatePreset,

@@ -1,4 +1,4 @@
-const { screen } = require('electron');
+import { screen } from 'electron';
 
 /**
  *
@@ -401,4 +401,4 @@ class WindowLayoutManager {
     }
 }
 
-module.exports = WindowLayoutManager;
+export default WindowLayoutManager;

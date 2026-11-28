@@ -1,9 +1,9 @@
 // src/bridge/internalBridge.js
-const { EventEmitter } = require('events');
+import { EventEmitter } from 'events';
 
 // Internal event bus connecting FeatureCore and WindowCore
 const internalBridge = new EventEmitter();
-module.exports = internalBridge;
+export default internalBridge;
 
 // Example event
 // internalBridge.on('content-protection-changed', (enabled) => {

@@ -1,4 +1,4 @@
 const DOWNLOAD_CHECKSUMS = {
 };
 
-module.exports = { DOWNLOAD_CHECKSUMS };
+export { DOWNLOAD_CHECKSUMS };

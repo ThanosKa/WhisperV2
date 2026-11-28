@@ -5,10 +5,32 @@
 // } catch (err) {
 // }
 
-require('dotenv').config();
+// First import, so `.env` is loaded before any other module reads `process.env`.
+import 'dotenv/config';
 
-const { app, BrowserWindow, shell, ipcMain, dialog, desktopCapturer, session } = require('electron');
-const path = require('node:path');
+import { app, BrowserWindow, shell, ipcMain, dialog, desktopCapturer, session, screen } from 'electron';
+import path from 'node:path';
+import fs from 'fs';
+import net from 'net';
+import { spawnSync } from 'child_process';
+import { createWindows, windowPool } from './window/windowManager.js';
+import listenService from './features/listen/listenService';
+import databaseInitializer from './features/common/services/databaseInitializer';
+import authService from './features/common/services/authService';
+import express from 'express';
+import { autoUpdater } from 'electron-updater';
+import { EventEmitter } from 'events';
+import askService from './features/ask/askService';
+import * as settingsService from './features/settings/settingsService';
+import sessionRepository from './features/common/repositories/session';
+import sttRepository from './features/listen/stt/repositories';
+import summaryRepository from './features/listen/summary/repositories';
+import askRepository from './features/ask/repositories';
+import userRepository from './features/common/repositories/user';
+import presetRepository from './features/common/repositories/preset';
+import featureBridge from './bridge/featureBridge';
+import windowBridge from './bridge/windowBridge';
+import createBackendApp from '../../whisper_web/backend_node/dist';
 
 // Ensure consistent app name so protocol prompts say "Open Whisper" even in dev
 app.setName('Whisper');
@@ -17,8 +39,7 @@ app.setName('Whisper');
 //  auto-register protocol for dev (Windows only)
 // -------------------------------------------------
 if (process.platform === 'win32' && !app.isPackaged) {
-    const { spawnSync } = require('child_process');
-    const repoRoot = path.resolve(__dirname, '..'); // repo folder
+    const repoRoot = path.resolve(__dirname, '../..'); // repo folder (this file runs from out/main/)
     const correctCmd = `"${process.execPath}" "${repoRoot}" "%1"`;
 
     const key = 'HKCU\\Software\\Classes\\whisper\\shell\\open\\command';
@@ -46,18 +67,6 @@ if (!gotTheLock) {
 
 // Setup protocol after single instance lock so second-instance events are caught correctly
 setupProtocolHandling();
-const { createWindows } = require('./window/windowManager.js');
-const listenService = require('./features/listen/listenService');
-const databaseInitializer = require('./features/common/services/databaseInitializer');
-const authService = require('./features/common/services/authService');
-const express = require('express');
-const { autoUpdater } = require('electron-updater');
-const { EventEmitter } = require('events');
-const askService = require('./features/ask/askService');
-const settingsService = require('./features/settings/settingsService');
-const sessionRepository = require('./features/common/repositories/session');
-const featureBridge = require('./bridge/featureBridge');
-const windowBridge = require('./bridge/windowBridge');
 
 // Global variables
 const eventBridge = new EventEmitter();
@@ -151,7 +160,6 @@ function setupProtocolHandling() {
 }
 
 function focusMainWindow() {
-    const { windowPool } = require('./window/windowManager.js');
     if (windowPool) {
         const header = windowPool.get('header');
         if (header && !header.isDestroyed()) {
@@ -196,7 +204,6 @@ if (process.platform === 'win32') {
 
 app.whenReady().then(async () => {
     // Initialize auto-updater
-    const { autoUpdater } = require('electron-updater');
 
     // Configure auto-updater
     autoUpdater.checkForUpdatesAndNotify();
@@ -209,7 +216,6 @@ app.whenReady().then(async () => {
     autoUpdater.on('update-available', info => {
         console.log('Update available:', info);
         // Broadcast to all windows
-        const { windowPool } = require('./window/windowManager');
         if (windowPool) {
             const allWindows = BrowserWindow.getAllWindows();
             const releaseUrl = `https://github.com/ThanosKa/whisper-desktop/releases/latest`;
@@ -229,7 +235,6 @@ app.whenReady().then(async () => {
     autoUpdater.on('update-not-available', info => {
         console.log('Update not available:', info);
         // Broadcast to all windows
-        const { windowPool } = require('./window/windowManager');
         if (windowPool) {
             const allWindows = BrowserWindow.getAllWindows();
             allWindows.forEach(win => {
@@ -245,7 +250,6 @@ app.whenReady().then(async () => {
     autoUpdater.on('error', err => {
         console.error('Auto-updater error:', err);
         // Broadcast to all windows
-        const { windowPool } = require('./window/windowManager');
         if (windowPool) {
             const allWindows = BrowserWindow.getAllWindows();
             allWindows.forEach(win => {
@@ -265,7 +269,6 @@ app.whenReady().then(async () => {
     autoUpdater.on('update-downloaded', info => {
         console.log('Update downloaded:', info);
         // Broadcast to all windows
-        const { windowPool } = require('./window/windowManager');
         if (windowPool) {
             const allWindows = BrowserWindow.getAllWindows();
             allWindows.forEach(win => {
@@ -284,8 +287,6 @@ app.whenReady().then(async () => {
     session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
         try {
             // Try to detect which display the app is on (prefer Ask window)
-            const { windowPool } = require('./window/windowManager');
-            const { screen } = require('electron');
             const askWin = windowPool.get('ask');
             const headerWin = windowPool.get('header');
             const refWin = askWin && !askWin.isDestroyed() && askWin.isVisible() ? askWin : headerWin;
@@ -356,7 +357,6 @@ app.whenReady().then(async () => {
 
         // Open dev tools for recovery toast window on app launch (dev mode only)
         if (!app.isPackaged) {
-            const { windowPool } = require('./window/windowManager');
             const recoveryToastWin = windowPool.get('recoveryToast');
             if (recoveryToastWin && !recoveryToastWin.isDestroyed()) {
                 recoveryToastWin.webContents.once('dom-ready', () => {
@@ -444,12 +444,6 @@ app.on('activate', () => {
 });
 
 function setupWebDataHandlers() {
-    const sessionRepository = require('./features/common/repositories/session');
-    const sttRepository = require('./features/listen/stt/repositories');
-    const summaryRepository = require('./features/listen/summary/repositories');
-    const askRepository = require('./features/ask/repositories');
-    const userRepository = require('./features/common/repositories/user');
-    const presetRepository = require('./features/common/repositories/preset');
 
     const handleRequest = async (channel, responseChannel, payload) => {
         let result;
@@ -655,7 +649,6 @@ async function handleCustomUrl(url) {
                 handlePersonalizeFromUrl(params);
                 break;
             default:
-                const { windowPool } = require('./window/windowManager.js');
                 const header = windowPool.get('header');
                 if (header) {
                     if (header.isMinimized()) header.restore();
@@ -672,7 +665,6 @@ async function handleCustomUrl(url) {
 }
 
 async function handleWebappAuthCallback(params) {
-    const userRepository = require('./features/common/repositories/user');
     const { sessionUuid, uid, email, displayName } = params;
 
     console.log('[Auth] Deep link callback received with params:', params);
@@ -702,7 +694,6 @@ async function handleWebappAuthCallback(params) {
         console.log('[Auth] Successfully signed in with session UUID:', sessionUuid);
 
         // Focus the app window
-        const { windowPool } = require('./window/windowManager.js');
         const header = windowPool.get('header');
         if (header) {
             if (header.isMinimized()) header.restore();
@@ -713,7 +704,6 @@ async function handleWebappAuthCallback(params) {
     } catch (error) {
         console.error('[Auth] Error during session validation or sign-in:', error);
         // The UI will not change, and the user can try again.
-        const { windowPool } = require('./window/windowManager.js');
         const header = windowPool.get('header');
         if (header) {
             header.webContents.send('auth-failed', { message: error.message });
@@ -724,7 +714,6 @@ async function handleWebappAuthCallback(params) {
 function handlePersonalizeFromUrl(params) {
     console.log('[Custom URL] Personalize params:', params);
 
-    const { windowPool } = require('./window/windowManager.js');
     const header = windowPool.get('header');
 
     if (header) {
@@ -761,7 +750,7 @@ async function startWebStack() {
 
     const getAvailablePort = () => {
         return new Promise((resolve, reject) => {
-            const server = require('net').createServer();
+            const server = net.createServer();
             server.listen(0, err => {
                 if (err) reject(err);
                 const port = server.address().port;
@@ -785,12 +774,10 @@ async function startWebStack() {
         whisper_WEB_URL: process.env.whisper_WEB_URL,
     });
 
-    const createBackendApp = require('../whisper_web/backend_node/dist');
     const nodeApi = createBackendApp(eventBridge);
 
-    const staticDir = app.isPackaged ? path.join(process.resourcesPath, 'out') : path.join(__dirname, '..', 'whisper_web', 'out');
+    const staticDir = app.isPackaged ? path.join(process.resourcesPath, 'out') : path.join(__dirname, '..', '..', 'whisper_web', 'out');
 
-    const fs = require('fs');
 
     if (!fs.existsSync(staticDir)) {
         console.error(`============================================================`);

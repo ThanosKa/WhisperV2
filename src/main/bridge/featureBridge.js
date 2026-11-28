@@ -1,15 +1,16 @@
 // src/bridge/featureBridge.js
-const { ipcMain, app, BrowserWindow } = require('electron');
-const settingsService = require('../features/settings/settingsService');
-const authService = require('../features/common/services/authService');
+import { ipcMain, app, BrowserWindow, shell } from 'electron';
+import { autoUpdater } from 'electron-updater';
+import * as settingsService from '../features/settings/settingsService';
+import authService from '../features/common/services/authService';
 // Model provider management removed (server-only)
-const shortcutsService = require('../features/shortcuts/shortcutsService');
-const presetRepository = require('../features/common/repositories/preset');
-const askService = require('../features/ask/askService');
-const listenService = require('../features/listen/listenService');
-const permissionService = require('../features/common/services/permissionService');
+import shortcutsService from '../features/shortcuts/shortcutsService';
+import presetRepository from '../features/common/repositories/preset';
+import askService from '../features/ask/askService';
+import listenService from '../features/listen/listenService';
+import permissionService from '../features/common/services/permissionService';
 
-module.exports = {
+export default {
     // Receive requests from renderer and forward to services
     initialize() {
         // Settings Service
@@ -19,14 +20,12 @@ module.exports = {
         ipcMain.handle('settings:get-auto-update', async () => await settingsService.getAutoUpdateSetting());
         ipcMain.handle('settings:set-auto-update', async (event, isEnabled) => await settingsService.setAutoUpdateSetting(isEnabled));
         ipcMain.handle('settings:get-app-version', async () => {
-            const { app } = require('electron');
             return app.getVersion();
         });
         // Removed legacy provider-model settings IPC
 
         // Add new handler for opening DB path
         ipcMain.handle('settings:open-db-path', async () => {
-            const { app, shell } = require('electron');
             try {
                 const userDataPath = app.getPath('userData');
                 await shell.openPath(userDataPath);
@@ -68,7 +67,6 @@ module.exports = {
         // Auto-update handlers
         ipcMain.handle('app:check-for-updates', async () => {
             try {
-                const { autoUpdater } = require('electron-updater');
                 if (process.env.NODE_ENV === 'development') {
                     return { success: false, error: 'Development mode - updates disabled' };
                 }
@@ -82,7 +80,6 @@ module.exports = {
 
         ipcMain.handle('app:install-update', async () => {
             try {
-                const { autoUpdater } = require('electron-updater');
                 if (process.env.NODE_ENV === 'development') {
                     return { success: false, error: 'Development mode - updates disabled' };
                 }

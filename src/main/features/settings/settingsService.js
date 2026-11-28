@@ -1,8 +1,8 @@
-const { ipcMain, BrowserWindow } = require('electron');
-const Store = require('electron-store').default;
-const authService = require('../common/services/authService');
-const settingsRepository = require('./repositories');
-const { windowPool } = require('../../window/windowManager');
+import { ipcMain, BrowserWindow } from 'electron';
+import Store from 'electron-store';
+import authService from '../common/services/authService';
+import settingsRepository from './repositories';
+import { windowPool } from '../../window/windowManager';
 
 // New imports for common services
 // Model provider management removed (server-only)
@@ -238,7 +238,6 @@ async function updateContentProtection(enabled) {
         settings.contentProtection = enabled;
 
         // Update content protection in main window
-        const { app } = require('electron');
         const mainWindow = windowPool.get('main');
         if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.setContentProtection(enabled);
@@ -290,7 +289,7 @@ function notifyPresetUpdate(action, presetId, title = null) {
     windowNotificationManager.notifyRelevantWindows('presets-updated', data);
 }
 
-module.exports = {
+export {
     initialize,
     cleanup,
     notifyPresetUpdate,

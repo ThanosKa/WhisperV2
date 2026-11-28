@@ -1,4 +1,4 @@
-const sqliteClient = require('../../services/sqliteClient');
+import sqliteClient from '../../services/sqliteClient';
 
 function getByProvider(provider) {
     const db = sqliteClient.getDb();
@@ -102,7 +102,7 @@ function getActiveSettings() {
     return activeSettings;
 }
 
-module.exports = {
+export {
     getByProvider,
     getAll,
     upsert,

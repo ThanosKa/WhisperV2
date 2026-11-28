@@ -1,9 +1,10 @@
-const sqliteClient = require('../../../common/services/sqliteClient');
+import { randomUUID } from 'crypto';
+import sqliteClient from '../../../common/services/sqliteClient';
 
 function addTranscript({ uid, sessionId, speaker, text }) {
     // uid is ignored in the SQLite implementation
     const db = sqliteClient.getDb();
-    const transcriptId = require('crypto').randomUUID();
+    const transcriptId = randomUUID();
     const now = Math.floor(Date.now() / 1000);
     const query = `INSERT INTO transcripts (id, session_id, start_at, speaker, text, created_at) VALUES (?, ?, ?, ?, ?, ?)`;
 
@@ -22,7 +23,7 @@ function getAllTranscriptsBySessionId(sessionId) {
     return db.prepare(query).all(sessionId);
 }
 
-module.exports = {
+export {
     addTranscript,
     getAllTranscriptsBySessionId,
 };

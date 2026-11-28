@@ -1,4 +1,4 @@
-const sqliteClient = require('../../../common/services/sqliteClient');
+import sqliteClient from '../../../common/services/sqliteClient';
 
 function saveSummary({ uid, sessionId, tldr, text, bullet_json, action_json, model = 'unknown' }) {
     // uid is ignored in the SQLite implementation
@@ -34,7 +34,7 @@ function getSummaryBySessionId(sessionId) {
     return db.prepare(query).get(sessionId) || null;
 }
 
-module.exports = {
+export {
     saveSummary,
     getSummaryBySessionId,
 };

@@ -1,4 +1,4 @@
-const { spawn } = require('child_process');
+import { spawn } from 'child_process';
 
 function spawnAsync(command, args = [], options = {}) {
     return new Promise((resolve, reject) => {
@@ -36,4 +36,4 @@ function spawnAsync(command, args = [], options = {}) {
     });
 }
 
-module.exports = { spawnAsync };
+export { spawnAsync };

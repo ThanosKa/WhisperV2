@@ -1,8 +1,8 @@
-const { app } = require('electron');
-const path = require('path');
-const fs = require('fs');
-const sqliteClient = require('./sqliteClient');
-const config = require('../config/config');
+import { app } from 'electron';
+import path from 'path';
+import fs from 'fs';
+import sqliteClient from './sqliteClient';
+import config from '../config/config';
 
 class DatabaseInitializer {
     constructor() {
@@ -218,4 +218,4 @@ class DatabaseInitializer {
 
 const databaseInitializer = new DatabaseInitializer();
 
-module.exports = databaseInitializer;
+export default databaseInitializer;

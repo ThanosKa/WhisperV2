@@ -1,37 +1,39 @@
-const { BrowserWindow } = require('electron');
-const llmClient = require('../common/ai/llmClient');
-// Lazy require helper to avoid circular dependency issues
-const getWindowManager = () => require('../../window/windowManager');
-const internalBridge = require('../../bridge/internalBridge');
-const summaryService = require('../listen/summary/summaryService');
+import { BrowserWindow } from 'electron';
+import * as llmClient from '../common/ai/llmClient';
+import * as windowManager from '../../window/windowManager';
+import internalBridge from '../../bridge/internalBridge';
+import summaryService from '../listen/summary/summaryService';
 
 const getWindowPool = () => {
     try {
-        return getWindowManager().windowPool;
+        return windowManager.windowPool;
     } catch {
         return null;
     }
 };
 
-const sessionRepository = require('../common/repositories/session');
-const askRepository = require('./repositories');
-const path = require('node:path');
-const fs = require('node:fs');
-const os = require('os');
-const util = require('util');
-const execFile = util.promisify(require('child_process').execFile);
-const { desktopCapturer, screen } = require('electron');
+import sessionRepository from '../common/repositories/session';
+import askRepository from './repositories';
+import path from 'node:path';
+import fs from 'node:fs';
+import os from 'os';
+import util from 'util';
+import { execFile as execFileCallback } from 'child_process';
+const execFile = util.promisify(execFileCallback);
+import { desktopCapturer, screen } from 'electron';
 
 // Try to load sharp, but don't fail if it's not available
-let sharp;
-try {
-    sharp = require('sharp');
-    console.log('[AskService] Sharp module loaded successfully');
-} catch (error) {
-    console.warn('[AskService] Sharp module not available:', error.message);
-    console.warn('[AskService] Screenshot functionality will work with reduced image processing capabilities');
-    sharp = null;
-}
+const sharpLoading = import('sharp').then(
+    module => {
+        console.log('[AskService] Sharp module loaded successfully');
+        return module.default;
+    },
+    error => {
+        console.warn('[AskService] Sharp module not available:', error.message);
+        console.warn('[AskService] Screenshot functionality will work with reduced image processing capabilities');
+        return null;
+    }
+);
 
 function broadcastQuotaUpdateFromResponse(response) {
     try {
@@ -67,6 +69,7 @@ async function captureScreenshot(options = {}) {
             const imageBuffer = await fs.promises.readFile(tempPath);
             await fs.promises.unlink(tempPath);
 
+            const sharp = await sharpLoading;
             if (sharp) {
                 try {
                     // Try using sharp for optimal image processing
@@ -467,7 +470,10 @@ class AskService {
         let shouldSendScreenOnly = false;
         if (inputScreenOnly && this.state.showTextInput && askWindow && askWindow.isVisible()) {
             shouldSendScreenOnly = true;
-            const listenService = require('../listen/listenService');
+            // Imported here, not at the top: a static import closes the cycle summaryService ->
+            // settingsService -> windowManager -> askService -> listenService, whose constructor needs
+            // summaryService loaded.
+            const { default: listenService } = await import('../listen/listenService');
             const conversationHistory = listenService.getConversationHistory();
             await this.sendMessage('Assist me', conversationHistory, null, this.state.useScreenCapture);
             return;
@@ -599,7 +605,7 @@ class AskService {
             console.log(`[AskService] history: items=${conversationHistoryRaw?.length || 0}`);
 
             // Check if we're in a meeting context (open listen session exists)
-            const listenService = require('../listen/listenService');
+            const { default: listenService } = await import('../listen/listenService');
             const currentListenSessionId = listenService.getCurrentSessionData()?.sessionId || null;
             const isInMeeting = Boolean(currentListenSessionId);
 
@@ -992,4 +998,4 @@ class AskService {
 
 const askService = new AskService();
 
-module.exports = askService;
+export default askService;

@@ -1,6 +1,6 @@
-const { globalShortcut, screen } = require('electron');
-const internalBridge = require('../../bridge/internalBridge');
-const askService = require('../ask/askService');
+import { globalShortcut, screen } from 'electron';
+import internalBridge from '../../bridge/internalBridge';
+import askService from '../ask/askService';
 
 class ShortcutsService {
     constructor() {
@@ -190,4 +190,4 @@ class ShortcutsService {
 
 const shortcutsService = new ShortcutsService();
 
-module.exports = shortcutsService;
+export default shortcutsService;

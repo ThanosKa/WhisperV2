@@ -1,8 +1,11 @@
-const { spawn } = require('child_process');
-const { randomUUID } = require('crypto');
-const WebSocket = require('ws');
-const authService = require('../../common/services/authService');
-const config = require('../../common/config/config');
+import { spawn } from 'child_process';
+import { randomUUID } from 'crypto';
+import WebSocket from 'ws';
+import authService from '../../common/services/authService';
+import { app } from 'electron';
+import path from 'path';
+import config from '../../common/config/config';
+import { windowPool } from '../../../window/windowManager';
 
 const COMPLETION_DEBOUNCE_MS = config.get('utteranceSilenceMs') ?? 800;
 const MAX_UTTERANCE_CHARS = (() => {
@@ -49,7 +52,6 @@ class SttService {
 
     sendToRenderer(channel, data) {
         // Send Listen-related events only to Listen window (prevent Ask window conflicts)
-        const { windowPool } = require('../../../window/windowManager');
         const listenWindow = windowPool?.get('listen');
 
         if (listenWindow && !listenWindow.isDestroyed()) {
@@ -610,11 +612,9 @@ class SttService {
         await this.killExistingSystemAudioDump();
         console.log('Starting macOS audio capture for "Them"...');
 
-        const { app } = require('electron');
-        const path = require('path');
         const systemAudioPath = app.isPackaged
-            ? path.join(process.resourcesPath, 'app.asar.unpacked', 'src', 'ui', 'assets', 'SystemAudioDump')
-            : path.join(app.getAppPath(), 'src', 'ui', 'assets', 'SystemAudioDump');
+            ? path.join(process.resourcesPath, 'app.asar.unpacked', 'src', 'renderer', 'assets', 'SystemAudioDump')
+            : path.join(app.getAppPath(), 'src', 'renderer', 'assets', 'SystemAudioDump');
 
         console.log('SystemAudioDump path:', systemAudioPath);
 
@@ -737,4 +737,4 @@ class SttService {
     }
 }
 
-module.exports = SttService;
+export default SttService;

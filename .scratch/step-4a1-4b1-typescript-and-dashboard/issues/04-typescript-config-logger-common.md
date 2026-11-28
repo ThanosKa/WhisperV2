@@ -4,7 +4,7 @@
 
 **Blocked by:** 03
 
-**Status:** open
+**Status:** claimed
 
 **Label:** ready-for-agent
 

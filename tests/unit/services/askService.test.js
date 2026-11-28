@@ -1,11 +1,11 @@
 const { describe, test, expect, beforeEach } = require('@jest/globals');
 
-jest.mock('../../../src/features/common/ai/llmClient', () => require('../../mocks/llmClient.mock'));
-jest.mock('../../../src/features/common/repositories/session', () => require('../../mocks/database.mock').sessionRepository);
-jest.mock('../../../src/features/ask/repositories', () => require('../../mocks/database.mock').askRepository);
+jest.mock('../../../src/main/features/common/ai/llmClient', () => require('../../mocks/llmClient.mock'));
+jest.mock('../../../src/main/features/common/repositories/session', () => require('../../mocks/database.mock').sessionRepository);
+jest.mock('../../../src/main/features/ask/repositories', () => require('../../mocks/database.mock').askRepository);
 
 // Mock listenService for toggleAskButton tests
-jest.mock('../../../src/features/listen/listenService', () => ({
+jest.mock('../../../src/main/features/listen/listenService', () => ({
     getConversationHistory: jest.fn(() => []),
     getCurrentSessionData: jest.fn(() => ({ sessionId: 'test-session-id' })),
 }));
@@ -21,9 +21,9 @@ const mockSummaryService = {
         analysisProfile: 'meeting_analysis',
     })),
 };
-jest.mock('../../../src/features/listen/summary/summaryService', () => mockSummaryService);
+jest.mock('../../../src/main/features/listen/summary/summaryService', () => mockSummaryService);
 
-jest.mock('../../../src/window/windowManager', () => {
+jest.mock('../../../src/main/window/windowManager', () => {
     const createMockWindow = () => ({
         isDestroyed: jest.fn(() => false),
         isVisible: jest.fn(() => true),
@@ -62,7 +62,7 @@ describe('AskService', () => {
             analysisProfile: 'meeting_analysis',
         });
 
-        askService = require('../../../src/features/ask/askService');
+        askService = require('../../../src/main/features/ask/askService');
     });
 
     describe('_detectIntentFromClickPill', () => {
@@ -206,7 +206,7 @@ describe('AskService', () => {
             askService.state.useScreenCapture = true;
 
             // Mock llmClient.stream to avoid actual API call
-            const llmClient = require('../../../src/features/common/ai/llmClient');
+            const llmClient = require('../../../src/main/features/common/ai/llmClient');
             llmClient.stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
@@ -230,7 +230,7 @@ describe('AskService', () => {
             askService._forceDefaultProfileOnce = false;
             askService.state.useScreenCapture = true;
 
-            const llmClient = require('../../../src/features/common/ai/llmClient');
+            const llmClient = require('../../../src/main/features/common/ai/llmClient');
             llmClient.stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
@@ -254,7 +254,7 @@ describe('AskService', () => {
             askService._forceDefaultProfileOnce = false;
             askService.state.useScreenCapture = false;
 
-            const llmClient = require('../../../src/features/common/ai/llmClient');
+            const llmClient = require('../../../src/main/features/common/ai/llmClient');
             llmClient.stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
@@ -278,7 +278,7 @@ describe('AskService', () => {
             askService._forceDefaultProfileOnce = true;
             askService.state.useScreenCapture = false;
 
-            const llmClient = require('../../../src/features/common/ai/llmClient');
+            const llmClient = require('../../../src/main/features/common/ai/llmClient');
             llmClient.stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
@@ -302,7 +302,7 @@ describe('AskService', () => {
             askService._forceDefaultProfileOnce = false;
             askService.state.useScreenCapture = false;
 
-            const llmClient = require('../../../src/features/common/ai/llmClient');
+            const llmClient = require('../../../src/main/features/common/ai/llmClient');
             llmClient.stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
@@ -323,13 +323,13 @@ describe('AskService', () => {
                 writable: true,
             });
 
-            const listenService = require('../../../src/features/listen/listenService');
+            const listenService = require('../../../src/main/features/listen/listenService');
             listenService.getConversationHistory.mockReturnValue([]);
 
             askService.state.useScreenCapture = false;
             askService.state.showTextInput = true;
 
-            const llmClient = require('../../../src/features/common/ai/llmClient');
+            const llmClient = require('../../../src/main/features/common/ai/llmClient');
             llmClient.stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
@@ -350,13 +350,13 @@ describe('AskService', () => {
                 writable: true,
             });
 
-            const listenService = require('../../../src/features/listen/listenService');
+            const listenService = require('../../../src/main/features/listen/listenService');
             listenService.getConversationHistory.mockReturnValue([]);
 
             askService.state.useScreenCapture = true;
             askService.state.showTextInput = true;
 
-            const llmClient = require('../../../src/features/common/ai/llmClient');
+            const llmClient = require('../../../src/main/features/common/ai/llmClient');
             llmClient.stream.mockResolvedValueOnce({
                 headers: new Map(),
                 body: {
@@ -409,7 +409,7 @@ describe('AskService', () => {
                 mockSummaryService.selectedRoleText = 'You are a sales assistant helping sell CRM software.';
                 mockSummaryService.selectedPresetId = 'sales';
 
-                const llmClient = require('../../../src/features/common/ai/llmClient');
+                const llmClient = require('../../../src/main/features/common/ai/llmClient');
                 llmClient.stream.mockResolvedValueOnce({
                     headers: new Map(),
                     body: {
@@ -440,7 +440,7 @@ describe('AskService', () => {
                 mockSummaryService.selectedRoleText = 'You are a recruiting assistant.';
                 mockSummaryService.selectedPresetId = 'recruiting';
 
-                const llmClient = require('../../../src/features/common/ai/llmClient');
+                const llmClient = require('../../../src/main/features/common/ai/llmClient');
                 llmClient.stream.mockResolvedValueOnce({
                     headers: new Map(),
                     body: {
@@ -470,7 +470,7 @@ describe('AskService', () => {
                 mockSummaryService.selectedRoleText = 'You are a sales assistant.';
                 mockSummaryService.selectedPresetId = 'sales';
 
-                const llmClient = require('../../../src/features/common/ai/llmClient');
+                const llmClient = require('../../../src/main/features/common/ai/llmClient');
                 llmClient.stream.mockResolvedValueOnce({
                     headers: new Map(),
                     body: {
@@ -494,7 +494,7 @@ describe('AskService', () => {
                 mockSummaryService.selectedRoleText = 'You are a sales assistant.';
                 mockSummaryService.selectedPresetId = 'sales';
 
-                const llmClient = require('../../../src/features/common/ai/llmClient');
+                const llmClient = require('../../../src/main/features/common/ai/llmClient');
                 llmClient.stream.mockResolvedValueOnce({
                     headers: new Map(),
                     body: {
@@ -518,7 +518,7 @@ describe('AskService', () => {
                 mockSummaryService.selectedRoleText = 'You are a recruiting assistant.';
                 mockSummaryService.selectedPresetId = 'recruiting';
 
-                const llmClient = require('../../../src/features/common/ai/llmClient');
+                const llmClient = require('../../../src/main/features/common/ai/llmClient');
                 llmClient.stream.mockResolvedValueOnce({
                     headers: new Map(),
                     body: {
@@ -542,7 +542,7 @@ describe('AskService', () => {
                 // Set mock properties directly
                 mockSummaryService.selectedRoleText = 'You are a sales assistant.';
 
-                const llmClient = require('../../../src/features/common/ai/llmClient');
+                const llmClient = require('../../../src/main/features/common/ai/llmClient');
                 llmClient.stream.mockResolvedValueOnce({
                     headers: new Map(),
                     body: {
@@ -566,7 +566,7 @@ describe('AskService', () => {
                 // Set mock properties directly
                 mockSummaryService.selectedRoleText = 'You are a sales assistant.';
 
-                const llmClient = require('../../../src/features/common/ai/llmClient');
+                const llmClient = require('../../../src/main/features/common/ai/llmClient');
                 llmClient.stream.mockResolvedValueOnce({
                     headers: new Map(),
                     body: {
@@ -594,7 +594,7 @@ describe('AskService', () => {
                 mockSummaryService.selectedRoleText = '';
                 mockSummaryService.selectedPresetId = 'sales';
 
-                const llmClient = require('../../../src/features/common/ai/llmClient');
+                const llmClient = require('../../../src/main/features/common/ai/llmClient');
                 llmClient.stream.mockResolvedValueOnce({
                     headers: new Map(),
                     body: {
@@ -622,7 +622,7 @@ describe('AskService', () => {
                     analysisProfile: 'sales_analysis',
                 });
 
-                const llmClient = require('../../../src/features/common/ai/llmClient');
+                const llmClient = require('../../../src/main/features/common/ai/llmClient');
                 llmClient.stream.mockResolvedValueOnce({
                     headers: new Map(),
                     body: {

@@ -1,6 +1,6 @@
 const { describe, test, expect, beforeEach, afterEach } = require('@jest/globals');
 
-jest.mock('../../../src/features/common/config/config', () => {
+jest.mock('../../../src/main/features/common/config/config', () => {
     const values = {
         smartTrigger: {
             enabled: true,
@@ -20,7 +20,7 @@ jest.mock('../../../src/features/common/config/config', () => {
     };
 });
 
-jest.mock('../../../src/features/common/ai/llmClient', () => ({
+jest.mock('../../../src/main/features/common/ai/llmClient', () => ({
     chat: jest.fn().mockResolvedValue({}),
 }));
 
@@ -42,7 +42,7 @@ describe('SummaryService smart trigger batching', () => {
     beforeEach(() => {
         jest.resetModules();
         jest.clearAllMocks();
-        config = require('../../../src/features/common/config/config');
+        config = require('../../../src/main/features/common/config/config');
         config.set('smartTrigger', {
             enabled: true,
             minTokenCount: 12,
@@ -51,7 +51,7 @@ describe('SummaryService smart trigger batching', () => {
         });
         config.set('analysisStep', 5);
         config.set('recapStep', 15);
-        summaryService = require('../../../src/features/listen/summary/summaryService');
+        summaryService = require('../../../src/main/features/listen/summary/summaryService');
         summaryService.resetConversationHistory();
         summaryService.sendToRenderer = jest.fn();
         summaryService.onAnalysisComplete = jest.fn();

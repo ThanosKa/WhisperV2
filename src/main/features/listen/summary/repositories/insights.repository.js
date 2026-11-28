@@ -1,0 +1,31 @@
+import sqliteClient from '../../../common/services/sqliteClient';
+import crypto from 'crypto';
+
+function saveInsight({ sessionId, analysisRound, payload }) {
+    const db = sqliteClient.getDb();
+    const id = crypto.randomUUID();
+    const now = Math.floor(Date.now() / 1000);
+    const payloadJson = JSON.stringify(payload);
+    
+    const query = `INSERT INTO session_insights (id, session_id, analysis_round, payload_json, created_at) VALUES (?, ?, ?, ?, ?)`;
+    try {
+        db.prepare(query).run(id, sessionId, analysisRound, payloadJson, now);
+        return { id };
+    } catch (err) {
+        console.error('[InsightsRepo] Save failed:', err);
+        throw err;
+    }
+}
+
+function getAllInsightsBySessionId(sessionId) {
+    const db = sqliteClient.getDb();
+    const query = `SELECT * FROM session_insights WHERE session_id = ? ORDER BY analysis_round ASC`;
+    const rows = db.prepare(query).all(sessionId);
+    return rows.map(row => ({
+        ...row,
+        payload: JSON.parse(row.payload_json)
+    }));
+}
+
+export { saveInsight, getAllInsightsBySessionId };
+

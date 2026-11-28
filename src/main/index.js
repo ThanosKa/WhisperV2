@@ -1,0 +1,886 @@
+// try {
+//     const reloader = require('electron-reloader');
+//     reloader(module, {
+//     });
+// } catch (err) {
+// }
+
+// First import, so `.env` is loaded before any other module reads `process.env`.
+import 'dotenv/config';
+
+import { app, BrowserWindow, shell, ipcMain, dialog, desktopCapturer, session, screen } from 'electron';
+import path from 'node:path';
+import fs from 'fs';
+import net from 'net';
+import { spawnSync } from 'child_process';
+import { createWindows, windowPool } from './window/windowManager.js';
+import listenService from './features/listen/listenService';
+import databaseInitializer from './features/common/services/databaseInitializer';
+import authService from './features/common/services/authService';
+import express from 'express';
+import { autoUpdater } from 'electron-updater';
+import { EventEmitter } from 'events';
+import askService from './features/ask/askService';
+import * as settingsService from './features/settings/settingsService';
+import sessionRepository from './features/common/repositories/session';
+import sttRepository from './features/listen/stt/repositories';
+import summaryRepository from './features/listen/summary/repositories';
+import askRepository from './features/ask/repositories';
+import userRepository from './features/common/repositories/user';
+import presetRepository from './features/common/repositories/preset';
+import featureBridge from './bridge/featureBridge';
+import windowBridge from './bridge/windowBridge';
+import createBackendApp from '../../whisper_web/backend_node/dist';
+
+// Ensure consistent app name so protocol prompts say "Open Whisper" even in dev
+app.setName('Whisper');
+
+// -------------------------------------------------
+//  auto-register protocol for dev (Windows only)
+// -------------------------------------------------
+if (process.platform === 'win32' && !app.isPackaged) {
+    const repoRoot = path.resolve(__dirname, '../..'); // repo folder (this file runs from out/main/)
+    const correctCmd = `"${process.execPath}" "${repoRoot}" "%1"`;
+
+    const key = 'HKCU\\Software\\Classes\\whisper\\shell\\open\\command';
+
+    // 1) check current value
+    const { stdout } = spawnSync('reg', ['query', key, '/ve'], { encoding: 'utf8' });
+    const needsUpdate = !stdout || !stdout.includes(correctCmd);
+
+    if (needsUpdate) {
+        console.log('[Dev] Re-registering whisper:// protocol');
+        // 2) set new value
+        const { status, stderr } = spawnSync('reg', ['add', key, '/ve', '/d', correctCmd, '/f'], { encoding: 'utf8' });
+        if (status !== 0) {
+            console.warn('[Dev] Protocol auto-registration failed:', stderr);
+        }
+    }
+}
+
+// Ensure single instance and register handlers BEFORE any argv parsing or protocol work
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+    app.quit();
+    process.exit(0);
+}
+
+// Setup protocol after single instance lock so second-instance events are caught correctly
+setupProtocolHandling();
+
+// Global variables
+const eventBridge = new EventEmitter();
+let WEB_PORT = 3000;
+let isShuttingDown = false; // Flag to prevent infinite shutdown loop
+
+// Model provider management removed (server-only); no global modelStateService
+
+// Native deep link handling - cross-platform compatible
+let pendingDeepLinkUrl = null;
+
+function setupProtocolHandling() {
+    // Protocol registration - must be done before app is ready
+    try {
+        const isDevRegistration = process.defaultApp || !app.isPackaged;
+        if (!app.isDefaultProtocolClient('whisper')) {
+            // In dev, pass the app folder as an argument so Windows launches the correct project
+            let success = false;
+            if (isDevRegistration) {
+                const appArg = process.argv.length >= 2 ? [path.resolve(process.argv[1])] : [];
+                success = app.setAsDefaultProtocolClient('whisper', process.execPath, appArg);
+            } else {
+                success = app.setAsDefaultProtocolClient('whisper');
+            }
+            if (success) {
+                console.log('[Protocol] Successfully set as default protocol client for whisper://');
+            } else {
+                console.warn('[Protocol] Failed to set as default protocol client - this may affect deep linking');
+            }
+        } else {
+            console.log('[Protocol] Already registered as default protocol client for whisper://');
+        }
+    } catch (error) {
+        console.error('[Protocol] Error during protocol registration:', error);
+    }
+
+    // Handle protocol URLs on Windows/Linux
+    app.on('second-instance', (event, commandLine, workingDirectory) => {
+        console.log('[Protocol] Second instance command line:', commandLine);
+
+        focusMainWindow();
+
+        let protocolUrl = null;
+
+        // Search through all command line arguments for a valid protocol URL
+        for (const arg of commandLine) {
+            if (arg && typeof arg === 'string' && arg.startsWith('whisper://')) {
+                // Clean up the URL by removing problematic characters
+                const cleanUrl = arg.replace(/[\\₩]/g, '');
+
+                // Additional validation for Windows
+                if (process.platform === 'win32') {
+                    // On Windows, ensure the URL doesn't contain file path indicators
+                    if (!cleanUrl.includes(':') || cleanUrl.indexOf('://') === cleanUrl.lastIndexOf(':')) {
+                        protocolUrl = cleanUrl;
+                        break;
+                    }
+                } else {
+                    protocolUrl = cleanUrl;
+                    break;
+                }
+            }
+        }
+
+        if (protocolUrl) {
+            console.log('[Protocol] Valid URL found from second instance:', protocolUrl);
+            handleCustomUrl(protocolUrl);
+        } else {
+            console.log('[Protocol] No valid protocol URL found in command line arguments');
+            console.log('[Protocol] Command line args:', commandLine);
+        }
+    });
+
+    // Handle protocol URLs on macOS
+    app.on('open-url', (event, url) => {
+        event.preventDefault();
+        console.log('[Protocol] Received URL via open-url:', url);
+
+        if (!url || !url.startsWith('whisper://')) {
+            console.warn('[Protocol] Invalid URL format:', url);
+            return;
+        }
+
+        if (app.isReady()) {
+            handleCustomUrl(url);
+        } else {
+            pendingDeepLinkUrl = url;
+            console.log('[Protocol] App not ready, storing URL for later');
+        }
+    });
+}
+
+function focusMainWindow() {
+    if (windowPool) {
+        const header = windowPool.get('header');
+        if (header && !header.isDestroyed()) {
+            if (header.isMinimized()) header.restore();
+            header.focus();
+            return true;
+        }
+    }
+
+    // Fallback: focus any available window
+    const windows = BrowserWindow.getAllWindows();
+    if (windows.length > 0) {
+        const mainWindow = windows[0];
+        if (!mainWindow.isDestroyed()) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.focus();
+            return true;
+        }
+    }
+
+    return false;
+}
+
+if (process.platform === 'win32') {
+    for (const arg of process.argv) {
+        if (arg && typeof arg === 'string' && arg.startsWith('whisper://')) {
+            // Clean up the URL by removing problematic characters (korean characters issue...)
+            const cleanUrl = arg.replace(/[\\₩]/g, '');
+
+            if (!cleanUrl.includes(':') || cleanUrl.indexOf('://') === cleanUrl.lastIndexOf(':')) {
+                console.log('[Protocol] Found protocol URL in initial arguments:', cleanUrl);
+                pendingDeepLinkUrl = cleanUrl;
+                break;
+            }
+        }
+    }
+
+    console.log('[Protocol] Initial process.argv:', process.argv);
+}
+
+// (moved earlier)
+
+app.whenReady().then(async () => {
+    // Initialize auto-updater
+
+    // Configure auto-updater
+    autoUpdater.checkForUpdatesAndNotify();
+
+    // Log update events for debugging
+    autoUpdater.on('checking-for-update', () => {
+        console.log('Checking for update...');
+    });
+
+    autoUpdater.on('update-available', info => {
+        console.log('Update available:', info);
+        // Broadcast to all windows
+        if (windowPool) {
+            const allWindows = BrowserWindow.getAllWindows();
+            const releaseUrl = `https://github.com/ThanosKa/whisper-desktop/releases/latest`;
+            allWindows.forEach(win => {
+                if (win && !win.isDestroyed()) {
+                    win.webContents.send('app:update-available', {
+                        version: info.version,
+                        releaseDate: info.releaseDate,
+                        releaseName: info.releaseName,
+                        releaseUrl: releaseUrl,
+                    });
+                }
+            });
+        }
+    });
+
+    autoUpdater.on('update-not-available', info => {
+        console.log('Update not available:', info);
+        // Broadcast to all windows
+        if (windowPool) {
+            const allWindows = BrowserWindow.getAllWindows();
+            allWindows.forEach(win => {
+                if (win && !win.isDestroyed()) {
+                    win.webContents.send('app:update-not-available', {
+                        currentVersion: app.getVersion(),
+                    });
+                }
+            });
+        }
+    });
+
+    autoUpdater.on('error', err => {
+        console.error('Auto-updater error:', err);
+        // Broadcast to all windows
+        if (windowPool) {
+            const allWindows = BrowserWindow.getAllWindows();
+            allWindows.forEach(win => {
+                if (win && !win.isDestroyed()) {
+                    win.webContents.send('app:update-error', {
+                        error: err.message || 'Unknown update error',
+                    });
+                }
+            });
+        }
+    });
+
+    autoUpdater.on('download-progress', progressObj => {
+        console.log(`Download progress: ${progressObj.percent}%`);
+    });
+
+    autoUpdater.on('update-downloaded', info => {
+        console.log('Update downloaded:', info);
+        // Broadcast to all windows
+        if (windowPool) {
+            const allWindows = BrowserWindow.getAllWindows();
+            allWindows.forEach(win => {
+                if (win && !win.isDestroyed()) {
+                    win.webContents.send('app:update-downloaded', {
+                        version: info.version,
+                        releaseDate: info.releaseDate,
+                        releaseName: info.releaseName,
+                    });
+                }
+            });
+        }
+    });
+
+    // Setup native loopback audio capture for Windows
+    session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+        try {
+            // Try to detect which display the app is on (prefer Ask window)
+            const askWin = windowPool.get('ask');
+            const headerWin = windowPool.get('header');
+            const refWin = askWin && !askWin.isDestroyed() && askWin.isVisible() ? askWin : headerWin;
+
+            let targetDisplayId = null;
+            if (refWin && !refWin.isDestroyed()) {
+                const b = refWin.getBounds();
+                const center = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+                const disp = screen.getDisplayNearestPoint(center);
+                targetDisplayId = disp?.id;
+            }
+
+            desktopCapturer
+                .getSources({ types: ['screen'] })
+                .then(sources => {
+                    let videoSource = sources[0];
+                    if (targetDisplayId != null) {
+                        const idStr = String(targetDisplayId);
+                        const byDisplayId = sources.find(s => String(s.display_id || '') === idStr);
+                        if (byDisplayId) {
+                            videoSource = byDisplayId;
+                        } else {
+                            const parsed = sources.find(s => {
+                                const parts = String(s.id || '').split(':');
+                                return parts.length >= 2 && parts[1] === idStr;
+                            });
+                            if (parsed) videoSource = parsed;
+                        }
+                    }
+                    callback({ video: videoSource, audio: 'loopback' });
+                })
+                .catch(error => {
+                    console.error('Failed to get desktop capturer sources:', error);
+                    callback({});
+                });
+        } catch (e) {
+            console.error('DisplayMediaRequestHandler error:', e);
+            callback({});
+        }
+    });
+
+    // Initialize core services
+    // Note: Firebase removed - using webapp authentication
+
+    try {
+        await databaseInitializer.initialize();
+        console.log('>>> [index.js] Database initialized successfully');
+
+        // Clean up zombie sessions from previous runs first - MOVED TO authService
+        // sessionRepository.endAllActiveSessions();
+
+        await authService.initialize();
+
+        // Removed modelStateService initialization (server-only)
+
+        featureBridge.initialize(); // Added: featureBridge initialization
+        windowBridge.initialize();
+        setupWebDataHandlers();
+
+        // Initialize listen service
+        listenService.initialize();
+
+        // Start web server and create windows ONLY after all initializations are successful
+        WEB_PORT = await startWebStack();
+        console.log('Web front-end listening on', WEB_PORT);
+
+        createWindows();
+
+        // Open dev tools for recovery toast window on app launch (dev mode only)
+        if (!app.isPackaged) {
+            const recoveryToastWin = windowPool.get('recoveryToast');
+            if (recoveryToastWin && !recoveryToastWin.isDestroyed()) {
+                recoveryToastWin.webContents.once('dom-ready', () => {
+                    recoveryToastWin.webContents.openDevTools({ mode: 'detach' });
+                });
+            }
+        }
+
+        // Bootstrap recovery check AFTER windows are created (so header can receive notification)
+        (async () => {
+            try {
+                console.log('[Main] Starting recovery bootstrap...');
+                await listenService.bootstrapRecovery();
+                console.log('[Main] Recovery bootstrap complete');
+            } catch (err) {
+                console.error('[Main] Recovery bootstrap failed:', err);
+            }
+        })();
+    } catch (err) {
+        console.error('>>> [index.js] Database initialization failed - some features may not work', err);
+        // Optionally, show an error dialog to the user
+        dialog.showErrorBox(
+            'Application Error',
+            'A critical error occurred during startup. Some features might be disabled. Please restart the application.'
+        );
+    }
+
+    // initAutoUpdater should be called after auth is initialized
+    initAutoUpdater();
+
+    // Process any pending deep link after everything is initialized
+    if (pendingDeepLinkUrl) {
+        console.log('[Protocol] Processing pending URL:', pendingDeepLinkUrl);
+        handleCustomUrl(pendingDeepLinkUrl);
+        pendingDeepLinkUrl = null;
+    }
+});
+
+app.on('before-quit', async event => {
+    // Prevent infinite loop by checking if shutdown is already in progress
+    if (isShuttingDown) {
+        console.log('[Shutdown] 🔄 Shutdown already in progress, allowing quit...');
+        return;
+    }
+
+    console.log('[Shutdown] App is about to quit. Starting graceful shutdown...');
+
+    // Set shutdown flag to prevent infinite loop
+    isShuttingDown = true;
+
+    // Prevent immediate quit to allow graceful shutdown
+    event.preventDefault();
+
+    try {
+        // 1. Stop audio capture first (immediate) - don't end session, preserve for recovery
+        await listenService.stopAudioCapture();
+        console.log('[Shutdown] Audio capture stopped');
+
+        // NOTE: Don't end sessions on app close - preserve them for crash recovery
+        // Sessions are only ended when user explicitly clicks "Done" or signs out
+
+        // 4. Close database connections (final cleanup)
+        try {
+            databaseInitializer.close();
+            console.log('[Shutdown] Database connections closed');
+        } catch (closeError) {
+            console.warn('[Shutdown] Error closing database:', closeError.message);
+        }
+
+        console.log('[Shutdown] Graceful shutdown completed successfully');
+    } catch (error) {
+        console.error('[Shutdown] Error during graceful shutdown:', error);
+        // Continue with shutdown even if there were errors
+    } finally {
+        // Actually quit the app now
+        console.log('[Shutdown] Exiting application...');
+        app.exit(0); // Use app.exit() instead of app.quit() to force quit
+    }
+});
+
+app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+        createWindows();
+    }
+});
+
+function setupWebDataHandlers() {
+
+    const handleRequest = async (channel, responseChannel, payload) => {
+        let result;
+        // const currentUserId = authService.getCurrentUserId(); // No longer needed here
+        try {
+            switch (channel) {
+                // SESSION
+                case 'get-sessions':
+                    // Adapter injects UID
+                    result = await sessionRepository.getAllByUserId();
+                    break;
+                case 'get-session-details':
+                    const session = await sessionRepository.getById(payload);
+                    if (!session) {
+                        result = null;
+                        break;
+                    }
+                    // Ownership check: ensure the requested session belongs to the current authenticated user
+                    try {
+                        const currentUid = authService.getCurrentUserId();
+                        if (!currentUid || session.uid !== currentUid) {
+                            console.warn('[WebData] Unauthorized access to session details blocked:', {
+                                requestedSessionId: payload,
+                                sessionOwner: session.uid,
+                                currentUid,
+                            });
+                            result = null;
+                            break;
+                        }
+                    } catch (e) {
+                        console.warn('[WebData] Failed to validate session ownership:', e?.message || e);
+                        result = null;
+                        break;
+                    }
+                    const [transcripts, ai_messages, summary] = await Promise.all([
+                        sttRepository.getAllTranscriptsBySessionId(payload),
+                        askRepository.getAllAiMessagesBySessionId(payload),
+                        summaryRepository.getSummaryBySessionId(payload),
+                    ]);
+
+                    // For active sessions (ended_at is null), fetch all insights
+                    let insights = null;
+                    if (!session.ended_at) {
+                        insights = summaryRepository.getAllInsightsBySessionId(payload);
+                    }
+
+                    result = { session, transcripts, ai_messages, summary, insights };
+                    break;
+                case 'delete-session':
+                    // Ensure the session belongs to the current user before deletion
+                    try {
+                        const currentUidForDelete = authService.getCurrentUserId();
+                        const sessionForDelete = await sessionRepository.getById(payload);
+                        if (!sessionForDelete || !currentUidForDelete || sessionForDelete.uid !== currentUidForDelete) {
+                            console.warn('[WebData] Unauthorized delete-session blocked:', {
+                                requestedSessionId: payload,
+                                sessionOwner: sessionForDelete?.uid,
+                                currentUidForDelete,
+                            });
+                            result = { success: false, error: 'Unauthorized' };
+                            break;
+                        }
+                    } catch (e) {
+                        console.warn('[WebData] Failed to validate session ownership for delete:', e?.message || e);
+                        result = { success: false, error: 'Unauthorized' };
+                        break;
+                    }
+                    result = await sessionRepository.deleteWithRelatedData(payload);
+                    break;
+                case 'create-session':
+                    // Adapter injects UID
+                    const id = await sessionRepository.create('ask');
+                    if (payload && payload.title) {
+                        await sessionRepository.updateTitle(id, payload.title);
+                    }
+                    result = { id };
+                    break;
+                case 'update-session-title':
+                    if (!payload || !payload.id || !payload.title) {
+                        throw new Error('id and title are required');
+                    }
+                    // Ownership check for update
+                    try {
+                        const currentUidForUpdate = authService.getCurrentUserId();
+                        const sessionForUpdate = await sessionRepository.getById(payload.id);
+                        if (!sessionForUpdate || !currentUidForUpdate || sessionForUpdate.uid !== currentUidForUpdate) {
+                            console.warn('[WebData] Unauthorized update-session-title blocked:', {
+                                requestedSessionId: payload.id,
+                                sessionOwner: sessionForUpdate?.uid,
+                                currentUidForUpdate,
+                            });
+                            result = { success: false, error: 'Unauthorized' };
+                            break;
+                        }
+                    } catch (e) {
+                        console.warn('[WebData] Failed to validate session ownership for update:', e?.message || e);
+                        result = { success: false, error: 'Unauthorized' };
+                        break;
+                    }
+                    result = await sessionRepository.updateTitle(payload.id, payload.title);
+                    break;
+
+                // USER
+                case 'get-user-profile':
+                    // Adapter injects UID
+                    result = await userRepository.getById();
+                    break;
+                case 'update-user-profile':
+                    // Adapter injects UID
+                    result = await userRepository.update(payload);
+                    break;
+                case 'find-or-create-user':
+                    result = await userRepository.findOrCreate(payload);
+                    break;
+                // Removed save/check api key routes (server-only)
+                case 'delete-account':
+                    // Adapter injects UID
+                    result = await userRepository.deleteById();
+                    break;
+
+                // PRESET
+                case 'get-presets':
+                    // Adapter injects UID
+                    result = await presetRepository.getPresets();
+                    break;
+                case 'update-preset':
+                    // Adapter injects UID
+                    result = await presetRepository.update(payload.id, payload.data);
+                    settingsService.notifyPresetUpdate('updated', payload.id, payload.data.title);
+                    break;
+
+                // BATCH
+                case 'get-batch-data':
+                    const includes = payload ? payload.split(',').map(item => item.trim()) : ['profile', 'presets', 'sessions'];
+                    const promises = {};
+
+                    if (includes.includes('profile')) {
+                        // Adapter injects UID
+                        promises.profile = userRepository.getById();
+                    }
+                    if (includes.includes('presets')) {
+                        // Adapter injects UID
+                        promises.presets = presetRepository.getPresets();
+                    }
+                    if (includes.includes('sessions')) {
+                        // Adapter injects UID
+                        promises.sessions = sessionRepository.getAllByUserId();
+                    }
+
+                    const batchResult = {};
+                    const promiseResults = await Promise.all(Object.values(promises));
+                    Object.keys(promises).forEach((key, index) => {
+                        batchResult[key] = promiseResults[index];
+                    });
+
+                    result = batchResult;
+                    break;
+
+                default:
+                    throw new Error(`Unknown web data channel: ${channel}`);
+            }
+            eventBridge.emit(responseChannel, { success: true, data: result });
+        } catch (error) {
+            console.error(`Error handling web data request for ${channel}:`, error);
+            eventBridge.emit(responseChannel, { success: false, error: error.message });
+        }
+    };
+
+    eventBridge.on('web-data-request', handleRequest);
+}
+
+async function handleCustomUrl(url) {
+    try {
+        console.log('[Custom URL] Processing URL:', url);
+
+        // Validate and clean URL
+        if (!url || typeof url !== 'string' || !url.startsWith('whisper://')) {
+            console.error('[Custom URL] Invalid URL format:', url);
+            return;
+        }
+
+        // Clean up URL by removing problematic characters
+        const cleanUrl = url.replace(/[\\₩]/g, '');
+
+        // Additional validation
+        if (cleanUrl !== url) {
+            console.log('[Custom URL] Cleaned URL from:', url, 'to:', cleanUrl);
+            url = cleanUrl;
+        }
+
+        const urlObj = new URL(url);
+        const action = urlObj.hostname;
+        const params = Object.fromEntries(urlObj.searchParams);
+
+        console.log('[Custom URL] Action:', action, 'Params:', params);
+
+        switch (action) {
+            case 'login':
+            case 'auth-success':
+                await handleWebappAuthCallback(params);
+                break;
+            case 'personalize':
+                handlePersonalizeFromUrl(params);
+                break;
+            default:
+                const header = windowPool.get('header');
+                if (header) {
+                    if (header.isMinimized()) header.restore();
+                    header.focus();
+
+                    const targetUrl = `http://localhost:${WEB_PORT}/${action}`;
+                    console.log(`[Custom URL] Navigating webview to: ${targetUrl}`);
+                    header.webContents.loadURL(targetUrl);
+                }
+        }
+    } catch (error) {
+        console.error('[Custom URL] Error parsing URL:', error);
+    }
+}
+
+async function handleWebappAuthCallback(params) {
+    const { sessionUuid, uid, email, displayName } = params;
+
+    console.log('[Auth] Deep link callback received with params:', params);
+
+    if (!sessionUuid) {
+        console.error('[Auth] Webapp auth callback is missing session UUID.');
+        return;
+    }
+
+    console.log('[Auth] Received session UUID from deep link, validating session...');
+
+    try {
+        // Prepare user data from deep link parameters if available
+        let userInfo = null;
+        if (uid && email) {
+            userInfo = {
+                uid: uid,
+                email: email,
+                displayName: displayName ? decodeURIComponent(displayName) : 'User',
+            };
+            console.log('[Auth] Using user data from deep link:', userInfo);
+        }
+
+        // Use authService to sign in with session and user data
+        await authService.signInWithSession(sessionUuid, userInfo);
+
+        console.log('[Auth] Successfully signed in with session UUID:', sessionUuid);
+
+        // Focus the app window
+        const header = windowPool.get('header');
+        if (header) {
+            if (header.isMinimized()) header.restore();
+            header.focus();
+        } else {
+            console.error('[Auth] Header window not found after auth callback.');
+        }
+    } catch (error) {
+        console.error('[Auth] Error during session validation or sign-in:', error);
+        // The UI will not change, and the user can try again.
+        const header = windowPool.get('header');
+        if (header) {
+            header.webContents.send('auth-failed', { message: error.message });
+        }
+    }
+}
+
+function handlePersonalizeFromUrl(params) {
+    console.log('[Custom URL] Personalize params:', params);
+
+    const header = windowPool.get('header');
+
+    if (header) {
+        if (header.isMinimized()) header.restore();
+        header.focus();
+
+        const personalizeUrl = `http://localhost:${WEB_PORT}/settings`;
+        console.log(`[Custom URL] Navigating to personalize page: ${personalizeUrl}`);
+        header.webContents.loadURL(personalizeUrl);
+
+        BrowserWindow.getAllWindows().forEach(win => {
+            win.webContents.send('enter-personalize-mode', {
+                message: 'Personalization mode activated',
+                params: params,
+            });
+        });
+    } else {
+        console.error('[Custom URL] Header window not found for personalize');
+    }
+}
+
+// Express 5 passes a listen error to the callback instead of throwing it.
+function listenOn({ expressApp, port }) {
+    return new Promise((resolve, reject) => {
+        const server = expressApp.listen(port, '127.0.0.1', err => (err ? reject(err) : resolve(server)));
+        server.on('error', reject);
+        app.once('before-quit', () => server.close());
+    });
+}
+
+async function startWebStack() {
+    console.log('NODE_ENV =', process.env.NODE_ENV);
+    const isDev = !app.isPackaged;
+
+    const getAvailablePort = () => {
+        return new Promise((resolve, reject) => {
+            const server = net.createServer();
+            server.listen(0, err => {
+                if (err) reject(err);
+                const port = server.address().port;
+                server.close(() => resolve(port));
+            });
+        });
+    };
+
+    const apiPort = await getAvailablePort();
+    const frontendPort = await getAvailablePort();
+
+    console.log(`🔧 Allocated ports: API=${apiPort}, Frontend=${frontendPort}`);
+
+    process.env.whisper_API_PORT = apiPort.toString();
+    process.env.whisper_API_URL = `http://localhost:${apiPort}`;
+    process.env.whisper_WEB_PORT = frontendPort.toString();
+    process.env.whisper_WEB_URL = `http://localhost:${frontendPort}`;
+
+    console.log(`🌍 Environment variables set:`, {
+        whisper_API_URL: process.env.whisper_API_URL,
+        whisper_WEB_URL: process.env.whisper_WEB_URL,
+    });
+
+    const nodeApi = createBackendApp(eventBridge);
+
+    const staticDir = app.isPackaged ? path.join(process.resourcesPath, 'out') : path.join(__dirname, '..', '..', 'whisper_web', 'out');
+
+
+    if (!fs.existsSync(staticDir)) {
+        console.error(`============================================================`);
+        console.error(`[ERROR] Frontend build directory not found!`);
+        console.error(`Path: ${staticDir}`);
+        console.error(`Please run 'npm run build' inside the 'whisper_web' directory first.`);
+        console.error(`============================================================`);
+        app.quit();
+        return;
+    }
+
+    const runtimeConfig = {
+        API_URL: `http://localhost:${apiPort}`,
+        WEB_URL: `http://localhost:${frontendPort}`,
+        timestamp: Date.now(),
+    };
+
+    // Create runtime configuration file in writable temp folder
+    const tempDir = app.getPath('temp');
+    const configPath = path.join(tempDir, 'runtime-config.json');
+    fs.writeFileSync(configPath, JSON.stringify(runtimeConfig, null, 2));
+    console.log(`📝 Runtime config created in temp location: ${configPath}`);
+
+    const frontSrv = express();
+
+    // When frontend requests /runtime-config.json, serve the file from temp folder
+    frontSrv.get('/runtime-config.json', (req, res) => {
+        res.sendFile(configPath);
+    });
+
+    frontSrv.use((req, res, next) => {
+        if (req.path.indexOf('.') === -1 && req.path !== '/') {
+            const htmlPath = path.join(staticDir, req.path + '.html');
+            if (fs.existsSync(htmlPath)) {
+                return res.sendFile(htmlPath);
+            }
+        }
+        next();
+    });
+
+    frontSrv.use(express.static(staticDir));
+
+    await listenOn({ expressApp: frontSrv, port: frontendPort });
+
+    console.log(`✅ Frontend server started on http://localhost:${frontendPort}`);
+
+    const apiSrv = express();
+    apiSrv.use(nodeApi);
+
+    await listenOn({ expressApp: apiSrv, port: apiPort });
+
+    console.log(`✅ API server started on http://localhost:${apiPort}`);
+
+    console.log(`🚀 All services ready:
+   Frontend: http://localhost:${frontendPort}
+   API:      http://localhost:${apiPort}`);
+
+    return frontendPort;
+}
+
+// Auto-update initialization
+async function initAutoUpdater() {
+    if (process.env.NODE_ENV === 'development') {
+        console.log('Development environment, skipping auto-updater.');
+        return;
+    }
+
+    try {
+        await autoUpdater.checkForUpdates();
+        autoUpdater.on('update-available', info => {
+            console.log('Update available!', info);
+            // Broadcast to all windows
+            const allWindows = BrowserWindow.getAllWindows();
+            allWindows.forEach(win => {
+                if (win && !win.isDestroyed()) {
+                    win.webContents.send('app:update-available', {
+                        version: info.version,
+                        releaseDate: info.releaseDate,
+                        releaseName: info.releaseName,
+                    });
+                }
+            });
+            autoUpdater.downloadUpdate();
+        });
+        autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName, date, url) => {
+            console.log('Update downloaded:', releaseNotes, releaseName, date, url);
+            // Broadcast to all windows
+            const allWindows = BrowserWindow.getAllWindows();
+            allWindows.forEach(win => {
+                if (win && !win.isDestroyed()) {
+                    win.webContents.send('app:update-downloaded', {
+                        version: releaseName,
+                        releaseDate: date,
+                        releaseName: releaseName,
+                    });
+                }
+            });
+            // Don't show dialog automatically - let UI handle it
+        });
+        autoUpdater.on('error', err => {
+            console.error('Error in auto-updater:', err);
+        });
+    } catch (err) {
+        console.error('Error initializing auto-updater:', err);
+    }
+}

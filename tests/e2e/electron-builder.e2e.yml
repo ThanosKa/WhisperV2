@@ -6,7 +6,7 @@
 # suite's main-process preload from the command line: `-r` is read by Electron's default app, which
 # a packaged app does not run, and Electron ignores NODE_OPTIONS in a packaged app (Playwright also
 # removes it). So this build starts at tests/e2e/support/packaged-main.js, which loads the preload,
-# then the app's own src/index.js.
+# then the app's own built main (out/main/index.js).
 extends: electron-builder.yml
 
 directories:

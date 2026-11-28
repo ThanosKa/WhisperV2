@@ -1,11 +1,11 @@
 const { describe, test, expect, beforeEach, afterEach } = require('@jest/globals');
 
-jest.mock('../../../src/features/common/ai/llmClient', () => require('../../mocks/llmClient.mock'));
-jest.mock('../../../src/features/common/repositories/session', () => require('../../mocks/database.mock').sessionRepository);
-jest.mock('../../../src/features/ask/repositories', () => require('../../mocks/database.mock').askRepository);
+jest.mock('../../../src/main/features/common/ai/llmClient', () => require('../../mocks/llmClient.mock'));
+jest.mock('../../../src/main/features/common/repositories/session', () => require('../../mocks/database.mock').sessionRepository);
+jest.mock('../../../src/main/features/ask/repositories', () => require('../../mocks/database.mock').askRepository);
 
 // Mock listenService
-jest.mock('../../../src/features/listen/listenService', () => ({
+jest.mock('../../../src/main/features/listen/listenService', () => ({
     getConversationHistory: jest.fn(() => []),
     getCurrentSessionData: jest.fn(() => ({ sessionId: 'test-session-id' })),
 }));
@@ -20,10 +20,10 @@ const mockSummaryService = {
         analysisProfile: 'meeting_analysis',
     })),
 };
-jest.mock('../../../src/features/listen/summary/summaryService', () => mockSummaryService);
+jest.mock('../../../src/main/features/listen/summary/summaryService', () => mockSummaryService);
 
 // Mock windowManager
-jest.mock('../../../src/window/windowManager', () => {
+jest.mock('../../../src/main/window/windowManager', () => {
     const createMockWindow = () => ({
         isDestroyed: jest.fn(() => false),
         isVisible: jest.fn(() => true),
@@ -65,9 +65,9 @@ describe('AskService - Web Search Integration', () => {
             analysisProfile: 'meeting_analysis',
         });
 
-        askService = require('../../../src/features/ask/askService');
-        llmClient = require('../../../src/features/common/ai/llmClient');
-        windowManager = require('../../../src/window/windowManager');
+        askService = require('../../../src/main/features/ask/askService');
+        llmClient = require('../../../src/main/features/common/ai/llmClient');
+        windowManager = require('../../../src/main/window/windowManager');
         mockAskWindow = windowManager.__mockAskWindow;
     });
 

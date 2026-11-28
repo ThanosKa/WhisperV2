@@ -140,7 +140,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 
 type RelayStream = keyof RelayAudio;
 
-// The messages the app sends the relay (src/features/listen/stt/sttService.js), with the fields the fake reads.
+// The messages the app sends the relay (src/main/features/listen/stt/sttService.js), with the fields the fake reads.
 type RelayMessage = { type: 'OPEN'; sessionId: string } | { type: 'AUDIO'; stream: RelayStream } | { type: 'CLOSE' };
 
 const isRelayStream = (value: unknown): value is RelayStream => value === 'me' || value === 'them';

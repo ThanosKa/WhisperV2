@@ -14,15 +14,16 @@ const SCALE_SWITCH = '--force-device-scale-factor=1';
 
 // The app the suite launches. `WHISPER_E2E_APP=packaged` runs the packaged app that
 // `pnpm run package:e2e` builds into dist-e2e/ for this Mac's architecture; unset (or
-// `development`), the suite runs the development app from the repo.
-type AppUnderTest = { kind: 'development' } | { kind: 'packaged'; executablePath: string };
+// `development`), the suite runs the development app from the repo: electron-vite's output in out/,
+// which `pnpm run build:all` builds, started through package.json's `main`.
+type AppUnderTest = { kind: 'development'; mainPath: string } | { kind: 'packaged'; executablePath: string };
 
 const PACKAGED_APP_DIR = path.join(APP_ROOT, 'dist-e2e', process.arch === 'arm64' ? 'mac-arm64' : 'mac');
 
 const readAppUnderTest = (): AppUnderTest => {
     const value = process.env.WHISPER_E2E_APP ?? 'development';
     if (value === 'development') {
-        return { kind: 'development' };
+        return { kind: 'development', mainPath: path.join(APP_ROOT, 'out', 'main', 'index.js') };
     }
     if (value === 'packaged') {
         return { kind: 'packaged', executablePath: path.join(PACKAGED_APP_DIR, 'Whisper.app', 'Contents', 'MacOS', 'Whisper') };
@@ -40,6 +41,9 @@ type LaunchOptions = Pick<NonNullable<Parameters<typeof electron.launch>[0]>, 'e
 async function launchOptions({ app }: { app: AppUnderTest }): Promise<LaunchOptions> {
     switch (app.kind) {
         case 'development':
+            await fs.access(app.mainPath).catch(() => {
+                throw new Error(`No built app at ${app.mainPath}; build it with \`pnpm run build:all\``);
+            });
             return { args: [SCALE_SWITCH, '-r', MAIN_PRELOAD, APP_ROOT] };
         case 'packaged':
             await fs.access(app.executablePath).catch(() => {

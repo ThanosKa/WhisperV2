@@ -1,10 +1,10 @@
 const { describe, test, expect, beforeEach } = require('@jest/globals');
 
-jest.mock('../../../src/window/windowManager', () => ({
+jest.mock('../../../src/main/window/windowManager', () => ({
     windowPool: new Map(),
 }));
 
-jest.mock('../../../src/features/common/config/config', () => ({
+jest.mock('../../../src/main/features/common/config/config', () => ({
     get: jest.fn(key => {
         if (key === 'utteranceSilenceMs') return 800;
         if (key === 'maxUtteranceChars') return 50;
@@ -12,9 +12,9 @@ jest.mock('../../../src/features/common/config/config', () => ({
     }),
 }));
 
-jest.mock('../../../src/features/common/services/authService', () => ({}));
+jest.mock('../../../src/main/features/common/services/authService', () => ({}));
 
-const SttService = require('../../../src/features/listen/stt/sttService');
+const SttService = require('../../../src/main/features/listen/stt/sttService');
 
 describe('SttService utterance segmentation', () => {
     let service;

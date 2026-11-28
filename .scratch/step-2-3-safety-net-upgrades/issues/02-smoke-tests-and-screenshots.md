@@ -63,3 +63,13 @@ The one setting the user changes that the app stores is the analysis preset. It 
 **Checks:** the suite passed 3 runs in a row (10 passed, about 38 s each). Counts are in `assets/baseline.md`: root Jest 124, `whisper_web` Jest 49, root lint exit 127 (`eslint` is not installed), `whisper_web` lint and type-check clean.
 
 Playwright prints "Internal error: step id not found: fixture@NN" when a test fails inside the `launchApp` fixture. It is noise from Playwright 1.56, not a failure.
+
+### 2026-11-28, review fixes (branch `step-2-3-review-fixes`)
+
+The code review of steps 2-3 found these in the suite; all are fixed except the one skipped below.
+- **Screenshots were not exact.** `toHaveScreenshot(name)` used Playwright's default `threshold: 0.2`, which lets each pixel's colour differ. The call now passes `threshold: 0` (with the default `maxDiffPixels: 0`), the exact match this ticket asks for. The baselines are unchanged.
+- **The fake server's unknown requests are a union on `kind`** (`http`, `websocket`, `relay`, `failed`) instead of strings with a prefix. Relay messages are parsed once into an `OPEN | AUDIO | CLOSE` union; a message that does not parse, or an `AUDIO` on a stream other than `me` or `them`, is recorded as unknown. `tests/e2e/fakeServer.spec.ts` (4 tests) tests the fake on its own, without launching the app, so the Playwright suite now lists 14 tests: these 4 and the 10 Electron tests.
+- **Shared code:** `tests/e2e/flows.ts` holds the Ask flow, the Listen flow and the Listen-button selector that both specs copied; `tests/e2e/appRoot.ts` the one `APP_ROOT`. The Listen screenshot now also waits for the Listen button's `active` class, as Smoke 3 does.
+- **Types:** `RunningApp` names the `{ electronApp, headerWindow }` pair; the launch-options type derives from `electron.launch`; `STARTUP_VIEWS` `satisfies AppView[]`. Every helper takes one object argument.
+- **Narration comments** listed by the review are deleted; the workaround comments stay.
+- **Skipped: a branded type for the fake session id.** The id is one constant inside the test fake, compared in one place; a brand would guard nothing a reader cannot see.

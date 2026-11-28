@@ -124,3 +124,11 @@
 ### 2026-11-28, end-of-spec run (branch `step-2-3-end-run`, `dev` at 7ab4197)
 
 End-of-spec run 2026-11-28: passed. Development app, one full run of `pnpm run test:e2e`: 10 of 10 passed (4 smoke tests, 6 screenshots) in 46.9 s, against the ticket 02 baselines plus this ticket's re-baseline (`a1943b2`). No test was rerun and nothing was changed. The Screenshot-window fix `744cf66` passed in full runs on both the development app and the packaged app (ticket 07). Load average 4.5 at the start.
+
+### 2026-11-28, review fixes (branch `step-2-3-review-fixes`)
+
+The review flagged these as outside the ticket's list. They are kept, as justified:
+- **`src/window/windowManager.js`, `showScreenshotWindow`**: forced by Electron 45 (item 3 under the code changes above). The review also found that this change sent the image twice (on load and in the 100 ms show) and used the new window without a destroyed check. Fixed: the image is sent once, on `did-finish-load`; the 100 ms timer only places and shows the window; a gone header or window stops the call. `tests/unit/window/screenshotWindow.test.js` (2 tests) covers both, so root Jest is 130 (124 + these 2 + 4 release tests, ticket 07).
+- **`permissions: dotenv: skills: false`** in `pnpm-workspace.yaml`: pnpm 12 asks to approve the agent skills that `dotenv` 18 ships, and an install must not stop on a prompt. Denying them keeps the install unattended and adds no agent files.
+- **The deleted `make` script**: it called `electron-forge`, which is not installed, so it could only fail. Deleted with the npm-to-pnpm script move (`d25e240`).
+- **`listenOn({ expressApp, port })`** in `src/index.js`: the Express 5 listen change was written twice; one helper now holds it.

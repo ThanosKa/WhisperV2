@@ -525,8 +525,7 @@ class SttService {
         }
 
         const { data, mimeType } = payload.audio;
-        // IPC payloads are not parsed yet (ticket 07), so the type does not guarantee a string.
-        if (!data || typeof data !== 'string') {
+        if (!data) {
             throw new Error('Invalid audio payload');
         }
 

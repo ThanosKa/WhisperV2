@@ -9,6 +9,7 @@
 // and stops only the dev server it started. It needs the Chromium that `npx playwright install chromium` fetches (it runs as the new headless mode, channel chromium).
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,8 +66,9 @@ async function waitForServer({ url, timeoutMs }) {
 async function main() {
     const port = await freePort();
     const base = `http://127.0.0.1:${port}`;
-    const nextBin = path.join(webDir, 'node_modules', '.bin', 'next');
-    const server = spawn(nextBin, ['dev', '-p', String(port), '-H', '127.0.0.1'], {
+    // Resolved the way Node resolves it from whisper_web, so it works with pnpm's hoisted layout too.
+    const nextBin = createRequire(path.join(webDir, 'package.json')).resolve('next/dist/bin/next');
+    const server = spawn(process.execPath, [nextBin, 'dev', '-p', String(port), '-H', '127.0.0.1'], {
         cwd: webDir,
         env: { ...process.env, NEXT_PUBLIC_DEV_MOCK: '1', NEXT_TELEMETRY_DISABLED: '1' },
         detached: true,

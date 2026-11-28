@@ -27,7 +27,7 @@
 
 Done 2026-11-28 on branch `step-4a1-4b1-02-electron-vite-builds-the-app`.
 
-- **Counts:** root Jest 130 (15 suites), `whisper_web` Jest 49, Vitest 3 (`main` 1, `whisper_web` 2). `pnpm type-check` and `pnpm test` pass.
+- **Counts:** root Jest 130 (15 suites), `whisper_web` Jest 49, Vitest 3 (`main` 1, `whisper_web` 2). `pnpm type-check` and `pnpm test` pass. After merging `step-4a1-4b1` (tickets 08-10): root Jest 130, Vitest 37 (`main` 1, `whisper_web` 36), both still pass, and `pnpm run build:all` bundles the changed `backend_node`.
 - **Electron suite, run once:** development app 10 passed (4 smoke, 6 screenshots, no pixel difference from the step-3 baselines); packaged app (`pnpm run package:e2e`, then `WHISPER_E2E_APP=packaged`) 4 smoke passed. No rerun needed.
 - **Not ticked: `pnpm lint`.** It fails as on the integration branch (root `eslint --ext` with no root config); left to the oxlint setup. `pnpm web:lint` passes. No disable comment was added.
 - **Not ticked: the PR into `dev`.** The branch is committed locally; the PR and merge are the caller's.

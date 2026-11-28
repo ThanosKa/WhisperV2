@@ -1,85 +1,93 @@
-const { describe, test, expect, beforeEach, jest: jestModule } = require('@jest/globals');
+import { beforeEach, describe, expect, test, vi } from 'vitest';
+import listenService from '../../../src/main/features/listen/listenService';
 
-const mockSessionRepo = {
-    findLatestUnfinishedListen: jestModule.fn(),
-    end: jestModule.fn(),
-};
+const { mockSessionRepo, mockTranscriptRepo, mockInsightsRepo, mockAuthService, mockSummaryService, mockWindow, SttServiceMock } = vi.hoisted(() => {
+    const mockSessionRepo = {
+        findLatestUnfinishedListen: vi.fn(),
+        end: vi.fn(),
+    };
+    const mockTranscriptRepo = {
+        getAllTranscriptsBySessionId: vi.fn(),
+    };
+    const mockInsightsRepo = {
+        getAllInsightsBySessionId: vi.fn(),
+    };
+    const mockAuthService = {
+        getCurrentUserId: vi.fn((): string | null => 'test-user-id'),
+    };
+    const mockSummaryService = {
+        setCallbacks: vi.fn(),
+        setSessionId: vi.fn(),
+        hydrateConversation: vi.fn(),
+        hydrateInsights: vi.fn(),
+        selectedPresetId: 'meeting',
+    };
+    const mockWindow = {
+        isDestroyed: vi.fn(() => false),
+        webContents: { send: vi.fn() },
+    };
+    // listenService builds its STT service when the module loads, so the stand-in needs a working
+    // implementation from the start; each test sets its own again.
+    const SttServiceMock = vi.fn(function SttService(): Record<string, unknown> {
+        return {
+            setCallbacks: vi.fn(),
+            initializeSttSessions: vi.fn(async () => true),
+            closeSessions: vi.fn(async () => true),
+        };
+    });
 
-const mockTranscriptRepo = {
-    getAllTranscriptsBySessionId: jestModule.fn(),
-};
+    return { mockSessionRepo, mockTranscriptRepo, mockInsightsRepo, mockAuthService, mockSummaryService, mockWindow, SttServiceMock };
+});
 
-const mockInsightsRepo = {
-    getAllInsightsBySessionId: jestModule.fn(),
-};
-
-const mockAuthService = {
-    getCurrentUserId: jestModule.fn(() => 'test-user-id'),
-};
-
-jestModule.mock('../../../src/main/features/common/repositories/session', () => ({
-    findLatestUnfinishedListen: () => mockSessionRepo.findLatestUnfinishedListen(),
-    end: (id) => mockSessionRepo.end(id),
+vi.mock('../../../src/main/features/common/repositories/session', () => ({
+    default: {
+        findLatestUnfinishedListen: () => mockSessionRepo.findLatestUnfinishedListen(),
+        end: (id: string) => mockSessionRepo.end(id),
+    },
 }));
 
-jestModule.mock('../../../src/main/features/common/services/authService', () => mockAuthService);
+vi.mock('../../../src/main/features/common/services/authService', () => ({ default: mockAuthService }));
 
-jestModule.mock('../../../src/main/features/listen/stt/repositories', () => ({
-    getAllTranscriptsBySessionId: (sessionId) => mockTranscriptRepo.getAllTranscriptsBySessionId(sessionId),
+vi.mock('../../../src/main/features/listen/stt/repositories', () => ({
+    default: {
+        getAllTranscriptsBySessionId: (sessionId: string) => mockTranscriptRepo.getAllTranscriptsBySessionId(sessionId),
+    },
 }));
 
-jestModule.mock('../../../src/main/features/listen/summary/repositories', () => ({
-    getAllInsightsBySessionId: (sessionId) => mockInsightsRepo.getAllInsightsBySessionId(sessionId),
+vi.mock('../../../src/main/features/listen/summary/repositories', () => ({
+    default: {
+        getAllInsightsBySessionId: (sessionId: string) => mockInsightsRepo.getAllInsightsBySessionId(sessionId),
+    },
 }));
 
-jestModule.mock('../../../src/main/features/listen/stt/sttService', () =>
-    jestModule.fn().mockImplementation(() => ({
-        setCallbacks: jestModule.fn(),
-        initializeSttSessions: jestModule.fn(async () => true),
-    }))
-);
+vi.mock('../../../src/main/features/listen/stt/sttService', () => ({ default: SttServiceMock }));
 
-const mockSummaryService = {
-    setCallbacks: jestModule.fn(),
-    setSessionId: jestModule.fn(),
-    hydrateConversation: jestModule.fn(),
-    hydrateInsights: jestModule.fn(),
-    selectedPresetId: 'meeting',
-};
+vi.mock('../../../src/main/features/listen/summary/summaryService', () => ({ default: mockSummaryService }));
 
-jestModule.mock('../../../src/main/features/listen/summary/summaryService', () => mockSummaryService);
-
-const mockWindow = {
-    isDestroyed: jestModule.fn(() => false),
-    webContents: { send: jestModule.fn() },
-};
-
-jestModule.mock('../../../src/main/window/windowManager', () => ({
+vi.mock('../../../src/main/window/windowManager', () => ({
     windowPool: {
-        get: jestModule.fn(() => mockWindow),
+        get: vi.fn(() => mockWindow),
     },
 }));
 
 describe('Crash Recovery - Edge Cases', () => {
-    let listenService;
-
-    beforeEach(() => {
-        jestModule.clearAllMocks();
-        listenService = require('../../../src/main/features/listen/listenService');
+    beforeEach(async () => {
+        vi.clearAllMocks();
         listenService.strandedSession = null;
         listenService.isRecoveryDismissed = false;
         listenService.currentSessionId = null;
         mockAuthService.getCurrentUserId.mockReturnValue('test-user-id');
 
-        const windowManager = require('../../../src/main/window/windowManager');
-        windowManager.windowPool.get.mockImplementation(() => mockWindow);
+        const windowManager = await import('../../../src/main/window/windowManager');
+        vi.mocked(windowManager.windowPool.get).mockImplementation(() => mockWindow);
         mockWindow.isDestroyed.mockReturnValue(false);
 
-        const SttService = require('../../../src/main/features/listen/stt/sttService');
-        SttService.mockImplementation(() => ({
-            setCallbacks: jestModule.fn(),
-            initializeSttSessions: jestModule.fn(async () => true),
-        }));
+        SttServiceMock.mockImplementation(function () {
+            return {
+                setCallbacks: vi.fn(),
+                initializeSttSessions: vi.fn(async () => true),
+            };
+        });
     });
 
     test('should ignore session exists but no transcripts', async () => {
@@ -137,8 +145,8 @@ describe('Crash Recovery - Edge Cases', () => {
 
         const transcripts = [{ id: 1, speaker: 'User', text: 'Test', timestamp: 1000 }];
 
-        const { windowPool } = require('../../../src/main/window/windowManager');
-        windowPool.get.mockReturnValue(null); // Window not ready
+        const { windowPool } = await import('../../../src/main/window/windowManager');
+        vi.mocked(windowPool.get).mockReturnValue(null); // Window not ready
 
         mockSessionRepo.findLatestUnfinishedListen.mockReturnValue(session);
         mockTranscriptRepo.getAllTranscriptsBySessionId.mockResolvedValue(transcripts);
@@ -170,12 +178,12 @@ describe('Crash Recovery - Edge Cases', () => {
 
         // Simulate Listen button click
         const headerWindow = {
-            isDestroyed: jestModule.fn(() => false),
-            webContents: { send: jestModule.fn() },
+            isDestroyed: vi.fn(() => false),
+            webContents: { send: vi.fn() },
         };
 
-        const { windowPool } = require('../../../src/main/window/windowManager');
-        windowPool.get.mockReturnValue(headerWindow);
+        const { windowPool } = await import('../../../src/main/window/windowManager');
+        vi.mocked(windowPool.get).mockReturnValue(headerWindow);
 
         // Should block and notify header
         expect(listenService.strandedSession).not.toBeNull();
@@ -191,14 +199,12 @@ describe('Crash Recovery - Edge Cases', () => {
         };
 
         mockSessionRepo.findLatestUnfinishedListen.mockReturnValue(latestSession);
-        mockTranscriptRepo.getAllTranscriptsBySessionId.mockResolvedValue([
-            { id: 1, speaker: 'User', text: 'Test', timestamp: 1000 },
-        ]);
+        mockTranscriptRepo.getAllTranscriptsBySessionId.mockResolvedValue([{ id: 1, speaker: 'User', text: 'Test', timestamp: 1000 }]);
         mockInsightsRepo.getAllInsightsBySessionId.mockReturnValue([]);
 
         const result = await listenService.findStrandedSession();
 
-        expect(result.session.id).toBe('session-latest');
+        expect(result?.session.id).toBe('session-latest');
         expect(mockSessionRepo.findLatestUnfinishedListen).toHaveBeenCalledTimes(1);
     });
 
@@ -295,9 +301,8 @@ describe('Crash Recovery - Edge Cases', () => {
         mockInsightsRepo.getAllInsightsBySessionId.mockReturnValue([]);
 
         listenService.strandedSession = await listenService.findStrandedSession();
-        listenService.sttService.initializeSttSessions.mockRejectedValue(new Error('STT init failed'));
+        vi.mocked(listenService.sttService.initializeSttSessions).mockRejectedValue(new Error('STT init failed'));
 
         await expect(listenService.resumeStrandedSession()).rejects.toThrow('STT resume failed after retries');
     });
 });
-

@@ -9,6 +9,13 @@ export default defineConfig({
                     name: 'main',
                     environment: 'node',
                     include: ['src/**/*.test.ts', 'tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
+                    // Agent worktrees under .claude/ hold full copies of the repo.
+                    exclude: ['**/node_modules/**', '.claude/**'],
+                    setupFiles: ['tests/setup/vitest.setup.ts'],
+                    clearMocks: true,
+                    mockReset: true,
+                    restoreMocks: true,
+                    testTimeout: 10000,
                 },
             },
             'whisper_web',

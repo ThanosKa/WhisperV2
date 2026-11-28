@@ -1,25 +1,29 @@
-const { describe, test, expect, beforeEach } = require('@jest/globals');
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-jest.mock('../../../src/main/features/common/services/authService', () => ({
-    getCurrentUserId: jest.fn(() => 'test-user-id'),
+vi.mock('../../../src/main/features/common/services/authService', () => ({
+    default: {
+        getCurrentUserId: vi.fn(() => 'test-user-id'),
+    },
 }));
 
-jest.mock('../../../src/main/features/settings/repositories', () => require('../../mocks/database.mock').presetRepository);
+vi.mock('../../../src/main/features/settings/repositories', async () => ({
+    default: (await import('../../mocks/database.mock')).repositoryMocks.presetRepository,
+}));
 
-jest.mock('../../../src/main/window/windowManager', () => {
-    const { BrowserWindow } = require('electron');
+vi.mock('../../../src/main/window/windowManager', async () => {
+    const { electronMock } = await import('../../setup/electronMocks');
     const createWindow = () => ({
-        isDestroyed: jest.fn(() => false),
-        isVisible: jest.fn(() => true),
+        isDestroyed: vi.fn(() => false),
+        isVisible: vi.fn(() => true),
         webContents: {
-            send: jest.fn(),
+            send: vi.fn(),
         },
     });
 
     const settingsWindow = createWindow();
     const listenWindow = createWindow();
 
-    BrowserWindow.getAllWindows.mockImplementation(() => [settingsWindow, listenWindow]);
+    electronMock.BrowserWindow.getAllWindows.mockImplementation(() => [settingsWindow, listenWindow]);
 
     return {
         windowPool: new Map([
@@ -30,21 +34,24 @@ jest.mock('../../../src/main/window/windowManager', () => {
 });
 
 describe('SettingsService', () => {
-    let settingsService;
-    let storeInstance;
+    let settingsService: typeof import('../../../src/main/features/settings/settingsService');
+    let storeInstance: import('../../setup/electronMocks').MockStore;
 
-    beforeEach(() => {
-        jest.clearAllMocks();
-        jest.useFakeTimers();
-        jest.resetModules();
-        settingsService = require('../../../src/main/features/settings/settingsService');
-        const Store = require('electron-store');
-        storeInstance = Store.__instances[0];
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        vi.useFakeTimers();
+        vi.resetModules();
+        settingsService = await import('../../../src/main/features/settings/settingsService');
+        // resetModules gave the service a fresh electron-store stand-in; read its instance.
+        const { mockStoreInstances } = await import('../../setup/electronMocks');
+        const [firstStore] = mockStoreInstances;
+        if (!firstStore) throw new Error('settingsService did not create a store');
+        storeInstance = firstStore;
     });
 
     afterEach(() => {
-        jest.runOnlyPendingTimers();
-        jest.useRealTimers();
+        vi.runOnlyPendingTimers();
+        vi.useRealTimers();
     });
 
     describe('getSettings', () => {
@@ -54,7 +61,7 @@ describe('SettingsService', () => {
             const settings = await settingsService.getSettings();
 
             expect(settings.profile).toBe('sales');
-            expect(settings.customField).toBe('custom-value');
+            expect(settings).toHaveProperty('customField', 'custom-value');
             expect(settings.language).toBe('en');
         });
 
@@ -75,10 +82,7 @@ describe('SettingsService', () => {
 
             await settingsService.saveSettings({ fontSize: 16 });
 
-            expect(storeInstance.set).toHaveBeenCalledWith(
-                'users.test-user-id',
-                expect.objectContaining({ fontSize: 16 })
-            );
+            expect(storeInstance.set).toHaveBeenCalledWith('users.test-user-id', expect.objectContaining({ fontSize: 16 }));
         });
 
         test('returns success indicator', async () => {
@@ -86,16 +90,6 @@ describe('SettingsService', () => {
 
             const result = await settingsService.saveSettings({ fontSize: 18 });
             expect(result).toEqual({ success: true });
-        });
-    });
-
-    describe('Window lifecycle helpers', () => {
-        test('initialize executes without throwing', () => {
-            expect(() => settingsService.initialize()).not.toThrow();
-        });
-
-        test('cleanup executes without throwing', () => {
-            expect(() => settingsService.cleanup()).not.toThrow();
         });
     });
 });

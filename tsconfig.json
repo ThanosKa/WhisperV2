@@ -1,13 +1,17 @@
 {
     "extends": "./tsconfig.base.json",
     "compilerOptions": {
-        "types": ["node"]
+        "types": ["node"],
+        "allowJs": true,
+        "checkJs": false
     },
     "include": [
         "vitest.config.mts",
         "whisper_web/vitest.config.mts",
         "src/**/*.ts",
         "tests/unit/**/*.ts",
-        "tests/integration/**/*.ts"
+        "tests/integration/**/*.ts",
+        "tests/setup/**/*.ts",
+        "tests/mocks/**/*.ts"
     ]
 }

@@ -5,6 +5,6 @@ import { describe, expect, it } from 'vitest';
 describe('the main Vitest project', () => {
     it('runs in Node without a DOM', () => {
         expect(typeof process.versions.node).toBe('string');
-        expect(typeof globalThis.document).toBe('undefined');
+        expect('document' in globalThis).toBe(false);
     });
 });

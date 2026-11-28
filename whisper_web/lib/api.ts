@@ -144,7 +144,7 @@ const initDevIfNeeded = () => {
     }
 };
 
-// Testing utility to reset module state between Jest suites
+// Testing utility to reset module state between tests (vitest.setup.ts)
 export const __resetApiTestState = () => {
     apiUrlInitialized = false;
     initializationPromise = null;

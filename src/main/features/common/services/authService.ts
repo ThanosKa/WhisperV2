@@ -46,7 +46,7 @@ export const UserProfileSchema = z.object({
 
 export type UserProfile = z.infer<typeof UserProfileSchema>;
 
-// The user fields a sign-in deep link carries (index.js).
+// The user fields a sign-in deep link carries (index.ts).
 export type DeepLinkUser = { uid: string; email: string; displayName: string };
 
 export type UserMode = 'unauthenticated' | 'webapp';

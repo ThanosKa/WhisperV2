@@ -36,7 +36,7 @@ node --version
 
 - `src/` – Electron app (windows, services, IPC).
 - `whisper_web/` – Next.js web UI + `backend_node/` Express bridge.
-- `tests/` – Jest + Playwright for desktop; `whisper_web/e2e/` for web.
+- `tests/` – Vitest (unit, integration) + Playwright (Electron e2e) for desktop; the dashboard's tests live in `whisper_web/`.
 - `docs/` – Pipelines and architecture references.
 
 ## Install
@@ -47,7 +47,7 @@ npm run setup
 
 ## Dev
 
-- Desktop: `pnpm dev` (electron-vite: rebuilds and restarts the app on change; run `pnpm run build:web` once first). `pnpm start` builds and launches once.
+- Desktop: `pnpm dev` (electron-vite: rebuilds and restarts the app on change; it builds the dashboard's backend first, and the dashboard export when missing). `pnpm start` builds and launches once.
 - Web UI alone: `cd whisper_web && npm run dev` (uses backend_node or mocks).
 
 ## Build / package
@@ -60,7 +60,7 @@ npm run setup
 
 ## Tests
 
-- Desktop Jest: `npm test` (or `test:unit`, `test:integration`)
+- Vitest, desktop and dashboard: `pnpm test` (or `test:unit`, `test:integration`)
 - Desktop Playwright: `npm run test:e2e` (headed/ui/debug variants available)
 - Web lint/tests: `cd whisper_web && npm run lint && npm run test` (or `test:e2e`)
 
@@ -86,5 +86,5 @@ cp .env.example .env
 
 ## Notes
 
-- Env vars: see `.env.example` for all options, `src/main/features/common/config/config.js` for defaults.
-- Keep `whisper_web/backend_node` rebuilt (`npm run build:backend`) before packaging.
+- Env vars: see `.env.example` for all options, `src/main/features/common/config/env.ts` for how they are parsed; app settings and their defaults are in `src/main/features/common/config/config.ts` (overridden by `~/.whisper/config.json`).
+- Keep `whisper_web/backend_node` rebuilt (`pnpm --filter whisper-frontend run build:backend`, part of `pnpm run build:web`) before packaging.

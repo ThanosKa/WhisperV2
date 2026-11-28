@@ -153,7 +153,7 @@ class ListenService {
     }
 
     initialize(): void {
-        // IPC handlers are set up in featureBridge.js
+        // IPC handlers are set up in featureBridge.ts
         log.info('Initialized and ready');
     }
 

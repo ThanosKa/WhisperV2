@@ -36,7 +36,8 @@ jobs:
 
     - name: Build and Publish Electron App (macOS)
       if: matrix.os == 'macos-latest'
-      run: npm run build:all && npx electron-builder --mac --publish always
+      # release:mac adds the macOS floor to latest-mac.yml before it uploads the release.
+      run: npm run release:mac
       env:
         GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         CSC_LINK: ${{ secrets.CSC_LINK }}

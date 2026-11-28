@@ -117,6 +117,6 @@
   - Ask's input never appeared after a click 0.1 s into the launch. The feature pages finish loading up to about 0.7 s after the header. Commit `eaac143` now makes the fixture wait for them, with a test-only change.
   - The startup windows took more than 20 s to load once.
   - The Screenshot window sometimes captured fully transparent while it was visible. This happened in about 1 of 10 instrumented runs, with both versions of the fix. The `<img>` never finished decoding (`complete=false`), which points at the compositor, not the app's data.
-  - None of these reproduced on demand in isolation. The end-of-spec run should look at these first. Ticket 04's notes for the orchestrator hold the details.
+  - None of these reproduced on demand in isolation. The end-of-spec run should look at these first.
 
 **Tried and dropped (owner's focus request).** The suite steals focus on the owner's Mac. A no-focus patch in `main-preload.js` failed: Electron's `BrowserWindow` export cannot be redefined ("Cannot redefine property: BrowserWindow"), so the class could not be swapped. The owner then dropped the request, and the change was reverted, nothing committed.

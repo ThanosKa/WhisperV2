@@ -67,6 +67,7 @@
         "@electron/notarize": "^3.1.2",
         "@playwright/test": "^1.65.1",
         "@types/better-sqlite3": "^7.6.13",
+        "@types/express": "^5.0.6",
         "@types/node": "^26.6.11",
         "@types/ws": "^8.18.2",
         "electron": "^45.5.0",

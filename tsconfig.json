@@ -1,9 +1,7 @@
 {
     "extends": "./tsconfig.base.json",
     "compilerOptions": {
-        "types": ["node"],
-        "allowJs": true,
-        "checkJs": false
+        "types": ["node"]
     },
     "include": [
         "vitest.config.mts",

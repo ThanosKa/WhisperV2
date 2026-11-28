@@ -21,7 +21,7 @@ const litRenderer = () => ({
 export default defineConfig({
     main: {
         build: {
-            lib: { entry: 'src/main/index.js' },
+            lib: { entry: 'src/main/index.ts' },
             rolldownOptions: {
                 // An optional dependency loaded with `import()` (sharp) is loaded with `require`, as
                 // before the bundle: `require` reads a package in app.asar and its unpacked binaries.
@@ -32,7 +32,7 @@ export default defineConfig({
     },
     preload: {
         build: {
-            lib: { entry: 'src/preload/preload.js' },
+            lib: { entry: 'src/preload/preload.ts' },
         },
     },
 });

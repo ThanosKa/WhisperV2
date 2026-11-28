@@ -244,13 +244,6 @@ const showRecoveryToast = ({ sessionInfo, headerBounds }: { sessionInfo: unknown
     toastWin.moveTop();
 };
 
-const hideRecoveryToast = () => {
-    const toastWin = windowPool.get('recoveryToast');
-    if (!toastWin || toastWin.isDestroyed()) return;
-    toastWin.webContents.send('recovery-toast:hide');
-    toastWin.hide();
-};
-
 const positionRecoveryToast = ({ toastWin, headerBounds }: { toastWin: BrowserWindow; headerBounds?: Rectangle | undefined }) => {
     let bounds = headerBounds;
     if (!bounds) {
@@ -1095,7 +1088,6 @@ export {
     hidePlanWindow,
     cancelHidePlanWindow,
     showRecoveryToast,
-    hideRecoveryToast,
     openLoginPage,
     moveWindowStep,
     handleHeaderStateChanged,

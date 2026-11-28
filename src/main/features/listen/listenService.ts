@@ -58,9 +58,6 @@ class ListenService {
             onTranscriptionComplete: ({ speaker, text }) => {
                 void this.handleTranscriptionComplete({ speaker, text });
             },
-            onStatusUpdate: status => {
-                this.sendToRenderer({ channel: 'update-status', data: status });
-            },
             onQuotaExceeded: resetAt => {
                 void this.handleSttQuotaExceeded(resetAt);
             },
@@ -69,9 +66,6 @@ class ListenService {
         // Summary service callbacks
         this.summaryService.setCallbacks({
             onAnalysisComplete: () => {},
-            onStatusUpdate: status => {
-                this.sendToRenderer({ channel: 'update-status', data: status });
-            },
         });
     }
 
@@ -301,8 +295,6 @@ class ListenService {
                 mode: 'quotaExceeded',
             });
         }
-
-        this.sendToRenderer({ channel: 'update-status', data: 'Daily audio limit reached' });
     }
 
     async saveConversationTurn({ speaker, transcription }: { speaker: Speaker; transcription: string }): Promise<void> {
@@ -384,8 +376,6 @@ class ListenService {
         }
 
         this.isInitializingSession = true;
-        this.sendToRenderer({ channel: 'session-initializing', data: true });
-        this.sendToRenderer({ channel: 'update-status', data: 'Initializing sessions...' });
 
         try {
             // Initialize database session
@@ -398,17 +388,14 @@ class ListenService {
 
             log.info({ sessionId: this.currentSessionId }, 'Listen service initialized');
 
-            this.sendToRenderer({ channel: 'update-status', data: 'Connected. Ready to listen.' });
             this.sendToRenderer({ channel: 'change-listen-capture-state', data: { status: 'start' } });
 
             return true;
         } catch (error) {
             log.error({ err: error, sessionId: this.currentSessionId }, 'Failed to initialize listen service');
-            this.sendToRenderer({ channel: 'update-status', data: 'Initialization failed.' });
             return false;
         } finally {
             this.isInitializingSession = false;
-            this.sendToRenderer({ channel: 'session-initializing', data: false });
         }
     }
 
@@ -497,7 +484,6 @@ class ListenService {
         try {
             // Resume local capture; STT sockets remain active from pause
             this.sendToRenderer({ channel: 'change-listen-capture-state', data: { status: 'start' } });
-            this.sendToRenderer({ channel: 'update-status', data: 'Resumed listening.' });
             return { success: true };
         } catch (error) {
             log.error({ err: error, sessionId: this.currentSessionId }, 'Failed to resume listen session');
@@ -676,9 +662,6 @@ class ListenService {
         this.isRecoveryDismissed = false;
 
         // Re-initialize STT
-        this.sendToRenderer({ channel: 'session-initializing', data: true });
-        this.sendToRenderer({ channel: 'update-status', data: 'Resuming session...' });
-
         await this.connectSttWithRetry({ language: 'en', failure: 'STT resume failed after retries' });
 
         // Send restored insights to renderer
@@ -699,8 +682,6 @@ class ListenService {
             );
         }
 
-        this.sendToRenderer({ channel: 'update-status', data: 'Session resumed. Ready to listen.' });
-        this.sendToRenderer({ channel: 'session-initializing', data: false });
         this.sendToRenderer({ channel: 'change-listen-capture-state', data: { status: 'start' } });
 
         // Notify Listen window that session is active (enables transcription)

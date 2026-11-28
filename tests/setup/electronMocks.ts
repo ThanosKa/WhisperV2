@@ -79,6 +79,12 @@ const createMocks = () => {
         ipcRenderer: {
             on: vi.fn(),
             send: vi.fn(),
+            invoke: vi.fn(),
+            removeListener: vi.fn(),
+            removeAllListeners: vi.fn(),
+        },
+        contextBridge: {
+            exposeInMainWorld: vi.fn(),
         },
         screen: {
             getAllDisplays: vi.fn(() => []),

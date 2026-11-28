@@ -24,7 +24,7 @@ describe('SttService utterance segmentation', () => {
     beforeEach(() => {
         service = new SttService();
         service.sendToRenderer = vi.fn();
-        service.setCallbacks({ onTranscriptionComplete, onStatusUpdate: vi.fn(), onQuotaExceeded: vi.fn() });
+        service.setCallbacks({ onTranscriptionComplete, onQuotaExceeded: vi.fn() });
     });
 
     test('forces splits when partial text exceeds configured limit', () => {

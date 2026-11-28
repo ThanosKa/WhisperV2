@@ -1,7 +1,7 @@
 'use client';
 
 import { Download, Smartphone, Monitor, Tablet } from 'lucide-react';
-import { useRedirectIfNotAuth } from '@/utils/auth';
+import { useRedirectIfNotAuth } from '@/lib/auth';
 
 export default function DownloadPage() {
     const userInfo = useRedirectIfNotAuth();

@@ -1,7 +1,7 @@
 'use client'
 
 import { HelpCircle, Book, MessageCircle, Mail } from 'lucide-react'
-import { useRedirectIfNotAuth } from '@/utils/auth'
+import { useRedirectIfNotAuth } from '@/lib/auth'
 
 export default function HelpPage() {
   const userInfo = useRedirectIfNotAuth()

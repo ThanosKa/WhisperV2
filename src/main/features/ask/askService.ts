@@ -1,0 +1,1056 @@
+import { BrowserWindow, desktopCapturer, screen } from 'electron';
+import type { Display } from 'electron';
+import { z } from 'zod';
+import * as llmClient from '../common/ai/llmClient';
+import type { LlmPayload } from '../common/ai/llmClient';
+import * as windowManager from '../../window/windowManager';
+import internalBridge from '../../bridge/internalBridge';
+import summaryService from '../listen/summary/summaryService';
+import sessionRepository from '../common/repositories/session';
+import askRepository from './repositories';
+import { errorMessage } from '../common/utils/errors';
+import { logger } from '../common/utils/logger';
+import { sendEvent } from '../../ipc/sendEvent';
+import type { SessionId } from '../../../shared/sessionId';
+import path from 'node:path';
+import fs from 'node:fs';
+import os from 'os';
+import util from 'util';
+import { execFile as execFileCallback } from 'child_process';
+
+const log = logger.child({ module: 'AskService' });
+
+const execFile = util.promisify(execFileCallback);
+
+const getWindowPool = () => {
+    try {
+        return windowManager.windowPool;
+    } catch {
+        return null;
+    }
+};
+
+// The part of `listenService` that Ask uses. It is imported where it is used (see toggleAskButton).
+type ListenApi = {
+    getConversationHistory(): string[];
+    getCurrentSessionData(): { sessionId?: string | null } | null | undefined;
+};
+
+async function loadListenService(): Promise<ListenApi> {
+    // Imported here, not at the top: a static import closes the cycle summaryService ->
+    // settingsService -> windowManager -> askService -> listenService, whose constructor needs
+    // summaryService loaded.
+    const { default: listenService } = await import('../listen/listenService');
+    return listenService;
+}
+
+// Try to load sharp, but don't fail if it's not available
+const sharpLoading = import('sharp').then(
+    module => {
+        log.info('Sharp module loaded successfully');
+        return module.default;
+    },
+    (error: unknown) => {
+        log.warn({ err: error }, 'Sharp module not available');
+        log.warn('Screenshot functionality will work with reduced image processing capabilities');
+        return null;
+    }
+);
+
+function broadcastQuotaUpdateFromResponse(response: Response) {
+    try {
+        const headers = response.headers;
+        const limitHeader = headers.get('x-ratelimit-limit') || headers.get('X-RateLimit-Limit');
+        const usedHeader = headers.get('x-ratelimit-used') || headers.get('X-RateLimit-Used');
+        const remainingHeader = headers.get('x-ratelimit-remaining') || headers.get('X-RateLimit-Remaining');
+
+        const limit = Number.isFinite(Number(limitHeader)) ? Number(limitHeader) : undefined;
+        const used = Number.isFinite(Number(usedHeader)) ? Number(usedHeader) : undefined;
+        const remaining = Number.isFinite(Number(remainingHeader)) ? Number(remainingHeader) : undefined;
+
+        if (typeof limit === 'undefined' && typeof used === 'undefined' && typeof remaining === 'undefined') return;
+
+        BrowserWindow.getAllWindows().forEach(win => {
+            if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
+                sendEvent({ webContents: win.webContents, channel: 'quota:update', args: [{ limit, used, remaining }] });
+            }
+        });
+    } catch (e) {
+        log.warn({ err: e }, 'Failed to broadcast quota headers');
+    }
+}
+
+type ScreenshotResult =
+    { success: true; base64: string; width: number | null | undefined; height: number | null | undefined } | { success: false; error: string };
+
+async function captureScreenshot(): Promise<ScreenshotResult> {
+    if (process.platform === 'darwin') {
+        try {
+            const tempPath = path.join(os.tmpdir(), `screenshot-${Date.now()}.jpg`);
+
+            await execFile('screencapture', ['-x', '-t', 'jpg', tempPath]);
+
+            const imageBuffer = await fs.promises.readFile(tempPath);
+            await fs.promises.unlink(tempPath);
+
+            const sharp = await sharpLoading;
+            if (sharp) {
+                try {
+                    // Try using sharp for optimal image processing
+                    const resizedBuffer = await sharp(imageBuffer).resize({ height: 384 }).jpeg({ quality: 80 }).toBuffer();
+
+                    const base64 = resizedBuffer.toString('base64');
+                    const metadata = await sharp(resizedBuffer).metadata();
+
+                    return { success: true, base64, width: metadata.width, height: metadata.height };
+                } catch (sharpError) {
+                    log.warn({ err: sharpError }, 'Sharp module failed, falling back to basic image processing');
+                }
+            }
+
+            // Fallback: Return the original image without resizing
+            log.info('Using fallback image processing (no resize/compression)');
+            const base64 = imageBuffer.toString('base64');
+
+            return { success: true, base64, width: null, height: null };
+        } catch (error) {
+            log.error({ err: error }, 'Failed to capture screenshot');
+            return { success: false, error: errorMessage(error) };
+        }
+    }
+
+    try {
+        // Determine which display the app is currently on (prefer Ask window, fallback to header)
+        let targetDisplay: Display | null = null;
+        try {
+            const pool = getWindowPool?.() || null;
+            const askWin = pool?.get('ask');
+            const headerWin = pool?.get('header');
+            const refWin = askWin && !askWin.isDestroyed() && askWin.isVisible() ? askWin : headerWin;
+            if (refWin && !refWin.isDestroyed()) {
+                const b = refWin.getBounds();
+                const center = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+                targetDisplay = screen.getDisplayNearestPoint(center);
+            }
+        } catch {
+            // No reference window: use the first screen.
+        }
+
+        const sources = await desktopCapturer.getSources({
+            types: ['screen'],
+            thumbnailSize: {
+                width: 1920,
+                height: 1080,
+            },
+        });
+
+        let source = sources[0];
+        if (!source) {
+            throw new Error('No screen sources available');
+        }
+        if (targetDisplay) {
+            const targetId = String(targetDisplay.id);
+            const matchByDisplayId = sources.find(s => String(s.display_id || '') === targetId);
+            if (matchByDisplayId) {
+                source = matchByDisplayId;
+            } else {
+                const parsedMatch = sources.find(s => {
+                    const parts = String(s.id || '').split(':');
+                    return parts.length >= 2 && parts[1] === targetId;
+                });
+                if (parsedMatch) source = parsedMatch;
+            }
+        }
+        const buffer = source.thumbnail.toJPEG(70);
+        const base64 = buffer.toString('base64');
+        const size = source.thumbnail.getSize();
+
+        return {
+            success: true,
+            base64,
+            width: size.width,
+            height: size.height,
+        };
+    } catch (error) {
+        log.error({ err: error }, 'Failed to capture screenshot using desktopCapturer');
+        return {
+            success: false,
+            error: errorMessage(error),
+        };
+    }
+}
+
+// One chunk of the server's SSE stream (`data: {...}`). Every field is optional: the server sends
+// a "searching" signal, the citations, or a content delta. A chunk that does not fit is skipped.
+const StreamChunkSchema = z.object({
+    status: z.string().optional(),
+    query: z.unknown().optional(),
+    citations: z.unknown().optional(),
+    choices: z.array(z.object({ delta: z.object({ content: z.string().nullish() }).nullish() })).optional(),
+});
+
+// What `summaryService.getCurrentContext()` hands over: the terms and questions already surfaced.
+const SummaryContextSchema = z.object({
+    definedTerms: z.array(z.string()),
+    detectedQuestions: z.array(z.string()),
+});
+
+type ScreenshotData = { base64: string; timestamp: number };
+
+// What the Ask window renders (sent as `ask:stateUpdate`). `closeAskWindow` resets the state to the
+// first nine fields only, so the rest are optional.
+export type AskState = {
+    isVisible: boolean;
+    isLoading: boolean;
+    isStreaming: boolean;
+    currentQuestion: string;
+    currentResponse: string;
+    showTextInput: boolean;
+    interrupted: boolean;
+    screenshotData: ScreenshotData | null;
+    useScreenCapture?: boolean;
+    isSearching?: boolean;
+    searchCompleted?: boolean;
+    searchQuery?: string | null;
+    searchQueries?: string[];
+    citations?: unknown;
+    webSearchEnabled?: boolean;
+};
+
+type ProfileTable = Record<string, string>;
+
+/**
+ * @class
+ * @description
+ */
+class AskService {
+    abortController: AbortController | null = null;
+    state: AskState;
+    _forceDefaultProfileOnce = false;
+
+    constructor() {
+        this.state = {
+            isVisible: false,
+            isLoading: false,
+            isStreaming: false,
+            currentQuestion: '',
+            currentResponse: '',
+            showTextInput: true,
+            interrupted: false,
+            screenshotData: null, // Store screenshot data for current message
+            useScreenCapture: true, // Default enabled, session-only (resets on app restart)
+            isSearching: false,
+            searchCompleted: false,
+            searchQuery: null,
+            citations: [],
+            webSearchEnabled: false,
+        };
+        log.info('Service instance created');
+    }
+
+    /**
+     * Determine explicit click intent from known action labels/prefixes.
+     * This is evaluated BEFORE NLP heuristics to ensure precise routing.
+     * @param {string} userPromptRaw
+     * @returns {string|null} intent key (e.g., 'next', 'generic_followup', 'email', 'actions', 'summary', 'recap', 'define', 'root_causes', 'troubleshooting', 'study_questions', 'unclear', 'suggested_questions', 'gaps', 'objection', 'question')
+     */
+    _detectIntentFromClickPill(userPromptRaw: string | null | undefined): string | null {
+        const raw = (userPromptRaw || '').trim();
+        const lower = raw.toLowerCase();
+
+        // Exact common defaults
+        if (raw === '✨ What should I say next?') return 'next';
+        if (raw === '💬 Suggest follow-up questions') return 'generic_followup';
+        if (raw === '✉️ Draft a follow-up email') return 'email';
+        if (raw === '✅ Generate action items') return 'actions';
+        if (raw === '📝 Show summary') return 'summary';
+        if (raw === '🗒️ Recap meeting so far') return 'recap';
+
+        // Search intent - handle variations of globe emoji and spacing
+        if (/^[\u{1F310}\u{1F30D}\u{1F30E}\u{1F30F}]?\s*Search:/iu.test(raw)) return 'search';
+
+        // Prefixed items from analysis parsing
+        if (raw.startsWith('📘 Define')) return 'define';
+        if (raw.startsWith('📈 Sales Follow-Up')) return 'followup';
+        if (raw.startsWith('❗❗ Objection')) return 'objection';
+        if (raw.startsWith('❗❗Gap')) return 'gaps';
+        if (raw.startsWith('👆 Suggested Question')) return 'suggested_questions';
+        if (raw.startsWith('🔎 Root Cause')) return 'root_causes';
+        if (raw.startsWith('🔍 Troubleshooting Step')) return 'troubleshooting';
+        if (raw.startsWith('📚 Study Question')) return 'study_questions';
+        if (raw.startsWith('❓ Clarify')) return 'unclear';
+
+        // Generic question pill (placed last so Clarify takes precedence)
+        if (raw.startsWith('❓ ')) return 'question';
+
+        // Search intent for suggested searches
+        if (raw.startsWith('🌐 Search:')) return 'search';
+        if (raw.toLowerCase().startsWith('search:')) return 'search';
+
+        // Heuristic fallbacks (if labels localized or slightly edited)
+        if (lower.includes('what should i say next')) return 'next';
+        if (lower.includes('follow-up')) return 'generic_followup';
+        if (lower.includes('action item')) return 'actions';
+        if (lower.includes('recap')) return 'recap';
+        if (lower.includes('summary')) return 'summary';
+        if (lower.includes('email')) return 'email';
+        if (lower.includes('root cause')) return 'root_causes';
+        if (lower.includes('troubleshooting')) return 'troubleshooting';
+
+        return null;
+    }
+
+    /**
+     * Resolve profile id and whether to include conversation context based on intent and preset.
+     * @param {string} intent
+     * @param {string|null} presetId
+     * @returns {{ profileToUse: string, useConversationContext: boolean }}
+     */
+    _resolveProfileForIntent({ intent, presetId }: { intent: string; presetId: string | null }) {
+        const preset = (presetId || '').trim() || 'meeting';
+        // Centralized, low-risk routing table
+        const MAP: { meeting: ProfileTable; [preset: string]: ProfileTable | undefined } = {
+            meeting: {
+                next: 'meeting_next',
+                generic_followup: 'meeting_followup',
+                followup: 'meeting_followup',
+                define: 'meeting_define',
+                question: 'meeting_question',
+                actions: 'meeting_actions',
+                summary: 'meeting_summary',
+                recap: 'meeting_recap',
+                email: 'meeting_email',
+                search: 'meeting_search',
+            },
+            sales: {
+                next: 'sales_next',
+                generic_followup: 'sales_followup',
+                followup: 'sales_followup',
+                define: 'sales_define',
+                question: 'sales_answer_buyer',
+                objection: 'sales_objection',
+                suggested_questions: 'sales_followup',
+                actions: 'sales_actions',
+                summary: 'sales_summary',
+                recap: 'sales_recap',
+                email: 'sales_email',
+                search: 'sales_search',
+            },
+            recruiting: {
+                next: 'recruiting_should_say_next',
+                generic_followup: 'recruiting_followup',
+                followup: 'recruiting_followup',
+                define: 'recruiting_define',
+                question: 'recruiting_question',
+                suggested_questions: 'recruiting_suggested_question',
+                gaps: 'recruiting_gap',
+                actions: 'recruiting_actions',
+                summary: 'recruiting_summary',
+                recap: 'recruiting_recap',
+                email: 'recruiting_email',
+                search: 'recruiting_search',
+            },
+            'customer-support': {
+                next: 'customer_support_next',
+                generic_followup: 'customer_support_followup',
+                followup: 'customer_support_followup',
+                define: 'customer_support_define',
+                question: 'customer_support_question',
+                root_causes: 'customer_support_root_cause',
+                troubleshooting: 'customer_support_troubleshooting',
+                actions: 'customer_support_actions',
+                summary: 'customer_support_summary',
+                recap: 'customer_support_recap',
+                email: 'customer_support_email',
+                search: 'customer_support_search',
+            },
+            school: {
+                next: 'school_next',
+                generic_followup: 'school_followup',
+                followup: 'school_followup',
+                define: 'school_define',
+                question: 'school_question',
+                study_questions: 'school_followup',
+                unclear: 'school_question',
+                actions: 'school_actions',
+                summary: 'school_summary',
+                recap: 'school_recap',
+                email: 'school_email',
+                search: 'school_search',
+            },
+        };
+
+        const table = MAP[preset] ?? MAP.meeting;
+        const profileToUse = table[intent] || MAP.meeting[intent] || 'whisper';
+
+        // Conversation context policy per intent
+        const intentsWithoutContext = new Set(['define']);
+        const useConversationContext = !intentsWithoutContext.has(intent);
+
+        // Actions that should NOT receive role context (keep objective/factual)
+        const intentsWithoutRole = new Set(['define', 'recap', 'summary']);
+        const shouldIncludeRole = !intentsWithoutRole.has(intent);
+
+        return { profileToUse, useConversationContext, shouldIncludeRole };
+    }
+
+    _deriveTitleFromPrompt(prompt: string | null | undefined): string {
+        try {
+            const raw = (prompt || '').replace(/[\p{Emoji}\p{Extended_Pictographic}]/gu, '').trim();
+            if (!raw) return '';
+            // Use first sentence or up to ~12 words
+            const sentence = raw.split(/(?<=[\.\!\?])\s+/)[0] || raw;
+            const words = sentence.split(/\s+/).slice(0, 12).join(' ');
+            const cleaned = words
+                .replace(/[\r\n]+/g, ' ')
+                .replace(/\s{2,}/g, ' ')
+                .trim();
+            // Capitalize first letter
+            return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+        } catch {
+            return '';
+        }
+    }
+
+    /**
+     * Detects the intent/mode from user input to select the appropriate prompt template.
+     *
+     * @param {string} userPromptRaw
+     * @returns {{ mode: 'default'|'define'|'email'|'actions'|'summary'|'recap'|'next'|'followup' }}
+     */
+    _expandInsightRequest(userPromptRaw: string | null | undefined): { mode: string } {
+        const text = (userPromptRaw || '').toLowerCase();
+        const stripEmoji = (value: string) => value.replace(/[\p{Emoji}\p{Extended_Pictographic}]/gu, '').trim();
+        const normalized = stripEmoji(text);
+
+        // Draft follow-up email
+        if (normalized.includes('draft') && normalized.includes('email')) {
+            return { mode: 'email' };
+        }
+
+        // Define term (📘 Define "...")
+        const defineQuoted = normalized.match(/define\s+"([^"]+)"/);
+        if (normalized.startsWith('📘') || normalized.startsWith('define') || defineQuoted) {
+            const raw = (userPromptRaw || '').trim();
+            const fromQuotes = raw.match(/"([^"]+)"/);
+            let term =
+                fromQuotes?.[1] ||
+                raw
+                    .replace(/^📘\s*/i, '')
+                    .replace(/^define\s*/i, '')
+                    .replace(/"/g, '')
+                    .trim();
+            term = term.replace(/^about\s+/i, '').trim();
+            if (term && term.length > 1) {
+                return { mode: 'define' };
+            }
+        }
+
+        // Generate action items
+        if (normalized.includes('action') && normalized.includes('item')) {
+            return { mode: 'actions' };
+        }
+
+        // Show summary
+        if (normalized.includes('show summary') || normalized === 'summary' || normalized.includes('summar')) {
+            return { mode: 'summary' };
+        }
+
+        // Recap meeting so far
+        if (normalized.includes('recap') && normalized.includes('meeting')) {
+            return { mode: 'recap' };
+        }
+
+        // What should I say next (enhanced for support)
+        if (
+            normalized.includes('what should i say next') ||
+            normalized.includes('what to say next') ||
+            normalized.includes('next support step') ||
+            normalized.includes('what to respond') ||
+            normalized.includes('support next action')
+        ) {
+            return { mode: 'next' }; // Now catches support variants
+        }
+
+        // Suggest follow-up questions
+        if (normalized.includes('suggest follow-up') || normalized.includes('follow-up questions') || normalized.includes('💬')) {
+            return { mode: 'generic_followup' };
+        }
+        if (normalized.includes('sales follow-up') || normalized.includes('💡') || normalized.includes('📈')) {
+            return { mode: 'followup' };
+        }
+        if (normalized.includes('buyer asks') || normalized.includes('them asks')) {
+            return { mode: 'buyer_question' };
+        }
+        if (normalized.includes('address objection') || normalized.includes('🔄')) {
+            return { mode: 'objection' };
+        }
+        if (normalized.includes('objection') || normalized.includes('‼️')) {
+            return { mode: 'objection' };
+        }
+        if (normalized.includes('gap') || normalized.includes('🔍')) {
+            return { mode: 'gaps' };
+        } else if (normalized.includes('root cause') || normalized.includes('🔎')) {
+            return { mode: 'root_causes' };
+        } else if (normalized.includes('clarify') || normalized.includes('❓ clarify')) {
+            return { mode: 'unclear' };
+        } else if (normalized.includes('study question') || normalized.includes('📚')) {
+            return { mode: 'study_questions' };
+        } else if (normalized.includes('troubleshooting') || normalized.includes('🛠️')) {
+            return { mode: 'troubleshooting' };
+        } else if (normalized.includes('suggested question') || normalized.includes('💡 suggested')) {
+            return { mode: 'suggested_questions' };
+        }
+
+        return { mode: 'default' };
+    }
+
+    interruptStream() {
+        if (this.abortController) {
+            log.info('User interrupted the stream');
+            this.abortController.abort('User interrupted');
+            this.abortController = null;
+
+            // To avoid race conditions, ensure this is the definitive final state update.
+            this.state = {
+                ...this.state,
+                isLoading: false,
+                isStreaming: false,
+                showTextInput: true,
+                interrupted: true,
+                screenshotData: null, // Clear screenshot on interrupt
+            };
+            this._broadcastState();
+        }
+    }
+
+    _broadcastState() {
+        const askWindow = getWindowPool()?.get('ask');
+        if (askWindow && !askWindow.isDestroyed()) {
+            sendEvent({ webContents: askWindow.webContents, channel: 'ask:stateUpdate', args: [this.state] });
+        }
+    }
+
+    async toggleAskButton(inputScreenOnly = false) {
+        const askWindow = getWindowPool()?.get('ask');
+
+        if (inputScreenOnly && this.state.showTextInput && askWindow && askWindow.isVisible()) {
+            const listenService = await loadListenService();
+            const conversationHistory = listenService.getConversationHistory();
+            await this.sendMessage({ userPrompt: 'Assist me', conversationHistory, presetId: null, useScreenCapture: this.state.useScreenCapture });
+            return;
+        }
+
+        const hasContent = this.state.isLoading || this.state.isStreaming || (this.state.currentResponse && this.state.currentResponse.length > 0);
+
+        if (askWindow && askWindow.isVisible() && hasContent) {
+            this.state.showTextInput = !this.state.showTextInput;
+            this._broadcastState();
+        } else {
+            if (askWindow && askWindow.isVisible()) {
+                internalBridge.emit('window:requestVisibility', { name: 'ask', visible: false });
+                this.state.isVisible = false;
+            } else {
+                log.info('Showing hidden Ask window');
+                internalBridge.emit('window:requestVisibility', { name: 'ask', visible: true });
+                this.state.isVisible = true;
+            }
+            if (this.state.isVisible) {
+                this.state.showTextInput = true;
+                this._broadcastState();
+            }
+        }
+    }
+
+    async closeAskWindow() {
+        if (this.abortController) {
+            this.abortController.abort('Window closed by user');
+            this.abortController = null;
+        }
+
+        this.state = {
+            isVisible: false,
+            isLoading: false,
+            isStreaming: false,
+            currentQuestion: '',
+            currentResponse: '',
+            showTextInput: true,
+            interrupted: false,
+            screenshotData: null,
+        };
+        this._broadcastState();
+
+        internalBridge.emit('window:requestVisibility', { name: 'ask', visible: false });
+
+        return { success: true };
+    }
+
+    _formatConversationForPrompt(conversationTexts: string[] | null | undefined): string {
+        if (!conversationTexts || conversationTexts.length === 0) {
+            return 'No conversation history available.';
+        }
+        // return conversationTexts.slice(-30).join('\n'); // Former limit
+        return conversationTexts.join('\n'); // Send full conversation
+    }
+
+    async sendMessage({
+        userPrompt: rawPrompt,
+        conversationHistory: conversationHistoryRaw = [],
+        presetId = null,
+        useScreenCapture = true,
+        webSearchEnabled = false,
+    }: {
+        userPrompt: string;
+        conversationHistory?: string[] | undefined;
+        presetId?: string | null | undefined;
+        useScreenCapture?: boolean | undefined;
+        webSearchEnabled?: boolean | undefined;
+    }): Promise<{ success: true } | { success: false; error: string }> {
+        // Normalize and fallback to default help text when empty
+        const userPrompt = String(rawPrompt ?? '').trim();
+
+        // Detect if this is a suggested search from summary
+        const isSuggestedSearch = userPrompt.startsWith('🌐 Search:');
+        let actualPrompt = userPrompt;
+        const searchForce = webSearchEnabled || isSuggestedSearch;
+
+        if (isSuggestedSearch) {
+            // Parse: 🌐 Search: [Label] | [Query]
+            const [label = '', query] = userPrompt.replace('🌐 Search:', '').trim().split('|');
+            actualPrompt = (query ?? label).trim();
+        }
+
+        const originalPrompt = actualPrompt; // Keep for title derivation
+        if (!actualPrompt) {
+            actualPrompt = 'Help me';
+        }
+
+        internalBridge.emit('window:requestVisibility', { name: 'ask', visible: true });
+        this.state = {
+            ...this.state,
+            isLoading: true,
+            isStreaming: false,
+            isSearching: false, // Don't assume search until status signal is received
+            searchCompleted: false,
+            searchQuery: null,
+            searchQueries: [], // Initialize search queries array
+            citations: [],
+            currentQuestion: actualPrompt,
+            currentResponse: '',
+            showTextInput: false,
+            interrupted: false,
+            screenshotData: null, // Reset screenshot data, will be set after capture
+        };
+        this._broadcastState();
+
+        if (this.abortController) {
+            this.abortController.abort('New request received.');
+        }
+        const abortController = new AbortController();
+        this.abortController = abortController;
+        const { signal } = abortController;
+
+        let sessionId: SessionId | null = null;
+
+        try {
+            log.info({ promptPreview: actualPrompt.substring(0, 50), historyItems: conversationHistoryRaw?.length || 0 }, 'Processing message');
+
+            // Check if we're in a meeting context (open listen session exists)
+            const listenService = await loadListenService();
+            const currentListenSessionId = listenService.getCurrentSessionData()?.sessionId || null;
+            const isInMeeting = Boolean(currentListenSessionId);
+
+            if (isInMeeting) {
+                // We're in a meeting - use or promote to listen session for context
+                sessionId = await sessionRepository.getOrCreateActive('listen');
+                log.info({ sessionId }, 'Using meeting session for ask question');
+            } else {
+                // Standalone question - create new session for each question
+                sessionId = await sessionRepository.create('ask');
+                log.info({ sessionId }, 'Created new question session');
+                // Derive and save a concise title from user prompt
+                const derived = this._deriveTitleFromPrompt(originalPrompt);
+                if (derived && sessionId) {
+                    try {
+                        await sessionRepository.updateTitle({ id: sessionId, title: derived });
+                        log.info({ sessionId, title: derived }, 'Titled question session');
+                    } catch (e) {
+                        log.warn({ err: e, sessionId }, 'Failed to update session title for ask session');
+                    }
+                }
+            }
+            await askRepository.addAiMessage({ sessionId, role: 'user', content: actualPrompt.trim() });
+            log.info({ sessionId }, 'Saved user prompt');
+
+            // LLM is server-backed only; no client-side provider/model
+            log.info({ provider: 'server', model: 'remote-default' }, 'Model');
+
+            // Capture screenshot when useScreenCapture is enabled AND (manual Ask OR prompt equals 'Assist me')
+            // 'Assist me' is the Ask template's empty-input fallback and should include a screenshot
+            const isAssistMe = (actualPrompt || '').trim().toLowerCase() === 'assist me';
+            const shouldCaptureScreenshot = useScreenCapture && (this._forceDefaultProfileOnce === true || isAssistMe);
+            let screenshotBase64: string | null = null;
+            if (shouldCaptureScreenshot) {
+                const screenshotResult = await captureScreenshot();
+                screenshotBase64 = screenshotResult.success ? screenshotResult.base64 : null;
+            }
+            const screenshotTaken = Boolean(screenshotBase64);
+
+            // Store screenshot data in state for frontend display
+            const screenshotData = screenshotBase64
+                ? {
+                      base64: screenshotBase64,
+                      timestamp: Date.now(),
+                  }
+                : null;
+
+            // Update state with screenshot data
+            this.state.screenshotData = screenshotData;
+            this._broadcastState();
+
+            const conversationHistory = this._formatConversationForPrompt(conversationHistoryRaw);
+            log.info(
+                { clickLen: actualPrompt.trim().length, historyChars: conversationHistory.length, screenshot: screenshotBase64 ? 1 : 0 },
+                'What the LLM sees'
+            );
+            const expansion = this._expandInsightRequest(actualPrompt);
+            log.info({ mode: expansion.mode }, 'Expanded intent (heuristic)');
+
+            // Prefer explicit click intent detection from pill labels/prefixes
+            const explicitIntent = this._detectIntentFromClickPill(userPrompt) || expansion.mode;
+            const activePreset = presetId || (summaryService && summaryService.selectedPresetId) || null;
+
+            log.info({ intent: explicitIntent, preset: activePreset }, 'Routing');
+
+            const resolved = this._resolveProfileForIntent({ intent: explicitIntent, presetId: activePreset });
+            const { useConversationContext, shouldIncludeRole } = resolved;
+            let profileToUse = resolved.profileToUse;
+
+            if (this._forceDefaultProfileOnce) {
+                log.info({ force: this._forceDefaultProfileOnce }, 'Manual Ask detected, forcing default profile: whisper');
+                profileToUse = 'whisper';
+                // Keep context decision based on intent (e.g., define=false), do not override
+            }
+
+            // Get role context from summaryService (contains default + user custom context)
+            const roleContext = summaryService.selectedRoleText || '';
+            log.info({ chars: roleContext.length }, 'Role context length');
+
+            // Build context for prompt - conversation transcript
+            const contextForPrompt = useConversationContext ? conversationHistory : '';
+
+            // Build new payload format for server-side prompt construction
+            const userContent = screenshotBase64
+                ? [
+                      { type: 'text', text: actualPrompt.trim() },
+                      {
+                          type: 'image_url',
+                          image_url: { url: `data:image/jpeg;base64,${screenshotBase64}` },
+                      },
+                  ]
+                : actualPrompt.trim();
+
+            if (screenshotBase64) {
+                log.info({ b64Len: screenshotBase64.length, head: screenshotBase64.slice(0, 32) }, 'Screenshot present');
+            }
+
+            // Build context object - ALWAYS use structured format { transcript, previousItems }
+            // Server expects this structure for both analysis and action profiles
+            let context: { transcript: string; previousItems: string[] } | null = null;
+            if (useConversationContext && contextForPrompt) {
+                const parsedContext = SummaryContextSchema.safeParse(summaryService.getCurrentContext());
+                const summaryContext = parsedContext.success ? parsedContext.data : null;
+                const hasPreviousItems = summaryContext && (summaryContext.definedTerms.length > 0 || summaryContext.detectedQuestions.length > 0);
+
+                context = {
+                    transcript: contextForPrompt,
+                    previousItems:
+                        summaryContext && hasPreviousItems
+                            ? [
+                                  ...summaryContext.definedTerms.map(term => `📘 Define ${term}`),
+                                  ...summaryContext.detectedQuestions.map(question => `❓ ${question}`),
+                              ]
+                            : [],
+                };
+                log.info({ transcriptChars: contextForPrompt.length, previousItems: context.previousItems.length }, 'Context built');
+            }
+
+            // Build base payload
+            const payload: LlmPayload = {
+                profile: profileToUse,
+                userContent: userContent,
+                context: context,
+            };
+
+            if (searchForce) {
+                payload.forceSearch = true;
+                log.info('Web search enabled for this request (forceSearch=true)');
+            }
+
+            // Add role unless excluded for this intent type OR profile is whisper (generic chatbot)
+            if (shouldIncludeRole && roleContext && profileToUse !== 'whisper') {
+                payload.role = roleContext;
+                log.info({ intent: explicitIntent }, 'Including role context');
+            } else if (!shouldIncludeRole) {
+                log.info({ intent: explicitIntent }, 'Excluding role context (objective/factual)');
+            } else if (profileToUse === 'whisper') {
+                log.info('Excluding role context for whisper profile (generic chatbot)');
+            }
+
+            // concise request log
+            log.info(
+                { profile: profileToUse, hasImage: Boolean(screenshotBase64), hasContext: !!context, hasRole: !!payload.role },
+                'Sending request to LLM'
+            );
+
+            try {
+                const response = await llmClient.stream({ payload, signal });
+
+                // Broadcast quota headers immediately on stream start
+                broadcastQuotaUpdateFromResponse(response);
+
+                log.info('LLM responded, starting to process stream');
+
+                const askWin = getWindowPool()?.get('ask');
+
+                if (!askWin || askWin.isDestroyed()) {
+                    log.error('Ask window is not available to send stream to');
+                    void response.body?.getReader().cancel();
+                    return { success: false, error: 'Ask window is not available.' };
+                }
+
+                const reader = this._readerOf(response);
+                signal.addEventListener('abort', () => {
+                    log.info({ reason: signal.reason }, 'Aborting stream reader');
+                    reader.cancel(signal.reason).catch(() => {
+                        /* Ignore errors when already cancelled */
+                    });
+                });
+
+                await this._processStream({ reader, askWin, sessionId, signal });
+                log.info({ screenshotTaken }, 'LLM stream finished');
+                return { success: true };
+            } catch (multimodalError) {
+                // The server did not take the image: retry with text only. (`_isMultimodalError`
+                // was an async method whose Promise was always truthy, so any failure with a
+                // screenshot retried. The retry rule is kept as it ran.)
+                if (screenshotBase64) {
+                    log.info({ reason: errorMessage(multimodalError) }, 'Multimodal request failed, retrying with text-only');
+
+                    const textOnlyPayload: LlmPayload = {
+                        profile: profileToUse,
+                        userContent: `User Request: ${userPrompt.trim()}`,
+                        context: context,
+                    };
+
+                    // Include role in fallback if it was in original payload (exclude whisper)
+                    if (shouldIncludeRole && roleContext && profileToUse !== 'whisper') {
+                        textOnlyPayload.role = roleContext;
+                    }
+                    const fallbackResponse = await llmClient.stream({ payload: textOnlyPayload, signal });
+                    // Broadcast quota headers for fallback as well
+                    broadcastQuotaUpdateFromResponse(fallbackResponse);
+                    const askWin = getWindowPool()?.get('ask');
+
+                    if (!askWin || askWin.isDestroyed()) {
+                        log.error('Ask window is not available for fallback response');
+                        void fallbackResponse.body?.getReader().cancel();
+                        return { success: false, error: 'Ask window is not available.' };
+                    }
+
+                    const fallbackReader = this._readerOf(fallbackResponse);
+                    signal.addEventListener('abort', () => {
+                        log.info({ reason: signal.reason }, 'Aborting fallback stream reader');
+                        fallbackReader.cancel(signal.reason).catch(() => {});
+                    });
+
+                    await this._processStream({ reader: fallbackReader, askWin, sessionId, signal });
+                    log.info({ screenshotTaken }, 'LLM stream finished (fallback)');
+                    return { success: true };
+                } else {
+                    // Another kind of error, or there was no screenshot: throw it as it is.
+                    throw multimodalError;
+                }
+            }
+        } catch (error) {
+            log.error({ err: error, sessionId }, 'Error during message processing');
+            this.state = {
+                ...this.state,
+                isLoading: false,
+                isStreaming: false,
+                showTextInput: true,
+            };
+            this._broadcastState();
+
+            const message = errorMessage(error);
+            const askWin = getWindowPool()?.get('ask');
+            if (askWin && !askWin.isDestroyed()) {
+                // Detect quota exceeded via status text to keep logic simple
+                const msg = message.toLowerCase();
+                if (msg.includes('429') || msg.includes('too many requests')) {
+                    sendEvent({ webContents: askWin.webContents, channel: 'ask-response-stream-error', args: [{ error: 'quota_exceeded' }] });
+                } else {
+                    const streamError = message || 'Unknown error occurred';
+                    sendEvent({ webContents: askWin.webContents, channel: 'ask-response-stream-error', args: [{ error: streamError }] });
+                }
+            }
+
+            return { success: false, error: message };
+        }
+    }
+
+    _readerOf(response: Response): ReadableStreamDefaultReader<Uint8Array> {
+        if (!response.body) {
+            throw new Error('LLM response has no body');
+        }
+        return response.body.getReader();
+    }
+
+    async _processStream({
+        reader,
+        askWin,
+        sessionId,
+        signal,
+    }: {
+        reader: ReadableStreamDefaultReader<Uint8Array>;
+        askWin: BrowserWindow;
+        sessionId: SessionId | null;
+        signal: AbortSignal;
+    }): Promise<void> {
+        const decoder = new TextDecoder();
+        let fullResponse = '';
+        let tokenCount = 0;
+
+        try {
+            this.state.isLoading = false;
+            this.state.isStreaming = true;
+            this._broadcastState();
+
+            log.info('Starting to process LLM response stream');
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n').filter(line => line.trim() !== '');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.substring(6);
+                        if (data === '[DONE]') {
+                            log.info('LLM stream completed with [DONE] signal');
+                            return;
+                        }
+                        const json = this._parseChunk(data);
+                        if (!json) continue;
+
+                        // Handle immediate feedback signal (status: searching)
+                        if (json.status === 'searching') {
+                            this.state.isSearching = true;
+                            this.state.searchCompleted = false;
+                            // Update query ONLY if server provides it explicitly AND it's a string
+                            if (json.query && typeof json.query === 'string') {
+                                this.state.searchQuery = json.query.trim();
+                            } else if (json.query) {
+                                // Log unexpected format for debugging
+                                log.warn({ type: typeof json.query, value: json.query }, 'Unexpected query format received');
+                            }
+                            this._broadcastState();
+                            continue;
+                        }
+
+                        // Handle streaming citations
+                        if (json.citations) {
+                            this.state.citations = json.citations;
+                            this.state.isSearching = false;
+                            this.state.searchCompleted = true;
+                            this._broadcastState();
+                            continue;
+                        }
+
+                        const token = json.choices?.[0]?.delta?.content || '';
+                        if (token) {
+                            if (this.state.isSearching) {
+                                // Searching was active, but now we have real result tokens
+                                this.state.isSearching = false;
+                                this.state.searchCompleted = true;
+                            }
+
+                            tokenCount++;
+                            fullResponse += token;
+                            this.state.currentResponse = fullResponse;
+                            this._broadcastState();
+                        }
+                    }
+                }
+            }
+
+            log.info({ tokenCount, responseChars: fullResponse.length }, 'Stream processing completed');
+        } catch (streamError) {
+            if (signal.aborted) {
+                log.info({ reason: signal.reason }, 'Stream reading was intentionally cancelled');
+            } else {
+                log.error({ err: streamError, sessionId }, 'Error while processing stream');
+                if (askWin && !askWin.isDestroyed()) {
+                    sendEvent({
+                        webContents: askWin.webContents,
+                        channel: 'ask-response-stream-error',
+                        args: [{ error: errorMessage(streamError) }],
+                    });
+                }
+            }
+        } finally {
+            this.state.isStreaming = false;
+            // If the stream was aborted, `interruptStream` is responsible for state.
+            if (!signal.aborted) {
+                this.state.currentResponse = fullResponse;
+                this._broadcastState();
+            }
+
+            if (fullResponse) {
+                try {
+                    await askRepository.addAiMessage({ sessionId, role: 'assistant', content: fullResponse });
+                    log.info({ sessionId }, 'Saved partial or full assistant response after stream ended');
+                } catch (dbError) {
+                    log.error({ err: dbError, sessionId }, 'Failed to save assistant response after stream ended');
+                }
+            }
+        }
+    }
+
+    // A line that is not JSON, or not one of the chunk shapes, is skipped (as before).
+    _parseChunk(data: string): z.infer<typeof StreamChunkSchema> | null {
+        let raw: unknown;
+        try {
+            raw = JSON.parse(data);
+        } catch {
+            return null;
+        }
+        const parsed = StreamChunkSchema.safeParse(raw);
+        return parsed.success ? parsed.data : null;
+    }
+
+    async sendMessageManual({
+        userPrompt,
+        conversationHistory = [],
+        useScreenCapture = true,
+        webSearchEnabled = false,
+    }: {
+        userPrompt: string;
+        conversationHistory?: string[] | undefined;
+        useScreenCapture?: boolean | undefined;
+        webSearchEnabled?: boolean | undefined;
+    }) {
+        this._forceDefaultProfileOnce = true;
+        try {
+            return await this.sendMessage({ userPrompt, conversationHistory, presetId: null, useScreenCapture, webSearchEnabled });
+        } finally {
+            this._forceDefaultProfileOnce = false;
+        }
+    }
+}
+
+const askService = new AskService();
+
+export default askService;

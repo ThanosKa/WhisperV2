@@ -1,135 +1,69 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import LoginPage from '@/app/login/page';
-import * as api from '@/utils/api';
-import * as devMock from '@/utils/devMock';
+import { desktop, makeUser, sentRequests } from './support/desktop';
 
-jest.mock('@/utils/api');
-jest.mock('@/utils/devMock');
-jest.mock('next/navigation', () => ({
-    useRouter: () => ({
-        push: jest.fn(),
-    }),
-}));
-
-const mockGetUserProfile = api.getUserProfile as jest.MockedFunction<typeof api.getUserProfile>;
-const mockIsDevMockEnabled = devMock.isDevMockEnabled as jest.MockedFunction<typeof devMock.isDevMockEnabled>;
+const router = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => router }));
 
 describe('LoginPage', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
-        global.fetch = jest.fn();
-        (global.fetch as jest.Mock).mockRejectedValue(new Error('Not found'));
-        mockIsDevMockEnabled.mockReturnValue(false);
+        router.push.mockClear();
     });
 
-    afterEach(() => {
-        jest.restoreAllMocks();
-    });
-
-    it('renders welcome message', () => {
-        render(<LoginPage />);
-        expect(screen.getByText(/welcome to whisper/i)).toBeInTheDocument();
-    });
-
-    it('skips runtime-config fetch in dev mock mode', () => {
-        mockIsDevMockEnabled.mockReturnValue(true);
-        render(<LoginPage />);
-        expect(global.fetch).not.toHaveBeenCalled();
-    });
-
-    it('detects Electron mode via runtime-config', async () => {
-        (global.fetch as jest.Mock).mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({ API_URL: 'http://localhost:9001' }),
-        });
-
-        render(<LoginPage />);
-        await waitFor(() => {
-            expect(screen.getByText(/desktop app detected/i)).toBeInTheDocument();
-        });
-    });
-
-    it('shows web mode when runtime-config not found', async () => {
-        (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Not found'));
-
-        render(<LoginPage />);
-        await waitFor(() => {
-            expect(screen.getByText(/sign in with your account/i)).toBeInTheDocument();
-        });
-    });
-
-    it('handles sync success', async () => {
-        (global.fetch as jest.Mock).mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({ API_URL: 'http://localhost:9001' }),
-        });
-
-        mockGetUserProfile.mockResolvedValue({
-            uid: 'user-1',
-            display_name: 'Test User',
-            email: 'test@example.com',
-        });
+    it('in a plain browser, asks the user to sign in with their account', async () => {
+        desktop.mode = 'web';
 
         render(<LoginPage />);
 
-        await waitFor(() => {
-            expect(mockGetUserProfile).toHaveBeenCalledTimes(1);
-        });
-
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /sync complete/i })).toBeInTheDocument();
-        });
+        expect(screen.getByRole('heading', { name: /welcome to whisper/i })).toBeInTheDocument();
+        expect(await screen.findByText(/sign in with your account/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /sign in with account/i })).toBeInTheDocument();
     });
 
-    it('shows error message on sync failure', async () => {
-        (global.fetch as jest.Mock).mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({ API_URL: 'http://localhost:9001' }),
-        });
-
-        mockGetUserProfile.mockRejectedValue(new Error('Failed to fetch'));
+    it('in dev mock mode, shows the browser sign-in without asking for the runtime config', async () => {
+        localStorage.setItem('dev_mock', '1');
 
         render(<LoginPage />);
 
-        await waitFor(() => {
-            expect(mockGetUserProfile).toHaveBeenCalledTimes(1);
-        });
-
-        await waitFor(() => {
-            expect(screen.getByText(/desktop app user not found/i)).toBeInTheDocument();
-            expect(screen.getByRole('button', { name: /retry sync/i })).toBeInTheDocument();
-        });
+        expect(await screen.findByRole('button', { name: /sign in with account/i })).toBeInTheDocument();
+        expect(sentRequests).toEqual([]);
     });
 
-    it('shows retry button after error', async () => {
-        (global.fetch as jest.Mock).mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({ API_URL: 'http://localhost:9001' }),
+    it('in the desktop app, syncs the signed-in desktop user and opens settings', async () => {
+        desktop.user = makeUser({ uid: 'user-7', display_name: 'Desk User', email: 'desk@example.com' });
+
+        render(<LoginPage />);
+
+        expect(await screen.findByText(/desktop app detected/i)).toBeInTheDocument();
+        expect(await screen.findByRole('button', { name: /sync complete/i })).toBeInTheDocument();
+        expect(JSON.parse(localStorage.getItem('whisper_user') || 'null')).toEqual({
+            uid: 'user-7',
+            display_name: 'Desk User',
+            email: 'desk@example.com',
         });
+        await vi.waitFor(() => expect(router.push).toHaveBeenCalledWith('/settings'), { timeout: 2000 });
+    });
 
-        mockGetUserProfile
-            .mockRejectedValueOnce(new Error('Failed to fetch'))
-            .mockResolvedValueOnce({
-                uid: 'user-1',
-                display_name: 'Retry User',
-                email: 'retry@example.com',
-            });
+    it('in the desktop app with no signed-in user, says so and offers a retry', async () => {
+        desktop.user = null;
 
+        render(<LoginPage />);
+
+        expect(await screen.findByText(/desktop app user not found/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /retry sync/i })).toBeInTheDocument();
+    });
+
+    it('syncs on retry once the user has signed in to the desktop app', async () => {
+        desktop.user = null;
         const user = userEvent.setup();
         render(<LoginPage />);
+        const retry = await screen.findByRole('button', { name: /retry sync/i });
 
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: /retry sync/i })).toBeInTheDocument();
-        });
+        desktop.user = makeUser({ display_name: 'Retry User' });
+        await user.click(retry);
 
-        const syncButton = screen.getByRole('button', { name: /retry sync/i });
-        await user.click(syncButton);
-
-        await waitFor(() => {
-            expect(mockGetUserProfile).toHaveBeenCalledTimes(2);
-            expect(screen.getByRole('button', { name: /sync complete/i })).toBeInTheDocument();
-        });
+        expect(await screen.findByRole('button', { name: /sync complete/i })).toBeInTheDocument();
     });
 });
-

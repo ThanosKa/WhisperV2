@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { normalizePathname } from '@/utils/path';
+import { normalizePathname } from '@/lib/path';
 import { cn } from '@/lib/utils';
 
 export type MatchStrategy = 'exact' | 'startsWith';

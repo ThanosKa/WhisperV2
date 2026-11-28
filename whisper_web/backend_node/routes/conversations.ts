@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { type Request, type Response } from 'express';
 import { ipcRequest } from '../ipcBridge';
 import type { Session, SessionDetails } from '../types/session';
 
@@ -164,7 +164,8 @@ router.get('/search/page', async (req: Request, res: Response) => {
                 const tldr = ((d.summary.tldr || '') as string).toLowerCase();
                 const text = ((d.summary.text || '') as string).toLowerCase();
                 if (tldr.includes(q) || text.includes(q)) {
-                    summaryMatches.add(listenSessions[idx].id as string);
+                    const session = listenSessions[idx];
+                    if (session) summaryMatches.add(session.id as string);
                 }
             });
             filtered = ordered.filter(s => titleMatches.has(s.id as string) || summaryMatches.has(s.id as string));

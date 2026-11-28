@@ -1,5 +1,12 @@
+// The Lit renderer's build, run by electron-vite (electron.vite.config.mjs) until the renderer is
+// rewritten in step 6. It stays on esbuild because Vite's dev server cannot serve the renderer
+// unchanged: src/renderer/listen/audioCore/ is CommonJS (`require`, `module.exports`), and Vite
+// serves source files as native ES modules.
 const esbuild = require('esbuild');
+const fs = require('fs');
 const path = require('path');
+
+const RENDERER_DIR = path.join(__dirname, 'src', 'renderer');
 
 const baseConfig = {
     bundle: true,
@@ -14,52 +21,30 @@ const baseConfig = {
 };
 
 const entryPoints = [
-    { in: 'src/ui/app/HeaderController.js', out: 'public/build/header' },
-    { in: 'src/ui/app/WhisperApp.js', out: 'public/build/content' },
-    { in: 'src/ui/app/RecoveryToast.js', out: 'public/build/recovery-toast' },
+    { in: 'src/renderer/app/HeaderController.js', out: 'public/build/header' },
+    { in: 'src/renderer/app/WhisperApp.js', out: 'public/build/content' },
+    { in: 'src/renderer/app/RecoveryToast.js', out: 'public/build/recovery-toast' },
 ];
 
-async function build() {
-    try {
-        console.log('Building renderer process code...');
-        await Promise.all(
-            entryPoints.map(point =>
-                esbuild.build({
-                    ...baseConfig,
-                    entryPoints: [point.in],
-                    outfile: `${point.out}.js`,
-                })
-            )
-        );
-        console.log('✅ Renderer builds successful!');
-    } catch (e) {
-        console.error('Renderer build failed:', e);
-        process.exit(1);
-    }
+async function buildRenderer() {
+    await Promise.all(
+        entryPoints.map(point =>
+            esbuild.build({
+                ...baseConfig,
+                absWorkingDir: __dirname,
+                entryPoints: [point.in],
+                outfile: `${point.out}.js`,
+            })
+        )
+    );
 }
 
-async function watch() {
-    try {
-        const contexts = await Promise.all(
-            entryPoints.map(point =>
-                esbuild.context({
-                    ...baseConfig,
-                    entryPoints: [point.in],
-                    outfile: `${point.out}.js`,
-                })
-            )
-        );
-
-        console.log('Watching for changes...');
-        await Promise.all(contexts.map(context => context.watch()));
-    } catch (e) {
-        console.error('Watch mode failed:', e);
-        process.exit(1);
-    }
+// Every file under src/renderer/, so a watch build reruns the renderer build when one changes.
+function rendererSourceFiles() {
+    return fs
+        .readdirSync(RENDERER_DIR, { recursive: true, withFileTypes: true })
+        .filter(entry => entry.isFile())
+        .map(entry => path.join(entry.parentPath, entry.name));
 }
 
-if (process.argv.includes('--watch')) {
-    watch();
-} else {
-    build();
-}
+module.exports = { buildRenderer, rendererSourceFiles };

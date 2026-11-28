@@ -12,7 +12,7 @@
 
 - [x] The four files are split into smaller components in their feature folder; no file in them is left over about 200 lines without a reason written here
 - [x] The activity details page gets an MSW page test before it is split, since it has none today
-- [ ] No change in what the pages render or request: the MSW page tests pass, and the 10 dashboard pages match their step-3 screenshots
+- [x] No change in what the pages render or request: the MSW page tests pass, and the 10 dashboard pages match their step-3 screenshots
 - [ ] `pnpm type-check` and `pnpm test` pass, and `pnpm lint` passes as it stands when the ticket runs (oxlint is set up outside this spec). The test counts are recorded in this ticket's comments
 - [x] No lint rule is silenced with a disable comment
 - [ ] Work on its own branch, merged into `dev` through a pull request

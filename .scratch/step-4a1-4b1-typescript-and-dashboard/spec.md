@@ -212,3 +212,7 @@ The seams below match [Which tests to delete](../whisper-cleanup/issues/09-which
 - **Risk: vendored renderer scripts under Vite.** The fallback (keep `build.js` for the renderer until step 6) is written above so that the ticket does not stall.
 - **The parallel tracks share files.** A branch rebases on `dev` and re-runs `pnpm install` before its PR, so `pnpm-lock.yaml` conflicts are resolved by the tool, not by hand.
 - `/to-tickets` cut this spec into 12 tickets in `issues/`, each with its model.
+
+## End-of-spec run (ticket 12, 2026-11-28)
+
+type-check 0, `pnpm test` 0 (331 tests: main 269, dashboard 62), `pnpm web:lint` 0, `pnpm lint` fails as expected (no root lint config; oxlint effort). Electron suite 14/14 in dev and 14/14 packaged. Dashboard screenshots: 8 identical, `download` re-baselined (anti-aliasing), `activity` differs only in a total built from `Math.random()` fake data. Status stays open until the owner decides on that one (see ticket 12).

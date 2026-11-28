@@ -38,6 +38,10 @@ const NO_ANIMATION_CSS = `*, *::before, *::after {
     animation: none !important; transition: none !important; caret-color: transparent !important; scroll-behavior: auto !important;
 }`;
 
+// Next 15+ draws a dev-tools badge (bottom left) inside <nextjs-portal>; it is not part of the dashboard.
+// Hiding it also hides Next's error overlay, so page errors are printed instead (see pageerror below).
+const HIDE_NEXT_DEV_TOOLS_CSS = 'nextjs-portal { display: none !important; }';
+
 function freePort() {
     return new Promise((resolve, reject) => {
         const server = net.createServer();
@@ -107,11 +111,16 @@ async function main() {
             }
         });
         const page = await context.newPage();
+        page.on('pageerror', error => console.error(`page error on ${page.url()}: ${error.message}`));
+        page.on('console', message => {
+            if (message.type() === 'error') console.error(`console error on ${page.url()}: ${message.text()}`);
+        });
         mkdirSync(assetsDir, { recursive: true });
 
         for (const [index, { name, route }] of PAGES.entries()) {
             await page.goto(`${base}${route}`, { waitUntil: 'load', timeout: 120_000 });
             await page.addStyleTag({ content: NO_ANIMATION_CSS });
+            await page.addStyleTag({ content: HIDE_NEXT_DEV_TOOLS_CSS });
             await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => undefined);
             await page.evaluate(() => document.fonts.ready);
             await page.waitForTimeout(1500);

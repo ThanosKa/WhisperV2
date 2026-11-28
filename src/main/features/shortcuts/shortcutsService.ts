@@ -1,25 +1,39 @@
 import { globalShortcut, screen } from 'electron';
+import type { BrowserWindow } from 'electron';
 import internalBridge from '../../bridge/internalBridge';
 import askService from '../ask/askService';
+import { logger } from '../common/utils/logger';
+
+const log = logger.child({ module: 'ShortcutsService' });
+
+type Keybinds = {
+    moveUp: string;
+    moveDown: string;
+    moveLeft: string;
+    moveRight: string;
+    toggleVisibility: string;
+    toggleClickThrough: string;
+    nextStep: string;
+    manualScreenshot: string;
+    previousResponse: string;
+    nextResponse: string;
+};
 
 class ShortcutsService {
-    constructor() {
-        this.lastVisibleWindows = new Set(['header']);
-        this.mouseEventsIgnored = false;
-        this.windowPool = null;
-        this.allWindowVisibility = true;
-    }
+    private mouseEventsIgnored = false;
+    private windowPool: Map<string, BrowserWindow> | null = null;
+    private allWindowVisibility = true;
 
-    initialize(windowPool) {
+    initialize(windowPool: Map<string, BrowserWindow>) {
         this.windowPool = windowPool;
         internalBridge.on('reregister-shortcuts', () => {
-            console.log('[ShortcutsService] Reregistering shortcuts due to header state change.');
-            this.registerShortcuts();
+            log.info('Reregistering shortcuts due to header state change');
+            void this.registerShortcuts();
         });
-        console.log('[ShortcutsService] Initialized with dependencies and event listener.');
+        log.info('Initialized with dependencies and event listener');
     }
 
-    getDefaultKeybinds() {
+    getDefaultKeybinds(): Keybinds {
         // Use CommandOrControl for cross-platform compatibility.
         return {
             moveUp: 'CommandOrControl+Up',
@@ -35,7 +49,7 @@ class ShortcutsService {
         };
     }
 
-    async loadKeybinds() {
+    async loadKeybinds(): Promise<Keybinds> {
         // Always return default keybinds and don't touch the database.
         return this.getDefaultKeybinds();
     }
@@ -56,22 +70,23 @@ class ShortcutsService {
     }
 
     async registerShortcuts(registerOnlyToggleVisibility = false) {
-        if (!this.windowPool) {
-            console.error('[Shortcuts] Service not initialized. Cannot register shortcuts.');
+        const windowPool = this.windowPool;
+        if (!windowPool) {
+            log.error('Service not initialized. Cannot register shortcuts.');
             return;
         }
         const keybinds = await this.loadKeybinds();
         globalShortcut.unregisterAll();
 
-        const header = this.windowPool.get('header');
+        const header = windowPool.get('header');
         const mainWindow = header;
 
-        const sendToRenderer = (channel, ...args) => {
-            this.windowPool.forEach(win => {
+        const sendToRenderer = (channel: string) => {
+            windowPool.forEach(win => {
                 if (win && !win.isDestroyed()) {
                     try {
-                        win.webContents.send(channel, ...args);
-                    } catch (e) {
+                        win.webContents.send(channel);
+                    } catch {
                         // Ignore errors for destroyed windows
                     }
                 }
@@ -80,9 +95,9 @@ class ShortcutsService {
 
         if (registerOnlyToggleVisibility) {
             if (keybinds.toggleVisibility) {
-                globalShortcut.register(keybinds.toggleVisibility, () => this.toggleAllWindowsVisibility());
+                globalShortcut.register(keybinds.toggleVisibility, () => void this.toggleAllWindowsVisibility());
             }
-            console.log('[Shortcuts] registerOnlyToggleVisibility, only toggleVisibility shortcut is registered.');
+            log.info('registerOnlyToggleVisibility, only toggleVisibility shortcut is registered');
             return;
         }
 
@@ -115,37 +130,32 @@ class ShortcutsService {
 
         // --- User-configurable shortcuts ---
 
-        for (const action in keybinds) {
-            const accelerator = keybinds[action];
+        const moveStep = (direction: string) => () => {
+            if (header && header.isVisible()) internalBridge.emit('window:moveStep', { direction });
+        };
+
+        for (const [action, accelerator] of Object.entries(keybinds)) {
             if (!accelerator) continue;
 
-            let callback;
+            let callback: (() => void) | undefined;
             switch (action) {
                 case 'toggleVisibility':
-                    callback = () => this.toggleAllWindowsVisibility();
+                    callback = () => void this.toggleAllWindowsVisibility();
                     break;
                 case 'nextStep':
-                    callback = () => askService.toggleAskButton(true);
+                    callback = () => void askService.toggleAskButton(true);
                     break;
                 case 'moveUp':
-                    callback = () => {
-                        if (header && header.isVisible()) internalBridge.emit('window:moveStep', { direction: 'up' });
-                    };
+                    callback = moveStep('up');
                     break;
                 case 'moveDown':
-                    callback = () => {
-                        if (header && header.isVisible()) internalBridge.emit('window:moveStep', { direction: 'down' });
-                    };
+                    callback = moveStep('down');
                     break;
                 case 'moveLeft':
-                    callback = () => {
-                        if (header && header.isVisible()) internalBridge.emit('window:moveStep', { direction: 'left' });
-                    };
+                    callback = moveStep('left');
                     break;
                 case 'moveRight':
-                    callback = () => {
-                        if (header && header.isVisible()) internalBridge.emit('window:moveStep', { direction: 'right' });
-                    };
+                    callback = moveStep('right');
                     break;
                 case 'toggleClickThrough':
                     callback = () => {
@@ -159,7 +169,7 @@ class ShortcutsService {
                 case 'manualScreenshot':
                     callback = () => {
                         if (mainWindow && !mainWindow.isDestroyed()) {
-                            mainWindow.webContents.executeJavaScript('window.captureManualScreenshot && window.captureManualScreenshot();');
+                            void mainWindow.webContents.executeJavaScript('window.captureManualScreenshot && window.captureManualScreenshot();');
                         }
                     };
                     break;
@@ -175,16 +185,16 @@ class ShortcutsService {
                 try {
                     globalShortcut.register(accelerator, callback);
                 } catch (e) {
-                    console.error(`[Shortcuts] Failed to register shortcut for "${action}" (${accelerator}):`, e.message);
+                    log.error({ err: e, action, accelerator }, 'Failed to register shortcut');
                 }
             }
         }
-        console.log('[Shortcuts] All shortcuts have been registered.');
+        log.info('All shortcuts have been registered');
     }
 
     unregisterAll() {
         globalShortcut.unregisterAll();
-        console.log('[Shortcuts] All shortcuts have been unregistered.');
+        log.info('All shortcuts have been unregistered');
     }
 }
 

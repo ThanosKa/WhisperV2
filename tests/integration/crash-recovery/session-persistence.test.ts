@@ -60,13 +60,13 @@ vi.mock('../../../src/main/features/listen/summary/repositories', () => ({
     },
 }));
 
-vi.mock('../../../src/main/window/windowManager', () => ({
-    windowPool: {
-        get: vi.fn(() => ({
+const windowPoolGet = vi.hoisted(() => vi.fn<(name: string) => object | null | undefined>(() => ({
             isDestroyed: vi.fn(() => false),
             webContents: { send: vi.fn() },
-        })),
-    },
+        })));
+
+vi.mock('../../../src/main/window/windowManager', () => ({
+    windowPool: { get: windowPoolGet },
 }));
 
 describe('Crash Recovery - Session Persistence', () => {

@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { BrowserWindow } from 'electron';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 // Electron cannot run under Jest: a window here is a stand-in whose page loads when the test says so.
@@ -46,9 +47,10 @@ describe('showScreenshotWindow', () => {
     });
 
     test('sends the image to a new Screenshot window once, after its page has loaded', () => {
-        windowManager.windowPool.set('header', fakeWindow());
+        windowManager.windowPool.set('header', new BrowserWindow());
+        created.length = 0; // keep only the windows the code under test opens
 
-        windowManager.showScreenshotWindow('IMAGE', { x: 10, y: 20 });
+        windowManager.showScreenshotWindow({ base64Data: 'IMAGE', position: { x: 10, y: 20 } });
         const [screenshotWin] = created;
         if (!screenshotWin) throw new Error('no Screenshot window was opened');
         expect(screenshotWin.webContents.send).not.toHaveBeenCalled();
@@ -61,11 +63,12 @@ describe('showScreenshotWindow', () => {
     });
 
     test('opens no Screenshot window when the header window is gone', () => {
-        const header = fakeWindow();
+        const header = new BrowserWindow();
         header.destroy();
         windowManager.windowPool.set('header', header);
+        created.length = 0;
 
-        expect(() => windowManager.showScreenshotWindow('IMAGE', { x: 10, y: 20 })).not.toThrow();
+        expect(() => windowManager.showScreenshotWindow({ base64Data: 'IMAGE', position: { x: 10, y: 20 } })).not.toThrow();
         vi.advanceTimersByTime(100);
 
         expect(created).toEqual([]);

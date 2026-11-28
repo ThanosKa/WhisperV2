@@ -16,3 +16,7 @@ Resolved 2026-11-23 with the owner: follow the industry.
 - Users on 11 or 12 keep the last build that runs. While doing the work, check that auto-update does not hand them a build that will not open (whether `electron-updater` honours the `minimumSystemVersion` in `latest-mac.yml`; if not, gate the update).
 - The WhisperAPP download page says "macOS 13 or later" (today it wrongly says 10.15 in every locale, `WhisperAPP/src/lib/locales/*.json`).
 - **The app records what it should:** today nothing records which macOS or app version users run. The desktop sends its app version and OS version with its requests to WhisperAPP, and WhisperAPP keeps the last seen per user. This is the standard client-version header; it also tells when old builds are gone, so Railway can be switched off ([Direct-to-Soniox design](14-direct-to-soniox-design.md)). Behavior the user sees does not change.
+
+## Comments
+
+**Found in [Spec: Steps 2 and 3](../../step-2-3-safety-net-upgrades/spec.md):** `electron-updater` 6.6 (the installed builds) does honour `minimumSystemVersion` in the update feed, but compares it with `os.release()`, the Darwin version. The feed must say `22.0.0` (macOS 13), not `13.0`. `electron-builder` 26.0 does not write the field. The version header and the download-page text move to step 7.

@@ -118,3 +118,7 @@ whisper_web/out/
 .next/
 content.js
 .claude/worktrees/
+
+# Playwright output
+test-results/
+playwright-report/

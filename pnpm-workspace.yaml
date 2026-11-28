@@ -7,9 +7,7 @@ nodeLinker: hoisted
 # Packages whose install scripts may run. Everything else is denied.
 allowBuilds:
     esbuild: true
-    better-sqlite3: false
     electron-winstaller: false
-    electron: true
     sharp: true
 
 # Install the optional binaries (sharp's @img/*) for both macOS architectures, for the universal build.

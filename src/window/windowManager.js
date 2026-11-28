@@ -75,8 +75,9 @@ const showScreenshotWindow = (base64Data, position) => {
         const header = windowPool.get('header');
         if (header) {
             createFeatureWindows(header, ['screenshot']);
-            // Wait a bit for window to be created, then show
-            setTimeout(() => {
+            // Wait until the new window's page has loaded and listens for the data, then show.
+            // A fixed 100 ms wait lost the data when the page loaded slower (Electron 45).
+            windowPool.get('screenshot').webContents.once('did-finish-load', () => {
                 const newWin = windowPool.get('screenshot');
                 if (newWin && !newWin.isDestroyed()) {
                     newWin.webContents.send('screenshot:data', base64Data);
@@ -97,7 +98,7 @@ const showScreenshotWindow = (base64Data, position) => {
                     newWin.setAlwaysOnTop(true);
                     newWin.moveTop();
                 }
-            }, 100);
+            });
         }
         return;
     }

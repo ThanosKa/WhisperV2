@@ -13,7 +13,7 @@
 - [x] The fake server also streams LLM answers and speaks the STT relay's WebSocket protocol with a fixed transcript
 - [x] Smoke 2 passes: a typed question in Ask gets an answer streamed from the fake server
 - [x] Smoke 3 passes: Listen starts on Chromium's fake media device, the fake transcript shows, Listen stops, and the session is in the database read from the throwaway profile after the app closes. If Listen cannot start without system audio capture, the smallest boundary is stubbed and recorded here
-- [ ] Smoke 4 passes: a setting changed in Settings is still set after a restart with the same profile
+- [x] Smoke 4 passes: a setting changed in Settings is still set after a restart with the same profile
 - [x] Six screenshots pass with an exact match: header, Ask, Listen, Settings, Plan, Screenshot, each in its normal state, fixed window size, animations off, changing text masked
 - [x] The suite passes three runs in a row with no change, so it is not flaky
 - [x] No app code changes, except a hook already recorded in ticket 01
@@ -26,14 +26,14 @@
 
 Built test-first on the seam the spec names (Seam 1, the Electron app through Playwright). Each smoke test failed first for the expected reason (an unknown request in the fake server), then passed. Install and build as in ticket 01 (Node 20.19.4 first on `PATH`; `npm install` at the root and in `whisper_web`; lockfiles restored; `npm run build:all`). Run with `npm run test:e2e`.
 
-**Smoke 4 is not ticked: it does not use the Settings window.** No control in today's Settings window stores a setting:
+**Smoke 4 does not use the Settings window (owner approved on 2026-11-28).** No control in today's Settings window stores a setting:
 - Stealth Mode lives only in memory (`isContentProtectionOn = true` in `windowManager.js`), so a restart turns it back on. This is today's behavior, and the suite does not change it.
 - The Automatic Updates toggle is commented out.
 - The monitor list only moves the window.
 - Personalize opens the browser.
 - Logout is stored, but it is the sign-in state, not a setting.
 
-The one setting the user changes that the app stores is the analysis preset. It is chosen in the Listen window and saved in the `whisper-settings` store (`analysisPresetId`). Smoke 4 chooses Recruiting, restarts on the same profile, and checks Recruiting is still chosen. It was shown to catch a loss: deleting `whisper-settings.json` between the two launches made it fail (`meetings` instead of `recruiting`). The owner should confirm this is the setting the spec meant, or name another one.
+The one setting the user changes that the app stores is the analysis preset. It is chosen in the Listen window and saved in the `whisper-settings` store (`analysisPresetId`). Smoke 4 chooses Recruiting, restarts on the same profile, and checks Recruiting is still chosen. It was shown to catch a loss: deleting `whisper-settings.json` between the two launches made it fail (`meetings` instead of `recruiting`). The owner approved the analysis preset as the Smoke 4 setting on 2026-11-28.
 
 **Fake server** (`tests/e2e/fakeServer.ts`). It adds `POST /api/llm/stream`, which sends three OpenAI-style server-sent events, one write each, then `[DONE]`. It also adds `POST /api/llm/chat`, which returns `{ success, content }`; Listen's Done asks it for a `comprehensive_summary` JSON. Both check `X-Session-UUID`, and the request bodies are logged for assertions. The WebSocket upgrade on `/` with the fake session becomes a relay in the protocol of `websocket/src/index.ts`:
 - `OPEN` is answered with `CONNECTED`.

@@ -236,6 +236,7 @@ describe('ActivityPage', () => {
                 takeRecords: jest.fn(),
                 root: null,
                 rootMargin: '',
+                scrollMargin: '',
                 thresholds: [],
             } as IntersectionObserver;
         }) as unknown as typeof IntersectionObserver;

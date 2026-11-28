@@ -7,10 +7,6 @@
 
 require('dotenv').config();
 
-if (require('electron-squirrel-startup')) {
-    process.exit(0);
-}
-
 const { app, BrowserWindow, shell, ipcMain, dialog, desktopCapturer, session } = require('electron');
 const path = require('node:path');
 
@@ -55,7 +51,6 @@ const listenService = require('./features/listen/listenService');
 const databaseInitializer = require('./features/common/services/databaseInitializer');
 const authService = require('./features/common/services/authService');
 const express = require('express');
-const fetch = require('node-fetch');
 const { autoUpdater } = require('electron-updater');
 const { EventEmitter } = require('events');
 const askService = require('./features/ask/askService');

@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** claimed
+**Status:** resolved
 
 **Label:** ready-for-agent
 
@@ -16,7 +16,7 @@
 - [x] `whisper_web/e2e/`, its Playwright config, its `@playwright/test` dependency and its `test:e2e*` scripts are deleted
 - [x] The committed `test-results/` and `playwright-report/` folders, root and `whisper_web`, are deleted and added to `.gitignore`
 - [x] `whisper_web` Jest, lint and type-check give the step-1 counts
-- [ ] Work on its own branch, merged into `dev` through a pull request
+- [x] Work on its own branch, merged into `dev` through a pull request (PR #6; review fixes in the closing PR)
 
 
 ## Comments

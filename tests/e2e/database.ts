@@ -2,8 +2,7 @@ import { execFile } from 'node:child_process';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { promisify } from 'node:util';
-
-const APP_ROOT = path.resolve(__dirname, '../..');
+import { APP_ROOT } from './appRoot';
 
 // `better-sqlite3` is built for Electron, not for the Node that runs Playwright, so the query runs
 // in Electron's binary in Node mode, with the app's own driver, after the app has closed.
@@ -22,7 +21,6 @@ const electronBinary = (): string => {
     return resolved;
 };
 
-// Returns the rows of `sql` run on the profile's `whisper.db`, as parsed JSON.
 export async function queryDatabase({ userDataDir, sql }: { userDataDir: string; sql: string }): Promise<unknown> {
     const { stdout } = await promisify(execFile)(electronBinary(), ['-e', QUERY_SCRIPT], {
         cwd: APP_ROOT,

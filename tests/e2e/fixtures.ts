@@ -2,9 +2,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { _electron as electron, expect, test as base, type ElectronApplication, type Page } from '@playwright/test';
+import { APP_ROOT } from './appRoot';
 import { FAKE_SESSION_UUID, FAKE_USER, startFakeServer, type FakeServer } from './fakeServer';
 
-const APP_ROOT = path.resolve(__dirname, '../..');
 const MAIN_PRELOAD = path.join(__dirname, 'support', 'main-preload.js');
 export const FAKE_SCREEN_JPEG = path.join(__dirname, 'support', 'fake-screen.jpg');
 
@@ -35,7 +35,9 @@ const APP_UNDER_TEST = readAppUnderTest();
 // The development app runs through Electron's default app, which loads the preload with `-r`. The
 // packaged app has no default app; its test build loads the preload from its own entry point
 // (tests/e2e/electron-builder.e2e.yml).
-async function launchOptions({ app }: { app: AppUnderTest }): Promise<{ executablePath?: string; args: string[] }> {
+type LaunchOptions = Pick<NonNullable<Parameters<typeof electron.launch>[0]>, 'executablePath' | 'args'>;
+
+async function launchOptions({ app }: { app: AppUnderTest }): Promise<LaunchOptions> {
     switch (app.kind) {
         case 'development':
             return { args: [SCALE_SWITCH, '-r', MAIN_PRELOAD, APP_ROOT] };
@@ -47,7 +49,6 @@ async function launchOptions({ app }: { app: AppUnderTest }): Promise<{ executab
     }
 }
 
-// The feature windows load `content.html?view=<name>`; the header loads `header.html`.
 export type AppView = 'header' | 'ask' | 'listen' | 'settings' | 'plan' | 'screenshot';
 
 type Fixtures = {
@@ -58,7 +59,8 @@ type Fixtures = {
     headerWindow: Page;
 };
 
-// Writes the `auth-session` electron-store file the way authService saves it after a login.
+export type RunningApp = Pick<Fixtures, 'electronApp' | 'headerWindow'>;
+
 const seedLoggedInSession = async ({ userDataDir }: { userDataDir: string }) => {
     const store = { sessionUuid: FAKE_SESSION_UUID, userProfile: FAKE_USER };
     await fs.writeFile(path.join(userDataDir, 'auth-session.json'), JSON.stringify(store));
@@ -69,14 +71,12 @@ const isView = ({ page, view }: { page: Page; view: AppView }) => {
     return view === 'header' ? url.pathname.endsWith('/header.html') : url.searchParams.get('view') === view;
 };
 
-// Finds the window that shows `view`, waiting for it if the app has not opened it yet.
 export async function findWindow({ electronApp, view }: { electronApp: ElectronApplication; view: AppView }): Promise<Page> {
     const predicate = (page: Page) => isView({ page, view });
     return electronApp.windows().find(predicate) ?? (await electronApp.waitForEvent('window', { predicate }));
 }
 
-// The windows the app opens at start, next to the header, on a logged-in profile.
-const STARTUP_VIEWS = ['listen', 'ask', 'settings', 'plan'];
+const STARTUP_VIEWS = ['listen', 'ask', 'settings', 'plan'] satisfies AppView[];
 
 // Waits until the header and the feature windows opened with it have loaded their pages. The app
 // sends a window its state over IPC when the header is used, and a page still loading misses it.
@@ -92,7 +92,7 @@ async function waitForStartupWindows({ electronApp }: { electronApp: ElectronApp
                         .map(win => new URL(win.webContents.getURL()).searchParams.get('view'));
                     return views.every(view => loaded.includes(view));
                 }, STARTUP_VIEWS),
-            { message: 'the startup windows finished loading', timeout: 20_000 },
+            { message: 'the startup windows finished loading', timeout: 20_000 }
         )
         .toBe(true);
 }
@@ -110,8 +110,6 @@ export const test = base.extend<Fixtures>({
         await use(dir);
         await fs.rm(dir, { recursive: true, force: true });
     },
-    // Launches the app on the test's profile and fake server. A test may launch it more than once
-    // (Smoke 4 restarts it); every app still running at the end is closed.
     launchApp: async ({ fakeServer, userDataDir }, use) => {
         const launched: ElectronApplication[] = [];
         await use(async () => {
@@ -131,11 +129,9 @@ export const test = base.extend<Fixtures>({
             await waitForStartupWindows({ electronApp });
             return electronApp;
         });
-        // The apps close before the fake server (a fixture they depend on) stops.
         for (const electronApp of launched) {
             await electronApp.close();
         }
-        // The main-process preload writes every uncaught exception in main to this file.
         const mainErrors = await fs.readFile(path.join(userDataDir, 'e2e-main-errors.log'), 'utf8').catch(() => '');
         expect(mainErrors, 'uncaught exceptions in the main process').toBe('');
     },

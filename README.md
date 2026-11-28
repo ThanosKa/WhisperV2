@@ -57,7 +57,7 @@ npm run setup
 - Web bundle: `npm run build:web`
 - Everything (renderer + web): `npm run build:all`
 - Electron dist: `npm run build` (or `dist:mac | dist:win | dist:linux | dist:all`)
-- Package only: `npm run package`; Publish via electron-builder: `npm run publish`
+- Package only: `npm run package`; macOS release (CI only, it publishes): `pnpm run release:mac`
 
 ## Tests
 

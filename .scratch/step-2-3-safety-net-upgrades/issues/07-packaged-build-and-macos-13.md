@@ -4,19 +4,19 @@
 
 **Blocked by:** 04
 
-**Status:** claimed
+**Status:** resolved
 
 **Label:** ready-for-agent
 
 **Model:** Opus (run `/model opus` before `/implement`). The stubs may not reach a packaged app, and `electron-builder` may not write the feed field: both need a judgment call on the fallback.
 
 - [x] The smoke tests can launch either the development app or a packaged app
-- [ ] The packaged app is built for the current architecture with `electron-builder --dir`, signing and notarizing off, and the suite runs against it. If the permission stub cannot reach it, only Smoke 1 runs there, accepting the permission header as "the app opened", and the reason is recorded here. Built; the suite run is deferred to the end-of-spec run (owner, 2026-11-28)
+- [x] The packaged app is built for the current architecture with `electron-builder --dir`, signing and notarizing off, and the suite runs against it. If the permission stub cannot reach it, only Smoke 1 runs there, accepting the permission header as "the app opened", and the reason is recorded here. Built; the suite run is deferred to the end-of-spec run (owner, 2026-11-28)
 - [x] `minimumSystemVersion` is `'13.0'` in the macOS build config
 - [x] A local macOS build without publishing produces a `latest-mac.yml` containing `minimumSystemVersion: 22.0.0` (Darwin 22 is macOS 13), through `electron-builder` config if the installed version supports it with that value, otherwise through a release step that adds it before upload. The file is saved in `assets/` as proof
 - [x] Nothing is published or released
-- [ ] The Electron suite against the development app, both Jest suites, `whisper_web` lint and type-check still pass. Both Jest suites, lint and type-check pass; the Electron suite is deferred to the end-of-spec run (owner, 2026-11-28)
-- [ ] Work on its own branch, merged into `dev` through a pull request
+- [x] The Electron suite against the development app, both Jest suites, `whisper_web` lint and type-check still pass. Both Jest suites, lint and type-check pass; the Electron suite is deferred to the end-of-spec run (owner, 2026-11-28)
+- [x] Work on its own branch, merged into `dev` through a pull request (PR #12; review fixes in the closing PR)
 
 ## Comments
 
@@ -103,3 +103,28 @@ WHISPER_E2E_APP=packaged pnpm run test:e2e    # all 10 tests against dist-e2e/ma
 | `whisper_web` type-check | exit 0 |
 | `tsc --strict` on `tests/e2e/fixtures.ts` and the specs | clean, apart from the existing missing `@types/ws` in `fakeServer.ts` |
 | Electron suite, development app and packaged app | deferred to the end-of-spec run (owner, 2026-11-28) |
+
+### 2026-11-28, end-of-spec run (branch `step-2-3-end-run`, `dev` at 7ab4197)
+
+End-of-spec run 2026-11-28: development app passed, 10 of 10 in one full run (46.9 s). Root Jest 124 passed, `whisper_web` Jest 49 passed, `whisper_web` lint clean, type-check exit 0.
+
+End-of-spec run 2026-11-28: packaged app passed, with one flaky test. `pnpm run package:e2e` exit 0, then `WHISPER_E2E_APP=packaged pnpm run test:e2e`, one full run: 9 of 10 passed (51.6 s). The stubs reached the packaged app: the header opened logged in (no permission screen), and Listen, Ask and Smoke 4 passed.
+- Failed: the Settings-window screenshot. The fixture's 20 s wait for the startup windows timed out (load average 12.2 at the start, from other work). This is the "startup windows over 20 s" flake ticket 04 saw under load.
+- Closing the app after that failure threw `TypeError: Object has been destroyed` at `windowManager.js:415`: the `onComplete` of `animateWindowBounds` in `window:adjustWindowHeight` calls `setResizable` on the destroyed window. It is the same kind of app bug as ticket 02's fade-out throw, at another call site, and shows only when the app quits mid-animation. Not fixed. The error went to the log, so no dialog appeared.
+- Rerun of that test alone (`--grep "Settings window"`): passed on the first try (load 6.6). Flaky, not broken. No code changed.
+
+### 2026-11-28, review fixes (branch `step-2-3-review-fixes`)
+
+- **A failed release upload exited 0.** `electron-builder publish` 26.18 catches every upload error, logs "error publishing" and returns null (`publishPackageWithTasks`), and a shell glob that matched nothing reached it as a literal file name. CI would go green on a partial draft release. `release:mac` now runs `node scripts/release-mac.js` after `dist:mac`: it checks that `dist/` holds `latest-mac.yml`, a `.dmg`, a `.dmg.blockmap`, a `-mac.zip` and a `-mac.zip.blockmap`, uploads only those through `publishArtifactsWithOptions`, and exits 1 when a file is missing or the upload returns null.
+  - Tests: `tests/unit/scripts/releaseMac.test.js` (4 tests: upload failure, only the release files uploaded, missing file uploads nothing, the command exits 1 on an empty folder). No test uploads.
+  - One-off check, no network: the real command on a scratch folder of five dummy files, with no `GH_TOKEN`, `GITHUB_TOKEN` or `GITHUB_RELEASE_TOKEN` set. electron-builder logged "error publishing ... GitHub Personal Access Token is not set" (thrown before any request) and the command exited 1.
+- **The `publish` script is deleted.** It uploaded a macOS feed without the floor, and nothing ran it (CI runs `release:mac`). The README line that named it now names `release:mac`. This replaces the "Left for step 9" note above.
+- **Justified scope, kept:** `js-yaml` (the feed step parses and writes `latest-mac.yml` with it), `npmRebuild: false` and `mac.x64ArchFiles` (both explained under "Build config changes" above: nothing native is compiled at packaging time, and the universal merge failed without the second).
+
+### 2026-11-28, review-fixes run (branch `step-2-3-review-fixes`)
+
+After all review fixes, `pnpm run build:all`, then the Electron suite once per app. The Playwright suite now lists 14 tests: the 10 Electron tests and the 4 fake-server tests (no app launched).
+- Root Jest 130 passed (124 + 2 Screenshot-window + 4 release tests). `whisper_web` Jest 49 passed, lint clean, type-check exit 0. `tsc --strict` on `tests/e2e/*.ts`: clean apart from the existing missing `@types/ws`.
+- Development app, one full run of `pnpm run test:e2e` (load 4.0): 11 of 14 passed in 47.0 s. The 3 failures were screenshots at the new exact match (`threshold: 0`): Screenshot window, Listen window, Plan window. All smoke tests and the other screenshots passed. Ticket 02's comments have the measurements and the fix.
+- Development app, the screenshot spec rerun once after that fix (with `threshold: 0.1`, no pixel allowance; load 4.5): 5 of 6 passed in 28.4 s. Listen failed on 2 pixels of its select arrow. The final tolerance (`threshold: 0.1`, `maxDiffPixels: 5`) was then checked offline with Playwright's own image comparator on the saved images of both development runs: all pass. The development suite was not run again (one run, one rerun).
+- Packaged app: `pnpm run package:e2e` exit 0, then `WHISPER_E2E_APP=packaged pnpm run test:e2e`, one full run with the final tolerance (load 5.0): 14 of 14 passed in 34.2 s. No flake, no rerun.

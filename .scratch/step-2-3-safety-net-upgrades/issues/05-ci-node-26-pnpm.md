@@ -4,7 +4,7 @@
 
 **Blocked by:** 04
 
-**Status:** claimed
+**Status:** resolved
 
 **Label:** ready-for-agent
 
@@ -15,7 +15,7 @@
 - [x] CI passes on this ticket's own pull request into `dev`
 - [x] `build.yml` uses Node 26 and pnpm, same commands otherwise. It is not run, because it publishes a release
 - [x] Root lint is not added to CI (it stays broken until step 4b-1)
-- [ ] Work on its own branch, merged into `dev` through a pull request
+- [x] Work on its own branch, merged into `dev` through a pull request (PR #11; review fixes in the closing PR)
 
 ## Comments
 

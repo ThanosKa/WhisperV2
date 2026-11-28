@@ -4,7 +4,7 @@
 
 **Blocked by:** 03, 04
 
-**Status:** claimed
+**Status:** resolved
 
 **Label:** ready-for-agent
 
@@ -16,8 +16,8 @@
 - [x] The Tailwind 4 upgrade tool is run
 - [x] The ticket 03 script takes "after" screenshots; each page is compared by eye with its "before" image, with a pixel diff to point at differences, and every difference is fixed. The after images are saved in `assets/`
 - [x] `whisper_web` Jest, lint and type-check pass with the ticket 02 counts
-- [ ] The Electron suite still passes (main serves the dashboard export). Note: deferred to the end-of-spec run (owner, 2026-11-28)
-- [ ] Work on its own branch, merged into `dev` through a pull request
+- [x] The Electron suite still passes (main serves the dashboard export). Note: deferred to the end-of-spec run (owner, 2026-11-28)
+- [x] Work on its own branch, merged into `dev` through a pull request (PR #13; review fixes in the closing PR)
 
 ## Comments
 
@@ -38,6 +38,7 @@
 | `@testing-library/react` | 14.3.1 | 16.3.3, with its `@testing-library/dom` 10.4.2 peer |
 | `jest`, `jest-environment-jsdom`, `@types/jest` | 29 | 29 (unchanged on purpose) |
 | `lucide-react` | 0.294.0 | 0.294.0 (kept on purpose, see below) |
+| `react-markdown` | 9.1.0 | 10.1.0 (review fix, see "Review fixes" below) |
 
 - ESLint 10.16.0 is the newest, but it was published on 2026-11-27, and pnpm's 1-day `minimumReleaseAge` refuses it. 10.15.0 is the newest it accepts.
 - `@testing-library/jest-dom` 6 and `user-event` 14 already work with React 19, so they stay. Jest-dom 8 is out, but it is not needed for React 19.
@@ -157,3 +158,22 @@ app/layout.tsx(1,8): error TS2882: Cannot find module or type declarations for s
 - type-check: exit 0
 - lint: clean
 - `whisper_web` Jest: 49 passed
+
+### 2026-11-28, end-of-spec run (branch `step-2-3-end-run`, `dev` at 7ab4197)
+
+End-of-spec run 2026-11-28: passed. The Electron suite against the development app, after `pnpm run build:all` (which builds the dashboard export main serves): 10 of 10 passed in one full run. `whisper_web` Jest 49 passed, lint clean, type-check exit 0.
+
+### 2026-11-28, review fixes (branch `step-2-3-review-fixes`)
+
+- **`react-markdown` 9.1.0 → 10.1.0.** The review found 9 left behind. Its one breaking change in 10.0 removes the `className` prop of `<ReactMarkdown>`. `components/Markdown.tsx` already puts its class on a wrapping `<div>`, so no code changed. A one-off render of a sample with headings, lists, a table, inline and fenced code, a link, a quote and a rule (GFM, a `code` component reading `className`) gave byte-identical HTML on 9.1.0 and 10.1.0.
+- **`lucide-react` stays on 0.294.0, on purpose.** Every release that lists React 19 as a peer redraws icons the dashboard uses (see the table above and its note), and the dashboard must look the same until steps 5-6. 0.294 runs on React 19 unchanged.
+- **`agentRules: false` in `next.config.mjs` is justified scope.** Next 16's `next dev` writes `whisper_web/AGENTS.md` when an AI agent runs it. That file would be a stray agent doc, and the repo's agent docs come in step 8. Recorded under "Config changes" above.
+- **Skipped: positional arguments in `assets/dashboard-pixel-diff.mjs`** (`readRaw(label, page)`). It is a one-off scratch script outside the code, kept only as the record of this ticket's comparison.
+
+### 2026-11-28, review-fixes run (branch `step-2-3-review-fixes`)
+
+After all review fixes, `pnpm run build:all`, then the Electron suite once per app. The Playwright suite now lists 14 tests: the 10 Electron tests and the 4 fake-server tests (no app launched).
+- Root Jest 130 passed (124 + 2 Screenshot-window + 4 release tests). `whisper_web` Jest 49 passed, lint clean, type-check exit 0. `tsc --strict` on `tests/e2e/*.ts`: clean apart from the existing missing `@types/ws`.
+- Development app, one full run of `pnpm run test:e2e` (load 4.0): 11 of 14 passed in 47.0 s. The 3 failures were screenshots at the new exact match (`threshold: 0`): Screenshot window, Listen window, Plan window. All smoke tests and the other screenshots passed. Ticket 02's comments have the measurements and the fix.
+- Development app, the screenshot spec rerun once after that fix (with `threshold: 0.1`, no pixel allowance; load 4.5): 5 of 6 passed in 28.4 s. Listen failed on 2 pixels of its select arrow. The final tolerance (`threshold: 0.1`, `maxDiffPixels: 5`) was then checked offline with Playwright's own image comparator on the saved images of both development runs: all pass. The development suite was not run again (one run, one rerun).
+- Packaged app: `pnpm run package:e2e` exit 0, then `WHISPER_E2E_APP=packaged pnpm run test:e2e`, one full run with the final tolerance (load 5.0): 14 of 14 passed in 34.2 s. No flake, no rerun.

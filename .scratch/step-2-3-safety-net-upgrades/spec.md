@@ -1,6 +1,6 @@
 # Spec: Steps 2 and 3, safety net and upgrades
 
-Status: open
+Status: resolved
 Label: ready-for-agent
 
 Steps 2 and 3 of [Order of the work](../whisper-cleanup/issues/07-work-order.md), from the [Whisper cleanup map](../whisper-cleanup/map.md), run as one spec (amended 2026-11-28). Decisions come from [Test safety net today](../whisper-cleanup/issues/01-test-safety-net.md), [Which tests to delete](../whisper-cleanup/issues/09-which-tests-to-delete.md), [What the smoke tests and screenshots cover](../whisper-cleanup/issues/11-smoke-test-coverage.md), [Target versions for the upgrade](../whisper-cleanup/issues/10-upgrade-target-versions.md), [macOS minimum version](../whisper-cleanup/issues/12-macos-minimum-version.md) and [whisper_web cleanup scope](../whisper-cleanup/issues/18-whisper-web-cleanup.md).
@@ -169,3 +169,11 @@ The owner confirmed these seams (2026-11-28).
 - **Risk: Chromium's text rendering.** Electron 30 to 45 is a large Chromium jump; text can render a pixel differently with no visible change. If a screenshot fails only on anti-aliasing, the ticket re-baselines once and saves the diff image and the reason in `assets/`. Any other difference is a bug to fix.
 - **Risk: the development Electron binary's macOS permissions reset when Electron changes.** The permission stub makes the suite independent of them; the owner's real-world check stays on the final manual checklist.
 - This spec holds roughly 6-8 tickets for `/to-tickets`: the runnable install and the Electron suite need judgment (Opus); the deletions, the dependency list and the CI move are mechanical (Sonnet).
+
+## Done
+
+Resolved 2026-11-28. All 7 tickets merged into `dev` (PRs #6-#8, #10-#13); the code-review fixes and this closing record went in one closing PR.
+- Final counts: root Jest 130, `whisper_web` Jest 49, `whisper_web` lint and type-check clean, Playwright 14 (4 fake-server tests + 10 Electron), dev and packaged.
+- Gap: the final screenshot tolerance (threshold 0.1 + 5 pixels, ticket 02) passed on the packaged run and was checked offline against the dev run's images, but did not run live on the dev app. Step 4's first suite run covers it.
+- For step 9: the release path is new (`scripts/release-mac.js` uploads after the feed gets `minimumSystemVersion`; the `publish` script is gone). Check it carefully before the first real release.
+- Known app bugs, not fixed (behavior must not change here): `Object has been destroyed` when the app quits during a window's fade-out (`windowManager.js`, ticket 02), and a second one at `windowManager.js:415` (line as of 7ab4197) seen in the end-of-spec run. Both are for step 4a, where `windowManager` is rewritten.

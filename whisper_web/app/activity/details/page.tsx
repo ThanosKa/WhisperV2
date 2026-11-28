@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
-import { UserProfile, SessionDetails, getSessionDetails, deleteSession, updateSessionTitle } from '@/utils/api';
+import { type UserProfile, type SessionDetails, getSessionDetails, deleteSession, updateSessionTitle } from '@/utils/api';
 import { useToast } from '@/hooks/use-toast';
 import dynamic from 'next/dynamic';
 import { Sparkles, Copy, Check, Calendar, Timer } from 'lucide-react';
@@ -27,7 +27,7 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 );
 
 function SessionDetailsContent() {
-    const userInfo = useRedirectIfNotAuth() as UserProfile | null;
+    const userInfo = useRedirectIfNotAuth();
     const [sessionDetails, setSessionDetails] = useState<SessionDetails | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const searchParams = useSearchParams();
@@ -48,7 +48,7 @@ function SessionDetailsContent() {
             const fetchDetails = async () => {
                 setIsLoading(true);
                 try {
-                    const details = await getSessionDetails(sessionId as string);
+                    const details = await getSessionDetails(sessionId);
                     setSessionDetails(details);
                     setNewTitle(details.session.title || '');
                 } catch (error) {

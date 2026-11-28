@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { UserProfile, setUserInfo, findOrCreateUser, getUserProfile } from './api';
+import { type UserProfile, setUserInfo, findOrCreateUser, getUserProfile } from './api';
 import { isDevMockEnabled, getMockUser, ensureMockData } from './devMock';
 // Removed Firebase imports - using webapp authentication
 

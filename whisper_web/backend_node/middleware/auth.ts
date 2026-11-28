@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { type Request, type Response, type NextFunction } from 'express';
 
 export function identifyUser(req: Request, _res: Response, next: NextFunction): void {
     const userId = req.get('X-User-ID');

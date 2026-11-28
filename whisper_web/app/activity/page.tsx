@@ -6,12 +6,12 @@ import { useRedirectIfNotAuth } from '@/utils/auth';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
-import { UserProfile, Session, deleteSession, getConversationStats, updateSessionTitle, getMeetingsPage, getQuestionsPage } from '@/utils/api';
+import { type UserProfile, type Session, deleteSession, getConversationStats, updateSessionTitle, getMeetingsPage, getQuestionsPage } from '@/utils/api';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Mic, MessageSquare, Timer } from 'lucide-react';
 
 export default function ActivityPage() {
-    const userInfo = useRedirectIfNotAuth() as UserProfile | null;
+    const userInfo = useRedirectIfNotAuth();
     const [sessions, setSessions] = useState<Session[]>([]);
     const [meetings, setMeetings] = useState<Session[]>([]);
     const [questions, setQuestions] = useState<Session[]>([]);
@@ -138,7 +138,7 @@ export default function ActivityPage() {
         const observer = new IntersectionObserver(
             entries => {
                 const first = entries[0];
-                if (first.isIntersecting) {
+                if (first?.isIntersecting) {
                     if (activeTab === 'meetings') {
                         loadMoreMeetings();
                     } else {

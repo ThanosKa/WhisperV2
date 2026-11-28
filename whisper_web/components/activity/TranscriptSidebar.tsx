@@ -6,11 +6,11 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MessageBubble } from './MessageBubble';
-import { Transcript, AiMessage } from '@/utils/api';
+import { type Transcript, type AiMessage } from '@/utils/api';
 
 interface UsageEntry {
     question: AiMessage;
-    answer?: AiMessage;
+    answer?: AiMessage | undefined;
 }
 
 interface TranscriptSidebarProps {
@@ -24,15 +24,18 @@ export function TranscriptSidebar({ isOpen, onClose, transcripts, aiMessages }: 
     const [speakerFilter, setSpeakerFilter] = useState<string>('all');
 
     const speakerOptions = useMemo(() => {
-        const uniqueSpeakers = Array.from(new Set(transcripts.map(t => t.speaker).filter(Boolean)));
-        return ['all', ...uniqueSpeakers] as string[];
+        const uniqueSpeakers = new Set<string>();
+        for (const transcript of transcripts) {
+            if (transcript.speaker) uniqueSpeakers.add(transcript.speaker);
+        }
+        return ['all', ...uniqueSpeakers];
     }, [transcripts]);
 
     const usageEntries = useMemo<UsageEntry[]>(() => {
         const entries: UsageEntry[] = [];
         for (let index = 0; index < aiMessages.length; index += 1) {
             const current = aiMessages[index];
-            if (current.role !== 'user') continue;
+            if (!current || current.role !== 'user') continue;
 
             const nextMessage = aiMessages[index + 1];
             const answer = nextMessage?.role === 'assistant' ? nextMessage : undefined;

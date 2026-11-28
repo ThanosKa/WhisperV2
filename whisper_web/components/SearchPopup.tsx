@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, X, MessageSquare, HelpCircle } from 'lucide-react';
-import { searchConversations, searchConversationsPage, Session, PagedResult } from '@/utils/api';
+import { searchConversations, searchConversationsPage, type Session, type PagedResult } from '@/utils/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -190,7 +190,7 @@ export default function SearchPopup({ isOpen, onClose }: SearchPopupProps) {
         const observer = new IntersectionObserver(
             entries => {
                 const first = entries[0];
-                if (first.isIntersecting) {
+                if (first?.isIntersecting) {
                     loadMore();
                 }
             },

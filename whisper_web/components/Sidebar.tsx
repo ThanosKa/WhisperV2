@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useState, createElement, useEffect, useMemo, useCallback, memo } from 'react';
-import { Search, Activity, HelpCircle, Download, ChevronDown, User, Shield, Database, CreditCard, LogOut, LucideIcon } from 'lucide-react';
-import { UserProfile } from '@/utils/api';
+import { Search, Activity, HelpCircle, Download, ChevronDown, User, Shield, Database, CreditCard, LogOut, type LucideIcon } from 'lucide-react';
+import { type UserProfile } from '@/utils/api';
 import { useAuth } from '@/utils/auth';
 import { normalizePathname } from '@/utils/path';
-import { MatchStrategy, SETTINGS_TABS } from '@/components/settings/SettingsTabs';
+import { type MatchStrategy, SETTINGS_TABS } from '@/components/settings/SettingsTabs';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
@@ -39,20 +39,18 @@ const ANIMATION_DELAYS = {
 interface NavigationItem {
     name: string;
     href?: string;
-    action?: () => void;
+    action?: (() => void) | undefined;
     icon: LucideIcon | string;
-    isLucide: boolean;
     hasSubmenu?: boolean;
-    ariaLabel?: string;
+    ariaLabel?: string | undefined;
 }
 
 interface SubmenuItem {
     name: string;
     href: string;
     icon: LucideIcon | string;
-    isLucide: boolean;
-    ariaLabel?: string;
-    matchStrategy?: MatchStrategy;
+    ariaLabel?: string | undefined;
+    matchStrategy?: MatchStrategy | undefined;
 }
 
 interface SidebarProps {
@@ -144,15 +142,14 @@ const useAnimationStyles = (isCollapsed: boolean) => {
 
 const IconComponent = memo<{
     icon: LucideIcon | string;
-    isLucide: boolean;
     alt: string;
-    className?: string;
-}>(({ icon, isLucide, alt, className = 'h-[18px] w-[18px] transition-transform duration-200' }) => {
-    if (isLucide) {
-        return createElement(icon as LucideIcon, { className, 'aria-hidden': true });
+    className?: string | undefined;
+}>(({ icon, alt, className = 'h-[18px] w-[18px] transition-transform duration-200' }) => {
+    if (typeof icon !== 'string') {
+        return createElement(icon, { className, 'aria-hidden': true });
     }
 
-    return <Image src={icon as string} alt={alt} width={18} height={18} className={className} loading="lazy" />;
+    return <Image src={icon} alt={alt} width={18} height={18} className={className} loading="lazy" />;
 });
 
 IconComponent.displayName = 'IconComponent';
@@ -180,28 +177,24 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
                 name: 'Search',
                 action: onSearchClick,
                 icon: '/search.svg',
-                isLucide: false,
                 ariaLabel: 'Open search',
             },
             {
                 name: 'My Activity',
                 href: '/activity',
                 icon: '/activity.svg',
-                isLucide: false,
                 ariaLabel: 'View my activity',
             },
             {
                 name: 'Personalize',
                 href: '/personalize',
                 icon: '/book.svg',
-                isLucide: false,
                 ariaLabel: 'Personalization settings',
             },
             {
                 name: 'Settings',
                 href: '/settings',
                 icon: '/setting.svg',
-                isLucide: false,
                 hasSubmenu: true,
                 ariaLabel: 'Settings menu',
             },
@@ -226,7 +219,6 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
             name: tab.name,
             href: tab.href,
             icon: iconById[tab.id] ?? '/user.svg',
-            isLucide: false,
             ariaLabel: ariaById[tab.id],
             matchStrategy: tab.matchStrategy,
         }));
@@ -283,7 +275,7 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
                             style={{ willChange: 'background-color, color' }}
                         >
                             <div className="shrink-0 flex items-center justify-center w-5 h-5">
-                                <IconComponent icon={item.icon} isLucide={item.isLucide} alt={`${item.name} icon`} />
+                                <IconComponent icon={item.icon} alt={`${item.name} icon`} />
                             </div>
 
                             <div className="ml-[12px] overflow-hidden" style={getTextContainerStyle()}>
@@ -310,7 +302,7 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
                             style={{ willChange: 'background-color, color' }}
                         >
                             <div className="shrink-0 flex items-center justify-center w-5 h-5">
-                                <IconComponent icon={item.icon} isLucide={item.isLucide} alt={`${item.name} icon`} />
+                                <IconComponent icon={item.icon} alt={`${item.name} icon`} />
                             </div>
 
                             <div className="ml-[12px] overflow-hidden flex items-center" style={getTextContainerStyle()}>
@@ -364,7 +356,6 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
                                             >
                                                 <IconComponent
                                                     icon={subItem.icon}
-                                                    isLucide={subItem.isLucide}
                                                     alt={`${subItem.name} icon`}
                                                     className="h-4 w-4 shrink-0"
                                                 />
@@ -414,7 +405,7 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
                         style={{ willChange: 'background-color, color' }}
                     >
                         <div className="shrink-0 flex items-center justify-center w-5 h-5">
-                            <IconComponent icon={item.icon} isLucide={item.isLucide} alt={`${item.name} icon`} />
+                            <IconComponent icon={item.icon} alt={`${item.name} icon`} />
                         </div>
 
                         <div className="ml-[12px] overflow-hidden" style={getTextContainerStyle()}>
@@ -533,7 +524,6 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
                             <div className="shrink-0 flex items-center justify-center w-4 h-4">
                                 <IconComponent
                                     icon={item.icon}
-                                    isLucide={false}
                                     alt={`${item.text} icon`}
                                     className={`h-[16px] w-[16px] transition-transform duration-${ANIMATION_DURATION.ICON_HOVER}`}
                                 />

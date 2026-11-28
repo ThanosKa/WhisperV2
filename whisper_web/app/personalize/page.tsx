@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { ChevronDown, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { getPresets, updatePreset, PromptPreset } from '@/utils/api';
+import { getPresets, updatePreset, type PromptPreset } from '@/utils/api';
 import { useToast } from '@/hooks/use-toast';
 
 export default function PersonalizePage() {
@@ -36,7 +36,7 @@ export default function PersonalizePage() {
                 setAllPresets(presetsData);
                 if (presetsData.length > 0) {
                     const firstPreset = presetsData[0];
-                    selectPreset(firstPreset);
+                    if (firstPreset) selectPreset(firstPreset);
                 }
             } catch (error) {
                 console.error('Failed to fetch presets:', error);

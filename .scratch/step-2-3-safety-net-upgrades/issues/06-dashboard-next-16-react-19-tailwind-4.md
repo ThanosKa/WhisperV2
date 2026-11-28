@@ -38,6 +38,7 @@
 | `@testing-library/react` | 14.3.1 | 16.3.3, with its `@testing-library/dom` 10.4.2 peer |
 | `jest`, `jest-environment-jsdom`, `@types/jest` | 29 | 29 (unchanged on purpose) |
 | `lucide-react` | 0.294.0 | 0.294.0 (kept on purpose, see below) |
+| `react-markdown` | 9.1.0 | 10.1.0 (review fix, see "Review fixes" below) |
 
 - ESLint 10.16.0 is the newest, but it was published on 2026-11-27, and pnpm's 1-day `minimumReleaseAge` refuses it. 10.15.0 is the newest it accepts.
 - `@testing-library/jest-dom` 6 and `user-event` 14 already work with React 19, so they stay. Jest-dom 8 is out, but it is not needed for React 19.
@@ -161,3 +162,9 @@ app/layout.tsx(1,8): error TS2882: Cannot find module or type declarations for s
 ### 2026-11-28, end-of-spec run (branch `step-2-3-end-run`, `dev` at 7ab4197)
 
 End-of-spec run 2026-11-28: passed. The Electron suite against the development app, after `pnpm run build:all` (which builds the dashboard export main serves): 10 of 10 passed in one full run. `whisper_web` Jest 49 passed, lint clean, type-check exit 0.
+
+### 2026-11-28, review fixes (branch `step-2-3-review-fixes`)
+
+- **`react-markdown` 9.1.0 → 10.1.0.** The review found 9 left behind. Its one breaking change in 10.0 removes the `className` prop of `<ReactMarkdown>`. `components/Markdown.tsx` already puts its class on a wrapping `<div>`, so no code changed. A one-off render of a sample with headings, lists, a table, inline and fenced code, a link, a quote and a rule (GFM, a `code` component reading `className`) gave byte-identical HTML on 9.1.0 and 10.1.0.
+- **`lucide-react` stays on 0.294.0, on purpose.** Every release that lists React 19 as a peer redraws icons the dashboard uses (see the table above and its note), and the dashboard must look the same until steps 5-6. 0.294 runs on React 19 unchanged.
+- **`agentRules: false` in `next.config.mjs` is justified scope.** Next 16's `next dev` writes `whisper_web/AGENTS.md` when an AI agent runs it. That file would be a stray agent doc, and the repo's agent docs come in step 8. Recorded under "Config changes" above.

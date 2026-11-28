@@ -135,3 +135,25 @@ The upgrade tool dropped the `tailwindcss-animate` plugin without a replacement.
 - The export was served the way `src/index.js` serves it (its two Express middlewares, without Electron). All 10 pages and their CSS answered 200, and `backend_node/dist` loads.
 - Root Jest was not rerun: the permission check refused it in this session. This ticket changes no root code; only `pnpm-workspace.yaml` and the lockfile changed.
 - The Electron suite was not run, as the owner ordered.
+
+### 2026-11-28, CI fix: type-check on a clean checkout (PR #13)
+
+**The failure.** CI's "Type-check web app" step failed with this error:
+
+```
+app/layout.tsx(1,8): error TS2882: Cannot find module or type declarations for side-effect import of './globals.css'
+```
+
+- TypeScript 6 checks side-effect imports by default.
+- The declaration for `*.css` comes from `next/image-types/global`, which the gitignored `next-env.d.ts` references.
+- My local runs passed only because `next dev` and `next build` had written that file. A clean worktree reproduced the error.
+
+**The fix.** `type-check` is now `next typegen && tsc --noEmit`.
+- `next typegen` (Next 16) writes `next-env.d.ts` and the route types into `out/types` without a build.
+- I chose it over a hand-written `declare module '*.css'`, because the types stay Next's own and also cover the routes.
+- It leaves `tsconfig.json` unchanged.
+
+**Checks on the clean worktree** (`pnpm install --frozen-lockfile`, then the CI commands):
+- type-check: exit 0
+- lint: clean
+- `whisper_web` Jest: 49 passed

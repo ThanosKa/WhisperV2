@@ -26,10 +26,6 @@ const presetRepositoryAdapter = {
         return getBaseRepository().findUserPresetByTitle({ title, uid });
     },
 
-    getPresetTemplates: () => {
-        return getBaseRepository().getPresetTemplates();
-    },
-
     update: ({ id, changes }: { id: string; changes: PresetChanges }) => {
         const uid = authService.getCurrentUserId();
         return getBaseRepository().update({ id, changes, uid });

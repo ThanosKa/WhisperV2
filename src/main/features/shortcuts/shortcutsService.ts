@@ -81,17 +81,6 @@ class ShortcutsService {
         const header = windowPool.get('header');
         const mainWindow = header;
 
-        const sendToRenderer = (channel: string) => {
-            windowPool.forEach(win => {
-                if (win && !win.isDestroyed()) {
-                    try {
-                        win.webContents.send(channel);
-                    } catch {
-                        // Ignore errors for destroyed windows
-                    }
-                }
-            });
-        };
 
         if (registerOnlyToggleVisibility) {
             if (keybinds.toggleVisibility) {
@@ -174,10 +163,10 @@ class ShortcutsService {
                     };
                     break;
                 case 'previousResponse':
-                    callback = () => sendToRenderer('navigate-previous-response');
-                    break;
                 case 'nextResponse':
-                    callback = () => sendToRenderer('navigate-next-response');
+                    // Their channels had no listener and are deleted. The keys stay registered, so the
+                    // app still takes them from other apps as before; 4a-2 decides whether to drop them.
+                    callback = () => undefined;
                     break;
             }
 

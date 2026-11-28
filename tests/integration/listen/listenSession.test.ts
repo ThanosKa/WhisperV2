@@ -141,7 +141,6 @@ describe('Listen button', () => {
         await m.listenService.handleListenRequest('Resume');
         expect(lastResult()).toEqual({ success: true, nextStatus: 'inSession' });
         expect(sentTo(listenWindow, 'session-state-changed')).toContainEqual({ isActive: true, mode: 'resume' });
-        expect(sentTo(listenWindow, 'update-status')).toContain('Resumed listening.');
     });
 
     test('Listen during an active session reopens the window without a new relay connection', async () => {
@@ -227,8 +226,7 @@ describe('Starting a session', () => {
 
         expect(attempts).toBe(2);
         expect(lastResult()).toEqual({ success: true, nextStatus: 'inSession' });
-        expect(sentTo(listenWindow, 'update-status')).toContain('Relay error');
-        expect(sentTo(listenWindow, 'update-status')).toContain('Connected. Ready to listen.');
+        expect(sentTo(listenWindow, 'change-listen-capture-state')).toContainEqual({ status: 'start' });
     });
 
     test('fails without a signed-in desktop session and leaves the header before the session', async () => {
@@ -245,7 +243,7 @@ describe('Starting a session', () => {
         }
 
         expect(lastResult()).toEqual({ success: false, nextStatus: 'beforeSession' });
-        expect(sentTo(listenWindow, 'update-status')).toContain('Initialization failed.');
+        expect(sentTo(listenWindow, 'change-listen-capture-state')).not.toContainEqual({ status: 'start' });
         expect(relay.connections).toHaveLength(0);
     });
 });
@@ -338,17 +336,15 @@ describe('Live transcription', () => {
         expect(lastResult()).toEqual({ success: false, nextStatus: 'beforeSession', error: 'STT_AUDIO_QUOTA_EXCEEDED' });
         expect(sentTo(listenWindow, 'stt:quotaExceeded')).toEqual([{ resetAt: '2026-11-29T00:00:00.000Z' }]);
         expect(sentTo(listenWindow, 'session-state-changed')).toContainEqual({ isActive: false, mode: 'quotaExceeded' });
-        expect(sentTo(listenWindow, 'update-status')).toContain('Daily audio limit reached');
         expect(m.listenService.isSessionActive()).toBe(false);
     });
 
-    test('the relay dropping an open connection reports a disconnect', async () => {
+    test('the relay dropping an open connection ends the session without a quota message', async () => {
         await m.listenService.handleListenRequest('Listen');
 
         relay.latest().close({ code: 1011, reason: 'restart' });
 
-        await vi.waitFor(() => expect(sentTo(listenWindow, 'update-status')).toContain('Relay disconnected'));
-        expect(m.listenService.isSessionActive()).toBe(false);
+        await vi.waitFor(() => expect(m.listenService.isSessionActive()).toBe(false));
         expect(sentTo(header, 'stt:quotaExceeded')).toEqual([]);
     });
 });

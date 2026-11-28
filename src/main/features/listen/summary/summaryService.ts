@@ -41,7 +41,6 @@ export type AnalysisContext = {
 
 export type SummaryCallbacks = {
     onAnalysisComplete: (data: AnalysisResult) => void;
-    onStatusUpdate: (status: string) => void;
 };
 
 // A default preset's prompt may be JSON naming the analysis role.
@@ -104,7 +103,6 @@ class SummaryService {
 
     // Callbacks
     onAnalysisComplete: SummaryCallbacks['onAnalysisComplete'] | null = null;
-    onStatusUpdate: SummaryCallbacks['onStatusUpdate'] | null = null;
     batchTimer: NodeJS.Timeout | null = null; // For time fallback
 
     // Insights repository for crash recovery
@@ -140,9 +138,8 @@ class SummaryService {
         }
     }
 
-    setCallbacks({ onAnalysisComplete, onStatusUpdate }: SummaryCallbacks): void {
+    setCallbacks({ onAnalysisComplete }: SummaryCallbacks): void {
         this.onAnalysisComplete = onAnalysisComplete;
-        this.onStatusUpdate = onStatusUpdate;
     }
 
     setSessionId(sessionId: string | null): void {

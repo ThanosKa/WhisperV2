@@ -60,7 +60,6 @@ type RelaySession = {
 
 export type SttCallbacks = {
     onTranscriptionComplete: ({ speaker, text }: { speaker: Speaker; text: string }) => void;
-    onStatusUpdate: (status: string) => void;
     onQuotaExceeded: (resetAt: string) => void;
 };
 
@@ -84,7 +83,6 @@ class SttService {
 
     // Callbacks
     onTranscriptionComplete: SttCallbacks['onTranscriptionComplete'] | null = null;
-    onStatusUpdate: SttCallbacks['onStatusUpdate'] | null = null;
     onQuotaExceeded: SttCallbacks['onQuotaExceeded'] | null = null;
 
     // Relay connection state
@@ -92,9 +90,8 @@ class SttService {
     relaySessionId: string | null = null;
     relayReady = false;
 
-    setCallbacks({ onTranscriptionComplete, onStatusUpdate, onQuotaExceeded }: SttCallbacks): void {
+    setCallbacks({ onTranscriptionComplete, onQuotaExceeded }: SttCallbacks): void {
         this.onTranscriptionComplete = onTranscriptionComplete;
-        this.onStatusUpdate = onStatusUpdate;
         this.onQuotaExceeded = onQuotaExceeded;
     }
 
@@ -117,10 +114,6 @@ class SttService {
         this.meCompletionBuffer = '';
         this.meCompletionTimer = null;
         this.meCommittedLength = 0;
-
-        if (this.onStatusUpdate) {
-            this.onStatusUpdate('Listening...');
-        }
     }
 
     flushThemCompletion(sendToUI = true): void {
@@ -133,10 +126,6 @@ class SttService {
         this.themCompletionBuffer = '';
         this.themCompletionTimer = null;
         this.themCommittedLength = 0;
-
-        if (this.onStatusUpdate) {
-            this.onStatusUpdate('Listening...');
-        }
     }
 
     _handlePartialSegmentation({ speakerLabel, textChunk, committedKey }: { speakerLabel: Speaker; textChunk: string; committedKey: CommittedKey }): string {
@@ -435,9 +424,6 @@ class SttService {
                         this._installRelaySessions();
                         this.relayReady = true;
                         settleResolve();
-                        if (this.onStatusUpdate) {
-                            this.onStatusUpdate('Listening...');
-                        }
                         break;
 
                     case 'PARTIAL':
@@ -473,9 +459,6 @@ class SttService {
                         if (!this.relayReady) {
                             settleReject(new Error(message.message || 'Relay error'));
                         }
-                        if (this.onStatusUpdate) {
-                            this.onStatusUpdate('Relay error');
-                        }
                         break;
 
                     case 'CLOSED':
@@ -495,8 +478,6 @@ class SttService {
                 log.error({ err, relaySessionId: this.relaySessionId }, 'Relay socket error');
                 if (!this.relayReady) {
                     settleReject(err);
-                } else if (this.onStatusUpdate) {
-                    this.onStatusUpdate('Relay error');
                 }
             });
 
@@ -519,8 +500,6 @@ class SttService {
                 this._teardownRelayState();
                 if (!wasReady) {
                     settleReject(new Error('Relay connection closed before ready'));
-                } else if (this.onStatusUpdate) {
-                    this.onStatusUpdate('Relay disconnected');
                 }
             });
         });

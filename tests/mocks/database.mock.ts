@@ -32,7 +32,6 @@ const createUserRepository = () => ({
 
 const createPresetRepository = () => ({
     getPresets: vi.fn(async () => []),
-    getPresetTemplates: vi.fn(async () => []),
     update: vi.fn(async () => ({ success: true })),
 });
 

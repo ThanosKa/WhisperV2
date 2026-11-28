@@ -97,22 +97,6 @@ function findUserPresetByTitle({ title, uid }: { title: string; uid: string | nu
     }
 }
 
-function getPresetTemplates(): PresetRow[] {
-    const db = sqliteClient.getDb();
-    const query = `
-        SELECT * FROM prompt_presets
-        WHERE is_default = 1
-        ORDER BY title ASC
-    `;
-
-    try {
-        return z.array(PresetRowSchema).parse(db.prepare(query).all());
-    } catch (err) {
-        log.error({ err }, 'Failed to get preset templates');
-        throw err;
-    }
-}
-
 function update({ id, changes, uid }: { id: string; changes: PresetChanges; uid: string | null }): { changes: number } {
     const { title, prompt, append_text } = changes;
     const db = sqliteClient.getDb();
@@ -175,4 +159,4 @@ function update({ id, changes, uid }: { id: string; changes: PresetChanges; uid:
     return { changes: result.changes };
 }
 
-export { getPresets, getById, findUserPresetByTitle, getPresetTemplates, update };
+export { getPresets, getById, findUserPresetByTitle, update };

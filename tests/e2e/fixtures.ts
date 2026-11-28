@@ -6,10 +6,15 @@ import { FAKE_SESSION_UUID, FAKE_USER, startFakeServer, type FakeServer } from '
 
 const APP_ROOT = path.resolve(__dirname, '../..');
 const MAIN_PRELOAD = path.join(__dirname, 'support', 'main-preload.js');
+export const FAKE_SCREEN_JPEG = path.join(__dirname, 'support', 'fake-screen.jpg');
+
+// The feature windows load `content.html?view=<name>`; the header loads `header.html`.
+export type AppView = 'header' | 'ask' | 'listen' | 'settings' | 'plan' | 'screenshot';
 
 type Fixtures = {
     fakeServer: FakeServer;
     userDataDir: string;
+    launchApp: () => Promise<ElectronApplication>;
     electronApp: ElectronApplication;
     headerWindow: Page;
 };
@@ -19,6 +24,17 @@ const seedLoggedInSession = async ({ userDataDir }: { userDataDir: string }) => 
     const store = { sessionUuid: FAKE_SESSION_UUID, userProfile: FAKE_USER };
     await fs.writeFile(path.join(userDataDir, 'auth-session.json'), JSON.stringify(store));
 };
+
+const isView = ({ page, view }: { page: Page; view: AppView }) => {
+    const url = new URL(page.url());
+    return view === 'header' ? url.pathname.endsWith('/header.html') : url.searchParams.get('view') === view;
+};
+
+// Finds the window that shows `view`, waiting for it if the app has not opened it yet.
+export async function findWindow({ electronApp, view }: { electronApp: ElectronApplication; view: AppView }): Promise<Page> {
+    const predicate = (page: Page) => isView({ page, view });
+    return electronApp.windows().find(predicate) ?? (await electronApp.waitForEvent('window', { predicate }));
+}
 
 export const test = base.extend<Fixtures>({
     fakeServer: async ({}, use) => {
@@ -33,26 +49,35 @@ export const test = base.extend<Fixtures>({
         await use(dir);
         await fs.rm(dir, { recursive: true, force: true });
     },
-    electronApp: async ({ fakeServer, userDataDir }, use) => {
-        const electronApp = await electron.launch({
-            args: ['-r', MAIN_PRELOAD, APP_ROOT],
-            env: {
-                ...process.env,
-                WHISPER_E2E_USER_DATA: userDataDir,
-                API_BASE_URL: fakeServer.url,
-                STT_RELAY_URL: fakeServer.wsUrl,
-                whisper_API_URL: fakeServer.url,
-                whisper_WEB_URL: fakeServer.url,
-            },
+    // Launches the app on the test's profile and fake server. A test may launch it more than once
+    // (Smoke 4 restarts it); every app still running at the end is closed.
+    launchApp: async ({ fakeServer, userDataDir }, use) => {
+        const launched: ElectronApplication[] = [];
+        await use(async () => {
+            const electronApp = await electron.launch({
+                args: ['-r', MAIN_PRELOAD, APP_ROOT],
+                env: {
+                    ...process.env,
+                    WHISPER_E2E_USER_DATA: userDataDir,
+                    WHISPER_E2E_FAKE_SCREEN: FAKE_SCREEN_JPEG,
+                    API_BASE_URL: fakeServer.url,
+                    STT_RELAY_URL: fakeServer.wsUrl,
+                    whisper_API_URL: fakeServer.url,
+                    whisper_WEB_URL: fakeServer.url,
+                },
+            });
+            launched.push(electronApp);
+            return electronApp;
         });
-        await use(electronApp);
-        await electronApp.close();
+        for (const electronApp of launched) {
+            await electronApp.close();
+        }
+    },
+    electronApp: async ({ launchApp }, use) => {
+        await use(await launchApp());
     },
     headerWindow: async ({ electronApp }, use) => {
-        const isHeader = (page: Page) => page.url().endsWith('/header.html');
-        const headerWindow =
-            electronApp.windows().find(isHeader) ?? (await electronApp.waitForEvent('window', { predicate: isHeader }));
-        await use(headerWindow);
+        await use(await findWindow({ electronApp, view: 'header' }));
     },
 });
 

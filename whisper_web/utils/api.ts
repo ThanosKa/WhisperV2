@@ -16,7 +16,7 @@ export interface UserProfile {
     uid: string;
     display_name: string;
     email: string;
-    plan?: string;
+    plan?: string | undefined;
 }
 
 export interface Session {
@@ -25,7 +25,7 @@ export interface Session {
     title: string;
     session_type: string;
     started_at: number;
-    ended_at?: number;
+    ended_at?: number | undefined;
     sync_state: 'clean' | 'dirty';
     updated_at: number;
 }
@@ -34,10 +34,10 @@ export interface Transcript {
     id: string;
     session_id: string;
     start_at: number;
-    end_at?: number;
-    speaker?: string;
+    end_at?: number | undefined;
+    speaker?: string | undefined;
     text: string;
-    lang?: string;
+    lang?: string | undefined;
     created_at: number;
     sync_state: 'clean' | 'dirty';
 }
@@ -48,8 +48,8 @@ export interface AiMessage {
     sent_at: number;
     role: 'user' | 'assistant';
     content: string;
-    tokens?: number;
-    model?: string;
+    tokens?: number | undefined;
+    model?: string | undefined;
     created_at: number;
     sync_state: 'clean' | 'dirty';
 }
@@ -57,12 +57,12 @@ export interface AiMessage {
 export interface Summary {
     session_id: string;
     generated_at: number;
-    model?: string;
+    model?: string | undefined;
     text: string;
     tldr: string;
     bullet_json: string;
     action_json: string;
-    tokens_used?: number;
+    tokens_used?: number | undefined;
     updated_at: number;
     sync_state: 'clean' | 'dirty';
 }
@@ -75,7 +75,7 @@ export interface PromptPreset {
     is_default: 0 | 1;
     created_at: number;
     sync_state: 'clean' | 'dirty';
-    append_text?: string;
+    append_text?: string | undefined;
 }
 
 export interface SessionDetails {
@@ -83,7 +83,7 @@ export interface SessionDetails {
     transcripts: Transcript[];
     ai_messages: AiMessage[];
     summary: Summary | null;
-    insights?: Array<{ analysis_round: number; payload: { summary?: string[]; actions?: string[] } }> | null;
+    insights?: Array<{ analysis_round: number; payload: { summary?: string[] | undefined; actions?: string[] | undefined } }> | null | undefined;
 }
 
 const isFirebaseMode = (): boolean => {
@@ -276,7 +276,7 @@ export const searchConversationsPage = async (params: {
 
     if (isDevMockEnabled()) {
         initDevIfNeeded();
-        const all = getSessionsMock() as unknown as Session[];
+        const all = getSessionsMock();
         // Default ordering already roughly newest-first in mock initializer
         if (scope === 'all') {
             const items = all.slice(offset, offset + limit);
@@ -292,7 +292,7 @@ export const searchConversationsPage = async (params: {
                 return { items, nextOffset, total: listen.length };
             }
             const filtered = listen.filter(s => {
-                const d = getSessionDetailsMock(s.id) as unknown as SessionDetails | null;
+                const d = getSessionDetailsMock(s.id);
                 if (!d || !d.summary) return false;
                 const tldr = (d.summary.tldr || '').toLowerCase();
                 const text = (d.summary.text || '').toLowerCase();
@@ -337,7 +337,7 @@ export const searchConversationsPage = async (params: {
 
     const qs = new URLSearchParams({
         q: query || '',
-        scope: (params.scope || 'title') as string,
+        scope,
         offset: String(offset),
         limit: String(limit),
     });
@@ -448,8 +448,7 @@ export const getSessionDetails = async (sessionId: string): Promise<SessionDetai
         initDevIfNeeded();
         const details = getSessionDetailsMock(sessionId);
         if (!details) throw new Error('Session not found');
-        // Type cast from dev interfaces to app interfaces (same shape)
-        return details as unknown as SessionDetails;
+        return details;
     }
     const response = await apiCall(`/api/conversations/${sessionId}`, { method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch session details');
@@ -461,8 +460,9 @@ export const updateSessionTitle = async (sessionId: string, title: string): Prom
         initDevIfNeeded();
         const list = getSessionsMock();
         const idx = list.findIndex(s => s.id === sessionId);
-        if (idx >= 0) {
-            list[idx] = { ...list[idx], title, updated_at: Math.floor(Date.now() / 1000) };
+        const current = list[idx];
+        if (current) {
+            list[idx] = { ...current, title, updated_at: Math.floor(Date.now() / 1000) };
             setSessionsMock(list);
         }
         const details = getSessionDetailsMock(sessionId);
@@ -532,7 +532,7 @@ export const deleteSession = async (sessionId: string): Promise<void> => {
 export const getUserProfile = async (): Promise<UserProfile> => {
     if (isDevMockEnabled()) {
         initDevIfNeeded();
-        return getMockUser() as UserProfile;
+        return getMockUser();
     }
     const response = await apiCall(`/api/user/profile`, { method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch user profile');
@@ -571,7 +571,7 @@ export const deleteAccount = async (): Promise<void> => {
 export const getPresets = async (): Promise<PromptPreset[]> => {
     if (isDevMockEnabled()) {
         initDevIfNeeded();
-        return getPresetsMock() as unknown as PromptPreset[];
+        return getPresetsMock();
     }
     const response = await apiCall(`/api/presets`, { method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch presets');
@@ -583,8 +583,9 @@ export const updatePreset = async (id: string, data: { title?: string; prompt?: 
         initDevIfNeeded();
         const presets = getPresetsMock();
         const idx = presets.findIndex(p => p.id === id);
-        if (idx >= 0) {
-            const updated = { ...presets[idx] };
+        const current = presets[idx];
+        if (current) {
+            const updated = { ...current };
             if (data.title !== undefined) updated.title = data.title;
             if (data.prompt !== undefined) updated.prompt = data.prompt;
             if (data.append_text !== undefined) updated.append_text = data.append_text;
@@ -616,8 +617,8 @@ export const getBatchData = async (includes: ('profile' | 'presets' | 'sessions'
         initDevIfNeeded();
         const out: BatchData = {};
         if (includes.includes('profile')) out.profile = getMockUser();
-        if (includes.includes('presets')) out.presets = getPresetsMock() as PromptPreset[];
-        if (includes.includes('sessions')) out.sessions = getSessionsMock() as Session[];
+        if (includes.includes('presets')) out.presets = getPresetsMock();
+        if (includes.includes('sessions')) out.sessions = getSessionsMock();
         return out;
     }
     const response = await apiCall(`/api/user/batch?include=${includes.join(',')}`, { method: 'GET' });
@@ -632,5 +633,5 @@ export const logout = async () => {
     localStorage.removeItem('user_info');
 
     // Redirect to login
-    window.location.href = '/login';
+    window.location.href = new URL('/login', window.location.origin).toString();
 };

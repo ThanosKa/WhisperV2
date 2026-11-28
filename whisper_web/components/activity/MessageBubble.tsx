@@ -8,7 +8,7 @@ import Markdown from '@/components/Markdown';
 interface MessageBubbleProps {
     content: string;
     role?: 'user' | 'assistant' | 'speaker';
-    speaker?: string;
+    speaker?: string | undefined;
     timestamp?: number;
     isTranscript?: boolean;
 }

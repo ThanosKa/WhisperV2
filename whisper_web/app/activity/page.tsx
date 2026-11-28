@@ -6,12 +6,19 @@ import { useRedirectIfNotAuth } from '@/utils/auth';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
-import { UserProfile, Session, deleteSession, getConversationStats, updateSessionTitle, getMeetingsPage, getQuestionsPage } from '@/utils/api';
+import { type UserProfile, type Session, deleteSession, getConversationStats, updateSessionTitle, getMeetingsPage, getQuestionsPage } from '@/utils/api';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Mic, MessageSquare, Timer } from 'lucide-react';
 
+const PAGE_SIZE = 10;
+
 export default function ActivityPage() {
-    const userInfo = useRedirectIfNotAuth() as UserProfile | null;
+    const userInfo = useRedirectIfNotAuth();
+    // A new user remounts the page, so nothing from the previous user is kept and everything is fetched again.
+    return <ActivityContent key={userInfo?.uid ?? ''} userInfo={userInfo} />;
+}
+
+function ActivityContent({ userInfo }: { userInfo: UserProfile | null }) {
     const [sessions, setSessions] = useState<Session[]>([]);
     const [meetings, setMeetings] = useState<Session[]>([]);
     const [questions, setQuestions] = useState<Session[]>([]);
@@ -33,9 +40,7 @@ export default function ActivityPage() {
     const [isStatsLoading, setIsStatsLoading] = useState(true);
     const { toast } = useToast();
 
-    const PAGE_SIZE = 10;
-
-    const fetchSessions = async () => {
+    const fetchSessions = useCallback(async () => {
         try {
             const [meetingsPage, questionsPage] = await Promise.all([getMeetingsPage(0, PAGE_SIZE), getQuestionsPage(0, PAGE_SIZE)]);
             setMeetings(meetingsPage.items);
@@ -50,11 +55,10 @@ export default function ActivityPage() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, []);
 
-    const fetchStats = async () => {
+    const fetchStats = useCallback(async () => {
         try {
-            setIsStatsLoading(true);
             const stats = await getConversationStats();
             setTotalMeetingSeconds(stats.totalMeetingSeconds || 0);
             setTotalQuestions(stats.totalQuestions || 0);
@@ -63,14 +67,17 @@ export default function ActivityPage() {
         } finally {
             setIsStatsLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
-        fetchSessions();
-        fetchStats();
+        const loadInitialData = async () => {
+            await Promise.all([fetchSessions(), fetchStats()]);
+        };
+        void loadInitialData();
 
         // Listen for session updates from other pages
         const handleSessionUpdate = () => {
+            setIsStatsLoading(true);
             fetchSessions();
             fetchStats();
         };
@@ -80,24 +87,7 @@ export default function ActivityPage() {
         return () => {
             window.removeEventListener('sessionUpdated', handleSessionUpdate);
         };
-    }, []);
-
-    // Re-fetch when the logged-in user changes to prevent cross-user mixing
-    useEffect(() => {
-        if (!userInfo?.uid) return;
-        // Reset state before refetching for the new user
-        setIsLoading(true);
-        setMeetings([]);
-        setQuestions([]);
-        setSessions([]);
-        setMeetingsOffset(0);
-        setQuestionsOffset(0);
-        setHasMoreMeetings(true);
-        setHasMoreQuestions(true);
-        fetchSessions();
-        fetchStats();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [userInfo?.uid]);
+    }, [fetchSessions, fetchStats]);
 
     const loadMoreMeetings = useCallback(async () => {
         if (isLoadingMoreMeetings || !hasMoreMeetings) return;
@@ -138,7 +128,7 @@ export default function ActivityPage() {
         const observer = new IntersectionObserver(
             entries => {
                 const first = entries[0];
-                if (first.isIntersecting) {
+                if (first?.isIntersecting) {
                     if (activeTab === 'meetings') {
                         loadMoreMeetings();
                     } else {
@@ -397,11 +387,13 @@ function SessionCard({
         setTitle(optimisticTitle);
     };
 
-    // Update local state when session prop changes
-    useEffect(() => {
+    // Update local state when session prop changes (adjusted while rendering, not in an effect)
+    const [seenTitle, setSeenTitle] = useState(session.title);
+    if (seenTitle !== session.title) {
+        setSeenTitle(session.title);
         setOptimisticTitle(session.title || '');
         setTitle(session.title || '');
-    }, [session.title]);
+    }
 
     // Focus input when entering edit mode
     useEffect(() => {

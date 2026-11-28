@@ -1,10 +1,6 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    // Off until ticket 09 of step 4a-1/4b-1 fixes the 61 errors these three show; then delete them.
-    "noUncheckedIndexedAccess": false,
-    "exactOptionalPropertyTypes": false,
-    "verbatimModuleSyntax": false,
     "lib": [
       "dom",
       "dom.iterable",

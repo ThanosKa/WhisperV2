@@ -9,6 +9,8 @@ import internalBridge from '../bridge/internalBridge';
 import askService from '../features/ask/askService';
 import { env } from '../features/common/config/env';
 import { logger } from '../features/common/utils/logger';
+import { sendEvent } from '../ipc/sendEvent';
+import type { EventArgs } from '../../shared/ipc';
 import { apiBaseUrlArgument } from '../../shared/preloadArguments';
 
 const log = logger.child({ module: 'WindowManager' });
@@ -36,7 +38,7 @@ function notifyWindowVisibility({ name, visible }: { name: string; visible: bool
     const header = windowPool.get('header');
     if (!header || header.isDestroyed()) return;
     try {
-        header.webContents.send('listen-window-visibility', !!visible);
+        sendEvent({ webContents: header.webContents, channel: 'listen-window-visibility', args: [!!visible] });
     } catch (e) {
         log.warn({ err: e, name }, 'Failed to notify window visibility');
     }
@@ -98,7 +100,7 @@ const showScreenshotWindow = ({ base64Data, position }: { base64Data: string; po
             // The page can take longer than 100 ms to load (Electron 45), and data sent before it
             // listens is lost: send the data once the page has loaded.
             createdWin.webContents.once('did-finish-load', () => {
-                if (!createdWin.isDestroyed()) createdWin.webContents.send('screenshot:data', base64Data);
+                if (!createdWin.isDestroyed()) sendEvent({ webContents: createdWin.webContents, channel: 'screenshot:data', args: [base64Data] });
             });
             // Wait a bit for window to be created, then show
             setTimeout(() => {
@@ -133,7 +135,7 @@ const showScreenshotWindow = ({ base64Data, position }: { base64Data: string; po
     }
 
     // Send screenshot data to window
-    screenshotWin.webContents.send('screenshot:data', base64Data);
+    sendEvent({ webContents: screenshotWin.webContents, channel: 'screenshot:data', args: [base64Data] });
 
     // Position window near indicator
     if (position) {
@@ -217,7 +219,13 @@ const showPlanWindow = (visible: boolean) => {
     internalBridge.emit('window:showPlanWindow', { visible });
 };
 
-const showRecoveryToast = ({ sessionInfo, headerBounds }: { sessionInfo: unknown; headerBounds?: Rectangle | undefined }) => {
+const showRecoveryToast = ({
+    sessionInfo,
+    headerBounds,
+}: {
+    sessionInfo: EventArgs['recovery-toast:show'][0];
+    headerBounds?: Rectangle | undefined;
+}) => {
     const toastWin = windowPool.get('recoveryToast');
     if (!toastWin || toastWin.isDestroyed()) {
         const header = windowPool.get('header');
@@ -227,7 +235,7 @@ const showRecoveryToast = ({ sessionInfo, headerBounds }: { sessionInfo: unknown
                 const newWin = windowPool.get('recoveryToast');
                 if (newWin && !newWin.isDestroyed()) {
                     positionRecoveryToast({ toastWin: newWin, headerBounds });
-                    newWin.webContents.send('recovery-toast:show', sessionInfo);
+                    sendEvent({ webContents: newWin.webContents, channel: 'recovery-toast:show', args: [sessionInfo] });
                     newWin.show();
                     newWin.setAlwaysOnTop(true);
                     newWin.moveTop();
@@ -238,7 +246,7 @@ const showRecoveryToast = ({ sessionInfo, headerBounds }: { sessionInfo: unknown
     }
 
     positionRecoveryToast({ toastWin, headerBounds });
-    toastWin.webContents.send('recovery-toast:show', sessionInfo);
+    sendEvent({ webContents: toastWin.webContents, channel: 'recovery-toast:show', args: [sessionInfo] });
     toastWin.show();
     toastWin.setAlwaysOnTop(true);
     toastWin.moveTop();
@@ -319,13 +327,7 @@ function isWindowVisible(name: string) {
     }
 }
 
-function setupWindowController({
-    layoutManager,
-    movementManager,
-}: {
-    layoutManager: WindowLayoutManager;
-    movementManager: SmoothMovementManager;
-}) {
+function setupWindowController({ layoutManager, movementManager }: { layoutManager: WindowLayoutManager; movementManager: SmoothMovementManager }) {
     internalBridge.on('window:requestVisibility', ({ name, visible }: { name: string; visible: boolean }) => {
         void handleWindowVisibilityRequest({ layoutManager, movementManager, name, shouldBeVisible: visible });
     });
@@ -1064,7 +1066,7 @@ function forceShowPermissionOnboarding() {
         if (!header || header.isDestroyed()) {
             return { success: false, error: 'Header window not available' };
         }
-        header.webContents.send('header:force-show-permission');
+        sendEvent({ webContents: header.webContents, channel: 'header:force-show-permission', args: [] });
         return { success: true };
     } catch (e) {
         log.error({ err: e }, 'Failed to force show permission onboarding');

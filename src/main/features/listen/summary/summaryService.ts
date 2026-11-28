@@ -8,6 +8,8 @@ import config from '../../common/config/config';
 import * as settingsService from '../../settings/settingsService';
 import { windowPool } from '../../../window/windowManager';
 import { logger } from '../../common/utils/logger';
+import { sendEvent } from '../../../ipc/sendEvent';
+import type { EventArgs, EventChannel } from '../../../../shared/ipc';
 import { errorMessage } from '../../common/utils/errors';
 import fs from 'fs';
 import path from 'path';
@@ -184,10 +186,7 @@ class SummaryService {
                 this.customSystemPrompt = preset.prompt + (preset.append_text || '');
                 this.selectedRoleText = '';
                 this.analysisProfile = null;
-                log.info(
-                    { presetId, promptLength: this.customSystemPrompt.length, sessionId: this.currentSessionId },
-                    'Set custom analysis preset'
-                );
+                log.info({ presetId, promptLength: this.customSystemPrompt.length, sessionId: this.currentSessionId }, 'Set custom analysis preset');
             }
 
             return { success: true };
@@ -217,7 +216,10 @@ class SummaryService {
         // Update lastAnalyzedIndex to prevent immediate re-analysis
         this.lastAnalyzedIndex = this.conversationHistory.length;
 
-        log.info({ sessionId: this.currentSessionId, turns: this.conversationHistory.length, lastAnalyzedIndex: this.lastAnalyzedIndex }, 'Hydrated conversation');
+        log.info(
+            { sessionId: this.currentSessionId, turns: this.conversationHistory.length, lastAnalyzedIndex: this.lastAnalyzedIndex },
+            'Hydrated conversation'
+        );
     }
 
     hydrateInsights(insightPayload: InsightPayload | null | undefined): void {
@@ -257,11 +259,11 @@ class SummaryService {
         return words.slice(0, maxWords).join(' ');
     }
 
-    sendToRenderer({ channel, data }: { channel: string; data: unknown }): void {
+    sendToRenderer<C extends EventChannel>({ channel, args }: { channel: C; args: EventArgs[C] }): void {
         const listenWindow = windowPool?.get('listen');
 
         if (listenWindow && !listenWindow.isDestroyed()) {
-            listenWindow.webContents.send(channel, data);
+            sendEvent({ webContents: listenWindow.webContents, channel, args });
         }
     }
 
@@ -308,7 +310,7 @@ class SummaryService {
         };
 
         // Send to UI to trigger display of default actions
-        this.sendToRenderer({ channel: 'summary-update', data: initialData });
+        this.sendToRenderer({ channel: 'summary-update', args: [initialData] });
     }
 
     getConversationHistory(): string[] {
@@ -360,7 +362,10 @@ class SummaryService {
         const roundLog = `=== ROUND ${this.analysisRound} ===
 PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (actions:${prevActions} + terms:${prevTerms} + questions:${prevQuestionsCount})`;
 
-        log.info({ sessionId, round: this.analysisRound, prevActions, prevTerms, prevQuestions: prevQuestionsCount, totalSending }, 'Analysis round started');
+        log.info(
+            { sessionId, round: this.analysisRound, prevActions, prevTerms, prevQuestions: prevQuestionsCount, totalSending },
+            'Analysis round started'
+        );
         this.writeDebugLog(roundLog);
 
         // Accumulate ALL actions from analysis history (all previous rounds combined)
@@ -860,7 +865,7 @@ PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (acti
             }
 
             log.info({ sessionId: this.currentSessionId }, 'Sending structured data to renderer');
-            this.sendToRenderer({ channel: 'summary-update', data: { ...data, presetId: this.selectedPresetId } });
+            this.sendToRenderer({ channel: 'summary-update', args: [{ ...data, presetId: this.selectedPresetId }] });
 
             if (this.onAnalysisComplete) {
                 this.onAnalysisComplete(data);

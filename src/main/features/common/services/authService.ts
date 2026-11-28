@@ -5,6 +5,7 @@ import sessionRepository from '../repositories/session';
 import userRepository from '../repositories/user';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
+import { sendEvent } from '../../../ipc/sendEvent';
 import { errorMessage } from '../utils/errors';
 
 const log = logger.child({ module: 'AuthService' });
@@ -331,7 +332,7 @@ export class AuthService {
         // Send user state to all Electron windows
         BrowserWindow.getAllWindows().forEach(win => {
             if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
-                win.webContents.send('user-state-changed', userState);
+                sendEvent({ webContents: win.webContents, channel: 'user-state-changed', args: [userState] });
 
                 if (!userState.isLoggedIn) {
                     // Clear user data from local webapp localStorage when signed out or unauthenticated

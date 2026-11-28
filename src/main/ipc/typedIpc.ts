@@ -1,10 +1,8 @@
-import { ipcMain, type WebContents } from 'electron';
+import { ipcMain } from 'electron';
 import type { z } from 'zod';
 import {
     invokeArgSchemas,
     sendArgSchemas,
-    type EventArgs,
-    type EventChannel,
     type InvokeChannel,
     type InvokeParsedArgs,
     type InvokeResult,
@@ -45,9 +43,4 @@ export function on<C extends SendChannel>({ channel, listener }: { channel: C; l
         const parsed = parsePayload({ channel, schema, args });
         if (parsed !== undefined) listener(...parsed);
     });
-}
-
-// Sends a main-to-renderer event with the payload its channel declares.
-export function sendEvent<C extends EventChannel>({ webContents, channel, args }: { webContents: WebContents; channel: C; args: EventArgs[C] }): void {
-    webContents.send(channel, ...args);
 }

@@ -114,7 +114,13 @@ export default {
                 // Get conversation history from listenService and pass it to askService
                 const conversationHistory = listenService.getConversationHistory();
                 log.info(
-                    { channel: 'ask:sendQuestionFromAsk', clickLen: userPrompt.length, historyItems: conversationHistory.length, useScreenCapture, webSearchEnabled },
+                    {
+                        channel: 'ask:sendQuestionFromAsk',
+                        clickLen: userPrompt.length,
+                        historyItems: conversationHistory.length,
+                        useScreenCapture,
+                        webSearchEnabled,
+                    },
                     'Question from Ask'
                 );
                 log.info({ preview: JSON.stringify(conversationHistory.slice(-2)) }, 'History preview');
@@ -151,13 +157,16 @@ export default {
         });
 
         // Listen
-        handle({ channel: 'listen:sendMicAudio', handler: async ({ data, mimeType }) => await listenService.handleSendMicAudioContent({ data, mimeType }) });
+        handle({
+            channel: 'listen:sendMicAudio',
+            handler: async ({ data, mimeType }) => await listenService.handleSendMicAudioContent({ data, mimeType }),
+        });
         handle({
             channel: 'listen:sendSystemAudio',
             handler: async ({ data, mimeType }) => {
                 const result = await listenService.sttService.sendSystemAudioContent({ data, mimeType });
                 if (result.success) {
-                    listenService.sendToRenderer({ channel: 'system-audio-data', data: { data } });
+                    listenService.sendToRenderer({ channel: 'system-audio-data', args: [{ data }] });
                 }
                 return result;
             },

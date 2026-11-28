@@ -10,6 +10,7 @@ import sessionRepository from '../common/repositories/session';
 import askRepository from './repositories';
 import { errorMessage } from '../common/utils/errors';
 import { logger } from '../common/utils/logger';
+import { sendEvent } from '../../ipc/sendEvent';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'os';
@@ -70,7 +71,7 @@ function broadcastQuotaUpdateFromResponse(response: Response) {
 
         BrowserWindow.getAllWindows().forEach(win => {
             if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
-                win.webContents.send('quota:update', { limit, used, remaining });
+                sendEvent({ webContents: win.webContents, channel: 'quota:update', args: [{ limit, used, remaining }] });
             }
         });
     } catch (e) {
@@ -79,8 +80,7 @@ function broadcastQuotaUpdateFromResponse(response: Response) {
 }
 
 type ScreenshotResult =
-    | { success: true; base64: string; width: number | null | undefined; height: number | null | undefined }
-    | { success: false; error: string };
+    { success: true; base64: string; width: number | null | undefined; height: number | null | undefined } | { success: false; error: string };
 
 async function captureScreenshot(): Promise<ScreenshotResult> {
     if (process.platform === 'darwin') {
@@ -504,7 +504,6 @@ class AskService {
         return { mode: 'default' };
     }
 
-
     interruptStream() {
         if (this.abortController) {
             log.info('User interrupted the stream');
@@ -527,7 +526,7 @@ class AskService {
     _broadcastState() {
         const askWindow = getWindowPool()?.get('ask');
         if (askWindow && !askWindow.isDestroyed()) {
-            askWindow.webContents.send('ask:stateUpdate', this.state);
+            sendEvent({ webContents: askWindow.webContents, channel: 'ask:stateUpdate', args: [this.state] });
         }
     }
 
@@ -764,12 +763,13 @@ class AskService {
 
                 context = {
                     transcript: contextForPrompt,
-                    previousItems: summaryContext && hasPreviousItems
-                        ? [
-                              ...summaryContext.definedTerms.map(term => `📘 Define ${term}`),
-                              ...summaryContext.detectedQuestions.map(question => `❓ ${question}`),
-                          ]
-                        : [],
+                    previousItems:
+                        summaryContext && hasPreviousItems
+                            ? [
+                                  ...summaryContext.definedTerms.map(term => `📘 Define ${term}`),
+                                  ...summaryContext.detectedQuestions.map(question => `❓ ${question}`),
+                              ]
+                            : [],
                 };
                 log.info({ transcriptChars: contextForPrompt.length, previousItems: context.previousItems.length }, 'Context built');
             }
@@ -797,7 +797,10 @@ class AskService {
             }
 
             // concise request log
-            log.info({ profile: profileToUse, hasImage: Boolean(screenshotBase64), hasContext: !!context, hasRole: !!payload.role }, 'Sending request to LLM');
+            log.info(
+                { profile: profileToUse, hasImage: Boolean(screenshotBase64), hasContext: !!context, hasRole: !!payload.role },
+                'Sending request to LLM'
+            );
 
             try {
                 const response = await llmClient.stream({ payload, signal });
@@ -884,10 +887,10 @@ class AskService {
                 // Detect quota exceeded via status text to keep logic simple
                 const msg = message.toLowerCase();
                 if (msg.includes('429') || msg.includes('too many requests')) {
-                    askWin.webContents.send('ask-response-stream-error', { error: 'quota_exceeded' });
+                    sendEvent({ webContents: askWin.webContents, channel: 'ask-response-stream-error', args: [{ error: 'quota_exceeded' }] });
                 } else {
                     const streamError = message || 'Unknown error occurred';
-                    askWin.webContents.send('ask-response-stream-error', { error: streamError });
+                    sendEvent({ webContents: askWin.webContents, channel: 'ask-response-stream-error', args: [{ error: streamError }] });
                 }
             }
 
@@ -989,7 +992,11 @@ class AskService {
             } else {
                 log.error({ err: streamError, sessionId }, 'Error while processing stream');
                 if (askWin && !askWin.isDestroyed()) {
-                    askWin.webContents.send('ask-response-stream-error', { error: errorMessage(streamError) });
+                    sendEvent({
+                        webContents: askWin.webContents,
+                        channel: 'ask-response-stream-error',
+                        args: [{ error: errorMessage(streamError) }],
+                    });
                 }
             }
         } finally {

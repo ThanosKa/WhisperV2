@@ -28,7 +28,7 @@ import { errorMessage } from './features/common/utils/errors';
 import { logger } from './features/common/utils/logger';
 import featureBridge from './bridge/featureBridge';
 import windowBridge from './bridge/windowBridge';
-import { sendEvent } from './ipc/typedIpc';
+import { sendEvent } from './ipc/sendEvent';
 import type { EventArgs } from '../shared/ipc';
 import createBackendApp from '../../whisper_web/backend_node/dist';
 
@@ -452,7 +452,10 @@ async function getSessionDetails(payload: unknown) {
     try {
         const currentUid = authService.getCurrentUserId();
         if (!isCurrentUsersSession({ sessionOwner: session.uid, currentUid })) {
-            webDataLog.warn({ requestedSessionId: sessionId, sessionOwner: session.uid, currentUid }, 'Unauthorized access to session details blocked');
+            webDataLog.warn(
+                { requestedSessionId: sessionId, sessionOwner: session.uid, currentUid },
+                'Unauthorized access to session details blocked'
+            );
             return null;
         }
     } catch (e) {

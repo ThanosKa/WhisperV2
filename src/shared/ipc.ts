@@ -12,7 +12,7 @@ import type * as windowManager from '../main/window/windowManager';
 // Every IPC channel between main and the Lit windows, by kind:
 // - `invoke`: the renderer calls `ipcRenderer.invoke` and awaits the handler's result;
 // - `send`: the renderer calls `ipcRenderer.send`, main runs a listener, nothing comes back;
-// - `event`: main calls `webContents.send` and the renderer listens.
+// - `event`: main sends it with `sendEvent` (src/main/ipc/sendEvent.ts) and the renderer listens.
 // `args` is the positional argument list as the preload sends it. Main parses it with this schema
 // before a handler runs (src/main/ipc/typedIpc.ts); preload's `window.api` is typed from it.
 // Each schema accepts what today's UI sends (tests/unit/ipc/ipcChannels.test.ts).
@@ -146,10 +146,17 @@ const event = {
     'listen:stranded-session-detected': { args: z.tuple([strandedSessionInfo]) },
     'stt:quotaExceeded': { args: z.tuple([z.object({ resetAt: z.string().nullable() })]) },
     'session-state-changed': { args: z.tuple([z.object({ isActive: z.boolean(), mode: z.string() })]) },
-    'listen:sync-conversation-history': { args: z.tuple([z.array(z.string())]) },
+    // The summary's history lines in a live session; the transcript rows when a stranded session resumes
+    'listen:sync-conversation-history': {
+        args: z.tuple([z.union([z.array(z.string()), z.array(z.object({ speaker: z.string().nullable(), text: z.string().nullable() }))])]),
+    },
+    // A live utterance, or a stored transcript row (no timestamp) when a stranded session resumes
     'stt-update': {
         args: z.tuple([
-            z.object({ speaker: z.string(), text: z.string(), isPartial: z.boolean(), isFinal: z.boolean(), timestamp: z.number() }),
+            z.union([
+                z.object({ speaker: z.string(), text: z.string(), isPartial: z.boolean(), isFinal: z.boolean(), timestamp: z.number() }),
+                z.object({ speaker: z.string().nullable(), text: z.string().nullable(), isPartial: z.literal(false), isFinal: z.literal(true) }),
+            ]),
         ]),
     },
     'summary-update': { args: z.tuple([z.looseObject({ presetId: z.string().nullable() })]) },

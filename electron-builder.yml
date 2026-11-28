@@ -31,6 +31,10 @@ extraResources:
     - from: whisper_web/out
       to: out
 
+# Every native module ships prebuilt binaries (better-sqlite3's N-API prebuilds, sharp's @img
+# packages), so nothing is compiled at packaging time.
+npmRebuild: false
+
 asarUnpack:
     - 'src/ui/assets/SystemAudioDump'
     - '**/node_modules/sharp/**/*'
@@ -70,8 +74,14 @@ mac:
     category: public.app-category.utilities
     # Path to the .icns icon file
     icon: src/ui/assets/wlogo.icns
-    # Minimum macOS version (supports both Intel and Apple Silicon)
-    minimumSystemVersion: '11.0'
+    # Minimum macOS version, written to Info.plist as LSMinimumSystemVersion. Electron 44 and
+    # later need macOS 13. The update feed carries the same floor as a Darwin version (see
+    # scripts/add-mac-feed-minimum-system-version.js).
+    minimumSystemVersion: '13.0'
+    # The x64 and arm64 builds both carry the prebuilt binaries of both architectures
+    # (pnpm-workspace.yaml supportedArchitectures), so the universal merge finds the same Mach-O
+    # files in both. They are already per-architecture: keep one copy.
+    x64ArchFiles: 'Contents/Resources/app.asar.unpacked/node_modules/{@img/sharp-*,better-sqlite3}/**'
     hardenedRuntime: true
     entitlements: entitlements.plist
     entitlementsInherit: entitlements.plist

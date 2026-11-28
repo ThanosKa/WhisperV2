@@ -1,0 +1,26 @@
+# The packaged app the Electron suite runs against (`pnpm run package:e2e`): the release config
+# (electron-builder.yml), built for this Mac's architecture only with `--dir`, unsigned and not
+# notarized, into its own folder.
+#
+# The one difference from a release build is the entry point. A packaged app cannot load the
+# suite's main-process preload from the command line: `-r` is read by Electron's default app, which
+# a packaged app does not run, and Electron ignores NODE_OPTIONS in a packaged app (Playwright also
+# removes it). So this build starts at tests/e2e/support/packaged-main.js, which loads the preload,
+# then the app's own src/index.js.
+extends: electron-builder.yml
+
+directories:
+    output: dist-e2e
+
+extraMetadata:
+    main: tests/e2e/support/packaged-main.js
+
+files:
+    - tests/e2e/support/packaged-main.js
+    - tests/e2e/support/main-preload.js
+
+# No notarization hook and no signing identity: nothing here reads a credential.
+afterSign: null
+
+mac:
+    identity: null

@@ -1,0 +1,12 @@
+version: 1.7.0
+files:
+  - url: Whisper-1.7.0-universal-mac.zip
+    sha512: Y93i0mrruqjTs23aLDLzh0qmQN80+vRN5KOv6zkRTvJ7uKhbyN9EF4tmGI/qjzMFy/rPkkq4FJKHE2xS3jpc/w==
+    size: 249258391
+  - url: Whisper-1.7.0-universal.dmg
+    sha512: IN3zfMzWiGkPaZw3V1Ln+0GEW43MtlSy3ObA/tN8bpNSAxKda0+H7t5eUbMlXmeXCnxiMy4oVVV0AVMCn0yLKg==
+    size: 257655181
+path: Whisper-1.7.0-universal-mac.zip
+sha512: Y93i0mrruqjTs23aLDLzh0qmQN80+vRN5KOv6zkRTvJ7uKhbyN9EF4tmGI/qjzMFy/rPkkq4FJKHE2xS3jpc/w==
+releaseDate: '2026-11-28T12:13:07.510Z'
+minimumSystemVersion: 22.0.0

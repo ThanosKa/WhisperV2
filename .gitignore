@@ -112,6 +112,7 @@ data/*.db-wal
 # Build output
 out/
 dist/
+dist-e2e/
 build/
 public/build/
 whisper_web/out/

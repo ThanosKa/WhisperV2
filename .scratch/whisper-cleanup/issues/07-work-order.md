@@ -40,3 +40,5 @@ The agent runs the automated suite after every step.
 **Step 0 done 2026-11-25:** the relay (`../websocket`, commit `23c6c7c`) uses `stt-rt-v6`. It was tested locally against the real Soniox API with spoken audio (exact transcript, `<end>` turn detected, no errors), then deployed to Railway, where the deploy succeeded.
 
 **Step 1 done 2026-11-28:** [Spec: Step 1, housekeeping](../../step-1-housekeeping/spec.md). The three repos live in `~/Desktop/Cursor/Whisper/`, a local git repo whose root `CLAUDE.md` and `CODING_STANDARDS.md` load into every repo. WhisperV2's old docs are deleted, and its work reaches GitHub on `dev` through PRs (#2-#4); `main` waits for step 9. Same suite counts before and after.
+
+**Amended 2026-11-28 with the owner:** steps 2 and 3 run as one spec (one `/to-spec`, one `/to-tickets`). Their order stays: every step-3 ticket is blocked by the step-2 tickets it needs (the smoke tests, the six screenshots and the dashboard's "before" screenshots). The other steps keep one spec each.

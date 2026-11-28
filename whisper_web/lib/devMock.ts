@@ -88,7 +88,6 @@ const promptPresetSchema: z.ZodType<PromptPreset> = z.object({
 const presetListSchema = z.array(promptPresetSchema);
 const sessionListSchema = z.array(sessionSchema);
 
-
 const PRESETS_KEY = 'dev_mock_presets';
 const SESSIONS_KEY = 'dev_mock_sessions';
 const DETAILS_PREFIX = 'dev_mock_session_details_';
@@ -299,7 +298,7 @@ export function ensureMockData() {
                           },
                       ]
                     : [],
-                ai_messages: !isListen ? generateAIMessages(i, s.id, start) : [],
+                ai_messages: !isListen ? generateAIMessages({ sessionIndex: i, sessionId: s.id, startTime: start }) : [],
                 summary: isListen
                     ? {
                           session_id: s.id,
@@ -374,7 +373,7 @@ export function getSessionDetailsMock(id: string): DevSessionDetails | null {
     }
 }
 
-export function setSessionDetailsMock(id: string, details: DevSessionDetails) {
+export function setSessionDetailsMock({ id, details }: { id: string; details: DevSessionDetails }) {
     if (typeof window === 'undefined') return;
     try {
         localStorage.setItem(DETAILS_PREFIX + id, JSON.stringify(details));
@@ -596,7 +595,7 @@ function getQuestionAnswer(i: number): string {
     return answers[(i - 17) % 5] ?? '';
 }
 
-function generateAIMessages(sessionIndex: number, sessionId: string, startTime: number): DevAiMessage[] {
+function generateAIMessages({ sessionIndex, sessionId, startTime }: { sessionIndex: number; sessionId: string; startTime: number }): DevAiMessage[] {
     const messages: DevAiMessage[] = [];
     const now = Math.floor(Date.now() / 1000);
 

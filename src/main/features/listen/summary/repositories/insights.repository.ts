@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { z } from 'zod';
+import { SessionIdSchema, type SessionId } from '../../../../../shared/sessionId';
 import sqliteClient from '../../../common/services/sqliteClient';
 import { logger } from '../../../common/utils/logger';
 
@@ -19,7 +20,7 @@ export type InsightPayload = z.infer<typeof InsightPayloadSchema>;
 // A row of `session_insights` (config/schema.ts); every column is NOT NULL.
 const InsightRowSchema = z.object({
     id: z.string(),
-    session_id: z.string(),
+    session_id: SessionIdSchema,
     analysis_round: z.number(),
     payload_json: z.string(),
     created_at: z.number(),
@@ -29,7 +30,9 @@ export type InsightRow = z.infer<typeof InsightRowSchema>;
 
 export type Insight = InsightRow & { payload: InsightPayload };
 
-function saveInsight({ sessionId, analysisRound, payload }: { sessionId: string; analysisRound: number; payload: InsightPayload }): { id: string } {
+function saveInsight({ sessionId, analysisRound, payload }: { sessionId: SessionId; analysisRound: number; payload: InsightPayload }): {
+    id: string;
+} {
     const db = sqliteClient.getDb();
     const id = crypto.randomUUID();
     const now = Math.floor(Date.now() / 1000);

@@ -61,9 +61,12 @@ export default function PersonalizePage() {
             let updatedPreset: PromptPreset;
             if (selectedPreset.is_default === 1) {
                 // For defaults, append to append_text
-                await updatePreset(selectedPreset.id, {
-                    title: selectedPreset.title,
-                    append_text: newContent,
+                await updatePreset({
+                    id: selectedPreset.id,
+                    data: {
+                        title: selectedPreset.title,
+                        append_text: newContent,
+                    },
                 });
                 // Update local: add to append_text
                 updatedPreset = { ...selectedPreset, append_text: newContent };
@@ -73,10 +76,13 @@ export default function PersonalizePage() {
             } else {
                 // For customs, full prompt update
                 const updatedContent = savedContent + newContent;
-                await updatePreset(selectedPreset.id, {
-                    title: selectedPreset.title,
-                    prompt: updatedContent,
-                    append_text: '',
+                await updatePreset({
+                    id: selectedPreset.id,
+                    data: {
+                        title: selectedPreset.title,
+                        prompt: updatedContent,
+                        append_text: '',
+                    },
                 });
                 updatedPreset = { ...selectedPreset, prompt: updatedContent, append_text: '' };
                 setAllPresets(prev => prev.map(p => (p.id === selectedPreset.id ? updatedPreset : p)));
@@ -101,9 +107,12 @@ export default function PersonalizePage() {
             let updatedPreset: PromptPreset;
             if (selectedPreset.is_default === 1) {
                 // Clear append_text for defaults
-                await updatePreset(selectedPreset.id, {
-                    title: selectedPreset.title,
-                    append_text: '',
+                await updatePreset({
+                    id: selectedPreset.id,
+                    data: {
+                        title: selectedPreset.title,
+                        append_text: '',
+                    },
                 });
                 updatedPreset = { ...selectedPreset, append_text: '' };
                 setAllPresets(prev => prev.map(p => (p.id === selectedPreset.id ? updatedPreset : p)));
@@ -111,10 +120,13 @@ export default function PersonalizePage() {
                 setSavedContent(selectedPreset.prompt);
             } else {
                 // Clear prompt for customs
-                await updatePreset(selectedPreset.id, {
-                    title: selectedPreset.title,
-                    prompt: '',
-                    append_text: '',
+                await updatePreset({
+                    id: selectedPreset.id,
+                    data: {
+                        title: selectedPreset.title,
+                        prompt: '',
+                        append_text: '',
+                    },
                 });
                 updatedPreset = { ...selectedPreset, prompt: '', append_text: '' };
                 setAllPresets(prev => prev.map(p => (p.id === selectedPreset.id ? updatedPreset : p)));

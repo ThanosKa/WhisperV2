@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { BrowserWindow } from 'electron';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-// Electron cannot run under Jest: a window here is a stand-in whose page loads when the test says so.
+// Electron cannot run under Vitest: a window here is a stand-in whose page loads when the test says so.
 const fakeWindow = () => {
     let destroyed = false;
     const webContents = Object.assign(new EventEmitter(), { send: vi.fn(), openDevTools: vi.fn() });

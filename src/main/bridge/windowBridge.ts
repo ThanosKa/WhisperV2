@@ -1,6 +1,7 @@
 import { shell, BrowserWindow } from 'electron';
 import * as windowManager from '../window/windowManager';
-import { handle, on, sendEvent } from '../ipc/typedIpc';
+import { handle, on } from '../ipc/typedIpc';
+import { sendEvent } from '../ipc/sendEvent';
 
 // Bridge only registers IPC handlers (no business logic)
 export default {
@@ -12,7 +13,10 @@ export default {
         on({ channel: 'hide-settings-window', listener: () => windowManager.hideSettingsWindow() });
         on({ channel: 'cancel-hide-settings-window', listener: () => windowManager.cancelHideSettingsWindow() });
         // Screenshot window show/hide
-        on({ channel: 'show-screenshot-window', listener: ({ base64Data, position }) => windowManager.showScreenshotWindow({ base64Data, position }) });
+        on({
+            channel: 'show-screenshot-window',
+            listener: ({ base64Data, position }) => windowManager.showScreenshotWindow({ base64Data, position }),
+        });
         on({ channel: 'hide-screenshot-window', listener: () => windowManager.hideScreenshotWindow() });
         on({ channel: 'cancel-hide-screenshot-window', listener: () => windowManager.cancelHideScreenshotWindow() });
         // Plan tooltip show/hide
@@ -37,7 +41,10 @@ export default {
         on({ channel: 'header-animation-finished', listener: state => windowManager.handleHeaderAnimationFinished(state) });
         handle({ channel: 'get-header-position', handler: () => windowManager.getHeaderPosition() });
         handle({ channel: 'move-header-to', handler: (newX, newY) => windowManager.moveHeaderTo({ newX, newY }) });
-        handle({ channel: 'adjust-window-height', handler: ({ winName, height }) => windowManager.adjustWindowHeight({ winName, targetHeight: height }) });
+        handle({
+            channel: 'adjust-window-height',
+            handler: ({ winName, height }) => windowManager.adjustWindowHeight({ winName, targetHeight: height }),
+        });
 
         // Window visibility controls
         handle({ channel: 'window:set-visibility', handler: ({ name, visible }) => windowManager.setWindowVisibility({ name, visible }) });

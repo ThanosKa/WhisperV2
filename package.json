@@ -6,8 +6,8 @@
     "main": "out/main/index.js",
     "scripts": {
         "setup": "pnpm install && pnpm run build:all && pnpm start",
-        "dev": "electron-vite dev --watch --ignoreConfigWarning",
-        "start": "electron-vite preview --ignoreConfigWarning",
+        "dev": "node scripts/prepare-dev.js && electron-vite dev --watch --ignoreConfigWarning",
+        "start": "node scripts/prepare-dev.js && electron-vite preview --ignoreConfigWarning",
         "package": "pnpm run build:all && electron-builder --dir",
         "package:e2e": "pnpm run build:all && electron-builder --config tests/e2e/electron-builder.e2e.yml --mac --dir --publish never",
         "build": "pnpm run build:all && electron-builder --config electron-builder.yml --publish never",

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SessionIdSchema } from './sessionId';
 import type askService from '../main/features/ask/askService';
 import type { AskState } from '../main/features/ask/askService';
 import type authService from '../main/features/common/services/authService';
@@ -12,7 +13,7 @@ import type * as windowManager from '../main/window/windowManager';
 // Every IPC channel between main and the Lit windows, by kind:
 // - `invoke`: the renderer calls `ipcRenderer.invoke` and awaits the handler's result;
 // - `send`: the renderer calls `ipcRenderer.send`, main runs a listener, nothing comes back;
-// - `event`: main calls `webContents.send` and the renderer listens.
+// - `event`: main sends it with `sendEvent` (src/main/ipc/sendEvent.ts) and the renderer listens.
 // `args` is the positional argument list as the preload sends it. Main parses it with this schema
 // before a handler runs (src/main/ipc/typedIpc.ts); preload's `window.api` is typed from it.
 // Each schema accepts what today's UI sends (tests/unit/ipc/ipcChannels.test.ts).
@@ -22,12 +23,19 @@ import type * as windowManager from '../main/window/windowManager';
 // A handler's result is main's own value, so it is typed, never parsed.
 const result = <T>() => z.custom<T>();
 type Returns<F extends (...args: never[]) => unknown> = Awaited<ReturnType<F>>;
-type Outcome = { success: true } | { success: false; error: string };
+// A result on the `success` literal: the success branch carries its own fields, a failure its error.
+export type Outcome<Success extends object = Record<never, never>> = ({ success: true } & Success) | { success: false; error: string };
 
 const none = z.tuple([]);
+// The header's Listen button texts (MainHeader._getListenButtonText), sent on `listen:changeSession`
+export const ListenButtonTextSchema = z.enum(['Listen', 'Stop', 'Resume', 'Done']);
+export type ListenButtonText = z.infer<typeof ListenButtonTextSchema>;
+// What the recovery toast asks main to do with a stranded session
+export const RecoveryActionSchema = z.enum(['resume', 'finalize']);
+export type RecoveryAction = z.infer<typeof RecoveryActionSchema>;
 const audioContent = z.object({ data: z.string(), mimeType: z.string() });
 const rectangle = z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() });
-const strandedSessionInfo = z.looseObject({ id: z.string(), title: z.string(), started_at: z.number().nullable() });
+const strandedSessionInfo = z.looseObject({ id: SessionIdSchema, title: z.string(), started_at: z.number().nullable() });
 
 const invoke = {
     // Settings and app
@@ -73,15 +81,14 @@ const invoke = {
     'listen:startMacosSystemAudio': { args: none, result: result<Returns<typeof listenService.handleStartMacosAudio>>() },
     'listen:stopMacosSystemAudio': { args: none, result: result<Returns<typeof listenService.handleStopMacosAudio>>() },
     'listen:isSessionActive': { args: none, result: result<boolean>() },
-    // The header's button text; listenService answers an unknown one with `success: false`
-    'listen:changeSession': { args: z.tuple([z.string()]), result: result<Outcome>() },
+    'listen:changeSession': { args: z.tuple([ListenButtonTextSchema]), result: result<Outcome>() },
     'listen:listAnalysisPresets': { args: none, result: result<Returns<typeof settingsService.getPresets>>() },
     'listen:getAnalysisPreset': { args: none, result: result<{ presetId: string | null }>() },
     'listen:setAnalysisPreset': { args: z.tuple([z.object({ presetId: z.string().nullable() })]), result: result<Outcome>() },
-    // The action (`resume` or `finalize`; listenService answers another with `success: false`), then the session id
+    // The action, then the session id
     'listen:handleRecoveryAction': {
-        args: z.tuple([z.string(), z.string()]),
-        result: result<Returns<typeof listenService.handleRecoveryAction> | { success: false; error: string }>(),
+        args: z.tuple([RecoveryActionSchema, SessionIdSchema]),
+        result: result<Returns<typeof listenService.handleRecoveryAction>>(),
     },
     'listen:getStrandedSession': { args: none, result: result<StrandedSessionInfo | null>() },
 
@@ -139,17 +146,30 @@ const event = {
     'click-through-toggled': { args: z.tuple([z.boolean()]) },
 
     // Listen
+    // A failure may carry the status to show and an error code, or neither (listenService.handleListenRequest)
     'listen:changeSessionResult': {
-        args: z.tuple([z.object({ success: z.boolean(), nextStatus: z.string().optional(), error: z.string().optional() })]),
+        args: z.tuple([
+            z.union([
+                z.object({ success: z.literal(true), nextStatus: z.string() }),
+                z.object({ success: z.literal(false), nextStatus: z.string().optional(), error: z.string().optional() }),
+            ]),
+        ]),
     },
     'listen-window-visibility': { args: z.tuple([z.boolean()]) },
     'listen:stranded-session-detected': { args: z.tuple([strandedSessionInfo]) },
     'stt:quotaExceeded': { args: z.tuple([z.object({ resetAt: z.string().nullable() })]) },
     'session-state-changed': { args: z.tuple([z.object({ isActive: z.boolean(), mode: z.string() })]) },
-    'listen:sync-conversation-history': { args: z.tuple([z.array(z.string())]) },
+    // The summary's history lines in a live session; the transcript rows when a stranded session resumes
+    'listen:sync-conversation-history': {
+        args: z.tuple([z.union([z.array(z.string()), z.array(z.object({ speaker: z.string().nullable(), text: z.string().nullable() }))])]),
+    },
+    // A live utterance, or a stored transcript row (no timestamp) when a stranded session resumes
     'stt-update': {
         args: z.tuple([
-            z.object({ speaker: z.string(), text: z.string(), isPartial: z.boolean(), isFinal: z.boolean(), timestamp: z.number() }),
+            z.union([
+                z.object({ speaker: z.string(), text: z.string(), isPartial: z.boolean(), isFinal: z.boolean(), timestamp: z.number() }),
+                z.object({ speaker: z.string().nullable(), text: z.string().nullable(), isPartial: z.literal(false), isFinal: z.literal(true) }),
+            ]),
         ]),
     },
     'summary-update': { args: z.tuple([z.looseObject({ presetId: z.string().nullable() })]) },

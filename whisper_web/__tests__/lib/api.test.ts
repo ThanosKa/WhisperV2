@@ -14,7 +14,7 @@ describe('api in dev mock mode', () => {
     it('pages the stored meetings ten at a time', async () => {
         setSessionsMock(Array.from({ length: 15 }, (_, i) => makeMeeting({ id: `sess-${i}`, title: `Meeting ${i}`, hoursAgo: i + 1 })));
 
-        const page = await getMeetingsPage(0, 10);
+        const page = await getMeetingsPage({ offset: 0, limit: 10 });
 
         expect(page.items).toHaveLength(10);
         expect(page.nextOffset).toBe(10);
@@ -25,15 +25,18 @@ describe('api in dev mock mode', () => {
         const meeting = makeMeeting({ id: 'sess-1', title: 'Meeting', minutes: 30 });
         setSessionsMock([meeting]);
         const message: Omit<DevAiMessage, 'id' | 'role'> = { session_id: 'sess-1', sent_at: 0, content: 'Hi', created_at: 0, sync_state: 'clean' };
-        setSessionDetailsMock('sess-1', {
-            session: meeting,
-            transcripts: [],
-            ai_messages: [
-                { ...message, id: 'm-1', role: 'user' },
-                { ...message, id: 'm-2', role: 'assistant' },
-                { ...message, id: 'm-3', role: 'user' },
-            ],
-            summary: null,
+        setSessionDetailsMock({
+            id: 'sess-1',
+            details: {
+                session: meeting,
+                transcripts: [],
+                ai_messages: [
+                    { ...message, id: 'm-1', role: 'user' },
+                    { ...message, id: 'm-2', role: 'assistant' },
+                    { ...message, id: 'm-3', role: 'user' },
+                ],
+                summary: null,
+            },
         });
 
         expect(await getConversationStats()).toEqual({ totalMeetingSeconds: 1800, totalQuestions: 2 });
@@ -44,11 +47,11 @@ describe('api in dev mock mode', () => {
 
         await deleteSession('sess-2');
 
-        expect((await getMeetingsPage(0, 10)).items.map(s => s.id)).toEqual(['sess-1']);
+        expect((await getMeetingsPage({ offset: 0, limit: 10 })).items.map(s => s.id)).toEqual(['sess-1']);
     });
 
     it('refuses to call the network', async () => {
-        await expect(apiCall('/api/user/profile')).rejects.toThrow('apiCall not available in dev mock mode');
+        await expect(apiCall({ path: '/api/user/profile' })).rejects.toThrow('apiCall not available in dev mock mode');
     });
 });
 

@@ -1,6 +1,7 @@
 import { systemPreferences, shell, desktopCapturer } from 'electron';
 import { logger } from '../utils/logger';
 import { errorMessage } from '../utils/errors';
+import type { Outcome } from '../../../../shared/ipc';
 
 const log = logger.child({ module: 'Permissions' });
 
@@ -13,7 +14,8 @@ export type SystemPermissions = {
     error?: string;
 };
 
-export type PermissionResult = { success: boolean; status?: 'granted' | 'denied'; error?: string };
+// A denied microphone is a failure without an error message.
+export type PermissionResult = Outcome<{ status?: 'granted' }> | { success: false; status: 'denied' };
 
 // Only macOS asks the user; elsewhere both count as granted.
 const NOT_MAC_PERMISSIONS: SystemPermissions = { microphone: 'granted', screen: 'granted', needsSetup: false };
@@ -55,10 +57,7 @@ class PermissionService {
             }
 
             const granted = await systemPreferences.askForMediaAccess('microphone');
-            return {
-                success: granted,
-                status: granted ? 'granted' : 'denied',
-            };
+            return granted ? { success: true, status: 'granted' } : { success: false, status: 'denied' };
         } catch (err) {
             log.error({ err }, 'Error requesting microphone permission');
             return {

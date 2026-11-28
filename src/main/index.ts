@@ -28,8 +28,9 @@ import { errorMessage } from './features/common/utils/errors';
 import { logger } from './features/common/utils/logger';
 import featureBridge from './bridge/featureBridge';
 import windowBridge from './bridge/windowBridge';
-import { sendEvent } from './ipc/typedIpc';
+import { sendEvent } from './ipc/sendEvent';
 import type { EventArgs } from '../shared/ipc';
+import { SessionIdSchema } from '../shared/sessionId';
 import createBackendApp from '../../whisper_web/backend_node/dist';
 
 const log = logger.child({ module: 'Main' });
@@ -40,8 +41,7 @@ const customUrlLog = logger.child({ module: 'CustomUrl' });
 const authLog = logger.child({ module: 'Auth' });
 const updaterLog = logger.child({ module: 'AutoUpdater' });
 
-// Ensure consistent app name so protocol prompts say "Open Whisper" even in dev
-app.setName('Whisper');
+// The app name and the single-instance lock are set by ./entry before this module loads.
 
 // -------------------------------------------------
 //  auto-register protocol for dev (Windows only)
@@ -66,14 +66,7 @@ if (process.platform === 'win32' && !app.isPackaged) {
     }
 }
 
-// Ensure single instance and register handlers BEFORE any argv parsing or protocol work
-const gotTheLock = app.requestSingleInstanceLock();
-if (!gotTheLock) {
-    app.quit();
-    process.exit(0);
-}
-
-// Setup protocol after single instance lock so second-instance events are caught correctly
+// Setup protocol after single instance lock (./entry) so second-instance events are caught correctly
 setupProtocolHandling();
 
 // Global variables
@@ -428,9 +421,8 @@ app.on('activate', () => {
 
 // The dashboard's API (whisper_web/backend_node) asks main for data over `eventBridge`. Its payloads
 // come from HTTP requests, so each is parsed here before use.
-const SessionIdSchema = z.string();
 const CreateSessionSchema = z.looseObject({ title: z.string().optional() }).nullish();
-const UpdateSessionTitleSchema = z.object({ id: z.string(), title: z.string() });
+const UpdateSessionTitleSchema = z.object({ id: SessionIdSchema, title: z.string() });
 const UpdateUserProfileSchema = z.object({ displayName: z.string() });
 const FindOrCreateUserSchema = z.object({ uid: z.string(), displayName: z.string().nullish(), email: z.string().nullish() }).nullish();
 const UpdatePresetSchema = z.object({
@@ -452,7 +444,10 @@ async function getSessionDetails(payload: unknown) {
     try {
         const currentUid = authService.getCurrentUserId();
         if (!isCurrentUsersSession({ sessionOwner: session.uid, currentUid })) {
-            webDataLog.warn({ requestedSessionId: sessionId, sessionOwner: session.uid, currentUid }, 'Unauthorized access to session details blocked');
+            webDataLog.warn(
+                { requestedSessionId: sessionId, sessionOwner: session.uid, currentUid },
+                'Unauthorized access to session details blocked'
+            );
             return null;
         }
     } catch (e) {

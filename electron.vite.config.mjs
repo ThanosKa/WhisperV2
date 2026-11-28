@@ -21,7 +21,8 @@ const litRenderer = () => ({
 export default defineConfig({
     main: {
         build: {
-            lib: { entry: 'src/main/index.ts' },
+            // The entry takes the single-instance lock, then loads src/main/index.ts (src/main/entry.ts).
+            lib: { entry: { index: 'src/main/entry.ts' } },
             rolldownOptions: {
                 // An optional dependency loaded with `import()` (sharp) is loaded with `require`, as
                 // before the bundle: `require` reads a package in app.asar and its unpacked binaries.

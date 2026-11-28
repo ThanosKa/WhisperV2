@@ -30,7 +30,7 @@ jobs:
             - name: Type-check
               run: pnpm type-check
 
-            # Vitest for the app and the dashboard, then the Jest suites not yet moved to Vitest.
+            # Vitest: the app (main) and dashboard (whisper_web) projects.
             - name: Test
               run: pnpm test
 

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-// Every environment variable main reads, parsed once at startup. `index.js` imports `dotenv/config`
+// Every environment variable main reads, parsed once at startup. `index.ts` imports `dotenv/config`
 // first, so `.env` is loaded before this module runs. The dashboard's port and URL values
 // (`whisper_API_*`, `whisper_WEB_*`) are not here: main sets them itself at runtime (4b-2 deletes them).
 

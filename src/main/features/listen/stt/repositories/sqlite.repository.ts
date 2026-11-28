@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
+import { SessionIdSchema, type SessionId } from '../../../../../shared/sessionId';
 import sqliteClient from '../../../common/services/sqliteClient';
 import { logger } from '../../../common/utils/logger';
 
@@ -8,7 +9,7 @@ const log = logger.child({ module: 'SttRepository' });
 // A row of `transcripts` (config/schema.ts). Only `id` and `session_id` are NOT NULL.
 export const TranscriptRowSchema = z.object({
     id: z.string(),
-    session_id: z.string(),
+    session_id: SessionIdSchema,
     start_at: z.number().nullable(),
     end_at: z.number().nullable(),
     speaker: z.string().nullable(),
@@ -20,7 +21,7 @@ export const TranscriptRowSchema = z.object({
 
 export type TranscriptRow = z.infer<typeof TranscriptRowSchema>;
 
-export type NewTranscript = { uid: string | null; sessionId: string; speaker: string; text: string };
+export type NewTranscript = { uid: string | null; sessionId: SessionId; speaker: string; text: string };
 
 function addTranscript({ sessionId, speaker, text }: NewTranscript): { id: string } {
     // uid is ignored in the SQLite implementation

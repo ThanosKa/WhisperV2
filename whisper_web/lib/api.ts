@@ -144,7 +144,7 @@ const initDevIfNeeded = () => {
     }
 };
 
-// Testing utility to reset module state between Jest suites
+// Testing utility to reset module state between tests (vitest.setup.ts)
 export const __resetApiTestState = () => {
     apiUrlInitialized = false;
     initializationPromise = null;
@@ -169,7 +169,7 @@ export const getUserInfo = (): UserProfile | null => {
     return null;
 };
 
-export const setUserInfo = (userInfo: UserProfile | null, skipEvents: boolean = false) => {
+export const setUserInfo = ({ userInfo, skipEvents = false }: { userInfo: UserProfile | null; skipEvents?: boolean }) => {
     if (typeof window === 'undefined') return;
 
     if (userInfo) {
@@ -209,7 +209,7 @@ export const getApiHeaders = (): HeadersInit => {
     return headers;
 };
 
-export const apiCall = async (path: string, options: RequestInit = {}) => {
+export const apiCall = async ({ path, ...options }: { path: string } & RequestInit) => {
     // In dev-mock, do not call network at all
     if (isDevMockEnabled()) {
         throw new Error('apiCall not available in dev mock mode');
@@ -256,9 +256,7 @@ export const searchConversations = async (query: string): Promise<Session[]> => 
         const sessions = await getSessions();
         return sessions.filter(session => session.title.toLowerCase().includes(query.toLowerCase()));
     } else {
-        const response = await apiCall(`/api/conversations/search?q=${encodeURIComponent(query)}`, {
-            method: 'GET',
-        });
+        const response = await apiCall({ path: `/api/conversations/search?q=${encodeURIComponent(query)}`, method: 'GET' });
         if (!response.ok) {
             throw new Error('Failed to search conversations');
         }
@@ -341,7 +339,7 @@ export const searchConversationsPage = async (params: {
         offset: String(offset),
         limit: String(limit),
     });
-    const response = await apiCall(`/api/conversations/search/page?${qs.toString()}`, { method: 'GET' });
+    const response = await apiCall({ path: `/api/conversations/search/page?${qs.toString()}`, method: 'GET' });
     if (!response.ok) {
         throw new Error('Failed to search conversations (page)');
     }
@@ -353,7 +351,7 @@ export const getSessions = async (): Promise<Session[]> => {
         initDevIfNeeded();
         return getSessionsMock();
     }
-    const response = await apiCall(`/api/conversations`, { method: 'GET' });
+    const response = await apiCall({ path: `/api/conversations`, method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch sessions');
     return response.json();
 };
@@ -363,7 +361,7 @@ export const getMeetings = async (): Promise<Session[]> => {
         initDevIfNeeded();
         return getSessionsMock().filter(s => s.session_type === 'listen');
     }
-    const response = await apiCall(`/api/conversations/meetings`, { method: 'GET' });
+    const response = await apiCall({ path: `/api/conversations/meetings`, method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch meetings');
     const data = await response.json();
     // Backward compatibility with pre-pagination responses
@@ -375,7 +373,7 @@ export const getQuestions = async (): Promise<Session[]> => {
         initDevIfNeeded();
         return getSessionsMock().filter(s => s.session_type === 'ask');
     }
-    const response = await apiCall(`/api/conversations/questions`, { method: 'GET' });
+    const response = await apiCall({ path: `/api/conversations/questions`, method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch questions');
     const data = await response.json();
     return Array.isArray(data) ? data : data.items;
@@ -387,7 +385,7 @@ export interface PagedResult<T> {
     total: number;
 }
 
-export const getMeetingsPage = async (offset = 0, limit = 10): Promise<PagedResult<Session>> => {
+export const getMeetingsPage = async ({ offset = 0, limit = 10 }: { offset?: number; limit?: number } = {}): Promise<PagedResult<Session>> => {
     if (isDevMockEnabled()) {
         initDevIfNeeded();
         const all = getSessionsMock().filter(s => s.session_type === 'listen');
@@ -395,12 +393,12 @@ export const getMeetingsPage = async (offset = 0, limit = 10): Promise<PagedResu
         const nextOffset = offset + items.length < all.length ? offset + items.length : null;
         return { items, nextOffset, total: all.length };
     }
-    const response = await apiCall(`/api/conversations/meetings?offset=${offset}&limit=${limit}`, { method: 'GET' });
+    const response = await apiCall({ path: `/api/conversations/meetings?offset=${offset}&limit=${limit}`, method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch meetings page');
     return response.json();
 };
 
-export const getQuestionsPage = async (offset = 0, limit = 10): Promise<PagedResult<Session>> => {
+export const getQuestionsPage = async ({ offset = 0, limit = 10 }: { offset?: number; limit?: number } = {}): Promise<PagedResult<Session>> => {
     if (isDevMockEnabled()) {
         initDevIfNeeded();
         const all = getSessionsMock().filter(s => s.session_type === 'ask');
@@ -408,7 +406,7 @@ export const getQuestionsPage = async (offset = 0, limit = 10): Promise<PagedRes
         const nextOffset = offset + items.length < all.length ? offset + items.length : null;
         return { items, nextOffset, total: all.length };
     }
-    const response = await apiCall(`/api/conversations/questions?offset=${offset}&limit=${limit}`, { method: 'GET' });
+    const response = await apiCall({ path: `/api/conversations/questions?offset=${offset}&limit=${limit}`, method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch questions page');
     return response.json();
 };
@@ -438,7 +436,7 @@ export const getConversationStats = async (): Promise<ConversationStats> => {
         });
         return { totalMeetingSeconds, totalQuestions };
     }
-    const response = await apiCall(`/api/conversations/stats`, { method: 'GET' });
+    const response = await apiCall({ path: `/api/conversations/stats`, method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch conversation stats');
     return response.json();
 };
@@ -450,12 +448,12 @@ export const getSessionDetails = async (sessionId: string): Promise<SessionDetai
         if (!details) throw new Error('Session not found');
         return details;
     }
-    const response = await apiCall(`/api/conversations/${sessionId}`, { method: 'GET' });
+    const response = await apiCall({ path: `/api/conversations/${sessionId}`, method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch session details');
     return response.json();
 };
 
-export const updateSessionTitle = async (sessionId: string, title: string): Promise<void> => {
+export const updateSessionTitle = async ({ sessionId, title }: { sessionId: string; title: string }): Promise<void> => {
     if (isDevMockEnabled()) {
         initDevIfNeeded();
         const list = getSessionsMock();
@@ -468,16 +466,13 @@ export const updateSessionTitle = async (sessionId: string, title: string): Prom
         const details = getSessionDetailsMock(sessionId);
         if (details) {
             details.session.title = title;
-            setSessionDetailsMock(sessionId, details);
+            setSessionDetailsMock({ id: sessionId, details });
         }
         // announce update for listeners
         if (typeof window !== 'undefined') window.dispatchEvent(new Event('sessionUpdated'));
         return;
     }
-    const response = await apiCall(`/api/conversations/${sessionId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ title }),
-    });
+    const response = await apiCall({ path: `/api/conversations/${sessionId}`, method: 'PUT', body: JSON.stringify({ title }) });
     if (!response.ok) {
         const text = await response.text();
         throw new Error(`Failed to update title: ${response.status} ${text}`);
@@ -502,14 +497,11 @@ export const createSession = async (title?: string): Promise<{ id: string }> => 
         list.unshift(s);
         setSessionsMock(list);
         const details: SessionDetails = { session: s, transcripts: [], ai_messages: [], summary: null };
-        setSessionDetailsMock(id, details);
+        setSessionDetailsMock({ id, details });
         if (typeof window !== 'undefined') window.dispatchEvent(new Event('sessionUpdated'));
         return { id };
     }
-    const response = await apiCall(`/api/conversations`, {
-        method: 'POST',
-        body: JSON.stringify({ title }),
-    });
+    const response = await apiCall({ path: `/api/conversations`, method: 'POST', body: JSON.stringify({ title }) });
     if (!response.ok) throw new Error('Failed to create session');
     return response.json();
 };
@@ -525,7 +517,7 @@ export const deleteSession = async (sessionId: string): Promise<void> => {
         if (typeof window !== 'undefined') window.dispatchEvent(new Event('sessionUpdated'));
         return;
     }
-    const response = await apiCall(`/api/conversations/${sessionId}`, { method: 'DELETE' });
+    const response = await apiCall({ path: `/api/conversations/${sessionId}`, method: 'DELETE' });
     if (!response.ok) throw new Error('Failed to delete session');
 };
 
@@ -534,7 +526,7 @@ export const getUserProfile = async (): Promise<UserProfile> => {
         initDevIfNeeded();
         return getMockUser();
     }
-    const response = await apiCall(`/api/user/profile`, { method: 'GET' });
+    const response = await apiCall({ path: `/api/user/profile`, method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch user profile');
     return response.json();
 };
@@ -544,10 +536,7 @@ export const updateUserProfile = async (data: { displayName: string }): Promise<
         // no-op in dev
         return;
     }
-    const response = await apiCall(`/api/user/profile`, {
-        method: 'PUT',
-        body: JSON.stringify(data),
-    });
+    const response = await apiCall({ path: `/api/user/profile`, method: 'PUT', body: JSON.stringify(data) });
     if (!response.ok) throw new Error('Failed to update user profile');
 };
 
@@ -555,16 +544,13 @@ export const findOrCreateUser = async (user: UserProfile): Promise<UserProfile> 
     if (isDevMockEnabled()) {
         return user;
     }
-    const response = await apiCall(`/api/user/find-or-create`, {
-        method: 'POST',
-        body: JSON.stringify(user),
-    });
+    const response = await apiCall({ path: `/api/user/find-or-create`, method: 'POST', body: JSON.stringify(user) });
     if (!response.ok) throw new Error('Failed to find or create user');
     return response.json();
 };
 
 export const deleteAccount = async (): Promise<void> => {
-    const response = await apiCall(`/api/user/profile`, { method: 'DELETE' });
+    const response = await apiCall({ path: `/api/user/profile`, method: 'DELETE' });
     if (!response.ok) throw new Error('Failed to delete account');
 };
 
@@ -573,12 +559,12 @@ export const getPresets = async (): Promise<PromptPreset[]> => {
         initDevIfNeeded();
         return getPresetsMock();
     }
-    const response = await apiCall(`/api/presets`, { method: 'GET' });
+    const response = await apiCall({ path: `/api/presets`, method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch presets');
     return response.json();
 };
 
-export const updatePreset = async (id: string, data: { title?: string; prompt?: string; append_text?: string }): Promise<void> => {
+export const updatePreset = async ({ id, data }: { id: string; data: { title?: string; prompt?: string; append_text?: string } }): Promise<void> => {
     if (isDevMockEnabled()) {
         initDevIfNeeded();
         const presets = getPresetsMock();
@@ -596,10 +582,7 @@ export const updatePreset = async (id: string, data: { title?: string; prompt?: 
         return;
     }
     const body = { ...data }; // Only send provided fields
-    const response = await apiCall(`/api/presets/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(body),
-    });
+    const response = await apiCall({ path: `/api/presets/${id}`, method: 'PUT', body: JSON.stringify(body) });
     if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Failed to update preset: ${response.status} ${errorText}`);
@@ -621,14 +604,14 @@ export const getBatchData = async (includes: ('profile' | 'presets' | 'sessions'
         if (includes.includes('sessions')) out.sessions = getSessionsMock();
         return out;
     }
-    const response = await apiCall(`/api/user/batch?include=${includes.join(',')}`, { method: 'GET' });
+    const response = await apiCall({ path: `/api/user/batch?include=${includes.join(',')}`, method: 'GET' });
     if (!response.ok) throw new Error('Failed to fetch batch data');
     return response.json();
 };
 
 export const logout = async () => {
     // Clear local storage
-    setUserInfo(null);
+    setUserInfo({ userInfo: null });
     localStorage.removeItem('openai_api_key');
     localStorage.removeItem('user_info');
 

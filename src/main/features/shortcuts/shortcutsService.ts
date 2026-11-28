@@ -3,6 +3,7 @@ import type { BrowserWindow } from 'electron';
 import internalBridge from '../../bridge/internalBridge';
 import askService from '../ask/askService';
 import { logger } from '../common/utils/logger';
+import { sendEvent } from '../../ipc/sendEvent';
 
 const log = logger.child({ module: 'ShortcutsService' });
 
@@ -81,7 +82,6 @@ class ShortcutsService {
         const header = windowPool.get('header');
         const mainWindow = header;
 
-
         if (registerOnlyToggleVisibility) {
             if (keybinds.toggleVisibility) {
                 globalShortcut.register(keybinds.toggleVisibility, () => void this.toggleAllWindowsVisibility());
@@ -151,7 +151,7 @@ class ShortcutsService {
                         this.mouseEventsIgnored = !this.mouseEventsIgnored;
                         if (mainWindow && !mainWindow.isDestroyed()) {
                             mainWindow.setIgnoreMouseEvents(this.mouseEventsIgnored, { forward: true });
-                            mainWindow.webContents.send('click-through-toggled', this.mouseEventsIgnored);
+                            sendEvent({ webContents: mainWindow.webContents, channel: 'click-through-toggled', args: [this.mouseEventsIgnored] });
                         }
                     };
                     break;

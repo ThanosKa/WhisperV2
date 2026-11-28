@@ -6,6 +6,8 @@ import settingsRepository from './repositories';
 import { windowPool } from '../../window/windowManager';
 import { errorMessage } from '../common/utils/errors';
 import { logger } from '../common/utils/logger';
+import { sendEvent } from '../../ipc/sendEvent';
+import type { EventArgs } from '../../../shared/ipc';
 
 const log = logger.child({ module: 'SettingsService' });
 
@@ -28,28 +30,31 @@ const NOTIFICATION_CONFIG = {
 
 type NotificationOptions = { windowTypes?: string[]; debounce?: number };
 
+// The events this manager sends to the settings, main and listen windows
+type SettingsEvent = 'settings-updated' | 'presets-updated';
+
 // window targeting system
 class WindowNotificationManager {
     private readonly pendingNotifications = new Map<string, ReturnType<typeof setTimeout>>();
 
     /** Send notifications only to relevant windows. */
-    notifyRelevantWindows({ event, data = null, options = {} }: { event: string; data?: unknown; options?: NotificationOptions }) {
+    notifyRelevantWindows<C extends SettingsEvent>({ event, args, options = {} }: { event: C; args: EventArgs[C]; options?: NotificationOptions }) {
         const { windowTypes = NOTIFICATION_CONFIG.RELEVANT_WINDOW_TYPES, debounce = NOTIFICATION_CONFIG.DEBOUNCE_DELAY } = options;
 
         if (debounce > 0) {
             this.debounceNotification({
                 key: event,
                 fn: () => {
-                    this.sendToTargetWindows({ event, data, windowTypes });
+                    this.sendToTargetWindows({ event, args, windowTypes });
                 },
                 delay: debounce,
             });
         } else {
-            this.sendToTargetWindows({ event, data, windowTypes });
+            this.sendToTargetWindows({ event, args, windowTypes });
         }
     }
 
-    private sendToTargetWindows({ event, data, windowTypes }: { event: string; data: unknown; windowTypes: string[] }) {
+    private sendToTargetWindows<C extends SettingsEvent>({ event, args, windowTypes }: { event: C; args: EventArgs[C]; windowTypes: string[] }) {
         const relevantWindows = this.getRelevantWindows(windowTypes);
 
         if (relevantWindows.length === 0) {
@@ -61,11 +66,7 @@ class WindowNotificationManager {
 
         relevantWindows.forEach(win => {
             try {
-                if (data) {
-                    win.webContents.send(event, data);
-                } else {
-                    win.webContents.send(event);
-                }
+                sendEvent({ webContents: win.webContents, channel: event, args });
             } catch (error) {
                 log.warn({ err: error, event }, 'Failed to send event to window');
             }
@@ -173,7 +174,7 @@ async function saveSettings(settings: Record<string, unknown>): Promise<{ succes
         store.set(key, newSettings);
 
         // Use smart notification system
-        windowNotificationManager.notifyRelevantWindows({ event: 'settings-updated', data: newSettings });
+        windowNotificationManager.notifyRelevantWindows({ event: 'settings-updated', args: [newSettings] });
 
         return { success: true };
     } catch (error) {
@@ -216,7 +217,7 @@ function notifyPresetUpdate({ action, presetId, title = null }: { action: string
     const data: { action: string; presetId: string; title?: string } = { action, presetId };
     if (title) data.title = title;
 
-    windowNotificationManager.notifyRelevantWindows({ event: 'presets-updated', data });
+    windowNotificationManager.notifyRelevantWindows({ event: 'presets-updated', args: [data] });
 }
 
 export { notifyPresetUpdate, getSettings, saveSettings, getPresets, getAutoUpdateSetting, setAutoUpdateSetting };

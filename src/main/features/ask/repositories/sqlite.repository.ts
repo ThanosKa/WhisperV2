@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
+import { SessionIdSchema, type SessionId } from '../../../../shared/sessionId';
 import sqliteClient from '../../common/services/sqliteClient';
 import { logger } from '../../common/utils/logger';
 
@@ -8,7 +9,7 @@ const log = logger.child({ module: 'AskRepository' });
 // A row of `ai_messages` (common/config/schema.ts), as `SELECT *` reads it.
 export const AiMessageRowSchema = z.object({
     id: z.string(),
-    session_id: z.string(),
+    session_id: SessionIdSchema,
     sent_at: z.number().nullable(),
     role: z.string().nullable(),
     content: z.string().nullable(),
@@ -23,7 +24,7 @@ export type AiMessageRow = z.infer<typeof AiMessageRowSchema>;
 export type NewAiMessage = {
     // Ignored by the SQLite implementation.
     uid: string | null;
-    sessionId: string | null;
+    sessionId: SessionId | null;
     role: string;
     content: string;
     model?: string | undefined;
@@ -45,7 +46,7 @@ function addAiMessage({ sessionId, role, content, model = 'unknown' }: NewAiMess
     }
 }
 
-function getAllAiMessagesBySessionId(sessionId: string): AiMessageRow[] {
+function getAllAiMessagesBySessionId(sessionId: SessionId): AiMessageRow[] {
     const db = sqliteClient.getDb();
     const query = "SELECT * FROM ai_messages WHERE session_id = ? ORDER BY sent_at ASC";
     return z.array(AiMessageRowSchema).parse(db.prepare(query).all(sessionId));

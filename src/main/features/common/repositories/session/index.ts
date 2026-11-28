@@ -1,5 +1,6 @@
 import * as sqliteRepository from './sqlite.repository';
 import type { SessionType } from './sqlite.repository';
+import type { SessionId } from '../../../../../shared/sessionId';
 import type { AuthService } from '../../services/authService';
 import { logger } from '../../utils/logger';
 
@@ -51,15 +52,15 @@ const sessionRepositoryAdapter = {
         return getBaseRepository().getAllByUserId(uid);
     },
 
-    updateTitle: ({ id, title }: { id: string; title: string }) => getBaseRepository().updateTitle({ id, title }),
+    updateTitle: ({ id, title }: { id: SessionId; title: string }) => getBaseRepository().updateTitle({ id, title }),
 
-    deleteWithRelatedData: (id: string) => getBaseRepository().deleteWithRelatedData(id),
+    deleteWithRelatedData: (id: SessionId) => getBaseRepository().deleteWithRelatedData(id),
 
-    end: (id: string) => getBaseRepository().end(id),
+    end: (id: SessionId) => getBaseRepository().end(id),
 
-    updateType: ({ id, type }: { id: string; type: SessionType }) => getBaseRepository().updateType({ id, type }),
+    updateType: ({ id, type }: { id: SessionId; type: SessionType }) => getBaseRepository().updateType({ id, type }),
 
-    touch: (id: string) => getBaseRepository().touch(id),
+    touch: (id: SessionId) => getBaseRepository().touch(id),
 
     getOrCreateActive: (requestedType: SessionType = 'ask') => {
         const uid = currentUserId();

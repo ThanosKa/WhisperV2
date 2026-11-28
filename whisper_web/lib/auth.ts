@@ -1,45 +1,30 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { type UserProfile, setUserInfo, findOrCreateUser, getUserProfile } from './api';
 import { isDevMockEnabled, getMockUser, ensureMockData } from './devMock';
 // Removed Firebase imports - using webapp authentication
 
-export const useAuth = () => {
+// Dev mock mode is read once per page: it does not change while the page is open.
+const subscribeToDevMock = () => () => {};
+// The static export renders with only the env flag; the browser also reads `?dev=1` and localStorage.
+const devMockOnServer = () => process.env.NEXT_PUBLIC_DEV_MOCK === '1';
+
+type AuthState = { user: UserProfile | null; isLoading: boolean; mode: 'local' | 'webapp' | null };
+
+export const useAuth = (): AuthState => {
     const [user, setUser] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [mode, setMode] = useState<'local' | 'webapp' | null>(null);
-    const [retryCount, setRetryCount] = useState(0);
+    const [mode, setMode] = useState<AuthState['mode']>(null);
     const lastSyncTimeRef = useRef(0); // Debounce mechanism shared across events
+    // Dev mock mode: auth is short-circuited to a fake user, derived here rather than set in the effect
+    const devMock = useSyncExternalStore(subscribeToDevMock, isDevMockEnabled, devMockOnServer);
+    const [mockUser] = useState(getMockUser);
 
     useEffect(() => {
-        // Dev mock mode: short-circuit auth and return a fake user
+        // The effect reads the browser's value, also while the page hydrates with the server's
         if (isDevMockEnabled()) {
-            try {
-                ensureMockData();
-                const profile = getMockUser();
-                setUserInfo(profile, true);
-                // State is set in a microtask, not synchronously in the effect body
-                void Promise.resolve().then(() => {
-                    setMode('webapp');
-                    setUser(profile);
-                    setRetryCount(0);
-                    setIsLoading(false);
-                });
-                return;
-            } catch (e) {
-                console.log('⚠️ Dev mock mode initialization error:', e);
-            }
-        }
-
-        // Prevent infinite loops
-        if (retryCount > 3) {
-            console.log('🛑 Too many retries, staying unauthenticated');
-            setUserInfo(null);
-            void Promise.resolve().then(() => {
-                setMode(null);
-                setUser(null);
-                setIsLoading(false);
-            });
+            ensureMockData();
+            setUserInfo({ userInfo: mockUser, skipEvents: true });
             return;
         }
 
@@ -71,10 +56,9 @@ export const useAuth = () => {
                                 plan: apiUser.plan,
                             };
                             // Overwrite localStorage to ensure headers match server user
-                            setUserInfo(profile, true);
+                            setUserInfo({ userInfo: profile, skipEvents: true });
                             setMode('webapp');
                             setUser(profile);
-                            setRetryCount(0);
                             setIsLoading(false);
                             return;
                         }
@@ -83,8 +67,7 @@ export const useAuth = () => {
                         // Treat as logged out in Electron mode
                         setMode(null);
                         setUser(null);
-                        setUserInfo(null);
-                        setRetryCount(0);
+                        setUserInfo({ userInfo: null });
                         setIsLoading(false);
                         return;
                     }
@@ -97,7 +80,6 @@ export const useAuth = () => {
                             console.log('🌐 Webapp mode activated from localStorage:', profile.uid);
                             setMode('webapp');
                             setUser(profile);
-                            setRetryCount(0);
                             setIsLoading(false);
                             return;
                         }
@@ -108,14 +90,12 @@ export const useAuth = () => {
                 console.log('🚫 No authenticated user detected');
                 setMode(null);
                 setUser(null);
-                setUserInfo(null);
-                setRetryCount(0);
+                setUserInfo({ userInfo: null });
             } catch (error) {
                 console.error('Error checking stored auth:', error);
                 setMode(null);
                 setUser(null);
-                setUserInfo(null);
-                setRetryCount(0);
+                setUserInfo({ userInfo: null });
             }
             setIsLoading(false);
         };
@@ -126,7 +106,6 @@ export const useAuth = () => {
         const handleStorageChange = (e: StorageEvent) => {
             if (e.key === 'whisper_user') {
                 console.log('🔄 localStorage change detected, rechecking auth...');
-                setRetryCount(0); // Reset retry count on external changes
                 checkStoredAuth();
             }
         };
@@ -140,7 +119,6 @@ export const useAuth = () => {
             }
             lastSyncTimeRef.current = now;
             console.log('🔄 userInfoChanged event detected, rechecking auth...');
-            setRetryCount(0);
             checkStoredAuth();
         };
 
@@ -162,9 +140,9 @@ export const useAuth = () => {
             window.removeEventListener('userInfoChanged', handleUserInfoChanged);
             window.removeEventListener('beforeunload', handleBeforeUnload);
         };
-    }, [retryCount]);
+    }, [mockUser]);
 
-    return { user, isLoading, mode };
+    return devMock ? { user: mockUser, isLoading: false, mode: 'webapp' } : { user, isLoading, mode };
 };
 
 export const useRedirectIfNotAuth = () => {

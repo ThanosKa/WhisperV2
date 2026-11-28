@@ -13,6 +13,9 @@ import * as llmClient from '../common/ai/llmClient';
 import * as settingsService from '../settings/settingsService';
 import { windowPool } from '../../window/windowManager';
 import { logger } from '../common/utils/logger';
+import { sendEvent } from '../../ipc/sendEvent';
+import type { SessionId } from '../../../shared/sessionId';
+import { ListenButtonTextSchema, type EventArgs, type EventChannel, type Outcome, type RecoveryAction } from '../../../shared/ipc';
 import { errorMessage } from '../common/utils/errors';
 
 const log = logger.child({ module: 'ListenService' });
@@ -33,16 +36,17 @@ type ComprehensiveSummary = z.infer<typeof ComprehensiveSummarySchema>;
 // A listen session left open by a crash, found at startup.
 export type StrandedSession = { session: SessionRow; transcripts: TranscriptRow[]; insights: Insight[] };
 
-export type StrandedSessionInfo = { id: string; title: string; started_at: number | null };
+export type StrandedSessionInfo = { id: SessionId; title: string; started_at: number | null };
 
-export type HandlerResult = { success: boolean; error?: string | null };
+// Some handlers answer success with `error: null`, which the wire keeps.
+export type HandlerResult = Outcome<{ error?: null }>;
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 class ListenService {
     sttService = new SttService();
     summaryService = summaryService;
-    currentSessionId: string | null = null;
+    currentSessionId: SessionId | null = null;
     isInitializingSession = false;
     strandedSession: StrandedSession | null = null;
     isRecoveryDismissed = false;
@@ -69,11 +73,11 @@ class ListenService {
         });
     }
 
-    sendToRenderer({ channel, data }: { channel: string; data?: unknown }): void {
+    sendToRenderer<C extends EventChannel>({ channel, args }: { channel: C; args: EventArgs[C] }): void {
         const listenWindow = windowPool?.get('listen');
 
         if (listenWindow && !listenWindow.isDestroyed()) {
-            listenWindow.webContents.send(channel, data);
+            sendEvent({ webContents: listenWindow.webContents, channel, args });
         }
     }
 
@@ -122,10 +126,16 @@ class ListenService {
     notifyHeaderOfStrandedSession(session: SessionRow): void {
         const header = windowPool?.get('header');
         if (header && !header.isDestroyed()) {
-            header.webContents.send('listen:stranded-session-detected', {
-                id: session.id,
-                title: session.title || 'Untitled Session',
-                started_at: session.started_at,
+            sendEvent({
+                webContents: header.webContents,
+                channel: 'listen:stranded-session-detected',
+                args: [
+                    {
+                        id: session.id,
+                        title: session.title || 'Untitled Session',
+                        started_at: session.started_at,
+                    },
+                ],
             });
         }
     }
@@ -143,23 +153,27 @@ class ListenService {
     }
 
     initialize(): void {
-        // IPC handlers are set up in featureBridge.js
+        // IPC handlers are set up in featureBridge.ts
         log.info('Initialized and ready');
     }
 
+    // The IPC schema already limits the text to the header's buttons; this parses it again so main's
+    // own callers get the same check.
     async handleListenRequest(listenButtonText: string): Promise<void> {
         const listenWindow = windowPool.get('listen');
         const header = windowPool.get('header');
         // The untyped code called `header.webContents` without a check, so a missing header threw;
         // this keeps that.
-        const sendResultToHeader = (result: { success: boolean; nextStatus?: string }) => {
+        const sendResultToHeader = (result: EventArgs['listen:changeSessionResult'][0]) => {
             if (!header) throw new Error('Header window is not open');
-            header.webContents.send('listen:changeSessionResult', result);
+            sendEvent({ webContents: header.webContents, channel: 'listen:changeSessionResult', args: [result] });
         };
 
         try {
             let nextStatus = null;
-            switch (listenButtonText) {
+            const button = ListenButtonTextSchema.safeParse(listenButtonText);
+            if (!button.success) throw new Error(`[ListenService] unknown listenButtonText: ${listenButtonText}`);
+            switch (button.data) {
                 case 'Listen':
                     log.info({ sessionId: this.currentSessionId }, 'changeSession to "Listen"');
 
@@ -177,13 +191,17 @@ class ListenService {
                         setTimeout(() => {
                             try {
                                 const history = this.getConversationHistory();
-                                this.sendToRenderer({ channel: 'listen:sync-conversation-history', data: history });
+                                this.sendToRenderer({ channel: 'listen:sync-conversation-history', args: [history] });
                             } catch (e) {
                                 log.warn({ err: e, sessionId: this.currentSessionId }, 'Failed to sync conversation history');
                             }
                         }, 100);
                         if (listenWindow && !listenWindow.isDestroyed()) {
-                            listenWindow.webContents.send('session-state-changed', { isActive: true, mode: 'start' });
+                            sendEvent({
+                                webContents: listenWindow.webContents,
+                                channel: 'session-state-changed',
+                                args: [{ isActive: true, mode: 'start' }],
+                            });
                         }
                         nextStatus = 'inSession';
                     } else {
@@ -191,7 +209,11 @@ class ListenService {
                         if (initOk) {
                             internalBridge.emit('window:requestVisibility', { name: 'listen', visible: true });
                             if (listenWindow && !listenWindow.isDestroyed()) {
-                                listenWindow.webContents.send('session-state-changed', { isActive: true, mode: 'start' });
+                                sendEvent({
+                                    webContents: listenWindow.webContents,
+                                    channel: 'session-state-changed',
+                                    args: [{ isActive: true, mode: 'start' }],
+                                });
                             }
                             nextStatus = 'inSession';
                         } else {
@@ -208,7 +230,11 @@ class ListenService {
                     log.info({ sessionId: this.currentSessionId }, 'changeSession to "Stop"');
                     await this.pauseSession();
                     if (listenWindow && !listenWindow.isDestroyed()) {
-                        listenWindow.webContents.send('session-state-changed', { isActive: false, mode: 'pause' });
+                        sendEvent({
+                            webContents: listenWindow.webContents,
+                            channel: 'session-state-changed',
+                            args: [{ isActive: false, mode: 'pause' }],
+                        });
                     }
                     nextStatus = 'paused';
                     break;
@@ -217,7 +243,11 @@ class ListenService {
                     log.info({ sessionId: this.currentSessionId }, 'changeSession to "Resume"');
                     await this.resumeSession();
                     if (listenWindow && !listenWindow.isDestroyed()) {
-                        listenWindow.webContents.send('session-state-changed', { isActive: true, mode: 'resume' });
+                        sendEvent({
+                            webContents: listenWindow.webContents,
+                            channel: 'session-state-changed',
+                            args: [{ isActive: true, mode: 'resume' }],
+                        });
                     }
                     nextStatus = 'inSession';
                     break;
@@ -227,13 +257,10 @@ class ListenService {
                     await this.closeSession();
                     internalBridge.emit('window:requestVisibility', { name: 'listen', visible: false });
                     if (!listenWindow) throw new Error('Listen window is not open');
-                    listenWindow.webContents.send('session-state-changed', { isActive: false, mode: 'end' });
+                    sendEvent({ webContents: listenWindow.webContents, channel: 'session-state-changed', args: [{ isActive: false, mode: 'end' }] });
                     this.summaryService.resetConversationHistory();
                     nextStatus = 'beforeSession';
                     break;
-
-                default:
-                    throw new Error(`[ListenService] unknown listenButtonText: ${listenButtonText}`);
             }
 
             sendResultToHeader({ success: true, nextStatus });
@@ -265,7 +292,7 @@ class ListenService {
         log.info({ sessionId: this.currentSessionId, resetAt }, 'STT quota exceeded');
 
         // Stop audio capture
-        this.sendToRenderer({ channel: 'change-listen-capture-state', data: { status: 'stop' } });
+        this.sendToRenderer({ channel: 'change-listen-capture-state', args: [{ status: 'stop' }] });
 
         // Close STT sessions (but don't call closeSessions which would end the DB session)
         try {
@@ -278,21 +305,33 @@ class ListenService {
         // Notify header window
         const header = windowPool.get('header');
         if (header && !header.isDestroyed()) {
-            header.webContents.send('stt:quotaExceeded', { resetAt });
-            header.webContents.send('listen:changeSessionResult', {
-                success: false,
-                nextStatus: 'beforeSession',
-                error: 'STT_AUDIO_QUOTA_EXCEEDED',
+            sendEvent({ webContents: header.webContents, channel: 'stt:quotaExceeded', args: [{ resetAt }] });
+            sendEvent({
+                webContents: header.webContents,
+                channel: 'listen:changeSessionResult',
+                args: [
+                    {
+                        success: false,
+                        nextStatus: 'beforeSession',
+                        error: 'STT_AUDIO_QUOTA_EXCEEDED',
+                    },
+                ],
             });
         }
 
         // Notify listen window (for SttView to show quota exceeded message)
         const listenWindow = windowPool.get('listen');
         if (listenWindow && !listenWindow.isDestroyed()) {
-            listenWindow.webContents.send('stt:quotaExceeded', { resetAt });
-            listenWindow.webContents.send('session-state-changed', {
-                isActive: false,
-                mode: 'quotaExceeded',
+            sendEvent({ webContents: listenWindow.webContents, channel: 'stt:quotaExceeded', args: [{ resetAt }] });
+            sendEvent({
+                webContents: listenWindow.webContents,
+                channel: 'session-state-changed',
+                args: [
+                    {
+                        isActive: false,
+                        mode: 'quotaExceeded',
+                    },
+                ],
             });
         }
     }
@@ -388,7 +427,7 @@ class ListenService {
 
             log.info({ sessionId: this.currentSessionId }, 'Listen service initialized');
 
-            this.sendToRenderer({ channel: 'change-listen-capture-state', data: { status: 'start' } });
+            this.sendToRenderer({ channel: 'change-listen-capture-state', args: [{ status: 'start' }] });
 
             return true;
         } catch (error) {
@@ -421,7 +460,7 @@ class ListenService {
     async stopAudioCapture(): Promise<void> {
         // Stop audio without ending session (for app shutdown/crash recovery)
         try {
-            this.sendToRenderer({ channel: 'change-listen-capture-state', data: { status: 'stop' } });
+            this.sendToRenderer({ channel: 'change-listen-capture-state', args: [{ status: 'stop' }] });
             await this.sttService.closeSessions();
             await this.stopMacOSAudioCapture();
         } catch (err) {
@@ -431,7 +470,7 @@ class ListenService {
 
     async closeSession(): Promise<{ success: true } | { success: false; error: string }> {
         try {
-            this.sendToRenderer({ channel: 'change-listen-capture-state', data: { status: 'stop' } });
+            this.sendToRenderer({ channel: 'change-listen-capture-state', args: [{ status: 'stop' }] });
             // Close STT sessions
             await this.sttService.closeSessions();
 
@@ -467,7 +506,7 @@ class ListenService {
 
     async pauseSession(): Promise<{ success: true } | { success: false; error: string }> {
         try {
-            this.sendToRenderer({ channel: 'change-listen-capture-state', data: { status: 'stop' } });
+            this.sendToRenderer({ channel: 'change-listen-capture-state', args: [{ status: 'stop' }] });
             // Do not close STT sessions on pause; keep websockets alive for fast resume
             await this.stopMacOSAudioCapture();
 
@@ -483,7 +522,7 @@ class ListenService {
     async resumeSession(): Promise<{ success: true } | { success: false; error: string }> {
         try {
             // Resume local capture; STT sockets remain active from pause
-            this.sendToRenderer({ channel: 'change-listen-capture-state', data: { status: 'start' } });
+            this.sendToRenderer({ channel: 'change-listen-capture-state', args: [{ status: 'start' }] });
             return { success: true };
         } catch (error) {
             log.error({ err: error, sessionId: this.currentSessionId }, 'Failed to resume listen session');
@@ -504,7 +543,7 @@ class ListenService {
         return this.summaryService.getConversationHistory();
     }
 
-    async _generateAndSaveComprehensiveSummary(sessionId: string): Promise<void> {
+    async _generateAndSaveComprehensiveSummary(sessionId: SessionId): Promise<void> {
         try {
             // Get the full transcript
             log.info({ sessionId }, 'Looking for transcripts for comprehensive summary');
@@ -578,23 +617,24 @@ class ListenService {
         }
     }
 
-    async handleRecoveryAction({ action, sessionId }: { action: string; sessionId: string }): Promise<HandlerResult> {
+    // `dismiss` is main's own: the toast sends only `resume` and `finalize`.
+    async handleRecoveryAction({ action, sessionId }: { action: RecoveryAction | 'dismiss'; sessionId: string }): Promise<HandlerResult> {
         if (!this.strandedSession || this.strandedSession.session.id !== sessionId) {
             log.warn({ expectedSessionId: this.strandedSession?.session.id, sessionId, action }, 'Recovery action session mismatch');
             return { success: false, error: 'Session mismatch' };
         }
 
         try {
-            if (action === 'resume') {
-                return await this.resumeStrandedSession();
-            } else if (action === 'finalize') {
-                return await this.finalizeStrandedSession();
-            } else if (action === 'dismiss') {
-                this.isRecoveryDismissed = true;
-                this.strandedSession = null;
-                return { success: true };
+            switch (action) {
+                case 'resume':
+                    return await this.resumeStrandedSession();
+                case 'finalize':
+                    return await this.finalizeStrandedSession();
+                case 'dismiss':
+                    this.isRecoveryDismissed = true;
+                    this.strandedSession = null;
+                    return { success: true };
             }
-            return { success: false, error: 'Unknown action' };
         } catch (err) {
             log.error({ err, sessionId, action }, 'Recovery action failed');
             return { success: false, error: errorMessage(err) };
@@ -618,7 +658,11 @@ class ListenService {
         const latestInsight = insights.at(-1);
         if (Array.isArray(insights) && latestInsight) {
             log.info(
-                { sessionId: session.id, summaryPoints: latestInsight.payload?.summary?.length || 0, actions: latestInsight.payload?.actions?.length || 0 },
+                {
+                    sessionId: session.id,
+                    summaryPoints: latestInsight.payload?.summary?.length || 0,
+                    actions: latestInsight.payload?.actions?.length || 0,
+                },
                 'Recovery: hydrating insights'
             );
             this.summaryService.hydrateInsights(latestInsight.payload);
@@ -632,18 +676,24 @@ class ListenService {
             if (listenWindow && !listenWindow.isDestroyed()) {
                 log.info({ sessionId: session.id, transcripts: transcripts.length }, 'Recovery: sending transcripts to UI');
                 transcripts.forEach(t => {
-                    listenWindow.webContents.send('stt-update', {
-                        speaker: t.speaker,
-                        text: t.text,
-                        isFinal: true,
-                        isPartial: false,
+                    sendEvent({
+                        webContents: listenWindow.webContents,
+                        channel: 'stt-update',
+                        args: [
+                            {
+                                speaker: t.speaker,
+                                text: t.text,
+                                isFinal: true,
+                                isPartial: false,
+                            },
+                        ],
                     });
                 });
                 // Force height recalculation after transcripts load (fixes cut-off issue)
                 setTimeout(() => {
                     if (listenWindow && !listenWindow.isDestroyed()) {
                         // Trigger manual height adjustment to force ResizeObserver update
-                        listenWindow.webContents.send('force-height-recalc');
+                        sendEvent({ webContents: listenWindow.webContents, channel: 'force-height-recalc', args: [] });
                     }
                 }, 200);
             }
@@ -652,7 +702,7 @@ class ListenService {
         // Notify SummaryView about existing transcripts (fixes "Insights will appear here" placeholder)
         if (transcripts && transcripts.length > 0) {
             const history = transcripts.map(t => ({ speaker: t.speaker, text: t.text }));
-            this.sendToRenderer({ channel: 'listen:sync-conversation-history', data: history });
+            this.sendToRenderer({ channel: 'listen:sync-conversation-history', args: [history] });
         }
 
         log.info({ sessionId: session.id, transcripts: transcripts.length, hasInsights: !!insights }, 'Resumed stranded session');
@@ -670,9 +720,15 @@ class ListenService {
             log.info({ sessionId: session.id, insightRounds: insights.length }, 'Recovery: sending insight rounds to UI');
             // Reverse so newest arrives first (matches normal operation)
             [...insights].reverse().forEach(insight => {
-                listenWindow.webContents.send('summary-update', {
-                    ...insight.payload,
-                    presetId: this.summaryService.selectedPresetId || null,
+                sendEvent({
+                    webContents: listenWindow.webContents,
+                    channel: 'summary-update',
+                    args: [
+                        {
+                            ...insight.payload,
+                            presetId: this.summaryService.selectedPresetId || null,
+                        },
+                    ],
                 });
             });
         } else {
@@ -682,11 +738,11 @@ class ListenService {
             );
         }
 
-        this.sendToRenderer({ channel: 'change-listen-capture-state', data: { status: 'start' } });
+        this.sendToRenderer({ channel: 'change-listen-capture-state', args: [{ status: 'start' }] });
 
         // Notify Listen window that session is active (enables transcription)
         if (listenWindow && !listenWindow.isDestroyed()) {
-            listenWindow.webContents.send('session-state-changed', { isActive: true, mode: 'resume' });
+            sendEvent({ webContents: listenWindow.webContents, channel: 'session-state-changed', args: [{ isActive: true, mode: 'resume' }] });
         }
 
         // Show listen window
@@ -695,7 +751,7 @@ class ListenService {
         // Notify header to transition to inSession
         const header = windowPool.get('header');
         if (header) {
-            header.webContents.send('listen:changeSessionResult', { success: true, nextStatus: 'inSession' });
+            sendEvent({ webContents: header.webContents, channel: 'listen:changeSessionResult', args: [{ success: true, nextStatus: 'inSession' }] });
         }
 
         return { success: true };
@@ -724,7 +780,7 @@ class ListenService {
         return { success: true };
     }
 
-    async _finalizeSessionInBackground(sessionId: string): Promise<void> {
+    async _finalizeSessionInBackground(sessionId: SessionId): Promise<void> {
         try {
             await this._generateAndSaveComprehensiveSummary(sessionId);
         } catch (err) {

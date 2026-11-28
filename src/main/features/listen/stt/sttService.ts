@@ -9,6 +9,8 @@ import path from 'path';
 import config from '../../common/config/config';
 import { env } from '../../common/config/env';
 import { logger } from '../../common/utils/logger';
+import { sendEvent } from '../../../ipc/sendEvent';
+import type { EventArgs, EventChannel } from '../../../../shared/ipc';
 import { windowPool } from '../../../window/windowManager';
 
 const log = logger.child({ module: 'SttService' });
@@ -95,12 +97,12 @@ class SttService {
         this.onQuotaExceeded = onQuotaExceeded;
     }
 
-    sendToRenderer({ channel, data }: { channel: string; data: unknown }): void {
+    sendToRenderer<C extends EventChannel>({ channel, args }: { channel: C; args: EventArgs[C] }): void {
         // Send Listen-related events only to Listen window (prevent Ask window conflicts)
         const listenWindow = windowPool?.get('listen');
 
         if (listenWindow && !listenWindow.isDestroyed()) {
-            listenWindow.webContents.send(channel, data);
+            sendEvent({ webContents: listenWindow.webContents, channel, args });
         }
     }
 
@@ -128,7 +130,15 @@ class SttService {
         this.themCommittedLength = 0;
     }
 
-    _handlePartialSegmentation({ speakerLabel, textChunk, committedKey }: { speakerLabel: Speaker; textChunk: string; committedKey: CommittedKey }): string {
+    _handlePartialSegmentation({
+        speakerLabel,
+        textChunk,
+        committedKey,
+    }: {
+        speakerLabel: Speaker;
+        textChunk: string;
+        committedKey: CommittedKey;
+    }): string {
         if (!textChunk) return '';
         if (!MAX_UTTERANCE_CHARS) {
             this[committedKey] = 0;
@@ -191,13 +201,15 @@ class SttService {
         if (sendToUI) {
             this.sendToRenderer({
                 channel: 'stt-update',
-                data: {
-                    speaker,
-                    text: finalText,
-                    isPartial: false,
-                    isFinal: true,
-                    timestamp: Date.now(),
-                },
+                args: [
+                    {
+                        speaker,
+                        text: finalText,
+                        isPartial: false,
+                        isFinal: true,
+                        timestamp: Date.now(),
+                    },
+                ],
             });
         }
     }
@@ -233,13 +245,15 @@ class SttService {
             if (remainder) {
                 this.sendToRenderer({
                     channel: 'stt-update',
-                    data: {
-                        speaker: 'Me',
-                        text: remainder,
-                        isPartial: true,
-                        isFinal: false,
-                        timestamp: Date.now(),
-                    },
+                    args: [
+                        {
+                            speaker: 'Me',
+                            text: remainder,
+                            isPartial: true,
+                            isFinal: false,
+                            timestamp: Date.now(),
+                        },
+                    ],
                 });
             }
 
@@ -284,13 +298,15 @@ class SttService {
             if (remainder) {
                 this.sendToRenderer({
                     channel: 'stt-update',
-                    data: {
-                        speaker: 'Them',
-                        text: remainder,
-                        isPartial: true,
-                        isFinal: false,
-                        timestamp: Date.now(),
-                    },
+                    args: [
+                        {
+                            speaker: 'Them',
+                            text: remainder,
+                            isPartial: true,
+                            isFinal: false,
+                            timestamp: Date.now(),
+                        },
+                    ],
                 });
             }
 
@@ -411,7 +427,10 @@ class SttService {
                 }
                 const parsed = RelayMessageSchema.safeParse(json);
                 if (!parsed.success) {
-                    log.warn({ relaySessionId: this.relaySessionId, issues: z.prettifyError(parsed.error) }, 'Ignoring relay payload of unexpected shape');
+                    log.warn(
+                        { relaySessionId: this.relaySessionId, issues: z.prettifyError(parsed.error) },
+                        'Ignoring relay payload of unexpected shape'
+                    );
                     return;
                 }
                 const message = parsed.data;
@@ -452,10 +471,7 @@ class SttService {
                         break;
 
                     case 'ERROR':
-                        log.error(
-                            { relaySessionId: this.relaySessionId, code: message.code, relayMessage: message.message },
-                            'Relay error'
-                        );
+                        log.error({ relaySessionId: this.relaySessionId, code: message.code, relayMessage: message.message }, 'Relay error');
                         if (!this.relayReady) {
                             settleReject(new Error(message.message || 'Relay error'));
                         }
@@ -650,7 +666,7 @@ class SttService {
                 const monoChunk = CHANNELS === 2 ? this.convertStereoToMono(chunk) : chunk;
                 const base64Data = monoChunk.toString('base64');
 
-                this.sendToRenderer({ channel: 'system-audio-data', data: { data: base64Data } });
+                this.sendToRenderer({ channel: 'system-audio-data', args: [{ data: base64Data }] });
 
                 if (this.themSttSession) {
                     try {

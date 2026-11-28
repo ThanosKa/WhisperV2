@@ -1,7 +1,17 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import { readApiBaseUrlArgument } from '../shared/preloadArguments';
 // Types only: the sandboxed preload cannot load zod, and main parses every payload anyway.
-import type { EventArgs, EventChannel, InvokeArgs, InvokeChannel, InvokeResult, SendArgs, SendChannel } from '../shared/ipc';
+import type {
+    EventArgs,
+    EventChannel,
+    InvokeArgs,
+    InvokeChannel,
+    InvokeResult,
+    ListenButtonText,
+    RecoveryAction,
+    SendArgs,
+    SendChannel,
+} from '../shared/ipc';
 
 // Each wrapper takes its channel's arguments and result from the IPC list, so a renamed or
 // reshaped channel fails type-check here.
@@ -38,6 +48,11 @@ function listenToPayload<C extends 'app:update-available' | 'app:update-download
 }): void {
     ipcRenderer.on(channel, (_event: IpcRendererEvent, ...args: EventArgs[C]) => callback(...args));
 }
+
+// Two windows call each of these under the same name.
+const adjustWindowHeight = (winName: string, height: number) => invoke({ channel: 'adjust-window-height', args: [{ winName, height }] });
+const handleRecoveryAction = (action: RecoveryAction, sessionId: string) =>
+    invoke({ channel: 'listen:handleRecoveryAction', args: [action, sessionId] });
 
 const api = {
     // Platform information for renderer processes
@@ -109,7 +124,7 @@ const api = {
         showSettingsWindow: () => send({ channel: 'show-settings-window', args: [] }),
         hideSettingsWindow: () => send({ channel: 'hide-settings-window', args: [] }),
 
-        sendListenButtonClick: (listenButtonText: string) => invoke({ channel: 'listen:changeSession', args: [listenButtonText] }),
+        sendListenButtonClick: (listenButtonText: ListenButtonText) => invoke({ channel: 'listen:changeSession', args: [listenButtonText] }),
         sendAskButtonClick: () => invoke({ channel: 'ask:toggleAskButton', args: [] }),
         sendToggleAllWindowsVisibility: () => invoke({ channel: 'shortcut:toggleAllWindowsVisibility', args: [] }),
         getCurrentShortcuts: () => invoke({ channel: 'settings:getCurrentShortcuts', args: [] }),
@@ -132,7 +147,7 @@ const api = {
             unlisten({ channel: 'listen-window-visibility', listener: callback }),
 
         // Recovery actions
-        handleRecoveryAction: (action: string, sessionId: string) => invoke({ channel: 'listen:handleRecoveryAction', args: [action, sessionId] }),
+        handleRecoveryAction,
         onStrandedSessionDetected: (callback: Listener<'listen:stranded-session-detected'>) =>
             listen({ channel: 'listen:stranded-session-detected', listener: callback }),
         removeOnStrandedSessionDetected: (callback: Listener<'listen:stranded-session-detected'>) =>
@@ -151,7 +166,7 @@ const api = {
         removeOnShow: () => unlistenAll('recovery-toast:show'),
         onHide: (callback: Listener<'recovery-toast:hide'>) => listen({ channel: 'recovery-toast:hide', listener: callback }),
         removeOnHide: () => unlistenAll('recovery-toast:hide'),
-        handleRecoveryAction: (action: string, sessionId: string) => invoke({ channel: 'listen:handleRecoveryAction', args: [action, sessionId] }),
+        handleRecoveryAction,
     },
 
     // Quota/usage updates broadcast from main process
@@ -182,7 +197,7 @@ const api = {
     askView: {
         // Window Management
         closeAskWindow: () => invoke({ channel: 'ask:closeAskWindow', args: [] }),
-        adjustWindowHeight: (winName: string, height: number) => invoke({ channel: 'adjust-window-height', args: [{ winName, height }] }),
+        adjustWindowHeight,
 
         // Message Handling
         sendMessage: (text: string, useScreenCapture = true, webSearchEnabled = false) =>
@@ -210,7 +225,7 @@ const api = {
     // src/renderer/listen/ListenView.js
     listenView: {
         // Window Management
-        adjustWindowHeight: (winName: string, height: number) => invoke({ channel: 'adjust-window-height', args: [{ winName, height }] }),
+        adjustWindowHeight,
         onForceHeightRecalc: (callback: Listener<'force-height-recalc'>) => listen({ channel: 'force-height-recalc', listener: callback }),
 
         // Analysis Preset Management

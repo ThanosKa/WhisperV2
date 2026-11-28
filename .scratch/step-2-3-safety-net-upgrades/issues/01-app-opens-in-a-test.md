@@ -67,4 +67,6 @@ Result: `node_modules/electron` 30.5.1 with `dist/Electron.app`, `better-sqlite3
 | `whisper_web` lint | exit 0, no warnings or errors |
 | `whisper_web` type-check | exit 0 |
 
-A test run rewrites the committed `playwright-report/index.html` and writes to `test-results/`. These changes were restored and not committed. Ticket 03 deletes these folders and adds them to `.gitignore`.
+A test run rewrites the committed `playwright-report/index.html` and writes to `test-results/`. These changes were restored and not committed. Ticket 03 has since deleted these folders and added them to `.gitignore`.
+
+After `git merge dev` (ticket 03 had landed), every check was run again with the same results: e2e 1 passed, root Jest 124, `whisper_web` Jest 49, root lint 127, `whisper_web` lint and type-check clean. The working tree stayed clean after the runs.

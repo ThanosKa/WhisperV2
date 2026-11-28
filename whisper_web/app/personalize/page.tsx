@@ -28,6 +28,12 @@ export default function PersonalizePage() {
     // Check if there's appended content to reset (compare saved vs original)
     const canReset = !!selectedPreset?.append_text && !saving;
 
+    const selectPreset = (preset: PromptPreset) => {
+        setSelectedPreset(preset);
+        setSavedContent((preset.prompt || '') + (preset.append_text || ''));
+        setNewContent('');
+    };
+
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -46,12 +52,6 @@ export default function PersonalizePage() {
         };
         fetchData();
     }, []);
-
-    const selectPreset = (preset: PromptPreset) => {
-        setSelectedPreset(preset);
-        setSavedContent((preset.prompt || '') + (preset.append_text || ''));
-        setNewContent('');
-    };
 
     const handleSave = async () => {
         if (!canSave || !selectedPreset) return;

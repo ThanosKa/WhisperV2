@@ -633,5 +633,5 @@ export const logout = async () => {
     localStorage.removeItem('user_info');
 
     // Redirect to login
-    window.location.href = '/login';
+    window.location.href = new URL('/login', window.location.origin).toString();
 };

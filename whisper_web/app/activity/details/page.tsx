@@ -159,15 +159,16 @@ function SessionDetailsContent() {
     const isActiveSession = sessionDetails?.session && !sessionDetails.session.ended_at;
     
     // Flatten insights for active sessions (like desktop SummaryView does)
+    const insights = sessionDetails?.insights;
     const flattenedInsights = useMemo(() => {
-        if (!isActiveSession || !sessionDetails?.insights || sessionDetails.insights.length === 0) {
+        if (!isActiveSession || !insights || insights.length === 0) {
             return null;
         }
         
         const actions = new Set<string>();
         const summaryBullets = new Set<string>();
         
-        sessionDetails.insights.forEach(insight => {
+        insights.forEach(insight => {
             if (insight.payload?.actions && Array.isArray(insight.payload.actions)) {
                 insight.payload.actions.forEach((action: string) => actions.add(action));
             }
@@ -180,7 +181,7 @@ function SessionDetailsContent() {
             actions: Array.from(actions).reverse(),
             summary: Array.from(summaryBullets).reverse(),
         };
-    }, [isActiveSession, sessionDetails?.insights]);
+    }, [isActiveSession, insights]);
 
     if (!userInfo || isLoading) {
         return (

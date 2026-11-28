@@ -18,10 +18,13 @@ export const useAuth = () => {
                 ensureMockData();
                 const profile = getMockUser();
                 setUserInfo(profile, true);
-                setMode('webapp');
-                setUser(profile);
-                setRetryCount(0);
-                setIsLoading(false);
+                // State is set in a microtask, not synchronously in the effect body
+                void Promise.resolve().then(() => {
+                    setMode('webapp');
+                    setUser(profile);
+                    setRetryCount(0);
+                    setIsLoading(false);
+                });
                 return;
             } catch (e) {
                 console.log('⚠️ Dev mock mode initialization error:', e);
@@ -31,10 +34,12 @@ export const useAuth = () => {
         // Prevent infinite loops
         if (retryCount > 3) {
             console.log('🛑 Too many retries, staying unauthenticated');
-            setMode(null);
-            setUser(null);
             setUserInfo(null);
-            setIsLoading(false);
+            void Promise.resolve().then(() => {
+                setMode(null);
+                setUser(null);
+                setIsLoading(false);
+            });
             return;
         }
 

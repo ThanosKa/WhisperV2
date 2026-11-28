@@ -74,10 +74,16 @@ interface AnimationStyles {
 }
 
 const useAnimationStyles = (isCollapsed: boolean) => {
-    const [isAnimating, setIsAnimating] = useState(false);
+    const [isAnimating, setIsAnimating] = useState(true);
+    const [seenCollapsed, setSeenCollapsed] = useState(isCollapsed);
+
+    // Collapsing or expanding starts an animation (set while rendering); the effect below ends it
+    if (seenCollapsed !== isCollapsed) {
+        setSeenCollapsed(isCollapsed);
+        setIsAnimating(true);
+    }
 
     useEffect(() => {
-        setIsAnimating(true);
         const timer = setTimeout(() => setIsAnimating(false), ANIMATION_DURATION.SIDEBAR);
         return () => clearTimeout(timer);
     }, [isCollapsed]);
@@ -165,11 +171,13 @@ const SidebarComponent = ({ isCollapsed, onToggle, onSearchClick }: SidebarProps
 
     const isAuthenticatedUser = userInfo && userInfo.uid !== 'default_user';
 
-    useEffect(() => {
+    const [seenPathname, setSeenPathname] = useState(pathname);
+    if (seenPathname !== pathname) {
+        setSeenPathname(pathname);
         if (pathname.startsWith('/settings')) {
             setIsSettingsExpanded(true);
         }
-    }, [pathname]);
+    }
 
     const navigation = useMemo<NavigationItem[]>(
         () => [

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -34,9 +34,11 @@ export function InputDialog({
 }: InputDialogProps) {
   const [value, setValue] = useState(defaultValue);
 
-  useEffect(() => {
+  const [seen, setSeen] = useState({ open, defaultValue });
+  if (seen.open !== open || seen.defaultValue !== defaultValue) {
+    setSeen({ open, defaultValue });
     if (open) setValue(defaultValue);
-  }, [open, defaultValue]);
+  }
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

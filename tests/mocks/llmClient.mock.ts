@@ -76,7 +76,7 @@ const createSequentialSearchStream = () =>
     ]);
 
 const createLlmClientMock = () => ({
-    stream: vi.fn(async (_payload?: StreamPayload, _options?: object): Promise<StreamResponse> => ({
+    stream: vi.fn(async (_request?: { payload: StreamPayload; signal?: AbortSignal }): Promise<StreamResponse> => ({
         headers: defaultHeaders,
         body: {
             getReader: () => createStreamReader(),
@@ -84,7 +84,6 @@ const createLlmClientMock = () => ({
     })),
     chat: vi.fn(async (payload?: { profile?: string }) => ({
         content: `Mock response for ${payload?.profile || 'unknown'}`,
-        raw: { success: true },
     })),
 });
 
@@ -99,7 +98,8 @@ const llmClientMock = (globalThis.__whisperLlmClientMock ??= createLlmClientMock
 export const { stream, chat } = llmClientMock;
 
 export const firstStreamPayload = (): StreamPayload => {
-    const [payload] = stream.mock.calls[0] ?? [];
+    const [request] = stream.mock.calls[0] ?? [];
+    const payload = request?.payload;
     if (!payload) throw new Error('llmClient.stream was not called');
     return payload;
 };

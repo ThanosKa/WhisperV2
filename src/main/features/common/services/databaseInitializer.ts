@@ -2,12 +2,17 @@ import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import sqliteClient from './sqliteClient';
-import config from '../config/config';
+import { logger } from '../utils/logger';
+
+const log = logger.child({ module: 'DatabaseInitializer' });
 
 class DatabaseInitializer {
-    constructor() {
-        this.isInitialized = false;
+    isInitialized = false;
+    readonly dbPath: string;
+    readonly dataDir: string;
+    readonly sourceDbPath: string;
 
+    constructor() {
         // Final DB path to be used (writable location)
         const userDataPath = app.getPath('userData');
         // In both development and production mode, the database is stored in the userData directory:
@@ -17,14 +22,12 @@ class DatabaseInitializer {
         this.dataDir = userDataPath;
 
         // The original DB path (read-only location in the package)
-        this.sourceDbPath = app.isPackaged
-            ? path.join(process.resourcesPath, 'data', 'whisper.db')
-            : path.join(app.getAppPath(), 'data', 'whisper.db');
+        this.sourceDbPath = app.isPackaged ? path.join(process.resourcesPath, 'data', 'whisper.db') : path.join(app.getAppPath(), 'data', 'whisper.db');
     }
 
-    ensureDatabaseExists() {
+    ensureDatabaseExists(): void {
         if (!fs.existsSync(this.dbPath)) {
-            console.log(`[DB] Database not found at ${this.dbPath}. Preparing to create new database...`);
+            log.info({ dbPath: this.dbPath }, 'Database not found, preparing to create a new one');
 
             // Create userData directory (if it doesn't exist)
             if (!fs.existsSync(this.dataDir)) {
@@ -35,184 +38,48 @@ class DatabaseInitializer {
             if (fs.existsSync(this.sourceDbPath)) {
                 try {
                     fs.copyFileSync(this.sourceDbPath, this.dbPath);
-                    console.log(`[DB] Bundled database copied to ${this.dbPath}`);
-                } catch (error) {
-                    console.error(`[DB] Failed to copy bundled database:`, error);
+                    log.info({ dbPath: this.dbPath }, 'Bundled database copied');
+                } catch (err) {
+                    log.error({ err, sourceDbPath: this.sourceDbPath }, 'Failed to copy bundled database');
                     // Continue so that new DB can still be created even if copy fails
                 }
             } else {
-                console.log('[DB] No bundled DB found – a fresh database will be created.');
+                log.info('No bundled database found, a fresh one will be created');
             }
         }
     }
 
-    async initialize() {
+    async initialize(): Promise<boolean> {
         if (this.isInitialized) {
-            console.log('[DB] Already initialized.');
+            log.info('Already initialized');
             return true;
         }
 
         try {
             this.ensureDatabaseExists();
 
-            sqliteClient.connect(this.dbPath); // DB 경로를 인자로 전달
+            sqliteClient.connect(this.dbPath);
 
             // This single call will now synchronize the schema and then init default data.
-            await sqliteClient.initTables();
+            sqliteClient.initTables();
 
             // Clean up any orphaned sessions from previous versions
-            await sqliteClient.cleanupEmptySessions();
+            sqliteClient.cleanupEmptySessions();
 
             this.isInitialized = true;
-            console.log('[DB] Database initialized successfully');
+            log.info({ dbPath: this.dbPath }, 'Database initialized');
             return true;
-        } catch (error) {
-            console.error('[DB] Database initialization failed:', error);
+        } catch (err) {
+            log.error({ err, dbPath: this.dbPath }, 'Database initialization failed');
             this.isInitialized = false;
-            throw error;
+            throw err;
         }
     }
 
-    async ensureDataDirectory() {
-        try {
-            if (!fs.existsSync(this.dataDir)) {
-                fs.mkdirSync(this.dataDir, { recursive: true });
-                console.log('[DatabaseInitializer] Data directory created:', this.dataDir);
-            } else {
-                console.log('[DatabaseInitializer] Data directory exists:', this.dataDir);
-            }
-        } catch (error) {
-            console.error('[DatabaseInitializer] Failed to create data directory:', error);
-            throw error;
-        }
-    }
-
-    async checkDatabaseExists() {
-        try {
-            const exists = fs.existsSync(this.dbPath);
-            console.log('[DatabaseInitializer] Database file check:', { path: this.dbPath, exists });
-            return exists;
-        } catch (error) {
-            console.error('[DatabaseInitializer] Error checking database file:', error);
-            return false;
-        }
-    }
-
-    async createNewDatabase() {
-        console.log('[DatabaseInitializer] Creating new database...');
-        try {
-            await sqliteClient.connect(); // Connect and initialize tables/default data
-
-            const user = await sqliteClient.getUser(sqliteClient.defaultUserId);
-            if (!user) {
-                throw new Error('Default user was not created during initialization.');
-            }
-
-            console.log(`[DatabaseInitializer] Default user check successful, UID: ${user.uid}`);
-            return { success: true, user };
-        } catch (error) {
-            console.error('[DatabaseInitializer] Failed to create new database:', error);
-            throw error;
-        }
-    }
-
-    async connectToExistingDatabase() {
-        console.log('[DatabaseInitializer] Connecting to existing database...');
-        try {
-            await sqliteClient.connect();
-
-            const user = await sqliteClient.getUser(sqliteClient.defaultUserId);
-            if (!user) {
-                console.warn('[DatabaseInitializer] Default user not found in existing DB, attempting recovery.');
-                throw new Error('Default user missing');
-            }
-
-            console.log(`[DatabaseInitializer] Connection to existing DB successful for user: ${user.uid}`);
-            return { success: true, user };
-        } catch (error) {
-            console.error('[DatabaseInitializer] Failed to connect to existing database:', error);
-            throw error;
-        }
-    }
-
-    async validateAndRecoverData() {
-        console.log('[DatabaseInitializer] Validating database integrity...');
-        try {
-            console.log('[DatabaseInitializer] Validating database integrity...');
-
-            // The synchronizeSchema function handles table and column creation now.
-            // We just need to ensure default data is present.
-            await sqliteClient.synchronizeSchema();
-
-            const defaultUser = await sqliteClient.getUser(sqliteClient.defaultUserId);
-            if (!defaultUser) {
-                console.log('[DatabaseInitializer] Default user not found - creating...');
-                await sqliteClient.initDefaultData();
-            }
-
-            const presetTemplates = await sqliteClient.getPresets('default_user');
-            if (!presetTemplates || presetTemplates.length === 0) {
-                console.log('[DatabaseInitializer] Preset templates missing - creating...');
-                await sqliteClient.initDefaultData();
-            }
-
-            console.log('[DatabaseInitializer] Database validation completed');
-            return { success: true };
-        } catch (error) {
-            console.error('[DatabaseInitializer] Database validation failed:', error);
-            try {
-                await sqliteClient.initDefaultData();
-                console.log('[DatabaseInitializer] Default data recovered');
-                return { success: true };
-            } catch (error) {
-                console.error('[DatabaseInitializer] Database validation failed:', error);
-                throw error;
-            }
-        }
-    }
-
-    async getStatus() {
-        return {
-            isInitialized: this.isInitialized,
-            dbPath: this.dbPath,
-            dbExists: fs.existsSync(this.dbPath),
-            enableSQLiteStorage: config.get('enableSQLiteStorage'),
-            enableOfflineMode: config.get('enableOfflineMode'),
-        };
-    }
-
-    async reset() {
-        try {
-            console.log('[DatabaseInitializer] Resetting database...');
-
-            sqliteClient.close();
-
-            if (fs.existsSync(this.dbPath)) {
-                fs.unlinkSync(this.dbPath);
-                console.log('[DatabaseInitializer] Database file deleted');
-            }
-
-            this.isInitialized = false;
-            await this.initialize();
-
-            console.log('[DatabaseInitializer] Database reset completed');
-            return true;
-        } catch (error) {
-            console.error('[DatabaseInitializer] Database reset failed:', error);
-            return false;
-        }
-    }
-
-    close() {
-        if (sqliteClient) {
-            sqliteClient.close();
-        }
+    close(): void {
+        sqliteClient.close();
         this.isInitialized = false;
-        console.log('[DatabaseInitializer] Database connection closed');
-    }
-
-    getDatabasePath() {
-        return this.dbPath;
+        log.info('Database connection closed');
     }
 }
 

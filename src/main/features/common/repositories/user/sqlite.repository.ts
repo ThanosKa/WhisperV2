@@ -1,6 +1,27 @@
+import { z } from 'zod';
 import sqliteClient from '../../services/sqliteClient';
+import { logger } from '../../utils/logger';
+import { errorMessage } from '../../utils/errors';
 
-function findOrCreate(user) {
+const log = logger.child({ module: 'UserRepository' });
+
+// A row of `users` (config/schema.ts).
+export const UserRowSchema = z.object({
+    uid: z.string(),
+    display_name: z.string(),
+    email: z.string(),
+    created_at: z.number().nullable(),
+    auto_update_enabled: z.number().nullable(),
+});
+
+export type UserRow = z.infer<typeof UserRowSchema>;
+
+// What `findOrCreate` needs from a signed-in user; a WhisperAPP profile has these fields.
+export type NewUser = { uid: string; displayName?: string | null | undefined; email?: string | null | undefined };
+
+const SessionIdRowSchema = z.object({ id: z.string() });
+
+function findOrCreate(user: NewUser | null | undefined): UserRow | null | undefined {
     const db = sqliteClient.getDb();
 
     if (!user || !user.uid) {
@@ -17,53 +38,52 @@ function findOrCreate(user) {
     const query = `
         INSERT INTO users (uid, display_name, email, created_at)
         VALUES (?, ?, ?, ?)
-        ON CONFLICT(uid) DO UPDATE SET 
-            display_name=excluded.display_name, 
+        ON CONFLICT(uid) DO UPDATE SET
+            display_name=excluded.display_name,
             email=excluded.email
     `;
 
     try {
-        console.log('[SQLite] Creating/updating user:', { uid, displayName: safeDisplayName, email: safeEmail });
+        log.info({ uid, displayName: safeDisplayName, email: safeEmail }, 'Creating or updating user');
         db.prepare(query).run(uid, safeDisplayName, safeEmail, now);
         const result = getById(uid);
-        console.log('[SQLite] User operation successful:', result);
+        log.info({ uid, user: result }, 'User operation successful');
         return result;
     } catch (err) {
-        console.error('SQLite: Failed to find or create user:', err);
-        console.error('SQLite: User data:', { uid, displayName: safeDisplayName, email: safeEmail });
-        throw new Error(`Failed to create user in database: ${err.message}`);
+        log.error({ err, uid, displayName: safeDisplayName, email: safeEmail }, 'Failed to find or create user');
+        throw new Error(`Failed to create user in database: ${errorMessage(err)}`);
     }
 }
 
-function getById(uid) {
+function getById(uid: string | null | undefined): UserRow | null | undefined {
     const db = sqliteClient.getDb();
-    console.log('[SQLite] getById called with uid:', uid);
+    log.info({ uid }, 'getById called');
 
     if (!uid || uid === 'undefined' || uid === 'null') {
-        console.log('[SQLite] Invalid uid provided, returning null');
+        log.info({ uid }, 'Invalid uid provided, returning null');
         return null;
     }
 
-    const result = db.prepare('SELECT * FROM users WHERE uid = ?').get(uid);
-    console.log('[SQLite] getById result for uid', uid, ':', result);
+    const row = db.prepare('SELECT * FROM users WHERE uid = ?').get(uid);
+    const result = row === undefined ? undefined : UserRowSchema.parse(row);
+    log.info({ uid, user: result }, 'getById result');
 
     if (!result) {
-        console.log('[SQLite] No user found in database with uid:', uid);
-        console.log('[SQLite] This means the user has not been created in the local database yet');
+        log.info({ uid }, 'No user found in the local database yet');
     }
 
     return result;
 }
 
-function update({ uid, displayName }) {
+function update({ uid, displayName }: { uid: string; displayName: string }): { changes: number } {
     const db = sqliteClient.getDb();
     const result = db.prepare('UPDATE users SET display_name = ? WHERE uid = ?').run(displayName, uid);
     return { changes: result.changes };
 }
 
-function deleteById(uid) {
+function deleteById(uid: string | null): { success: true } {
     const db = sqliteClient.getDb();
-    const userSessions = db.prepare('SELECT id FROM sessions WHERE uid = ?').all(uid);
+    const userSessions = z.array(SessionIdRowSchema).parse(db.prepare('SELECT id FROM sessions WHERE uid = ?').all(uid));
     const sessionIds = userSessions.map(s => s.id);
 
     const transaction = db.transaction(() => {
@@ -78,17 +98,8 @@ function deleteById(uid) {
         db.prepare('DELETE FROM users WHERE uid = ?').run(uid);
     });
 
-    try {
-        transaction();
-        return { success: true };
-    } catch (err) {
-        throw err;
-    }
+    transaction();
+    return { success: true };
 }
 
-export {
-    findOrCreate,
-    getById,
-    update,
-    deleteById,
-};
+export { findOrCreate, getById, update, deleteById };

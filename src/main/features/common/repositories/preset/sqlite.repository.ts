@@ -1,14 +1,33 @@
+import { z } from 'zod';
 import sqliteClient from '../../services/sqliteClient';
+import { logger } from '../../utils/logger';
 
-function getPresets(uid) {
-    const db = sqliteClient.getDb();
+const log = logger.child({ module: 'PresetRepository' });
 
-    const normalizedUid = uid && uid !== 'undefined' && uid !== 'null' ? uid : null;
-    const targetUid = normalizedUid || sqliteClient.defaultUserId;
-    const includeCustomPresets = !!normalizedUid;
+// A row of `prompt_presets` (config/schema.ts), as `SELECT *` reads it.
+export const PresetRowSchema = z.object({
+    id: z.string(),
+    uid: z.string(),
+    title: z.string(),
+    prompt: z.string(),
+    is_default: z.number(),
+    created_at: z.number().nullable(),
+    sync_state: z.string().nullable(),
+    append_text: z.string().nullable(),
+});
 
-    const baseQuery = `
-        SELECT 
+export type PresetRow = z.infer<typeof PresetRowSchema>;
+
+// A preset with the user's append text resolved (the per-user override for a default preset).
+export const ResolvedPresetSchema = PresetRowSchema.extend({ append_text: z.string() });
+
+export type ResolvedPreset = z.infer<typeof ResolvedPresetSchema>;
+
+export type PresetChanges = { title?: string | undefined; prompt?: string | undefined; append_text?: string | null | undefined };
+
+const normalizeUid = (uid: string | null | undefined): string | null => (uid && uid !== 'undefined' && uid !== 'null' ? uid : null);
+
+const RESOLVED_PRESET_COLUMNS = `
             p.id,
             p.uid,
             p.title,
@@ -16,44 +35,41 @@ function getPresets(uid) {
             p.is_default,
             p.created_at,
             p.sync_state,
-            CASE 
+            CASE
                 WHEN p.is_default = 1 THEN COALESCE(o.append_text, '')
                 ELSE COALESCE(p.append_text, '')
-            END AS append_text
+            END AS append_text`;
+
+function getPresets(uid: string | null): ResolvedPreset[] {
+    const db = sqliteClient.getDb();
+
+    const normalizedUid = normalizeUid(uid);
+    const targetUid = normalizedUid || sqliteClient.defaultUserId;
+
+    const baseQuery = `
+        SELECT ${RESOLVED_PRESET_COLUMNS}
         FROM prompt_presets p
         LEFT JOIN preset_append_overrides o
             ON p.id = o.preset_id AND o.uid = ?
-        WHERE p.is_default = 1${includeCustomPresets ? ' OR p.uid = ?' : ''}
+        WHERE p.is_default = 1${normalizedUid ? ' OR p.uid = ?' : ''}
         ORDER BY p.is_default DESC, p.title ASC
     `;
 
     try {
-        const params = includeCustomPresets ? [targetUid, normalizedUid] : [targetUid];
-        return db.prepare(baseQuery).all(...params);
+        const params = normalizedUid ? [targetUid, normalizedUid] : [targetUid];
+        return z.array(ResolvedPresetSchema).parse(db.prepare(baseQuery).all(...params));
     } catch (err) {
-        console.error('SQLite: Failed to get presets:', err);
+        log.error({ err, uid }, 'Failed to get presets');
         throw err;
     }
 }
 
-function getById(id, uid) {
+function getById({ id, uid }: { id: string; uid: string | null }): ResolvedPreset | null {
     const db = sqliteClient.getDb();
-    const normalizedUid = uid && uid !== 'undefined' && uid !== 'null' ? uid : null;
-    const targetUid = normalizedUid || sqliteClient.defaultUserId;
+    const targetUid = normalizeUid(uid) || sqliteClient.defaultUserId;
 
     const query = `
-        SELECT 
-            p.id,
-            p.uid,
-            p.title,
-            p.prompt,
-            p.is_default,
-            p.created_at,
-            p.sync_state,
-            CASE 
-                WHEN p.is_default = 1 THEN COALESCE(o.append_text, '')
-                ELSE COALESCE(p.append_text, '')
-            END AS append_text
+        SELECT ${RESOLVED_PRESET_COLUMNS}
         FROM prompt_presets p
         LEFT JOIN preset_append_overrides o
             ON p.id = o.preset_id AND o.uid = ?
@@ -62,46 +78,49 @@ function getById(id, uid) {
 
     try {
         const row = db.prepare(query).get(targetUid, id);
-        return row || null;
+        return row === undefined ? null : ResolvedPresetSchema.parse(row);
     } catch (err) {
-        console.error('SQLite: Failed to get preset by id:', err);
+        log.error({ err, presetId: id, uid }, 'Failed to get preset by id');
         throw err;
     }
 }
 
-function findUserPresetByTitle(title, uid) {
+function findUserPresetByTitle({ title, uid }: { title: string; uid: string | null }): PresetRow | null {
     const db = sqliteClient.getDb();
     const query = `SELECT * FROM prompt_presets WHERE uid = ? AND is_default = 0 AND LOWER(title) = LOWER(?)`;
     try {
-        return db.prepare(query).get(uid, title) || null;
+        const row = db.prepare(query).get(uid, title);
+        return row === undefined ? null : PresetRowSchema.parse(row);
     } catch (err) {
-        console.error('SQLite: Failed to find user preset by title:', err);
+        log.error({ err, uid }, 'Failed to find user preset by title');
         throw err;
     }
 }
 
-function getPresetTemplates() {
+function getPresetTemplates(): PresetRow[] {
     const db = sqliteClient.getDb();
     const query = `
-        SELECT * FROM prompt_presets 
-        WHERE is_default = 1 
+        SELECT * FROM prompt_presets
+        WHERE is_default = 1
         ORDER BY title ASC
     `;
 
     try {
-        return db.prepare(query).all();
+        return z.array(PresetRowSchema).parse(db.prepare(query).all());
     } catch (err) {
-        console.error('SQLite: Failed to get preset templates:', err);
+        log.error({ err }, 'Failed to get preset templates');
         throw err;
     }
 }
 
-function update(id, { title, prompt, append_text }, uid) {
+function update({ id, changes, uid }: { id: string; changes: PresetChanges; uid: string | null }): { changes: number } {
+    const { title, prompt, append_text } = changes;
     const db = sqliteClient.getDb();
-    const current = db.prepare('SELECT * FROM prompt_presets WHERE id = ?').get(id);
-    if (!current) {
+    const row = db.prepare('SELECT * FROM prompt_presets WHERE id = ?').get(id);
+    if (row === undefined) {
         throw new Error('Preset not found');
     }
+    const current = PresetRowSchema.parse(row);
 
     if (current.is_default === 1) {
         if (prompt !== undefined && prompt !== current.prompt) {
@@ -121,7 +140,7 @@ function update(id, { title, prompt, append_text }, uid) {
             }
 
             if (append_text !== undefined) {
-                const targetUid = uid && uid !== 'undefined' && uid !== 'null' ? uid : sqliteClient.defaultUserId;
+                const targetUid = normalizeUid(uid) || sqliteClient.defaultUserId;
                 const normalized = append_text || '';
                 const timestamp = Math.floor(Date.now() / 1000);
 
@@ -145,7 +164,7 @@ function update(id, { title, prompt, append_text }, uid) {
 
     const result = db
         .prepare(
-            `UPDATE prompt_presets 
+            `UPDATE prompt_presets
              SET title = ?, prompt = ?, append_text = ?, sync_state = 'dirty'
              WHERE id = ? AND uid = ?`
         )
@@ -156,10 +175,4 @@ function update(id, { title, prompt, append_text }, uid) {
     return { changes: result.changes };
 }
 
-export {
-    getPresets,
-    getById,
-    findUserPresetByTitle,
-    getPresetTemplates,
-    update,
-};
+export { getPresets, getById, findUserPresetByTitle, getPresetTemplates, update };

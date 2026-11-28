@@ -621,7 +621,7 @@ class AskService {
                 const derived = this._deriveTitleFromPrompt(originalPrompt);
                 if (derived) {
                     try {
-                        await sessionRepository.updateTitle(sessionId, derived);
+                        await sessionRepository.updateTitle({ id: sessionId, title: derived });
                         console.log(`[AskService] 🏷️ Titled question session ${sessionId}: ${derived}`);
                     } catch (e) {
                         console.warn('[AskService] Failed to update session title for ask session:', e.message);
@@ -760,7 +760,7 @@ class AskService {
             }
 
             try {
-                const response = await llmClient.stream(payload, { signal });
+                const response = await llmClient.stream({ payload, signal });
 
                 // Broadcast quota headers immediately on stream start
                 broadcastQuotaUpdateFromResponse(response);
@@ -802,7 +802,7 @@ class AskService {
                     if (shouldIncludeRole && roleContext && profileToUse !== 'whisper') {
                         textOnlyPayload.role = roleContext;
                     }
-                    const fallbackResponse = await llmClient.stream(textOnlyPayload, { signal });
+                    const fallbackResponse = await llmClient.stream({ payload: textOnlyPayload, signal });
                     // Broadcast quota headers for fallback as well
                     broadcastQuotaUpdateFromResponse(fallbackResponse);
                     const askWin = getWindowPool()?.get('ask');

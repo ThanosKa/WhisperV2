@@ -9,6 +9,7 @@ import presetRepository from '../features/common/repositories/preset';
 import askService from '../features/ask/askService';
 import listenService from '../features/listen/listenService';
 import permissionService from '../features/common/services/permissionService';
+import { env } from '../features/common/config/env';
 
 export default {
     // Receive requests from renderer and forward to services
@@ -67,7 +68,7 @@ export default {
         // Auto-update handlers
         ipcMain.handle('app:check-for-updates', async () => {
             try {
-                if (process.env.NODE_ENV === 'development') {
+                if (env.NODE_ENV === 'development') {
                     return { success: false, error: 'Development mode - updates disabled' };
                 }
                 await autoUpdater.checkForUpdatesAndNotify();
@@ -80,7 +81,7 @@ export default {
 
         ipcMain.handle('app:install-update', async () => {
             try {
-                if (process.env.NODE_ENV === 'development') {
+                if (env.NODE_ENV === 'development') {
                     return { success: false, error: 'Development mode - updates disabled' };
                 }
 

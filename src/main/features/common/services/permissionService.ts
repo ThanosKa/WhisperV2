@@ -1,45 +1,55 @@
 import { systemPreferences, shell, desktopCapturer } from 'electron';
+import { logger } from '../utils/logger';
+import { errorMessage } from '../utils/errors';
+
+const log = logger.child({ module: 'Permissions' });
+
+type MediaAccessStatus = ReturnType<typeof systemPreferences.getMediaAccessStatus>;
+
+export type SystemPermissions = {
+    microphone: MediaAccessStatus;
+    screen: MediaAccessStatus;
+    needsSetup: boolean;
+    error?: string;
+};
+
+export type PermissionResult = { success: boolean; status?: 'granted' | 'denied'; error?: string };
+
+// Only macOS asks the user; elsewhere both count as granted.
+const NOT_MAC_PERMISSIONS: SystemPermissions = { microphone: 'granted', screen: 'granted', needsSetup: false };
+
+const readMacPermissions = (): SystemPermissions => {
+    const microphone = systemPreferences.getMediaAccessStatus('microphone');
+    const screen = systemPreferences.getMediaAccessStatus('screen');
+    return { microphone, screen, needsSetup: microphone !== 'granted' || screen !== 'granted' };
+};
 
 class PermissionService {
-    async checkSystemPermissions() {
-        const permissions = {
-            microphone: 'unknown',
-            screen: 'unknown',
-            needsSetup: true,
-        };
-
+    async checkSystemPermissions(): Promise<SystemPermissions> {
         try {
-            if (process.platform === 'darwin') {
-                permissions.microphone = systemPreferences.getMediaAccessStatus('microphone');
-                permissions.screen = systemPreferences.getMediaAccessStatus('screen');
-                permissions.needsSetup = permissions.microphone !== 'granted' || permissions.screen !== 'granted';
-            } else {
-                permissions.microphone = 'granted';
-                permissions.screen = 'granted';
-                permissions.needsSetup = false;
-            }
+            const permissions = process.platform === 'darwin' ? readMacPermissions() : NOT_MAC_PERMISSIONS;
 
-            console.log('[Permissions] System permissions status:', permissions);
+            log.info({ permissions }, 'System permissions status');
             return permissions;
-        } catch (error) {
-            console.error('[Permissions] Error checking permissions:', error);
+        } catch (err) {
+            log.error({ err }, 'Error checking permissions');
             return {
                 microphone: 'unknown',
                 screen: 'unknown',
                 needsSetup: true,
-                error: error.message,
+                error: errorMessage(err),
             };
         }
     }
 
-    async requestMicrophonePermission() {
+    async requestMicrophonePermission(): Promise<PermissionResult> {
         if (process.platform !== 'darwin') {
             return { success: true };
         }
 
         try {
             const status = systemPreferences.getMediaAccessStatus('microphone');
-            console.log('[Permissions] Microphone status:', status);
+            log.info({ status }, 'Microphone status');
             if (status === 'granted') {
                 return { success: true, status: 'granted' };
             }
@@ -49,16 +59,16 @@ class PermissionService {
                 success: granted,
                 status: granted ? 'granted' : 'denied',
             };
-        } catch (error) {
-            console.error('[Permissions] Error requesting microphone permission:', error);
+        } catch (err) {
+            log.error({ err }, 'Error requesting microphone permission');
             return {
                 success: false,
-                error: error.message,
+                error: errorMessage(err),
             };
         }
     }
 
-    async openSystemPreferences(section) {
+    async openSystemPreferences(section: unknown): Promise<PermissionResult> {
         if (process.platform !== 'darwin') {
             return { success: false, error: 'Not supported on this platform' };
         }
@@ -66,23 +76,23 @@ class PermissionService {
         try {
             if (section === 'screen-recording') {
                 try {
-                    console.log('[Permissions] Triggering screen capture request to register app...');
+                    log.info('Triggering screen capture request to register app');
                     await desktopCapturer.getSources({
                         types: ['screen'],
                         thumbnailSize: { width: 1, height: 1 },
                     });
-                    console.log('[Permissions] App registered for screen recording');
+                    log.info('App registered for screen recording');
                 } catch (captureError) {
-                    console.log('[Permissions] Screen capture request triggered (expected to fail):', captureError.message);
+                    log.info({ error: errorMessage(captureError) }, 'Screen capture request triggered (expected to fail)');
                 }
 
                 // Open macOS System Settings directly to Screen Recording privacy pane
                 await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
             }
             return { success: true };
-        } catch (error) {
-            console.error('[Permissions] Error opening system preferences:', error);
-            return { success: false, error: error.message };
+        } catch (err) {
+            log.error({ err, section }, 'Error opening system preferences');
+            return { success: false, error: errorMessage(err) };
         }
     }
 }

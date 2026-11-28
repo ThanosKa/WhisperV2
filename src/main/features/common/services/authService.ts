@@ -1,21 +1,88 @@
 import { BrowserWindow, shell } from 'electron';
 import Store from 'electron-store';
+import { z } from 'zod';
 import sessionRepository from '../repositories/session';
-import providerSettingsRepository from '../repositories/providerSettings';
 import userRepository from '../repositories/user';
+import { env } from '../config/env';
+import { logger } from '../utils/logger';
+import { errorMessage } from '../utils/errors';
+
+const log = logger.child({ module: 'AuthService' });
 
 // Webapp configuration
 const WEBAPP_CONFIG = {
-    domain: process.env.API_BASE_URL || 'https://app-whisper.com',
-    sessionInitUrl: `${process.env.API_BASE_URL || 'https://app-whisper.com'}/api/auth/session/init`,
-    sessionStatusUrl: `${process.env.API_BASE_URL || 'https://app-whisper.com'}/api/auth/session`,
-    sessionPageUrl: `${process.env.API_BASE_URL || 'https://app-whisper.com'}/session`,
+    domain: env.API_BASE_URL,
+    sessionInitUrl: `${env.API_BASE_URL}/api/auth/session/init`,
+    sessionStatusUrl: `${env.API_BASE_URL}/api/auth/session`,
+    sessionPageUrl: `${env.API_BASE_URL}/session`,
 };
 
-// Session storage using electron-store
-const sessionStore = new Store({ name: 'auth-session' });
+// ── What WhisperAPP sends (the WhisperAPP repo, src/app/api/auth/) ──────────────────────────────
 
-async function validateSession(sessionUuid) {
+// Every auth route answers `{ success, data }` or `{ success: false, error }`.
+const ApiEnvelopeSchema = z.object({
+    success: z.boolean().optional(),
+    error: z.string().optional(),
+    data: z.unknown(),
+});
+
+const SessionInitDataSchema = z.object({ session_uuid: z.string().min(1) });
+
+const SessionStatusDataSchema = z.object({ status: z.string() });
+
+// Main passes the quotas on to the windows without reading them.
+const QuotaSchema = z.record(z.string(), z.unknown());
+
+// The signed-in user, from /api/auth/user-by-session and from the stored copy in electron-store.
+export const UserProfileSchema = z.object({
+    uid: z.string().min(1),
+    email: z.string().nullish(),
+    displayName: z.string().nullish(),
+    plan: z.string().nullish(),
+    apiQuota: QuotaSchema.nullish(),
+    sttQuota: QuotaSchema.nullish(),
+});
+
+export type UserProfile = z.infer<typeof UserProfileSchema>;
+
+// The user fields a sign-in deep link carries (index.js).
+export type DeepLinkUser = { uid: string; email: string; displayName: string };
+
+export type UserMode = 'unauthenticated' | 'webapp';
+
+const describeIssues = (error: z.ZodError) => z.prettifyError(error);
+
+async function readEnvelope({ response, failure }: { response: Response; failure: string }): Promise<unknown> {
+    const envelope = ApiEnvelopeSchema.safeParse(await response.json());
+    if (!envelope.success) {
+        throw new Error(`${failure}: unexpected response from WhisperAPP (${describeIssues(envelope.error)})`);
+    }
+    if (!response.ok || !envelope.data.success) {
+        throw new Error(envelope.data.error || failure);
+    }
+    return envelope.data.data;
+}
+
+// Session storage using electron-store
+const sessionStore = new Store<Record<string, unknown>>({ name: 'auth-session' });
+
+const readStoredSession = (): string | undefined => {
+    const parsed = z.string().safeParse(sessionStore.get('sessionUuid'));
+    return parsed.success ? parsed.data : undefined;
+};
+
+const readStoredUser = (): UserProfile | undefined => {
+    const stored = sessionStore.get('userProfile');
+    if (stored === undefined) return undefined;
+    const parsed = UserProfileSchema.safeParse(stored);
+    if (!parsed.success) {
+        log.warn({ issues: describeIssues(parsed.error) }, 'Ignoring a stored user profile that does not parse');
+        return undefined;
+    }
+    return parsed.data;
+};
+
+async function validateSession(sessionUuid: string): Promise<UserProfile> {
     if (!sessionUuid) {
         throw new Error('Session UUID is required for validation');
     }
@@ -28,10 +95,11 @@ async function validateSession(sessionUuid) {
         },
     });
 
-    const statusData = await statusResponse.json();
-
-    if (!statusResponse.ok || !statusData.success) {
-        throw new Error(statusData.error || `HTTP ${statusResponse.status}: Session validation failed`);
+    const statusData = SessionStatusDataSchema.safeParse(
+        await readEnvelope({ response: statusResponse, failure: `HTTP ${statusResponse.status}: Session validation failed` })
+    );
+    if (!statusData.success) {
+        throw new Error(`Session validation failed: unexpected session status (${describeIssues(statusData.error)})`);
     }
 
     // Check if session is authenticated
@@ -47,85 +115,88 @@ async function validateSession(sessionUuid) {
         },
     });
 
-    const profileData = await profileResponse.json();
-
-    if (!profileResponse.ok || !profileData.success) {
-        throw new Error(profileData.error || `Failed to fetch user profile: ${profileResponse.status}`);
+    const profile = UserProfileSchema.safeParse(
+        await readEnvelope({ response: profileResponse, failure: `Failed to fetch user profile: ${profileResponse.status}` })
+    );
+    if (!profile.success) {
+        throw new Error(`Failed to fetch user profile: unexpected profile (${describeIssues(profile.error)})`);
     }
-
-    return profileData.data;
+    return profile.data;
 }
 
-class AuthService {
+const shortId = (sessionUuid: string) => `${sessionUuid.substring(0, 8)}...`;
+
+export class AuthService {
+    currentUserId: string | null = null; // No default user - null means unauthenticated
+    currentUserMode: UserMode = 'unauthenticated';
+    currentUser: UserProfile | null = null;
+    isInitialized = false;
+    sessionUuid: string | null = null;
+    lastBroadcastUserState: string | null = null; // Track last broadcast to prevent duplicates
+
+    // This ensures the key is ready before any login/logout state change.
+    initializationPromise: Promise<void> | null = null;
+
     constructor() {
-        this.currentUserId = null; // No default user - null means unauthenticated
-        this.currentUserMode = 'unauthenticated'; // 'unauthenticated', 'local', or 'webapp'
-        this.currentUser = null;
-        this.isInitialized = false;
-        this.sessionUuid = null;
-        this.lastBroadcastUserState = null; // Track last broadcast to prevent duplicates
-
-        // This ensures the key is ready before any login/logout state change.
-        this.initializationPromise = null;
-
         sessionRepository.setAuthService(this);
     }
 
-    initialize() {
+    initialize(): Promise<void> | null {
         if (this.isInitialized) return this.initializationPromise;
 
-        this.initializationPromise = new Promise(async resolve => {
-            console.log('[AuthService] Starting initialization...');
-
-            // Check for existing session from electron-store
-            const storedSession = sessionStore.get('sessionUuid');
-            const storedUser = sessionStore.get('userProfile');
-
-            console.log('[AuthService] Stored session data:', {
-                hasSession: !!storedSession,
-                hasUser: !!storedUser,
-                sessionUuid: storedSession ? storedSession.substring(0, 8) + '...' : 'none',
-                userUid: storedUser?.uid || 'none',
-            });
-
-            if (storedSession && storedUser) {
-                try {
-                    console.log('[AuthService] Attempting to validate stored session...');
-                    // Validate existing session
-                    const userProfile = await validateSession(storedSession);
-                    await this.handleUserSignIn(userProfile, storedSession);
-                    console.log('[AuthService] ✅ Successfully restored session from storage for user:', userProfile.uid);
-                } catch (error) {
-                    console.log('[AuthService] ❌ Stored session invalid, clearing:', error.message);
-                    sessionStore.clear();
-                    this.handleUserSignOut();
-                }
-            } else {
-                console.log('[AuthService] No stored session found, remaining unauthenticated');
-                this.handleUserSignOut();
-            }
-
-            this.broadcastUserState();
-            this.isInitialized = true;
-            console.log('[AuthService] ✅ Initialization completed. Current user:', this.getCurrentUserId());
-            resolve();
-        });
-
+        this.initializationPromise = this.restoreStoredSession();
         return this.initializationPromise;
     }
 
-    async handleUserSignIn(userProfile, sessionUuid) {
-        const previousUser = this.currentUser;
+    private async restoreStoredSession(): Promise<void> {
+        log.info('Starting initialization');
 
-        console.log(`[AuthService] User signed in:`, userProfile.uid);
+        // Check for existing session from electron-store
+        const storedSession = readStoredSession();
+        const storedUser = readStoredUser();
+
+        log.info(
+            {
+                hasSession: !!storedSession,
+                hasUser: !!storedUser,
+                sessionUuid: storedSession ? shortId(storedSession) : 'none',
+                uid: storedUser?.uid ?? 'none',
+            },
+            'Stored session data'
+        );
+
+        if (storedSession && storedUser) {
+            try {
+                log.info({ sessionUuid: shortId(storedSession) }, 'Validating stored session');
+                // Validate existing session
+                const userProfile = await validateSession(storedSession);
+                await this.handleUserSignIn({ userProfile, sessionUuid: storedSession });
+                log.info({ uid: userProfile.uid }, 'Restored session from storage');
+            } catch (error) {
+                log.info({ error: errorMessage(error) }, 'Stored session invalid, clearing');
+                sessionStore.clear();
+                this.handleUserSignOut();
+            }
+        } else {
+            log.info('No stored session found, remaining unauthenticated');
+            this.handleUserSignOut();
+        }
+
+        this.broadcastUserState();
+        this.isInitialized = true;
+        log.info({ uid: this.getCurrentUserId() }, 'Initialization completed');
+    }
+
+    async handleUserSignIn({ userProfile, sessionUuid }: { userProfile: UserProfile; sessionUuid: string }): Promise<void> {
+        log.info({ uid: userProfile.uid }, 'User signed in');
 
         // Ensure the user exists in the local SQLite database
         try {
-            await userRepository.findOrCreate(userProfile);
-            console.log('[AuthService] User data synchronized with local database');
-        } catch (error) {
-            console.error('[AuthService] Failed to sync user to local database:', error);
+            userRepository.findOrCreate(userProfile);
+            log.info({ uid: userProfile.uid }, 'User data synchronized with local database');
+        } catch (err) {
             // Don't fail the sign-in process, but log the error
+            log.error({ err, uid: userProfile.uid }, 'Failed to sync user to local database');
         }
 
         this.currentUser = userProfile;
@@ -137,39 +208,14 @@ class AuthService {
         sessionStore.set('sessionUuid', sessionUuid);
         sessionStore.set('userProfile', userProfile);
 
-        // Clean up any zombie sessions from a previous run for this user.
-        // await sessionRepository.endAllActiveSessions();
-
         // NOTE: Don't end sessions here - we want to preserve unfinished sessions for crash recovery
         // Sessions are only ended on explicit sign-out (see signOut() and handleUserSignOut())
-
-        // Check for and run data migration for the user
-        // Migration service disabled - using local-first data strategy with webapp authentication
-
-        // Update model state with user plan information
-        if (global.modelStateService && typeof global.modelStateService.setUserPlan === 'function') {
-            try {
-                await global.modelStateService.setUserPlan(userProfile.plan, userProfile.apiQuota);
-                console.log(`[AuthService] User plan (${userProfile.plan}) has been processed and state updated.`);
-            } catch (error) {
-                console.error('[AuthService] Failed to update model state with user plan:', error);
-            }
-        }
     }
 
-    handleUserSignOut() {
-        const previousUser = this.currentUser;
-
-        console.log(`[AuthService] User signed out or no session found.`);
-        if (previousUser) {
-            console.log(`[AuthService] Clearing user data for logged-out user: ${previousUser.uid}`);
-            if (global.modelStateService && typeof global.modelStateService.setUserPlan === 'function') {
-                try {
-                    global.modelStateService.setUserPlan(null, null);
-                } catch (e) {
-                    console.warn('[AuthService] Failed to clear user plan during logout:', e.message);
-                }
-            }
+    handleUserSignOut(): void {
+        log.info('User signed out or no session found');
+        if (this.currentUser) {
+            log.info({ uid: this.currentUser.uid }, 'Clearing user data for logged-out user');
         }
 
         this.currentUser = null;
@@ -181,13 +227,13 @@ class AuthService {
         sessionStore.clear();
 
         // End active sessions for the unauthenticated state
-        sessionRepository.endAllActiveSessions();
+        void sessionRepository.endAllActiveSessions();
     }
 
-    async startWebappAuthFlow() {
+    async startWebappAuthFlow(): Promise<{ success: true; sessionUuid: string } | { success: false; error: string }> {
         try {
             // 1. Initialize session with webapp
-            console.log('[AuthService] Initializing session with webapp...');
+            log.info('Initializing session with webapp');
             const initResponse = await fetch(WEBAPP_CONFIG.sessionInitUrl, {
                 method: 'POST',
                 headers: {
@@ -199,42 +245,39 @@ class AuthService {
                 throw new Error(`Session initialization failed: ${initResponse.status}`);
             }
 
-            const initData = await initResponse.json();
-            if (!initData.success || !initData.data?.session_uuid) {
+            const initData = ApiEnvelopeSchema.extend({ data: SessionInitDataSchema }).safeParse(await initResponse.json());
+            if (!initData.success || !initData.data.success) {
                 throw new Error('Invalid session initialization response');
             }
 
-            const sessionUuid = initData.data.session_uuid;
-            console.log('[AuthService] Session initialized:', sessionUuid);
+            const sessionUuid = initData.data.data.session_uuid;
+            log.info({ sessionUuid: shortId(sessionUuid) }, 'Session initialized');
 
             // 2. Open browser to session page
-            const sessionUrl = `${WEBAPP_CONFIG.sessionPageUrl}/${sessionUuid}`;
-            console.log(`[AuthService] Opening session URL: ${sessionUrl}`);
-            await shell.openExternal(sessionUrl);
+            log.info({ sessionUuid: shortId(sessionUuid) }, 'Opening session page');
+            await shell.openExternal(`${WEBAPP_CONFIG.sessionPageUrl}/${sessionUuid}`);
 
             // Note: No polling needed - authentication will complete via deep link callback
-            console.log('[AuthService] Waiting for deep link authentication callback...');
+            log.info('Waiting for deep link authentication callback');
 
             return { success: true, sessionUuid };
-        } catch (error) {
-            console.error('[AuthService] Failed to start webapp auth flow:', error);
-            return { success: false, error: error.message };
+        } catch (err) {
+            log.error({ err }, 'Failed to start webapp auth flow');
+            return { success: false, error: errorMessage(err) };
         }
     }
 
-    async signInWithSession(sessionUuid, userInfo = null) {
+    async signInWithSession({ sessionUuid, userInfo = null }: { sessionUuid: string; userInfo?: DeepLinkUser | null }): Promise<void> {
         try {
-            let userProfile;
-
             // Always validate the session with the webapp to get complete user profile including plan
             // This prevents jarring UI transitions in the header when deep links don't include plan info
-            console.log('[AuthService] Validating session with webapp to get complete user profile...');
-            userProfile = await validateSession(sessionUuid);
+            log.info({ sessionUuid: shortId(sessionUuid) }, 'Validating session with webapp to get complete user profile');
+            let userProfile = await validateSession(sessionUuid);
 
             // If userInfo is provided (from deep link), merge it with validated profile
             // but prioritize the validated profile data (especially plan information)
             if (userInfo && userInfo.uid && userInfo.email) {
-                console.log('[AuthService] Merging deep link user data with validated profile:', userInfo);
+                log.info({ uid: userInfo.uid }, 'Merging deep link user data with validated profile');
                 userProfile = {
                     ...userProfile,
                     // Keep validated profile data, but use displayName from deep link if it's more complete
@@ -243,87 +286,56 @@ class AuthService {
             }
 
             // Handle user sign-in
-            await this.handleUserSignIn(userProfile, sessionUuid);
+            await this.handleUserSignIn({ userProfile, sessionUuid });
 
-            console.log(`[AuthService] Successfully signed in with session for user:`, userProfile.uid);
+            log.info({ uid: userProfile.uid }, 'Signed in with session');
             this.broadcastUserState();
-        } catch (error) {
-            console.error('[AuthService] Error signing in with session:', error);
-            throw error; // Re-throw to be handled by the caller
+        } catch (err) {
+            log.error({ err }, 'Error signing in with session');
+            throw err; // Re-throw to be handled by the caller
         }
     }
 
-    async signOut() {
+    async signOut(): Promise<void> {
         try {
             // End all active sessions for the current user BEFORE signing out.
             await sessionRepository.endAllActiveSessions();
 
             this.handleUserSignOut();
-            console.log('[AuthService] User sign-out initiated successfully.');
+            log.info('User sign-out completed');
             this.broadcastUserState();
-        } catch (error) {
-            console.error('[AuthService] Error signing out:', error);
+        } catch (err) {
+            log.error({ err }, 'Error signing out');
         }
     }
 
-    broadcastUserState() {
+    // Sends the user state to every window. On sign-out it also clears the dashboard's copy of the
+    // user in localStorage and reloads the window.
+    //
+    // Kept as it behaves today: the duplicate check and the old sign-in branch read `uid`, `mode` and
+    // `displayName`, which `getCurrentUser()` does not return. So a broadcast is skipped only when
+    // `isLoggedIn` is unchanged, and nothing is synced into localStorage on sign-in. 4a-2 decides.
+    broadcastUserState(): void {
         const userState = this.getCurrentUser();
 
         // Prevent duplicate broadcasts with same user state
-        const userStateKey = `${userState.uid}-${userState.mode}-${userState.isLoggedIn}`;
+        const userStateKey = `isLoggedIn:${userState.isLoggedIn}`;
         if (this.lastBroadcastUserState === userStateKey) {
-            console.log('[AuthService] Skipping duplicate broadcast for same user state');
+            log.info('Skipping duplicate broadcast for same user state');
             return;
         }
         this.lastBroadcastUserState = userStateKey;
 
-        console.log('[AuthService] Broadcasting user state change:', userState);
+        log.info({ uid: userState.currentUserId, isLoggedIn: userState.isLoggedIn }, 'Broadcasting user state change');
 
         // Send user state to all Electron windows
         BrowserWindow.getAllWindows().forEach(win => {
             if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
                 win.webContents.send('user-state-changed', userState);
 
-                // 🔥 CRITICAL FIX: Sync user data to local webapp localStorage
-                if (userState.isLoggedIn && userState.mode === 'webapp') {
-                    // Inject user data into local webapp's localStorage
-                    const userProfile = {
-                        uid: userState.uid,
-                        display_name: userState.displayName,
-                        email: userState.email,
-                    };
-
-                    console.log('[AuthService] 🔄 Syncing user to local webapp localStorage:', userProfile);
-
-                    // Execute JavaScript in the webapp webview to update localStorage
-                    win.webContents
-                        .executeJavaScript(
-                            `
-                        try {
-                            // Update localStorage with user data
-                            localStorage.setItem('whisper_user', JSON.stringify(${JSON.stringify(userProfile)}));
-                            
-                            // Trigger userInfoChanged event to notify React components
-                            window.dispatchEvent(new Event('userInfoChanged'));
-                            
-                            console.log('🔄 Local webapp user data synchronized:', ${JSON.stringify(userProfile)});
-                        } catch (error) {
-                            console.error('❌ Failed to sync user to localStorage:', error);
-                        }
-                    `
-                        )
-                        .catch(error => {
-                            console.log('[AuthService] Failed to execute localStorage sync script:', error.message);
-                        });
-                    // Gentle reload to ensure dashboard fetches data for the new user
-                    try {
-                        win.webContents.reloadIgnoringCache();
-                    } catch (e) {
-                        console.warn('[AuthService] Failed to reload window after login:', e?.message || e);
-                    }
-                } else if (!userState.isLoggedIn || userState.mode === 'unauthenticated') {
+                if (!userState.isLoggedIn) {
                     // Clear user data from local webapp localStorage when signed out or unauthenticated
-                    console.log('[AuthService] 🗑️ Clearing user from local webapp localStorage (unauthenticated)');
+                    log.info({ windowId: win.id }, 'Clearing user from local webapp localStorage');
 
                     win.webContents
                         .executeJavaScript(
@@ -337,36 +349,30 @@ class AuthService {
                         }
                     `
                         )
-                        .catch(error => {
-                            console.log('[AuthService] Failed to execute localStorage clear script:', error.message);
+                        .catch((error: unknown) => {
+                            log.info({ windowId: win.id, error: errorMessage(error) }, 'Failed to execute localStorage clear script');
                         });
                     // Redirect/reload to a neutral state
                     try {
                         win.webContents.reloadIgnoringCache();
-                    } catch (e) {
-                        console.warn('[AuthService] Failed to reload window after logout:', e?.message || e);
+                    } catch (error) {
+                        log.warn({ windowId: win.id, error: errorMessage(error) }, 'Failed to reload window after logout');
                     }
                 }
             }
         });
     }
 
-    getCurrentUserId() {
-        const result = this.currentUserId || null;
-        return result;
+    getCurrentUserId(): string | null {
+        return this.currentUserId || null;
     }
 
-    // Internal utility to allow temporary scoping by uid during IPC requests
-    setCurrentUserId(uid) {
-        this.currentUserId = uid || null;
-    }
-
-    isAuthenticated() {
+    isAuthenticated(): boolean {
         return !!(this.currentUserMode === 'webapp' && this.currentUser && this.currentUserId);
     }
 
     getCurrentUser() {
-        const userState = {
+        return {
             currentUserMode: this.currentUserMode,
             hasCurrentUser: !!this.currentUserId,
             currentUserId: this.currentUserId,
@@ -383,27 +389,6 @@ class AuthService {
                   }
                 : null,
         };
-        return userState;
-    }
-
-    // Method to refresh user profile data
-    async refreshUserProfile() {
-        if (this.sessionUuid && this.currentUserMode === 'webapp') {
-            try {
-                const userProfile = await validateSession(this.sessionUuid);
-                this.currentUser = userProfile;
-                sessionStore.set('userProfile', userProfile);
-                this.broadcastUserState();
-                return userProfile;
-            } catch (error) {
-                console.error('[AuthService] Failed to refresh user profile:', error);
-                // Session might be expired, sign out
-                this.handleUserSignOut();
-                this.broadcastUserState();
-                throw error;
-            }
-        }
-        return null;
     }
 }
 

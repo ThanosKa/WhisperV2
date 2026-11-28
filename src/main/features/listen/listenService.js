@@ -533,7 +533,7 @@ class ListenService {
             }
 
             if (title) {
-                await sessionRepository.updateTitle(sessionId, title);
+                await sessionRepository.updateTitle({ id: sessionId, title });
             }
         } catch (err) {
             console.warn('[ListenService] Error in _generateAndSaveMeetingTitle:', err.message);
@@ -609,7 +609,7 @@ class ListenService {
             // Update the session title if a better one was generated
             if (summaryData.title && summaryData.title !== 'Meeting Summary') {
                 try {
-                    await sessionRepository.updateTitle(sessionId, summaryData.title);
+                    await sessionRepository.updateTitle({ id: sessionId, title: summaryData.title });
                     console.log(`[DB] 📝 Session ${sessionId} title updated: "${summaryData.title}" (profile: comprehensive_summary)`);
                 } catch (titleError) {
                     console.warn('[ListenService] Could not update title:', titleError.message);

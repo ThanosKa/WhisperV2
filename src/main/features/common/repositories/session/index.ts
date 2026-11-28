@@ -1,76 +1,86 @@
 import * as sqliteRepository from './sqlite.repository';
+import type { SessionType } from './sqlite.repository';
+import type { AuthService } from '../../services/authService';
+import { logger } from '../../utils/logger';
 
-let authService = null;
+export type { SessionRow, SessionType } from './sqlite.repository';
 
-function setAuthService(service) {
+const log = logger.child({ module: 'SessionRepository' });
+
+// authService sets itself here in its constructor; importing it would close a cycle at load.
+let authService: Pick<AuthService, 'getCurrentUserId'> | null = null;
+
+function setAuthService(service: Pick<AuthService, 'getCurrentUserId'>): void {
     authService = service;
 }
 
 function getBaseRepository() {
-    if (!authService) {
-        // Fallback or error if authService is not set, to prevent crashes.
-        // During initial load, it might not be set, so we default to sqlite.
-        return sqliteRepository;
-    }
     // Always use SQLite for local-first data strategy
     // Firebase repository disabled in favor of webapp authentication with local storage
     return sqliteRepository;
+}
+
+function currentUserId(): string | null {
+    if (!authService) {
+        throw new Error('SessionRepository used before authService was set');
+    }
+    return authService.getCurrentUserId();
 }
 
 // The adapter layer that injects the UID
 const sessionRepositoryAdapter = {
     setAuthService, // Expose the setter
 
-    getById: id => getBaseRepository().getById(id),
+    getById: (id: string) => getBaseRepository().getById(id),
 
-    create: (type = 'ask') => {
-        const uid = authService.getCurrentUserId();
+    create: (type: SessionType = 'ask') => {
+        const uid = currentUserId();
         if (!uid) {
-            console.warn('[SessionRepository] Cannot create session: user not authenticated');
+            log.warn('Cannot create session: user not authenticated');
             return null;
         }
-        return getBaseRepository().create(uid, type);
+        return getBaseRepository().create({ uid, type });
     },
 
     getAllByUserId: () => {
-        const uid = authService.getCurrentUserId();
+        const uid = currentUserId();
         if (!uid) {
-            console.warn('[SessionRepository] Cannot get sessions: user not authenticated');
+            log.warn('Cannot get sessions: user not authenticated');
             return [];
         }
         return getBaseRepository().getAllByUserId(uid);
     },
 
-    updateTitle: (id, title) => getBaseRepository().updateTitle(id, title),
+    updateTitle: ({ id, title }: { id: string; title: string }) => getBaseRepository().updateTitle({ id, title }),
 
-    deleteWithRelatedData: id => getBaseRepository().deleteWithRelatedData(id),
+    deleteWithRelatedData: (id: string) => getBaseRepository().deleteWithRelatedData(id),
 
-    end: id => getBaseRepository().end(id),
+    end: (id: string) => getBaseRepository().end(id),
 
-    updateType: (id, type) => getBaseRepository().updateType(id, type),
+    updateType: ({ id, type }: { id: string; type: SessionType }) => getBaseRepository().updateType({ id, type }),
 
-    touch: id => getBaseRepository().touch(id),
+    touch: (id: string) => getBaseRepository().touch(id),
 
-    getOrCreateActive: (requestedType = 'ask') => {
-        const uid = authService.getCurrentUserId();
+    getOrCreateActive: (requestedType: SessionType = 'ask') => {
+        const uid = currentUserId();
         if (!uid) {
-            console.warn('[SessionRepository] Cannot get/create active session: user not authenticated');
+            log.warn('Cannot get or create active session: user not authenticated');
             return null;
         }
-        return getBaseRepository().getOrCreateActive(uid, requestedType);
+        return getBaseRepository().getOrCreateActive({ uid, requestedType });
     },
 
     endAllActiveSessions: () => {
-        const uid = authService.getCurrentUserId();
+        const uid = currentUserId();
         if (!uid) {
-            console.log('[SessionRepository] Skipping endAllActiveSessions: user not authenticated');
+            log.info('Skipping endAllActiveSessions: user not authenticated');
             return Promise.resolve();
         }
         return getBaseRepository().endAllActiveSessions(uid);
     },
 
     findLatestUnfinishedListen: () => {
-        const uid = authService.getCurrentUserId();
+        const uid = currentUserId();
         if (!uid) return null;
         return getBaseRepository().findLatestUnfinishedListen(uid);
     },

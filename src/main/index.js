@@ -7,6 +7,8 @@
 
 // First import, so `.env` is loaded before any other module reads `process.env`.
 import 'dotenv/config';
+// Then the environment, parsed once: a wrong value stops startup here with the variable's name.
+import { env } from './features/common/config/env';
 
 import { app, BrowserWindow, shell, ipcMain, dialog, desktopCapturer, session, screen } from 'electron';
 import path from 'node:path';
@@ -517,7 +519,7 @@ function setupWebDataHandlers() {
                     // Adapter injects UID
                     const id = await sessionRepository.create('ask');
                     if (payload && payload.title) {
-                        await sessionRepository.updateTitle(id, payload.title);
+                        await sessionRepository.updateTitle({ id, title: payload.title });
                     }
                     result = { id };
                     break;
@@ -543,7 +545,7 @@ function setupWebDataHandlers() {
                         result = { success: false, error: 'Unauthorized' };
                         break;
                     }
-                    result = await sessionRepository.updateTitle(payload.id, payload.title);
+                    result = await sessionRepository.updateTitle({ id: payload.id, title: payload.title });
                     break;
 
                 // USER
@@ -571,7 +573,7 @@ function setupWebDataHandlers() {
                     break;
                 case 'update-preset':
                     // Adapter injects UID
-                    result = await presetRepository.update(payload.id, payload.data);
+                    result = await presetRepository.update({ id: payload.id, changes: payload.data });
                     settingsService.notifyPresetUpdate('updated', payload.id, payload.data.title);
                     break;
 
@@ -689,7 +691,7 @@ async function handleWebappAuthCallback(params) {
         }
 
         // Use authService to sign in with session and user data
-        await authService.signInWithSession(sessionUuid, userInfo);
+        await authService.signInWithSession({ sessionUuid, userInfo });
 
         console.log('[Auth] Successfully signed in with session UUID:', sessionUuid);
 
@@ -745,7 +747,7 @@ function listenOn({ expressApp, port }) {
 }
 
 async function startWebStack() {
-    console.log('NODE_ENV =', process.env.NODE_ENV);
+    console.log('NODE_ENV =', env.NODE_ENV);
     const isDev = !app.isPackaged;
 
     const getAvailablePort = () => {
@@ -840,7 +842,7 @@ async function startWebStack() {
 
 // Auto-update initialization
 async function initAutoUpdater() {
-    if (process.env.NODE_ENV === 'development') {
+    if (env.NODE_ENV === 'development') {
         console.log('Development environment, skipping auto-updater.');
         return;
     }

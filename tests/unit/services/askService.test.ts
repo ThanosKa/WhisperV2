@@ -395,16 +395,16 @@ describe('AskService', () => {
 
                 await askService.sendMessage('✨ What should I say next?', ['me: hi', 'them: hello'], 'sales', false);
 
-                expect(stream).toHaveBeenCalledWith(
-                    expect.objectContaining({
+                expect(stream).toHaveBeenCalledWith({
+                    payload: expect.objectContaining({
                         profile: 'sales_next',
                         role: 'You are a sales assistant helping sell CRM software.',
                         context: expect.objectContaining({
                             transcript: expect.any(String),
                         }),
                     }),
-                    expect.any(Object)
-                );
+                    signal: expect.any(Object),
+                });
             });
 
             test('includes role in payload for email intent', async () => {
@@ -425,13 +425,13 @@ describe('AskService', () => {
 
                 await askService.sendMessage('✉️ Draft a follow-up email', ['me: interview went well'], 'recruiting', false);
 
-                expect(stream).toHaveBeenCalledWith(
-                    expect.objectContaining({
+                expect(stream).toHaveBeenCalledWith({
+                    payload: expect.objectContaining({
                         profile: 'recruiting_email',
                         role: 'You are a recruiting assistant.',
                     }),
-                    expect.any(Object)
-                );
+                    signal: expect.any(Object),
+                });
             });
         });
 

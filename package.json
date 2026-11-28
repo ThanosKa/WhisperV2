@@ -25,7 +25,7 @@
         "build:all": "pnpm run build:renderer && pnpm run build:web",
         "watch:renderer": "node build.js --watch",
         "test": "vitest run && pnpm run test:jest",
-        "test:jest": "jest && pnpm --filter whisper-frontend run test",
+        "test:jest": "jest",
         "test:watch": "jest --watch",
         "test:coverage": "jest --coverage",
         "test:unit": "jest tests/unit",

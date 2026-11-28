@@ -1,284 +1,163 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ActivityPage from '@/app/activity/page';
-import * as api from '@/utils/api';
-import * as auth from '@/utils/auth';
+import { desktop, holdApi, makeMeeting, makeQuestion, makeUser, sentRequests, server } from './support/desktop';
+import { scrollIntoView } from './support/intersection-observer';
 
-jest.mock('@/utils/api');
-jest.mock('@/utils/auth');
+const router = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => router }));
 
-const mockGetMeetingsPage = api.getMeetingsPage as jest.MockedFunction<typeof api.getMeetingsPage>;
-const mockGetQuestionsPage = api.getQuestionsPage as jest.MockedFunction<typeof api.getQuestionsPage>;
-const mockGetConversationStats = api.getConversationStats as jest.MockedFunction<typeof api.getConversationStats>;
-const mockDeleteSession = api.deleteSession as jest.MockedFunction<typeof api.deleteSession>;
-const mockUseRedirectIfNotAuth = auth.useRedirectIfNotAuth as jest.MockedFunction<typeof auth.useRedirectIfNotAuth>;
+/** The card of the session with this title. */
+const card = async (title: string) => {
+    const link = (await screen.findByText(title)).closest('a');
+    if (!link) throw new Error(`No session card around ${title}`);
+    return within(link);
+};
 
 describe('ActivityPage', () => {
-    const mockUser = {
-        uid: 'user-1',
-        display_name: 'Test User',
-        email: 'test@example.com',
-    };
-
-    const mockMeetings = [
-        {
-            id: 'meeting-1',
-            uid: 'user-1',
-            title: 'Team Sync',
-            session_type: 'listen',
-            started_at: Math.floor(Date.now() / 1000) - 3600,
-            ended_at: Math.floor(Date.now() / 1000) - 1800,
-            sync_state: 'clean' as const,
-            updated_at: Math.floor(Date.now() / 1000) - 1800,
-        },
-        {
-            id: 'meeting-2',
-            uid: 'user-1',
-            title: 'Product Review',
-            session_type: 'listen',
-            started_at: Math.floor(Date.now() / 1000) - 7200,
-            ended_at: Math.floor(Date.now() / 1000) - 5400,
-            sync_state: 'clean' as const,
-            updated_at: Math.floor(Date.now() / 1000) - 5400,
-        },
-    ];
-
-    const mockQuestions = [
-        {
-            id: 'question-1',
-            uid: 'user-1',
-            title: 'Question #1',
-            session_type: 'ask',
-            started_at: Math.floor(Date.now() / 1000) - 3600,
-            sync_state: 'clean' as const,
-            updated_at: Math.floor(Date.now() / 1000) - 3600,
-        },
-    ];
-
     beforeEach(() => {
-        jest.clearAllMocks();
-        mockUseRedirectIfNotAuth.mockReturnValue(mockUser);
-        mockGetMeetingsPage.mockResolvedValue({
-            items: mockMeetings,
-            nextOffset: null,
-            total: mockMeetings.length,
-        });
-        mockGetQuestionsPage.mockResolvedValue({
-            items: mockQuestions,
-            nextOffset: null,
-            total: mockQuestions.length,
-        });
-        mockGetConversationStats.mockResolvedValue({
-            totalMeetingSeconds: 3600,
-            totalQuestions: 5,
-        });
-    });
-
-    it('renders loading state initially', async () => {
-        mockGetMeetingsPage.mockImplementation(() => new Promise(() => {}));
-        mockGetQuestionsPage.mockImplementation(() => new Promise(() => {}));
-        mockGetConversationStats.mockImplementation(() => new Promise(() => {}));
-
-        render(<ActivityPage />);
-        expect(screen.getByText(/loading your activity/i)).toBeInTheDocument();
-    });
-
-    it('renders greeting with user name', async () => {
-        render(<ActivityPage />);
-        await waitFor(() => {
-            expect(screen.getByText(/test user/i)).toBeInTheDocument();
-        });
-    });
-
-    it('renders stats cards', async () => {
-        render(<ActivityPage />);
-        await waitFor(() => {
-            expect(screen.getByText(/total time in meetings/i)).toBeInTheDocument();
-            expect(screen.getByText(/whisper uses/i)).toBeInTheDocument();
-        });
-    });
-
-    it('displays meetings tab by default', async () => {
-        render(<ActivityPage />);
-        await waitFor(() => {
-            expect(screen.getByText('Team Sync')).toBeInTheDocument();
-            expect(screen.getByText('Product Review')).toBeInTheDocument();
-        });
-    });
-
-    it('switches to questions tab', async () => {
-        const user = userEvent.setup();
-        render(<ActivityPage />);
-        await screen.findByText('Team Sync');
-
-        const questionsTab = screen.getByRole('button', { name: /questions/i });
-        await user.click(questionsTab);
-
-        await waitFor(() => {
-            expect(screen.getByText('Question #1')).toBeInTheDocument();
-            expect(screen.queryByText('Team Sync')).not.toBeInTheDocument();
-        });
-    });
-
-    it('shows empty state when no meetings', async () => {
-        mockGetMeetingsPage.mockResolvedValue({
-            items: [],
-            nextOffset: null,
-            total: 0,
-        });
-
-        render(<ActivityPage />);
-        await waitFor(() => {
-            expect(screen.getByText(/no meetings yet/i)).toBeInTheDocument();
-        });
-    });
-
-    it('shows empty state when no questions', async () => {
-        mockGetQuestionsPage.mockResolvedValue({
-            items: [],
-            nextOffset: null,
-            total: 0,
-        });
-
-        const user = userEvent.setup();
-        render(<ActivityPage />);
-        await screen.findByText('Team Sync');
-
-        const questionsTab = screen.getByRole('button', { name: /questions/i });
-        await user.click(questionsTab);
-
-        await waitFor(() => {
-            expect(screen.getByText(/no questions yet/i)).toBeInTheDocument();
-        });
-    });
-
-    it('opens delete confirmation dialog', async () => {
-        const user = userEvent.setup();
-        render(<ActivityPage />);
-        await screen.findByText('Team Sync');
-
-        const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
-        await user.click(deleteButtons[0]);
-
-        await waitFor(() => {
-            expect(screen.getByText(/are you sure you want to delete/i)).toBeInTheDocument();
-        });
-    });
-
-    it('deletes session on confirmation', async () => {
-        mockDeleteSession.mockResolvedValue(undefined);
-        mockGetMeetingsPage.mockResolvedValue({
-            items: [mockMeetings[0]],
-            nextOffset: null,
-            total: 1,
-        });
-
-        const user = userEvent.setup();
-        render(<ActivityPage />);
-        await waitFor(() => {
-            expect(screen.getByText('Team Sync')).toBeInTheDocument();
-        });
-
-        const deleteButtons = screen.getAllByRole('button', { name: /delete/i });
-        await user.click(deleteButtons[0]);
-
-        await waitFor(() => {
-            expect(screen.getByText(/are you sure/i)).toBeInTheDocument();
-        });
-
-        const confirmButton = screen.getByRole('button', { name: /delete/i });
-        await user.click(confirmButton);
-
-        await waitFor(() => {
-            expect(mockDeleteSession).toHaveBeenCalledWith('meeting-1');
-        });
-    });
-
-    it('loads more meetings on scroll', async () => {
-        const moreMeetings = [
-            ...mockMeetings,
-            {
-                id: 'meeting-3',
-                uid: 'user-1',
-                title: 'Sprint Planning',
-                session_type: 'listen',
-                started_at: Math.floor(Date.now() / 1000) - 10800,
-                ended_at: Math.floor(Date.now() / 1000) - 9000,
-                sync_state: 'clean' as const,
-                updated_at: Math.floor(Date.now() / 1000) - 9000,
-            },
+        router.push.mockClear();
+        desktop.user = makeUser({ display_name: 'Test User' });
+        desktop.sessions = [
+            makeMeeting({ id: 'meeting-1', title: 'Team Sync', minutes: 30, hoursAgo: 1 }),
+            makeMeeting({ id: 'meeting-2', title: 'Product Review', minutes: 45, hoursAgo: 2 }),
+            makeQuestion({ id: 'question-1', title: 'Question #1', hoursAgo: 1 }),
         ];
+        desktop.userQuestionCount = 5;
+    });
 
-        const originalImplementation = mockGetMeetingsPage.getMockImplementation();
-        mockGetMeetingsPage.mockImplementation((offset = 0) => {
-            if (offset === 0) {
-                return Promise.resolve({
-                    items: mockMeetings,
-                    nextOffset: 2,
-                    total: 3,
-                });
-            }
-            return Promise.resolve({
-                items: [moreMeetings[2]],
-                nextOffset: null,
-                total: 3,
-            });
-        });
+    it('shows a loading state until the sessions arrive', async () => {
+        server.use(holdApi('/api/conversations/meetings'));
 
-        const originalObserver = window.IntersectionObserver;
-        let observerCallback: IntersectionObserverCallback | null = null;
-        window.IntersectionObserver = jest.fn((cb: IntersectionObserverCallback) => {
-            observerCallback = cb;
-            return {
-                observe: jest.fn(),
-                disconnect: jest.fn(),
-                unobserve: jest.fn(),
-                takeRecords: jest.fn(),
-                root: null,
-                rootMargin: '',
-                scrollMargin: '',
-                thresholds: [],
-            } as IntersectionObserver;
-        }) as unknown as typeof IntersectionObserver;
+        render(<ActivityPage />);
 
+        expect(await screen.findByText(/loading your activity/i)).toBeInTheDocument();
+    });
+
+    it('greets the desktop user by name', async () => {
+        render(<ActivityPage />);
+
+        expect(await screen.findByRole('heading', { name: /good (morning|afternoon|evening), test user/i })).toBeInTheDocument();
+    });
+
+    it('sends the user to login when the desktop has no signed-in user', async () => {
+        desktop.user = null;
+
+        render(<ActivityPage />);
+
+        await vi.waitFor(() => expect(router.push).toHaveBeenCalledWith('/login'));
+    });
+
+    it('shows the total meeting time and the number of questions', async () => {
+        render(<ActivityPage />);
+
+        expect(await screen.findByText('1h 15m')).toBeInTheDocument();
+        expect(screen.getByText(/total time in meetings/i)).toBeInTheDocument();
+        expect(screen.getByText(/whisper uses/i)).toBeInTheDocument();
+        expect(screen.getByText('5')).toBeInTheDocument();
+    });
+
+    it('lists the meetings first', async () => {
+        render(<ActivityPage />);
+
+        expect(await screen.findByText('Team Sync')).toBeInTheDocument();
+        expect(screen.getByText('Product Review')).toBeInTheDocument();
+        expect(screen.queryByText('Question #1')).not.toBeInTheDocument();
+    });
+
+    it('lists the questions on the questions tab', async () => {
+        const user = userEvent.setup();
         render(<ActivityPage />);
         await screen.findByText('Team Sync');
 
-        expect(observerCallback).toBeTruthy();
-        const initialCallCount = mockGetMeetingsPage.mock.calls.length;
-        if (observerCallback) {
-            const cb = observerCallback as IntersectionObserverCallback;
-            act(() => {
-                cb([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
-            });
-        }
+        await user.click(screen.getByRole('button', { name: 'Questions' }));
 
-        await waitFor(() => {
-            expect(mockGetMeetingsPage.mock.calls.length).toBeGreaterThan(initialCallCount);
-            expect(mockGetMeetingsPage).toHaveBeenCalledWith(2, 10);
-        }, { timeout: 3000 });
-
-        window.IntersectionObserver = originalObserver;
-        if (originalImplementation) {
-            mockGetMeetingsPage.mockImplementation(originalImplementation);
-        } else {
-            mockGetMeetingsPage.mockReset();
-        }
+        expect(await screen.findByText('Question #1')).toBeInTheDocument();
+        expect(screen.queryByText('Team Sync')).not.toBeInTheDocument();
     });
 
-    it('handles pagination correctly', async () => {
-        mockGetMeetingsPage.mockResolvedValue({
-            items: mockMeetings,
-            nextOffset: 2,
-            total: 5,
-        });
+    it('says so when there are no meetings yet', async () => {
+        desktop.sessions = [makeQuestion({ id: 'question-1', title: 'Question #1' })];
 
         render(<ActivityPage />);
-        await waitFor(() => {
-            expect(screen.getByText('Team Sync')).toBeInTheDocument();
-        });
 
-        expect(mockGetMeetingsPage).toHaveBeenCalledWith(0, 10);
+        expect(await screen.findByText(/no meetings yet/i)).toBeInTheDocument();
+    });
+
+    it('says so when there are no questions yet', async () => {
+        desktop.sessions = [makeMeeting({ id: 'meeting-1', title: 'Team Sync' })];
+        const user = userEvent.setup();
+        render(<ActivityPage />);
+        await screen.findByText('Team Sync');
+
+        await user.click(screen.getByRole('button', { name: 'Questions' }));
+
+        expect(await screen.findByText(/no questions yet/i)).toBeInTheDocument();
+    });
+
+    it('deletes a session after the user confirms', async () => {
+        const user = userEvent.setup();
+        render(<ActivityPage />);
+
+        await user.click((await card('Team Sync')).getByRole('button', { name: 'Delete' }));
+        const dialog = await screen.findByRole('dialog');
+        expect(within(dialog).getByText(/are you sure you want to delete this activity/i)).toBeInTheDocument();
+        await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+        await waitFor(() => expect(screen.queryByText('Team Sync')).not.toBeInTheDocument());
+        expect(screen.getByText('Product Review')).toBeInTheDocument();
+        expect(desktop.sessions.map(s => s.id)).not.toContain('meeting-1');
+    });
+
+    it('keeps the session when the user cancels the delete', async () => {
+        const user = userEvent.setup();
+        render(<ActivityPage />);
+
+        await user.click((await card('Team Sync')).getByRole('button', { name: 'Delete' }));
+        await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+        expect(screen.getByText('Team Sync')).toBeInTheDocument();
+        expect(sentRequests.filter(request => request.startsWith('DELETE'))).toEqual([]);
+    });
+
+    it('renames a session', async () => {
+        const user = userEvent.setup();
+        render(<ActivityPage />);
+
+        await user.click((await card('Team Sync')).getByRole('button', { name: 'Edit' }));
+        const input = screen.getByPlaceholderText(/enter title/i);
+        await user.clear(input);
+        await user.type(input, 'Weekly Sync{Enter}');
+
+        expect(await screen.findByText('Weekly Sync')).toBeInTheDocument();
+        expect(desktop.sessions.find(s => s.id === 'meeting-1')?.title).toBe('Weekly Sync');
+    });
+
+    it('loads the next page of meetings when the user scrolls to the end', async () => {
+        desktop.sessions = Array.from({ length: 12 }, (_, i) => makeMeeting({ id: `meeting-${i + 1}`, title: `Meeting ${i + 1}`, hoursAgo: i + 1 }));
+        render(<ActivityPage />);
+        expect(await screen.findByText('Meeting 10')).toBeInTheDocument();
+        expect(screen.queryByText('Meeting 11')).not.toBeInTheDocument();
+
+        scrollIntoView(screen.getByTestId('meetings-sentinel'));
+
+        expect(await screen.findByText('Meeting 12')).toBeInTheDocument();
+        expect(screen.getByText('Meeting 11')).toBeInTheDocument();
+        expect(screen.getByText('End.')).toBeInTheDocument();
+    });
+
+    it('in dev mock mode, shows the mock user and sessions without any request', async () => {
+        localStorage.setItem('dev_mock', '1');
+        const user = userEvent.setup();
+
+        render(<ActivityPage />);
+
+        expect(await screen.findByRole('heading', { name: /dev user/i })).toBeInTheDocument();
+        expect(await screen.findByText('Team Sync #1')).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Questions' }));
+        expect(await screen.findByText('Question #1')).toBeInTheDocument();
+        expect(sentRequests).toEqual([]);
     });
 });
-

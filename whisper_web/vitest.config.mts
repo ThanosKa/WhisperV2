@@ -9,8 +9,7 @@ export default defineProject({
         name: 'whisper_web',
         environment: 'jsdom',
         include: ['**/*.test.{ts,tsx}'],
-        // `__tests__/` still runs on Jest until ticket 08 moves it here.
-        exclude: ['**/node_modules/**', '.next/**', 'out/**', 'backend_node/**', '__tests__/**'],
+        exclude: ['**/node_modules/**', '.next/**', 'out/**', 'backend_node/**'],
         setupFiles: ['./vitest.setup.ts'],
     },
 });

@@ -1,4 +1,4 @@
-import { html } from '../../ui/assets/lit-core-2.7.4.min.js';
+import { html } from '../../renderer/assets/lit-core-2.7.4.min.js';
 
 export const renderTemplate = self => {
     const hasResponse = self.isLoading || self.currentResponse || self.isStreaming || self.isSearching;

@@ -47,15 +47,14 @@ npm run setup
 
 ## Dev
 
-- Desktop (bundles web): `npm run start` (builds renderer then launches Electron).
-- Renderer only watch: `npm run watch:renderer` (launch Electron separately if needed).
+- Desktop: `pnpm dev` (electron-vite: rebuilds and restarts the app on change; run `pnpm run build:web` once first). `pnpm start` builds and launches once.
 - Web UI alone: `cd whisper_web && npm run dev` (uses backend_node or mocks).
 
 ## Build / package
 
-- Renderer: `npm run build:renderer`
+- App (main, preload, renderer, with electron-vite): `pnpm run build:app`
 - Web bundle: `npm run build:web`
-- Everything (renderer + web): `npm run build:all`
+- Everything (web, then app): `npm run build:all`
 - Electron dist: `npm run build` (or `dist:mac | dist:win | dist:linux | dist:all`)
 - Package only: `npm run package`; macOS release (CI only, it publishes): `pnpm run release:mac`
 
@@ -87,5 +86,5 @@ cp .env.example .env
 
 ## Notes
 
-- Env vars: see `.env.example` for all options, `src/features/common/config/config.js` for defaults.
+- Env vars: see `.env.example` for all options, `src/main/features/common/config/config.js` for defaults.
 - Keep `whisper_web/backend_node` rebuilt (`npm run build:backend`) before packaging.

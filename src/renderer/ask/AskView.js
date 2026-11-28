@@ -1,5 +1,5 @@
-import { html, css, LitElement } from '../../ui/assets/lit-core-2.7.4.min.js';
-import { parser, parser_write, parser_end, default_renderer } from '../../ui/assets/smd.js';
+import { html, css, LitElement } from '../../renderer/assets/lit-core-2.7.4.min.js';
+import { parser, parser_write, parser_end, default_renderer } from '../../renderer/assets/smd.js';
 import { styles } from './ask-view.css.js';
 import { renderTemplate } from './AskView.template.js';
 

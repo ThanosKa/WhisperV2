@@ -1,4 +1,4 @@
-import { css } from '../../ui/assets/lit-core-2.7.4.min.js';
+import { css } from '../../renderer/assets/lit-core-2.7.4.min.js';
 
 export const styles = css`
     :host {

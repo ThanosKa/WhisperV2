@@ -176,7 +176,10 @@ const event = {
 
     // Updates
     'app:update-available': { args: z.tuple([updateInfo.extend({ releaseUrl: z.string().optional() })]) },
-    'app:update-downloaded': { args: z.tuple([updateInfo]) },
+    // All three are undefined in the second sender (index.ts initAutoUpdater), a kept bug for 4a-2
+    'app:update-downloaded': {
+        args: z.tuple([z.object({ version: z.string().optional(), releaseDate: z.string().optional(), releaseName: z.string().nullish() })]),
+    },
     'app:update-not-available': { args: z.tuple([z.object({ currentVersion: z.string() })]) },
     'app:update-error': { args: z.tuple([z.object({ error: z.string() })]) },
 };

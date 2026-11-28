@@ -1,28 +1,22 @@
-// try {
-//     const reloader = require('electron-reloader');
-//     reloader(module, {
-//     });
-// } catch (err) {
-// }
-
 // First import, so `.env` is loaded before any other module reads `process.env`.
 import 'dotenv/config';
 // Then the environment, parsed once: a wrong value stops startup here with the variable's name.
 import { env } from './features/common/config/env';
 
-import { app, BrowserWindow, shell, ipcMain, dialog, desktopCapturer, session, screen } from 'electron';
+import { app, BrowserWindow, dialog, desktopCapturer, session, screen, type Streams } from 'electron';
 import path from 'node:path';
-import fs from 'fs';
-import net from 'net';
-import { spawnSync } from 'child_process';
-import { createWindows, windowPool } from './window/windowManager.js';
+import fs from 'node:fs';
+import net from 'node:net';
+import type { Server } from 'node:http';
+import { spawnSync } from 'node:child_process';
+import { EventEmitter } from 'node:events';
+import express, { type Express } from 'express';
+import { autoUpdater, type UpdateInfo } from 'electron-updater';
+import { z } from 'zod';
+import { createWindows, windowPool } from './window/windowManager';
 import listenService from './features/listen/listenService';
 import databaseInitializer from './features/common/services/databaseInitializer';
-import authService from './features/common/services/authService';
-import express from 'express';
-import { autoUpdater } from 'electron-updater';
-import { EventEmitter } from 'events';
-import askService from './features/ask/askService';
+import authService, { type DeepLinkUser } from './features/common/services/authService';
 import * as settingsService from './features/settings/settingsService';
 import sessionRepository from './features/common/repositories/session';
 import sttRepository from './features/listen/stt/repositories';
@@ -30,9 +24,21 @@ import summaryRepository from './features/listen/summary/repositories';
 import askRepository from './features/ask/repositories';
 import userRepository from './features/common/repositories/user';
 import presetRepository from './features/common/repositories/preset';
+import { errorMessage } from './features/common/utils/errors';
+import { logger } from './features/common/utils/logger';
 import featureBridge from './bridge/featureBridge';
 import windowBridge from './bridge/windowBridge';
+import { sendEvent } from './ipc/typedIpc';
+import type { EventArgs } from '../shared/ipc';
 import createBackendApp from '../../whisper_web/backend_node/dist';
+
+const log = logger.child({ module: 'Main' });
+const protocolLog = logger.child({ module: 'Protocol' });
+const shutdownLog = logger.child({ module: 'Shutdown' });
+const webDataLog = logger.child({ module: 'WebData' });
+const customUrlLog = logger.child({ module: 'CustomUrl' });
+const authLog = logger.child({ module: 'Auth' });
+const updaterLog = logger.child({ module: 'AutoUpdater' });
 
 // Ensure consistent app name so protocol prompts say "Open Whisper" even in dev
 app.setName('Whisper');
@@ -51,11 +57,11 @@ if (process.platform === 'win32' && !app.isPackaged) {
     const needsUpdate = !stdout || !stdout.includes(correctCmd);
 
     if (needsUpdate) {
-        console.log('[Dev] Re-registering whisper:// protocol');
+        log.info('Dev: re-registering whisper:// protocol');
         // 2) set new value
         const { status, stderr } = spawnSync('reg', ['add', key, '/ve', '/d', correctCmd, '/f'], { encoding: 'utf8' });
         if (status !== 0) {
-            console.warn('[Dev] Protocol auto-registration failed:', stderr);
+            log.warn({ stderr }, 'Dev: protocol auto-registration failed');
         }
     }
 }
@@ -72,13 +78,12 @@ setupProtocolHandling();
 
 // Global variables
 const eventBridge = new EventEmitter();
-let WEB_PORT = 3000;
+// `undefined` when the dashboard build is missing and startup quits (startWebStack)
+let WEB_PORT: number | undefined = 3000;
 let isShuttingDown = false; // Flag to prevent infinite shutdown loop
 
-// Model provider management removed (server-only); no global modelStateService
-
 // Native deep link handling - cross-platform compatible
-let pendingDeepLinkUrl = null;
+let pendingDeepLinkUrl: string | null = null;
 
 function setupProtocolHandling() {
     // Protocol registration - must be done before app is ready
@@ -88,26 +93,27 @@ function setupProtocolHandling() {
             // In dev, pass the app folder as an argument so Windows launches the correct project
             let success = false;
             if (isDevRegistration) {
-                const appArg = process.argv.length >= 2 ? [path.resolve(process.argv[1])] : [];
+                const appArgument = process.argv[1];
+                const appArg = appArgument === undefined ? [] : [path.resolve(appArgument)];
                 success = app.setAsDefaultProtocolClient('whisper', process.execPath, appArg);
             } else {
                 success = app.setAsDefaultProtocolClient('whisper');
             }
             if (success) {
-                console.log('[Protocol] Successfully set as default protocol client for whisper://');
+                protocolLog.info('Set as default protocol client for whisper://');
             } else {
-                console.warn('[Protocol] Failed to set as default protocol client - this may affect deep linking');
+                protocolLog.warn('Failed to set as default protocol client - this may affect deep linking');
             }
         } else {
-            console.log('[Protocol] Already registered as default protocol client for whisper://');
+            protocolLog.info('Already registered as default protocol client for whisper://');
         }
     } catch (error) {
-        console.error('[Protocol] Error during protocol registration:', error);
+        protocolLog.error({ err: error }, 'Error during protocol registration');
     }
 
     // Handle protocol URLs on Windows/Linux
-    app.on('second-instance', (event, commandLine, workingDirectory) => {
-        console.log('[Protocol] Second instance command line:', commandLine);
+    app.on('second-instance', (_event, commandLine) => {
+        protocolLog.info({ commandLine }, 'Second instance command line');
 
         focusMainWindow();
 
@@ -134,29 +140,28 @@ function setupProtocolHandling() {
         }
 
         if (protocolUrl) {
-            console.log('[Protocol] Valid URL found from second instance:', protocolUrl);
-            handleCustomUrl(protocolUrl);
+            protocolLog.info({ url: protocolUrl }, 'Valid URL found from second instance');
+            void handleCustomUrl(protocolUrl);
         } else {
-            console.log('[Protocol] No valid protocol URL found in command line arguments');
-            console.log('[Protocol] Command line args:', commandLine);
+            protocolLog.info({ commandLine }, 'No valid protocol URL found in command line arguments');
         }
     });
 
     // Handle protocol URLs on macOS
     app.on('open-url', (event, url) => {
         event.preventDefault();
-        console.log('[Protocol] Received URL via open-url:', url);
+        protocolLog.info({ url }, 'Received URL via open-url');
 
         if (!url || !url.startsWith('whisper://')) {
-            console.warn('[Protocol] Invalid URL format:', url);
+            protocolLog.warn({ url }, 'Invalid URL format');
             return;
         }
 
         if (app.isReady()) {
-            handleCustomUrl(url);
+            void handleCustomUrl(url);
         } else {
             pendingDeepLinkUrl = url;
-            console.log('[Protocol] App not ready, storing URL for later');
+            protocolLog.info('App not ready, storing URL for later');
         }
     });
 }
@@ -172,9 +177,8 @@ function focusMainWindow() {
     }
 
     // Fallback: focus any available window
-    const windows = BrowserWindow.getAllWindows();
-    if (windows.length > 0) {
-        const mainWindow = windows[0];
+    const mainWindow = BrowserWindow.getAllWindows()[0];
+    if (mainWindow) {
         if (!mainWindow.isDestroyed()) {
             if (mainWindow.isMinimized()) mainWindow.restore();
             mainWindow.focus();
@@ -192,113 +196,97 @@ if (process.platform === 'win32') {
             const cleanUrl = arg.replace(/[\\₩]/g, '');
 
             if (!cleanUrl.includes(':') || cleanUrl.indexOf('://') === cleanUrl.lastIndexOf(':')) {
-                console.log('[Protocol] Found protocol URL in initial arguments:', cleanUrl);
+                protocolLog.info({ url: cleanUrl }, 'Found protocol URL in initial arguments');
                 pendingDeepLinkUrl = cleanUrl;
                 break;
             }
         }
     }
 
-    console.log('[Protocol] Initial process.argv:', process.argv);
+    protocolLog.info({ argv: process.argv }, 'Initial process.argv');
 }
 
-// (moved earlier)
+// Sends an event to every open window.
+function broadcast<C extends 'app:update-available' | 'app:update-not-available' | 'app:update-error' | 'app:update-downloaded'>({
+    channel,
+    args,
+}: {
+    channel: C;
+    args: EventArgs[C];
+}) {
+    BrowserWindow.getAllWindows().forEach(win => {
+        if (win && !win.isDestroyed()) {
+            sendEvent({ webContents: win.webContents, channel, args });
+        }
+    });
+}
 
-app.whenReady().then(async () => {
-    // Initialize auto-updater
-
+void app.whenReady().then(async () => {
     // Configure auto-updater
-    autoUpdater.checkForUpdatesAndNotify();
+    void autoUpdater.checkForUpdatesAndNotify();
 
     // Log update events for debugging
     autoUpdater.on('checking-for-update', () => {
-        console.log('Checking for update...');
+        updaterLog.info('Checking for update');
     });
 
-    autoUpdater.on('update-available', info => {
-        console.log('Update available:', info);
+    autoUpdater.on('update-available', (info: UpdateInfo) => {
+        updaterLog.info({ info }, 'Update available');
         // Broadcast to all windows
         if (windowPool) {
-            const allWindows = BrowserWindow.getAllWindows();
             const releaseUrl = `https://github.com/ThanosKa/whisper-desktop/releases/latest`;
-            allWindows.forEach(win => {
-                if (win && !win.isDestroyed()) {
-                    win.webContents.send('app:update-available', {
-                        version: info.version,
-                        releaseDate: info.releaseDate,
-                        releaseName: info.releaseName,
-                        releaseUrl: releaseUrl,
-                    });
-                }
+            broadcast({
+                channel: 'app:update-available',
+                args: [{ version: info.version, releaseDate: info.releaseDate, releaseName: info.releaseName, releaseUrl }],
             });
         }
     });
 
-    autoUpdater.on('update-not-available', info => {
-        console.log('Update not available:', info);
+    autoUpdater.on('update-not-available', (info: UpdateInfo) => {
+        updaterLog.info({ info }, 'Update not available');
         // Broadcast to all windows
         if (windowPool) {
-            const allWindows = BrowserWindow.getAllWindows();
-            allWindows.forEach(win => {
-                if (win && !win.isDestroyed()) {
-                    win.webContents.send('app:update-not-available', {
-                        currentVersion: app.getVersion(),
-                    });
-                }
-            });
+            broadcast({ channel: 'app:update-not-available', args: [{ currentVersion: app.getVersion() }] });
         }
     });
 
     autoUpdater.on('error', err => {
-        console.error('Auto-updater error:', err);
+        updaterLog.error({ err }, 'Auto-updater error');
         // Broadcast to all windows
         if (windowPool) {
-            const allWindows = BrowserWindow.getAllWindows();
-            allWindows.forEach(win => {
-                if (win && !win.isDestroyed()) {
-                    win.webContents.send('app:update-error', {
-                        error: err.message || 'Unknown update error',
-                    });
-                }
-            });
+            broadcast({ channel: 'app:update-error', args: [{ error: err.message || 'Unknown update error' }] });
         }
     });
 
     autoUpdater.on('download-progress', progressObj => {
-        console.log(`Download progress: ${progressObj.percent}%`);
+        updaterLog.info({ percent: progressObj.percent }, 'Download progress');
     });
 
     autoUpdater.on('update-downloaded', info => {
-        console.log('Update downloaded:', info);
+        updaterLog.info({ info }, 'Update downloaded');
         // Broadcast to all windows
         if (windowPool) {
-            const allWindows = BrowserWindow.getAllWindows();
-            allWindows.forEach(win => {
-                if (win && !win.isDestroyed()) {
-                    win.webContents.send('app:update-downloaded', {
-                        version: info.version,
-                        releaseDate: info.releaseDate,
-                        releaseName: info.releaseName,
-                    });
-                }
+            broadcast({
+                channel: 'app:update-downloaded',
+                args: [{ version: info.version, releaseDate: info.releaseDate, releaseName: info.releaseName }],
             });
         }
     });
 
     // Setup native loopback audio capture for Windows
-    session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+    session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
         try {
             // Try to detect which display the app is on (prefer Ask window)
             const askWin = windowPool.get('ask');
             const headerWin = windowPool.get('header');
             const refWin = askWin && !askWin.isDestroyed() && askWin.isVisible() ? askWin : headerWin;
 
-            let targetDisplayId = null;
+            let targetDisplayId: number | null = null;
             if (refWin && !refWin.isDestroyed()) {
                 const b = refWin.getBounds();
                 const center = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
                 const disp = screen.getDisplayNearestPoint(center);
-                targetDisplayId = disp?.id;
+                targetDisplayId = disp.id;
             }
 
             desktopCapturer
@@ -318,33 +306,27 @@ app.whenReady().then(async () => {
                             if (parsed) videoSource = parsed;
                         }
                     }
-                    callback({ video: videoSource, audio: 'loopback' });
+                    const streams: Streams = videoSource ? { video: videoSource, audio: 'loopback' } : { audio: 'loopback' };
+                    callback(streams);
                 })
                 .catch(error => {
-                    console.error('Failed to get desktop capturer sources:', error);
+                    log.error({ err: error }, 'Failed to get desktop capturer sources');
                     callback({});
                 });
         } catch (e) {
-            console.error('DisplayMediaRequestHandler error:', e);
+            log.error({ err: e }, 'DisplayMediaRequestHandler error');
             callback({});
         }
     });
 
     // Initialize core services
-    // Note: Firebase removed - using webapp authentication
-
     try {
         await databaseInitializer.initialize();
-        console.log('>>> [index.js] Database initialized successfully');
-
-        // Clean up zombie sessions from previous runs first - MOVED TO authService
-        // sessionRepository.endAllActiveSessions();
+        log.info('Database initialized');
 
         await authService.initialize();
 
-        // Removed modelStateService initialization (server-only)
-
-        featureBridge.initialize(); // Added: featureBridge initialization
+        featureBridge.initialize();
         windowBridge.initialize();
         setupWebDataHandlers();
 
@@ -353,7 +335,7 @@ app.whenReady().then(async () => {
 
         // Start web server and create windows ONLY after all initializations are successful
         WEB_PORT = await startWebStack();
-        console.log('Web front-end listening on', WEB_PORT);
+        log.info({ port: WEB_PORT }, 'Web front-end listening');
 
         createWindows();
 
@@ -368,18 +350,17 @@ app.whenReady().then(async () => {
         }
 
         // Bootstrap recovery check AFTER windows are created (so header can receive notification)
-        (async () => {
+        void (async () => {
             try {
-                console.log('[Main] Starting recovery bootstrap...');
+                log.info('Starting recovery bootstrap');
                 await listenService.bootstrapRecovery();
-                console.log('[Main] Recovery bootstrap complete');
+                log.info('Recovery bootstrap complete');
             } catch (err) {
-                console.error('[Main] Recovery bootstrap failed:', err);
+                log.error({ err }, 'Recovery bootstrap failed');
             }
         })();
     } catch (err) {
-        console.error('>>> [index.js] Database initialization failed - some features may not work', err);
-        // Optionally, show an error dialog to the user
+        log.error({ err }, 'Database initialization failed - some features may not work');
         dialog.showErrorBox(
             'Application Error',
             'A critical error occurred during startup. Some features might be disabled. Please restart the application.'
@@ -387,12 +368,12 @@ app.whenReady().then(async () => {
     }
 
     // initAutoUpdater should be called after auth is initialized
-    initAutoUpdater();
+    void initAutoUpdater();
 
     // Process any pending deep link after everything is initialized
     if (pendingDeepLinkUrl) {
-        console.log('[Protocol] Processing pending URL:', pendingDeepLinkUrl);
-        handleCustomUrl(pendingDeepLinkUrl);
+        protocolLog.info({ url: pendingDeepLinkUrl }, 'Processing pending URL');
+        void handleCustomUrl(pendingDeepLinkUrl);
         pendingDeepLinkUrl = null;
     }
 });
@@ -400,11 +381,11 @@ app.whenReady().then(async () => {
 app.on('before-quit', async event => {
     // Prevent infinite loop by checking if shutdown is already in progress
     if (isShuttingDown) {
-        console.log('[Shutdown] 🔄 Shutdown already in progress, allowing quit...');
+        shutdownLog.info('Shutdown already in progress, allowing quit');
         return;
     }
 
-    console.log('[Shutdown] App is about to quit. Starting graceful shutdown...');
+    shutdownLog.info('App is about to quit. Starting graceful shutdown');
 
     // Set shutdown flag to prevent infinite loop
     isShuttingDown = true;
@@ -415,26 +396,26 @@ app.on('before-quit', async event => {
     try {
         // 1. Stop audio capture first (immediate) - don't end session, preserve for recovery
         await listenService.stopAudioCapture();
-        console.log('[Shutdown] Audio capture stopped');
+        shutdownLog.info('Audio capture stopped');
 
         // NOTE: Don't end sessions on app close - preserve them for crash recovery
         // Sessions are only ended when user explicitly clicks "Done" or signs out
 
-        // 4. Close database connections (final cleanup)
+        // Close database connections (final cleanup)
         try {
             databaseInitializer.close();
-            console.log('[Shutdown] Database connections closed');
+            shutdownLog.info('Database connections closed');
         } catch (closeError) {
-            console.warn('[Shutdown] Error closing database:', closeError.message);
+            shutdownLog.warn({ err: closeError }, 'Error closing database');
         }
 
-        console.log('[Shutdown] Graceful shutdown completed successfully');
+        shutdownLog.info('Graceful shutdown completed successfully');
     } catch (error) {
-        console.error('[Shutdown] Error during graceful shutdown:', error);
+        shutdownLog.error({ err: error }, 'Error during graceful shutdown');
         // Continue with shutdown even if there were errors
     } finally {
         // Actually quit the app now
-        console.log('[Shutdown] Exiting application...');
+        shutdownLog.info('Exiting application');
         app.exit(0); // Use app.exit() instead of app.quit() to force quit
     }
 });
@@ -445,202 +426,202 @@ app.on('activate', () => {
     }
 });
 
-function setupWebDataHandlers() {
+// The dashboard's API (whisper_web/backend_node) asks main for data over `eventBridge`. Its payloads
+// come from HTTP requests, so each is parsed here before use.
+const SessionIdSchema = z.string();
+const CreateSessionSchema = z.looseObject({ title: z.string().optional() }).nullish();
+const UpdateSessionTitleSchema = z.object({ id: z.string(), title: z.string() });
+const UpdateUserProfileSchema = z.object({ displayName: z.string() });
+const FindOrCreateUserSchema = z.object({ uid: z.string(), displayName: z.string().nullish(), email: z.string().nullish() }).nullish();
+const UpdatePresetSchema = z.object({
+    id: z.string(),
+    data: z.object({ title: z.string().optional(), prompt: z.string().optional(), append_text: z.string().nullish() }),
+});
+const BatchIncludeSchema = z.string().optional();
 
-    const handleRequest = async (channel, responseChannel, payload) => {
-        let result;
-        // const currentUserId = authService.getCurrentUserId(); // No longer needed here
-        try {
-            switch (channel) {
-                // SESSION
-                case 'get-sessions':
-                    // Adapter injects UID
-                    result = await sessionRepository.getAllByUserId();
-                    break;
-                case 'get-session-details':
-                    const session = await sessionRepository.getById(payload);
-                    if (!session) {
-                        result = null;
-                        break;
-                    }
-                    // Ownership check: ensure the requested session belongs to the current authenticated user
-                    try {
-                        const currentUid = authService.getCurrentUserId();
-                        if (!currentUid || session.uid !== currentUid) {
-                            console.warn('[WebData] Unauthorized access to session details blocked:', {
-                                requestedSessionId: payload,
-                                sessionOwner: session.uid,
-                                currentUid,
-                            });
-                            result = null;
-                            break;
-                        }
-                    } catch (e) {
-                        console.warn('[WebData] Failed to validate session ownership:', e?.message || e);
-                        result = null;
-                        break;
-                    }
-                    const [transcripts, ai_messages, summary] = await Promise.all([
-                        sttRepository.getAllTranscriptsBySessionId(payload),
-                        askRepository.getAllAiMessagesBySessionId(payload),
-                        summaryRepository.getSummaryBySessionId(payload),
-                    ]);
-
-                    // For active sessions (ended_at is null), fetch all insights
-                    let insights = null;
-                    if (!session.ended_at) {
-                        insights = summaryRepository.getAllInsightsBySessionId(payload);
-                    }
-
-                    result = { session, transcripts, ai_messages, summary, insights };
-                    break;
-                case 'delete-session':
-                    // Ensure the session belongs to the current user before deletion
-                    try {
-                        const currentUidForDelete = authService.getCurrentUserId();
-                        const sessionForDelete = await sessionRepository.getById(payload);
-                        if (!sessionForDelete || !currentUidForDelete || sessionForDelete.uid !== currentUidForDelete) {
-                            console.warn('[WebData] Unauthorized delete-session blocked:', {
-                                requestedSessionId: payload,
-                                sessionOwner: sessionForDelete?.uid,
-                                currentUidForDelete,
-                            });
-                            result = { success: false, error: 'Unauthorized' };
-                            break;
-                        }
-                    } catch (e) {
-                        console.warn('[WebData] Failed to validate session ownership for delete:', e?.message || e);
-                        result = { success: false, error: 'Unauthorized' };
-                        break;
-                    }
-                    result = await sessionRepository.deleteWithRelatedData(payload);
-                    break;
-                case 'create-session':
-                    // Adapter injects UID
-                    const id = await sessionRepository.create('ask');
-                    if (payload && payload.title) {
-                        await sessionRepository.updateTitle({ id, title: payload.title });
-                    }
-                    result = { id };
-                    break;
-                case 'update-session-title':
-                    if (!payload || !payload.id || !payload.title) {
-                        throw new Error('id and title are required');
-                    }
-                    // Ownership check for update
-                    try {
-                        const currentUidForUpdate = authService.getCurrentUserId();
-                        const sessionForUpdate = await sessionRepository.getById(payload.id);
-                        if (!sessionForUpdate || !currentUidForUpdate || sessionForUpdate.uid !== currentUidForUpdate) {
-                            console.warn('[WebData] Unauthorized update-session-title blocked:', {
-                                requestedSessionId: payload.id,
-                                sessionOwner: sessionForUpdate?.uid,
-                                currentUidForUpdate,
-                            });
-                            result = { success: false, error: 'Unauthorized' };
-                            break;
-                        }
-                    } catch (e) {
-                        console.warn('[WebData] Failed to validate session ownership for update:', e?.message || e);
-                        result = { success: false, error: 'Unauthorized' };
-                        break;
-                    }
-                    result = await sessionRepository.updateTitle({ id: payload.id, title: payload.title });
-                    break;
-
-                // USER
-                case 'get-user-profile':
-                    // Adapter injects UID
-                    result = await userRepository.getById();
-                    break;
-                case 'update-user-profile':
-                    // Adapter injects UID
-                    result = await userRepository.update(payload);
-                    break;
-                case 'find-or-create-user':
-                    result = await userRepository.findOrCreate(payload);
-                    break;
-                // Removed save/check api key routes (server-only)
-                case 'delete-account':
-                    // Adapter injects UID
-                    result = await userRepository.deleteById();
-                    break;
-
-                // PRESET
-                case 'get-presets':
-                    // Adapter injects UID
-                    result = await presetRepository.getPresets();
-                    break;
-                case 'update-preset':
-                    // Adapter injects UID
-                    result = await presetRepository.update({ id: payload.id, changes: payload.data });
-                    settingsService.notifyPresetUpdate({ action: 'updated', presetId: payload.id, title: payload.data.title });
-                    break;
-
-                // BATCH
-                case 'get-batch-data':
-                    const includes = payload ? payload.split(',').map(item => item.trim()) : ['profile', 'presets', 'sessions'];
-                    const promises = {};
-
-                    if (includes.includes('profile')) {
-                        // Adapter injects UID
-                        promises.profile = userRepository.getById();
-                    }
-                    if (includes.includes('presets')) {
-                        // Adapter injects UID
-                        promises.presets = presetRepository.getPresets();
-                    }
-                    if (includes.includes('sessions')) {
-                        // Adapter injects UID
-                        promises.sessions = sessionRepository.getAllByUserId();
-                    }
-
-                    const batchResult = {};
-                    const promiseResults = await Promise.all(Object.values(promises));
-                    Object.keys(promises).forEach((key, index) => {
-                        batchResult[key] = promiseResults[index];
-                    });
-
-                    result = batchResult;
-                    break;
-
-                default:
-                    throw new Error(`Unknown web data channel: ${channel}`);
-            }
-            eventBridge.emit(responseChannel, { success: true, data: result });
-        } catch (error) {
-            console.error(`Error handling web data request for ${channel}:`, error);
-            eventBridge.emit(responseChannel, { success: false, error: error.message });
-        }
-    };
-
-    eventBridge.on('web-data-request', handleRequest);
+function isCurrentUsersSession({ sessionOwner, currentUid }: { sessionOwner: string | undefined; currentUid: string | null }) {
+    return !!currentUid && sessionOwner === currentUid;
 }
 
-async function handleCustomUrl(url) {
+async function getSessionDetails(payload: unknown) {
+    const sessionId = SessionIdSchema.parse(payload);
+    const session = sessionRepository.getById(sessionId);
+    if (!session) return null;
+
+    // Ownership check: ensure the requested session belongs to the current authenticated user
     try {
-        console.log('[Custom URL] Processing URL:', url);
+        const currentUid = authService.getCurrentUserId();
+        if (!isCurrentUsersSession({ sessionOwner: session.uid, currentUid })) {
+            webDataLog.warn({ requestedSessionId: sessionId, sessionOwner: session.uid, currentUid }, 'Unauthorized access to session details blocked');
+            return null;
+        }
+    } catch (e) {
+        webDataLog.warn({ err: e }, 'Failed to validate session ownership');
+        return null;
+    }
+    const [transcripts, ai_messages, summary] = await Promise.all([
+        sttRepository.getAllTranscriptsBySessionId(sessionId),
+        askRepository.getAllAiMessagesBySessionId(sessionId),
+        summaryRepository.getSummaryBySessionId(sessionId),
+    ]);
+
+    // For active sessions (ended_at is null), fetch all insights
+    const insights = session.ended_at ? null : summaryRepository.getAllInsightsBySessionId(sessionId);
+
+    return { session, transcripts, ai_messages, summary, insights };
+}
+
+async function deleteSession(payload: unknown) {
+    const sessionId = SessionIdSchema.parse(payload);
+    // Ensure the session belongs to the current user before deletion
+    try {
+        const currentUidForDelete = authService.getCurrentUserId();
+        const sessionForDelete = sessionRepository.getById(sessionId);
+        if (!sessionForDelete || !isCurrentUsersSession({ sessionOwner: sessionForDelete.uid, currentUid: currentUidForDelete })) {
+            webDataLog.warn(
+                { requestedSessionId: sessionId, sessionOwner: sessionForDelete?.uid, currentUidForDelete },
+                'Unauthorized delete-session blocked'
+            );
+            return { success: false, error: 'Unauthorized' };
+        }
+    } catch (e) {
+        webDataLog.warn({ err: e }, 'Failed to validate session ownership for delete');
+        return { success: false, error: 'Unauthorized' };
+    }
+    return sessionRepository.deleteWithRelatedData(sessionId);
+}
+
+async function createSession(payload: unknown) {
+    const body = CreateSessionSchema.parse(payload);
+    const id = sessionRepository.create('ask');
+    if (id && body && body.title) {
+        sessionRepository.updateTitle({ id, title: body.title });
+    }
+    return { id };
+}
+
+async function updateSessionTitle(payload: unknown) {
+    const parsed = UpdateSessionTitleSchema.safeParse(payload);
+    if (!parsed.success || !parsed.data.id || !parsed.data.title) {
+        throw new Error('id and title are required');
+    }
+    const { id, title } = parsed.data;
+    // Ownership check for update
+    try {
+        const currentUidForUpdate = authService.getCurrentUserId();
+        const sessionForUpdate = sessionRepository.getById(id);
+        if (!sessionForUpdate || !isCurrentUsersSession({ sessionOwner: sessionForUpdate.uid, currentUid: currentUidForUpdate })) {
+            webDataLog.warn(
+                { requestedSessionId: id, sessionOwner: sessionForUpdate?.uid, currentUidForUpdate },
+                'Unauthorized update-session-title blocked'
+            );
+            return { success: false, error: 'Unauthorized' };
+        }
+    } catch (e) {
+        webDataLog.warn({ err: e }, 'Failed to validate session ownership for update');
+        return { success: false, error: 'Unauthorized' };
+    }
+    return sessionRepository.updateTitle({ id, title });
+}
+
+async function updatePreset(payload: unknown) {
+    const { id, data } = UpdatePresetSchema.parse(payload);
+    const result = presetRepository.update({ id, changes: data });
+    settingsService.notifyPresetUpdate({ action: 'updated', presetId: id, title: data.title ?? null });
+    return result;
+}
+
+async function getBatchData(payload: unknown) {
+    const include = BatchIncludeSchema.parse(payload);
+    const includes = include ? include.split(',').map(item => item.trim()) : ['profile', 'presets', 'sessions'];
+
+    const [profile, presets, sessions] = await Promise.all([
+        includes.includes('profile') ? userRepository.getById() : undefined,
+        includes.includes('presets') ? presetRepository.getPresets() : undefined,
+        includes.includes('sessions') ? sessionRepository.getAllByUserId() : undefined,
+    ]);
+
+    // Only the parts asked for, in the order asked: profile, presets, sessions
+    return {
+        ...(includes.includes('profile') ? { profile } : {}),
+        ...(includes.includes('presets') ? { presets } : {}),
+        ...(includes.includes('sessions') ? { sessions } : {}),
+    };
+}
+
+// Each repository call below takes the current user from authService.
+async function webDataResult({ channel, payload }: { channel: string; payload: unknown }): Promise<unknown> {
+    switch (channel) {
+        // SESSION
+        case 'get-sessions':
+            return sessionRepository.getAllByUserId();
+        case 'get-session-details':
+            return getSessionDetails(payload);
+        case 'delete-session':
+            return deleteSession(payload);
+        case 'create-session':
+            return createSession(payload);
+        case 'update-session-title':
+            return updateSessionTitle(payload);
+
+        // USER
+        case 'get-user-profile':
+            return userRepository.getById();
+        case 'update-user-profile':
+            return userRepository.update(UpdateUserProfileSchema.parse(payload));
+        case 'find-or-create-user':
+            return userRepository.findOrCreate(FindOrCreateUserSchema.parse(payload));
+        case 'delete-account':
+            return userRepository.deleteById();
+
+        // PRESET
+        case 'get-presets':
+            return presetRepository.getPresets();
+        case 'update-preset':
+            return updatePreset(payload);
+
+        // BATCH
+        case 'get-batch-data':
+            return getBatchData(payload);
+
+        default:
+            throw new Error(`Unknown web data channel: ${channel}`);
+    }
+}
+
+function setupWebDataHandlers() {
+    eventBridge.on('web-data-request', async (channel: string, responseChannel: string, payload: unknown) => {
+        try {
+            const result = await webDataResult({ channel, payload });
+            eventBridge.emit(responseChannel, { success: true, data: result });
+        } catch (error) {
+            webDataLog.error({ err: error, channel }, 'Error handling web data request');
+            eventBridge.emit(responseChannel, { success: false, error: errorMessage(error) });
+        }
+    });
+}
+
+async function handleCustomUrl(rawUrl: string) {
+    try {
+        customUrlLog.info({ url: rawUrl }, 'Processing URL');
 
         // Validate and clean URL
-        if (!url || typeof url !== 'string' || !url.startsWith('whisper://')) {
-            console.error('[Custom URL] Invalid URL format:', url);
+        if (!rawUrl || typeof rawUrl !== 'string' || !rawUrl.startsWith('whisper://')) {
+            customUrlLog.error({ url: rawUrl }, 'Invalid URL format');
             return;
         }
 
         // Clean up URL by removing problematic characters
-        const cleanUrl = url.replace(/[\\₩]/g, '');
-
-        // Additional validation
-        if (cleanUrl !== url) {
-            console.log('[Custom URL] Cleaned URL from:', url, 'to:', cleanUrl);
-            url = cleanUrl;
+        const url = rawUrl.replace(/[\\₩]/g, '');
+        if (url !== rawUrl) {
+            customUrlLog.info({ from: rawUrl, to: url }, 'Cleaned URL');
         }
 
         const urlObj = new URL(url);
         const action = urlObj.hostname;
         const params = Object.fromEntries(urlObj.searchParams);
 
-        console.log('[Custom URL] Action:', action, 'Params:', params);
+        customUrlLog.info({ action, params }, 'Custom URL action');
 
         switch (action) {
             case 'login':
@@ -650,50 +631,51 @@ async function handleCustomUrl(url) {
             case 'personalize':
                 handlePersonalizeFromUrl(params);
                 break;
-            default:
+            default: {
                 const header = windowPool.get('header');
                 if (header) {
                     if (header.isMinimized()) header.restore();
                     header.focus();
 
                     const targetUrl = `http://localhost:${WEB_PORT}/${action}`;
-                    console.log(`[Custom URL] Navigating webview to: ${targetUrl}`);
-                    header.webContents.loadURL(targetUrl);
+                    customUrlLog.info({ targetUrl }, 'Navigating webview');
+                    void header.webContents.loadURL(targetUrl);
                 }
+            }
         }
     } catch (error) {
-        console.error('[Custom URL] Error parsing URL:', error);
+        customUrlLog.error({ err: error }, 'Error parsing URL');
     }
 }
 
-async function handleWebappAuthCallback(params) {
+async function handleWebappAuthCallback(params: Record<string, string>) {
     const { sessionUuid, uid, email, displayName } = params;
 
-    console.log('[Auth] Deep link callback received with params:', params);
+    authLog.info({ params }, 'Deep link callback received');
 
     if (!sessionUuid) {
-        console.error('[Auth] Webapp auth callback is missing session UUID.');
+        authLog.error('Webapp auth callback is missing session UUID');
         return;
     }
 
-    console.log('[Auth] Received session UUID from deep link, validating session...');
+    authLog.info('Received session UUID from deep link, validating session');
 
     try {
         // Prepare user data from deep link parameters if available
-        let userInfo = null;
+        let userInfo: DeepLinkUser | null = null;
         if (uid && email) {
             userInfo = {
                 uid: uid,
                 email: email,
                 displayName: displayName ? decodeURIComponent(displayName) : 'User',
             };
-            console.log('[Auth] Using user data from deep link:', userInfo);
+            authLog.info({ userInfo }, 'Using user data from deep link');
         }
 
         // Use authService to sign in with session and user data
         await authService.signInWithSession({ sessionUuid, userInfo });
 
-        console.log('[Auth] Successfully signed in with session UUID:', sessionUuid);
+        authLog.info({ sessionUuid }, 'Signed in with session UUID');
 
         // Focus the app window
         const header = windowPool.get('header');
@@ -701,20 +683,20 @@ async function handleWebappAuthCallback(params) {
             if (header.isMinimized()) header.restore();
             header.focus();
         } else {
-            console.error('[Auth] Header window not found after auth callback.');
+            authLog.error('Header window not found after auth callback');
         }
     } catch (error) {
-        console.error('[Auth] Error during session validation or sign-in:', error);
+        authLog.error({ err: error }, 'Error during session validation or sign-in');
         // The UI will not change, and the user can try again.
         const header = windowPool.get('header');
         if (header) {
-            header.webContents.send('auth-failed', { message: error.message });
+            sendEvent({ webContents: header.webContents, channel: 'auth-failed', args: [{ message: errorMessage(error) }] });
         }
     }
 }
 
-function handlePersonalizeFromUrl(params) {
-    console.log('[Custom URL] Personalize params:', params);
+function handlePersonalizeFromUrl(params: Record<string, string>) {
+    customUrlLog.info({ params }, 'Personalize params');
 
     const header = windowPool.get('header');
 
@@ -723,70 +705,57 @@ function handlePersonalizeFromUrl(params) {
         header.focus();
 
         const personalizeUrl = `http://localhost:${WEB_PORT}/settings`;
-        console.log(`[Custom URL] Navigating to personalize page: ${personalizeUrl}`);
-        header.webContents.loadURL(personalizeUrl);
-
-        BrowserWindow.getAllWindows().forEach(win => {
-            win.webContents.send('enter-personalize-mode', {
-                message: 'Personalization mode activated',
-                params: params,
-            });
-        });
+        customUrlLog.info({ personalizeUrl }, 'Navigating to personalize page');
+        void header.webContents.loadURL(personalizeUrl);
     } else {
-        console.error('[Custom URL] Header window not found for personalize');
+        customUrlLog.error('Header window not found for personalize');
     }
 }
 
 // Express 5 passes a listen error to the callback instead of throwing it.
-function listenOn({ expressApp, port }) {
-    return new Promise((resolve, reject) => {
+function listenOn({ expressApp, port }: { expressApp: Express; port: number }) {
+    return new Promise<Server>((resolve, reject) => {
         const server = expressApp.listen(port, '127.0.0.1', err => (err ? reject(err) : resolve(server)));
         server.on('error', reject);
         app.once('before-quit', () => server.close());
     });
 }
 
-async function startWebStack() {
-    console.log('NODE_ENV =', env.NODE_ENV);
-    const isDev = !app.isPackaged;
-
-    const getAvailablePort = () => {
-        return new Promise((resolve, reject) => {
-            const server = net.createServer();
-            server.listen(0, err => {
-                if (err) reject(err);
-                const port = server.address().port;
-                server.close(() => resolve(port));
-            });
+function getAvailablePort() {
+    return new Promise<number>((resolve, reject) => {
+        const server = net.createServer();
+        server.listen(0, () => {
+            const address = server.address();
+            if (address === null || typeof address === 'string') {
+                reject(new Error('The port probe has no TCP address'));
+                return;
+            }
+            server.close(() => resolve(address.port));
         });
-    };
+    });
+}
+
+async function startWebStack(): Promise<number | undefined> {
+    log.info({ nodeEnv: env.NODE_ENV }, 'Starting web stack');
 
     const apiPort = await getAvailablePort();
     const frontendPort = await getAvailablePort();
 
-    console.log(`🔧 Allocated ports: API=${apiPort}, Frontend=${frontendPort}`);
+    log.info({ apiPort, frontendPort }, 'Allocated ports');
 
     process.env.whisper_API_PORT = apiPort.toString();
     process.env.whisper_API_URL = `http://localhost:${apiPort}`;
     process.env.whisper_WEB_PORT = frontendPort.toString();
     process.env.whisper_WEB_URL = `http://localhost:${frontendPort}`;
 
-    console.log(`🌍 Environment variables set:`, {
-        whisper_API_URL: process.env.whisper_API_URL,
-        whisper_WEB_URL: process.env.whisper_WEB_URL,
-    });
+    log.info({ whisper_API_URL: process.env.whisper_API_URL, whisper_WEB_URL: process.env.whisper_WEB_URL }, 'Environment variables set');
 
     const nodeApi = createBackendApp(eventBridge);
 
     const staticDir = app.isPackaged ? path.join(process.resourcesPath, 'out') : path.join(__dirname, '..', '..', 'whisper_web', 'out');
 
-
     if (!fs.existsSync(staticDir)) {
-        console.error(`============================================================`);
-        console.error(`[ERROR] Frontend build directory not found!`);
-        console.error(`Path: ${staticDir}`);
-        console.error(`Please run 'npm run build' inside the 'whisper_web' directory first.`);
-        console.error(`============================================================`);
+        log.error({ staticDir }, "Frontend build directory not found. Run 'pnpm run build:web' first.");
         app.quit();
         return;
     }
@@ -801,12 +770,12 @@ async function startWebStack() {
     const tempDir = app.getPath('temp');
     const configPath = path.join(tempDir, 'runtime-config.json');
     fs.writeFileSync(configPath, JSON.stringify(runtimeConfig, null, 2));
-    console.log(`📝 Runtime config created in temp location: ${configPath}`);
+    log.info({ configPath }, 'Runtime config created in temp location');
 
     const frontSrv = express();
 
     // When frontend requests /runtime-config.json, serve the file from temp folder
-    frontSrv.get('/runtime-config.json', (req, res) => {
+    frontSrv.get('/runtime-config.json', (_req, res) => {
         res.sendFile(configPath);
     });
 
@@ -824,18 +793,15 @@ async function startWebStack() {
 
     await listenOn({ expressApp: frontSrv, port: frontendPort });
 
-    console.log(`✅ Frontend server started on http://localhost:${frontendPort}`);
+    log.info({ url: `http://localhost:${frontendPort}` }, 'Frontend server started');
 
     const apiSrv = express();
     apiSrv.use(nodeApi);
 
     await listenOn({ expressApp: apiSrv, port: apiPort });
 
-    console.log(`✅ API server started on http://localhost:${apiPort}`);
-
-    console.log(`🚀 All services ready:
-   Frontend: http://localhost:${frontendPort}
-   API:      http://localhost:${apiPort}`);
+    log.info({ url: `http://localhost:${apiPort}` }, 'API server started');
+    log.info({ frontend: `http://localhost:${frontendPort}`, api: `http://localhost:${apiPort}` }, 'All services ready');
 
     return frontendPort;
 }
@@ -843,46 +809,33 @@ async function startWebStack() {
 // Auto-update initialization
 async function initAutoUpdater() {
     if (env.NODE_ENV === 'development') {
-        console.log('Development environment, skipping auto-updater.');
+        updaterLog.info('Development environment, skipping auto-updater');
         return;
     }
 
     try {
         await autoUpdater.checkForUpdates();
-        autoUpdater.on('update-available', info => {
-            console.log('Update available!', info);
+        autoUpdater.on('update-available', (info: UpdateInfo) => {
+            updaterLog.info({ info }, 'Update available, downloading');
             // Broadcast to all windows
-            const allWindows = BrowserWindow.getAllWindows();
-            allWindows.forEach(win => {
-                if (win && !win.isDestroyed()) {
-                    win.webContents.send('app:update-available', {
-                        version: info.version,
-                        releaseDate: info.releaseDate,
-                        releaseName: info.releaseName,
-                    });
-                }
+            broadcast({
+                channel: 'app:update-available',
+                args: [{ version: info.version, releaseDate: info.releaseDate, releaseName: info.releaseName }],
             });
-            autoUpdater.downloadUpdate();
+            void autoUpdater.downloadUpdate();
         });
-        autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName, date, url) => {
-            console.log('Update downloaded:', releaseNotes, releaseName, date, url);
+        // Kept bug (4a-2): this listener read `(event, releaseNotes, releaseName, date, url)`, but
+        // electron-updater passes only the event, so the version, date and name it sent were undefined.
+        autoUpdater.on('update-downloaded', event => {
+            updaterLog.info({ event }, 'Update downloaded');
             // Broadcast to all windows
-            const allWindows = BrowserWindow.getAllWindows();
-            allWindows.forEach(win => {
-                if (win && !win.isDestroyed()) {
-                    win.webContents.send('app:update-downloaded', {
-                        version: releaseName,
-                        releaseDate: date,
-                        releaseName: releaseName,
-                    });
-                }
-            });
+            broadcast({ channel: 'app:update-downloaded', args: [{ version: undefined, releaseDate: undefined, releaseName: undefined }] });
             // Don't show dialog automatically - let UI handle it
         });
         autoUpdater.on('error', err => {
-            console.error('Error in auto-updater:', err);
+            updaterLog.error({ err }, 'Error in auto-updater');
         });
     } catch (err) {
-        console.error('Error initializing auto-updater:', err);
+        updaterLog.error({ err }, 'Error initializing auto-updater');
     }
 }

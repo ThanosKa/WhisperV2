@@ -70,8 +70,10 @@ mac:
     category: public.app-category.utilities
     # Path to the .icns icon file
     icon: src/ui/assets/wlogo.icns
-    # Minimum macOS version (supports both Intel and Apple Silicon)
-    minimumSystemVersion: '11.0'
+    # Minimum macOS version, written to Info.plist as LSMinimumSystemVersion. Electron 44 and
+    # later need macOS 13. The update feed carries the same floor as a Darwin version (see
+    # scripts/add-mac-feed-minimum-system-version.js).
+    minimumSystemVersion: '13.0'
     hardenedRuntime: true
     entitlements: entitlements.plist
     entitlementsInherit: entitlements.plist

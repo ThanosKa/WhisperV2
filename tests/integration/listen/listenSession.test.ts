@@ -124,9 +124,7 @@ describe('Listen button', () => {
         expect(connection.headers['x-session-uuid']).toBe('desktop-session-uuid');
         expect(connection.received[0]).toMatchObject({ type: 'OPEN', streams: ['me', 'them'] });
 
-        const sessionId = m.listenService.getCurrentSessionData().sessionId;
-        expect(sessionId).toEqual(expect.any(String));
-        const session = m.sessionRepository.getById(sessionId);
+        const session = m.sessionRepository.getById(currentSessionId());
         expect(session).toMatchObject({ uid: 'user-1', session_type: 'listen', ended_at: null });
         expect(m.listenService.isSessionActive()).toBe(true);
         m.internalBridge.removeAllListeners('window:requestVisibility');
@@ -304,11 +302,11 @@ describe('Live transcription', () => {
     });
 
     test('microphone audio goes to the relay on the me stream', async () => {
-        const before = await m.listenService.handleSendMicAudioContent('AAAA', 'audio/pcm;rate=24000');
+        const before = await m.listenService.handleSendMicAudioContent({ data: 'AAAA', mimeType: 'audio/pcm;rate=24000' });
         expect(before).toEqual({ success: false, error: 'User STT session not active' });
 
         await m.listenService.handleListenRequest('Listen');
-        const result = await m.listenService.handleSendMicAudioContent('AAAA', 'audio/pcm;rate=24000');
+        const result = await m.listenService.handleSendMicAudioContent({ data: 'AAAA', mimeType: 'audio/pcm;rate=24000' });
 
         expect(result).toEqual({ success: true });
         await vi.waitFor(() =>
@@ -321,7 +319,7 @@ describe('Live transcription', () => {
     test('system audio goes to the relay on the them stream', async () => {
         await m.listenService.handleListenRequest('Listen');
 
-        const result = await m.listenService.sttService.sendSystemAudioContent('BBBB', undefined);
+        const result = await m.listenService.sttService.sendSystemAudioContent({ data: 'BBBB', mimeType: undefined });
 
         expect(result).toEqual({ success: true });
         await vi.waitFor(() =>
@@ -512,7 +510,7 @@ describe('Recovering a session left open by a crash', () => {
         const sessionId = leaveSessionOpen();
         await m.listenService.bootstrapRecovery();
 
-        const result = await m.listenService.handleRecoveryAction('resume', sessionId);
+        const result = await m.listenService.handleRecoveryAction({ action: 'resume', sessionId });
 
         expect(result).toEqual({ success: true });
         expect(lastResult()).toEqual({ success: true, nextStatus: 'inSession' });
@@ -534,7 +532,7 @@ describe('Recovering a session left open by a crash', () => {
         const sessionId = leaveSessionOpen();
         await m.listenService.bootstrapRecovery();
 
-        const result = await m.listenService.handleRecoveryAction('finalize', sessionId);
+        const result = await m.listenService.handleRecoveryAction({ action: 'finalize', sessionId });
 
         expect(result).toEqual({ success: true });
         expect(m.listenService.getStrandedSessionInfo()).toBeNull();
@@ -547,7 +545,7 @@ describe('Recovering a session left open by a crash', () => {
         leaveSessionOpen();
         await m.listenService.bootstrapRecovery();
 
-        const result = await m.listenService.handleRecoveryAction('dismiss', 'other-session');
+        const result = await m.listenService.handleRecoveryAction({ action: 'dismiss', sessionId: 'other-session' });
 
         expect(result).toEqual({ success: false, error: 'Session mismatch' });
         expect(m.listenService.getStrandedSessionInfo()).not.toBeNull();

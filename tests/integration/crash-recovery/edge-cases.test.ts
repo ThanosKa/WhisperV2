@@ -222,7 +222,7 @@ describe('Crash Recovery - Edge Cases', () => {
 
         // First detection
         listenService.strandedSession = await listenService.findStrandedSession();
-        await listenService.handleRecoveryAction('dismiss', 'session-123');
+        await listenService.handleRecoveryAction({ action: 'dismiss', sessionId: 'session-123' });
 
         expect(listenService.isRecoveryDismissed).toBe(true);
 
@@ -249,7 +249,7 @@ describe('Crash Recovery - Edge Cases', () => {
         mockInsightsRepo.getAllInsightsBySessionId.mockReturnValue([]);
 
         listenService.strandedSession = await listenService.findStrandedSession();
-        const result = await listenService.handleRecoveryAction('finalize', 'session-123');
+        const result = await listenService.handleRecoveryAction({ action: 'finalize', sessionId: 'session-123' });
 
         expect(result.success).toBe(true);
         await new Promise(setImmediate);
@@ -273,7 +273,7 @@ describe('Crash Recovery - Edge Cases', () => {
 
         listenService.strandedSession = await listenService.findStrandedSession();
 
-        const result = await listenService.handleRecoveryAction('finalize', 'session-123');
+        const result = await listenService.handleRecoveryAction({ action: 'finalize', sessionId: 'session-123' });
 
         expect(result.success).toBe(true);
         expect(listenService.strandedSession).toBeNull();

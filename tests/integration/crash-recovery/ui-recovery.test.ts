@@ -165,7 +165,7 @@ describe('Crash Recovery - UI Recovery', () => {
         mockInsightsRepo.getAllInsightsBySessionId.mockReturnValue([]);
 
         listenService.strandedSession = await listenService.findStrandedSession();
-        const result = await listenService.handleRecoveryAction('resume', 'session-123');
+        const result = await listenService.handleRecoveryAction({ action: 'resume', sessionId: 'session-123' });
 
         expect(result.success).toBe(true);
         expect(mockSummaryService.hydrateConversation).toHaveBeenCalled();
@@ -187,7 +187,7 @@ describe('Crash Recovery - UI Recovery', () => {
         mockInsightsRepo.getAllInsightsBySessionId.mockReturnValue([]);
 
         listenService.strandedSession = await listenService.findStrandedSession();
-        const result = await listenService.handleRecoveryAction('finalize', 'session-123');
+        const result = await listenService.handleRecoveryAction({ action: 'finalize', sessionId: 'session-123' });
 
         expect(result.success).toBe(true);
     });
@@ -208,7 +208,7 @@ describe('Crash Recovery - UI Recovery', () => {
         mockInsightsRepo.getAllInsightsBySessionId.mockReturnValue([]);
 
         listenService.strandedSession = await listenService.findStrandedSession();
-        const result = await listenService.handleRecoveryAction('dismiss', 'session-123');
+        const result = await listenService.handleRecoveryAction({ action: 'dismiss', sessionId: 'session-123' });
 
         expect(result.success).toBe(true);
         expect(listenService.strandedSession).toBeNull();

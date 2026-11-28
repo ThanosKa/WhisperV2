@@ -151,11 +151,11 @@ export default {
         });
 
         // Listen
-        ipcMain.handle('listen:sendMicAudio', async (event, { data, mimeType }) => await listenService.handleSendMicAudioContent(data, mimeType));
+        ipcMain.handle('listen:sendMicAudio', async (event, { data, mimeType }) => await listenService.handleSendMicAudioContent({ data, mimeType }));
         ipcMain.handle('listen:sendSystemAudio', async (event, { data, mimeType }) => {
-            const result = await listenService.sttService.sendSystemAudioContent(data, mimeType);
+            const result = await listenService.sttService.sendSystemAudioContent({ data, mimeType });
             if (result.success) {
-                listenService.sendToRenderer('system-audio-data', { data });
+                listenService.sendToRenderer({ channel: 'system-audio-data', data: { data } });
             }
             return result;
         });
@@ -196,7 +196,7 @@ export default {
         // Recovery actions
         ipcMain.handle('listen:handleRecoveryAction', async (event, action, sessionId) => {
             try {
-                return await listenService.handleRecoveryAction(action, sessionId);
+                return await listenService.handleRecoveryAction({ action, sessionId });
             } catch (error) {
                 console.error('[FeatureBridge] Recovery action failed:', error);
                 return { success: false, error: error.message };

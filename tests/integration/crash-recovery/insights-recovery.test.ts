@@ -114,7 +114,7 @@ describe('Crash Recovery - Insights Recovery', () => {
 
         expect(result).not.toBeNull();
         expect(result?.insights).toHaveLength(1);
-        expect(result?.insights[0].payload.summary).toHaveLength(1);
+        expect(result?.insights[0]?.payload.summary).toHaveLength(1);
     });
 
     test('should recover ALL insight rounds (not just latest)', async () => {
@@ -155,8 +155,8 @@ describe('Crash Recovery - Insights Recovery', () => {
         const result = await listenService.findStrandedSession();
 
         expect(result?.insights).toHaveLength(3);
-        expect(result?.insights[0].payload.summary).toHaveLength(1);
-        expect(result?.insights[2].payload.summary).toHaveLength(3);
+        expect(result?.insights[0]?.payload.summary).toHaveLength(1);
+        expect(result?.insights[2]?.payload.summary).toHaveLength(3);
     });
 
     test('should send insights to UI in correct order', async () => {
@@ -354,8 +354,8 @@ describe('Crash Recovery - Insights Recovery', () => {
         const result = await listenService.findStrandedSession();
 
         expect(result?.insights).toHaveLength(5);
-        expect(result?.insights[0].payload.summary).toEqual(['Crash1-A']);
-        expect(result?.insights[4].payload.summary).toEqual(['Crash2-C']);
+        expect(result?.insights[0]?.payload.summary).toEqual(['Crash1-A']);
+        expect(result?.insights[4]?.payload.summary).toEqual(['Crash2-C']);
     });
 
     test('should recover all insights after 3rd crash including all rounds', async () => {
@@ -386,7 +386,7 @@ describe('Crash Recovery - Insights Recovery', () => {
         const result = await listenService.findStrandedSession();
 
         expect(result?.insights).toHaveLength(7);
-        expect(result?.insights[0].payload.summary).toEqual(['C1-A']);
-        expect(result?.insights[6].payload.summary).toEqual(['C3-B']);
+        expect(result?.insights[0]?.payload.summary).toEqual(['C1-A']);
+        expect(result?.insights[6]?.payload.summary).toEqual(['C3-B']);
     });
 });

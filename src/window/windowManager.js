@@ -75,6 +75,12 @@ const showScreenshotWindow = (base64Data, position) => {
         const header = windowPool.get('header');
         if (header) {
             createFeatureWindows(header, ['screenshot']);
+            // The page can take longer than 100 ms to load (Electron 45), and data sent before it
+            // listens is lost: send the data again once the page has loaded.
+            const createdWin = windowPool.get('screenshot');
+            createdWin.webContents.once('did-finish-load', () => {
+                if (!createdWin.isDestroyed()) createdWin.webContents.send('screenshot:data', base64Data);
+            });
             // Wait a bit for window to be created, then show
             setTimeout(() => {
                 const newWin = windowPool.get('screenshot');

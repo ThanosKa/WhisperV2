@@ -36,6 +36,28 @@ export async function findWindow({ electronApp, view }: { electronApp: ElectronA
     return electronApp.windows().find(predicate) ?? (await electronApp.waitForEvent('window', { predicate }));
 }
 
+// The windows the app opens at start, next to the header, on a logged-in profile.
+const STARTUP_VIEWS = ['listen', 'ask', 'settings', 'plan'];
+
+// Waits until the header and the feature windows opened with it have loaded their pages. The app
+// sends a window its state over IPC when the header is used, and a page still loading misses it.
+// On Electron 45 the development app's feature windows finish loading up to about 0.7 s after the
+// header, so a test that clicked at once could act before a person could.
+async function waitForStartupWindows({ electronApp }: { electronApp: ElectronApplication }) {
+    await expect
+        .poll(
+            () =>
+                electronApp.evaluate(({ BrowserWindow }, views) => {
+                    const loaded = BrowserWindow.getAllWindows()
+                        .filter(win => !win.webContents.isLoading() && win.webContents.getURL() !== '')
+                        .map(win => new URL(win.webContents.getURL()).searchParams.get('view'));
+                    return views.every(view => loaded.includes(view));
+                }, STARTUP_VIEWS),
+            { message: 'the startup windows finished loading', timeout: 20_000 },
+        )
+        .toBe(true);
+}
+
 export const test = base.extend<Fixtures>({
     fakeServer: async ({}, use) => {
         const fakeServer = await startFakeServer();
@@ -69,6 +91,7 @@ export const test = base.extend<Fixtures>({
                 },
             });
             launched.push(electronApp);
+            await waitForStartupWindows({ electronApp });
             return electronApp;
         });
         // The apps close before the fake server (a fixture they depend on) stops.

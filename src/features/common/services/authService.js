@@ -1,6 +1,5 @@
 const { BrowserWindow, shell } = require('electron');
-const fetch = require('node-fetch');
-const Store = require('electron-store');
+const Store = require('electron-store').default;
 const sessionRepository = require('../repositories/session');
 const providerSettingsRepository = require('../repositories/providerSettings');
 

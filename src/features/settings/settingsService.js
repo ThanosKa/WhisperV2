@@ -1,5 +1,5 @@
 const { ipcMain, BrowserWindow } = require('electron');
-const Store = require('electron-store');
+const Store = require('electron-store').default;
 const authService = require('../common/services/authService');
 const settingsRepository = require('./repositories');
 const { windowPool } = require('../../window/windowManager');

@@ -1,0 +1,19 @@
+packages:
+    - whisper_web
+
+# A flat, npm-like node_modules: what electron-builder packages from.
+nodeLinker: hoisted
+
+# Packages whose install scripts may run. Everything else is denied.
+allowBuilds:
+    esbuild: true
+    electron-winstaller: false
+
+# Install the optional binaries (sharp's @img/*) for both macOS architectures, for the universal build.
+supportedArchitectures:
+    os: [current]
+    cpu: [current, x64, arm64]
+
+permissions:
+  dotenv:
+    skills: false

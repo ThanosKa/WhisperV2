@@ -21,4 +21,22 @@ describe('useAuth', () => {
 
         expect(profileRequests()).toBe(2);
     });
+
+    it('in dev mock mode gives the mock user from the first render, without asking the desktop', () => {
+        localStorage.setItem('dev_mock', '1');
+
+        const { result } = renderHook(() => useAuth());
+
+        expect(result.current).toEqual({
+            user: { uid: 'dev_user', display_name: 'Dev User', email: 'dev@example.com' },
+            isLoading: false,
+            mode: 'webapp',
+        });
+        expect(JSON.parse(localStorage.getItem('whisper_user') ?? 'null')).toEqual({
+            uid: 'dev_user',
+            display_name: 'Dev User',
+            email: 'dev@example.com',
+        });
+        expect(sentRequests).toEqual([]);
+    });
 });

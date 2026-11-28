@@ -49,6 +49,11 @@ function listenToPayload<C extends 'app:update-available' | 'app:update-download
     ipcRenderer.on(channel, (_event: IpcRendererEvent, ...args: EventArgs[C]) => callback(...args));
 }
 
+// Two windows call each of these under the same name.
+const adjustWindowHeight = (winName: string, height: number) => invoke({ channel: 'adjust-window-height', args: [{ winName, height }] });
+const handleRecoveryAction = (action: RecoveryAction, sessionId: string) =>
+    invoke({ channel: 'listen:handleRecoveryAction', args: [action, sessionId] });
+
 const api = {
     // Platform information for renderer processes
     platform: {
@@ -142,8 +147,7 @@ const api = {
             unlisten({ channel: 'listen-window-visibility', listener: callback }),
 
         // Recovery actions
-        handleRecoveryAction: (action: RecoveryAction, sessionId: string) =>
-            invoke({ channel: 'listen:handleRecoveryAction', args: [action, sessionId] }),
+        handleRecoveryAction,
         onStrandedSessionDetected: (callback: Listener<'listen:stranded-session-detected'>) =>
             listen({ channel: 'listen:stranded-session-detected', listener: callback }),
         removeOnStrandedSessionDetected: (callback: Listener<'listen:stranded-session-detected'>) =>
@@ -162,8 +166,7 @@ const api = {
         removeOnShow: () => unlistenAll('recovery-toast:show'),
         onHide: (callback: Listener<'recovery-toast:hide'>) => listen({ channel: 'recovery-toast:hide', listener: callback }),
         removeOnHide: () => unlistenAll('recovery-toast:hide'),
-        handleRecoveryAction: (action: RecoveryAction, sessionId: string) =>
-            invoke({ channel: 'listen:handleRecoveryAction', args: [action, sessionId] }),
+        handleRecoveryAction,
     },
 
     // Quota/usage updates broadcast from main process
@@ -194,7 +197,7 @@ const api = {
     askView: {
         // Window Management
         closeAskWindow: () => invoke({ channel: 'ask:closeAskWindow', args: [] }),
-        adjustWindowHeight: (winName: string, height: number) => invoke({ channel: 'adjust-window-height', args: [{ winName, height }] }),
+        adjustWindowHeight,
 
         // Message Handling
         sendMessage: (text: string, useScreenCapture = true, webSearchEnabled = false) =>
@@ -222,7 +225,7 @@ const api = {
     // src/renderer/listen/ListenView.js
     listenView: {
         // Window Management
-        adjustWindowHeight: (winName: string, height: number) => invoke({ channel: 'adjust-window-height', args: [{ winName, height }] }),
+        adjustWindowHeight,
         onForceHeightRecalc: (callback: Listener<'force-height-recalc'>) => listen({ channel: 'force-height-recalc', listener: callback }),
 
         // Analysis Preset Management

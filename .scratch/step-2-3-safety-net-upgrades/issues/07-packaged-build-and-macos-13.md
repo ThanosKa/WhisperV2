@@ -120,3 +120,11 @@ End-of-spec run 2026-11-28: packaged app passed, with one flaky test. `pnpm run 
   - One-off check, no network: the real command on a scratch folder of five dummy files, with no `GH_TOKEN`, `GITHUB_TOKEN` or `GITHUB_RELEASE_TOKEN` set. electron-builder logged "error publishing ... GitHub Personal Access Token is not set" (thrown before any request) and the command exited 1.
 - **The `publish` script is deleted.** It uploaded a macOS feed without the floor, and nothing ran it (CI runs `release:mac`). The README line that named it now names `release:mac`. This replaces the "Left for step 9" note above.
 - **Justified scope, kept:** `js-yaml` (the feed step parses and writes `latest-mac.yml` with it), `npmRebuild: false` and `mac.x64ArchFiles` (both explained under "Build config changes" above: nothing native is compiled at packaging time, and the universal merge failed without the second).
+
+### 2026-11-28, review-fixes run (branch `step-2-3-review-fixes`)
+
+After all review fixes, `pnpm run build:all`, then the Electron suite once per app. The Playwright suite now lists 14 tests: the 10 Electron tests and the 4 fake-server tests (no app launched).
+- Root Jest 130 passed (124 + 2 Screenshot-window + 4 release tests). `whisper_web` Jest 49 passed, lint clean, type-check exit 0. `tsc --strict` on `tests/e2e/*.ts`: clean apart from the existing missing `@types/ws`.
+- Development app, one full run of `pnpm run test:e2e` (load 4.0): 11 of 14 passed in 47.0 s. The 3 failures were screenshots at the new exact match (`threshold: 0`): Screenshot window, Listen window, Plan window. All smoke tests and the other screenshots passed. Ticket 02's comments have the measurements and the fix.
+- Development app, the screenshot spec rerun once after that fix (with `threshold: 0.1`, no pixel allowance; load 4.5): 5 of 6 passed in 28.4 s. Listen failed on 2 pixels of its select arrow. The final tolerance (`threshold: 0.1`, `maxDiffPixels: 5`) was then checked offline with Playwright's own image comparator on the saved images of both development runs: all pass. The development suite was not run again (one run, one rerun).
+- Packaged app: `pnpm run package:e2e` exit 0, then `WHISPER_E2E_APP=packaged pnpm run test:e2e`, one full run with the final tolerance (load 5.0): 14 of 14 passed in 34.2 s. No flake, no rerun.

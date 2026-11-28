@@ -67,9 +67,25 @@ Playwright prints "Internal error: step id not found: fixture@NN" when a test fa
 ### 2026-11-28, review fixes (branch `step-2-3-review-fixes`)
 
 The code review of steps 2-3 found these in the suite; all are fixed except the one skipped below.
-- **Screenshots were not exact.** `toHaveScreenshot(name)` used Playwright's default `threshold: 0.2`, which lets each pixel's colour differ. The call now passes `threshold: 0` (with the default `maxDiffPixels: 0`), the exact match this ticket asks for. The baselines are unchanged.
+- **Screenshots were not exact.** `toHaveScreenshot(name)` used Playwright's default `threshold: 0.2`, which lets each pixel's colour differ. The call was set to `threshold: 0` (with the default `maxDiffPixels: 0`), the exact match this ticket asks for. Exact proved unstable; it ends on a measured tolerance, see "Exact match measured" below. The baselines are unchanged.
 - **The fake server's unknown requests are a union on `kind`** (`http`, `websocket`, `relay`, `failed`) instead of strings with a prefix. Relay messages are parsed once into an `OPEN | AUDIO | CLOSE` union; a message that does not parse, or an `AUDIO` on a stream other than `me` or `them`, is recorded as unknown. `tests/e2e/fakeServer.spec.ts` (4 tests) tests the fake on its own, without launching the app, so the Playwright suite now lists 14 tests: these 4 and the 10 Electron tests.
 - **Shared code:** `tests/e2e/flows.ts` holds the Ask flow, the Listen flow and the Listen-button selector that both specs copied; `tests/e2e/appRoot.ts` the one `APP_ROOT`. The Listen screenshot now also waits for the Listen button's `active` class, as Smoke 3 does.
 - **Types:** `RunningApp` names the `{ electronApp, headerWindow }` pair; the launch-options type derives from `electron.launch`; `STARTUP_VIEWS` `satisfies AppView[]`. Every helper takes one object argument.
 - **Narration comments** listed by the review are deleted; the workaround comments stay.
 - **Skipped: a branded type for the fake session id.** The id is one constant inside the test fake, compared in one place; a brand would guard nothing a reader cannot see.
+
+**Exact match measured, tolerance set (review fixes).** With `threshold: 0` the first full development run failed 3 screenshots. Measured on the saved images (largest per-pixel YIQ distance, Playwright's `threshold` scale):
+- Screenshot window: 14,591 pixels differ, at most 0.058: the edges of the scaled fake-screen image and the frame. Rendering noise.
+- Plan window: 92 pixels, at most 0.057: text anti-aliasing. Rendering noise.
+- Listen window: 2,405 pixels, at most 0.17: the "Show Insights" toggle button was hovered. Not noise. The test's own click on "Show Transcript" left Playwright's mouse on that button, and Chromium drops a hover only on the next mouse event, so `pointer-events: none` did not clear it. The default `threshold: 0.2` had hidden this. Fixed in the test: the mouse moves once more after the stable-look stylesheet goes in. The baseline has no hover, so it stays.
+- After that fix, the rerun of the screenshot spec with `threshold: 0.1` failed Listen on 2 pixels of its select arrow (0.22), the same 2 pixels in both runs.
+
+The comparison now uses `threshold: 0.1` and `maxDiffPixels: 5`, the smallest that passes every measured image with a margin (`threshold: 0.1` alone fails the 2 arrow pixels). Limit, recorded on purpose: a change as faint as a hover background (about 0.08 per pixel on Listen's grey) would also pass; the suite removes hover itself instead. No baseline image changed.
+
+### 2026-11-28, review-fixes run (branch `step-2-3-review-fixes`)
+
+After all review fixes, `pnpm run build:all`, then the Electron suite once per app. The Playwright suite now lists 14 tests: the 10 Electron tests and the 4 fake-server tests (no app launched).
+- Root Jest 130 passed (124 + 2 Screenshot-window + 4 release tests). `whisper_web` Jest 49 passed, lint clean, type-check exit 0. `tsc --strict` on `tests/e2e/*.ts`: clean apart from the existing missing `@types/ws`.
+- Development app, one full run of `pnpm run test:e2e` (load 4.0): 11 of 14 passed in 47.0 s. The 3 failures were screenshots at the new exact match (`threshold: 0`): Screenshot window, Listen window, Plan window. All smoke tests and the other screenshots passed. Ticket 02's comments have the measurements and the fix.
+- Development app, the screenshot spec rerun once after that fix (with `threshold: 0.1`, no pixel allowance; load 4.5): 5 of 6 passed in 28.4 s. Listen failed on 2 pixels of its select arrow. The final tolerance (`threshold: 0.1`, `maxDiffPixels: 5`) was then checked offline with Playwright's own image comparator on the saved images of both development runs: all pass. The development suite was not run again (one run, one rerun).
+- Packaged app: `pnpm run package:e2e` exit 0, then `WHISPER_E2E_APP=packaged pnpm run test:e2e`, one full run with the final tolerance (load 5.0): 14 of 14 passed in 34.2 s. No flake, no rerun.

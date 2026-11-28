@@ -32,13 +32,13 @@ Nothing the user sees changes, in the desktop app or in the dashboard.
 
 ### Shared tooling
 
-1. As the owner, I want one ESLint 10 flat config at the `WhisperV2` root for both the desktop app and the dashboard, so that one set of rules covers all the TypeScript I own.
-2. As the owner, I want the mechanical rules of `CODING_STANDARDS.md` enforced by lint (no `any`, no type assertions, no non-null `!`, no `console`, exhaustive `switch`, object arguments), so that an agent cannot skip them.
-3. As the owner, I want `pnpm lint` to work in the root, so that the command that fails today becomes a real check.
+1. As the owner, I want the linter (oxlint) set up by its own agent outside this spec, so that this spec does not choose lint rules and only keeps the code passing whatever `pnpm lint` checks.
+2. As the owner, I want the mechanical rules of `CODING_STANDARDS.md` followed in the code this spec writes (no `any`, no type assertions, no non-null `!`, no `console`, exhaustive `switch`, object arguments), whether or not the linter checks them yet, so that the oxlint setup finds little to fix.
+3. As the owner, I want each ticket to pass `pnpm lint` as it stands when the ticket runs, so that the two efforts do not break each other.
 4. As the owner, I want one strict base TypeScript config that the app and the dashboard extend, so that strictness is set in one place.
 5. As the owner, I want Vitest to run the root and dashboard tests from one command, so that the agent and CI run one test step.
 6. As the owner, I want CI to run lint, type-check and tests for the whole repo on every pull request to `dev`, so that a break is caught before it merges.
-7. As an agent, I want lint failures to never be silenced with `eslint-disable`, so that a rule is either followed or changed in the config on purpose.
+7. As an agent, I want lint failures never silenced with a disable comment, so that a rule is either followed or changed in the config on purpose.
 
 ### 4a-1: build
 
@@ -110,20 +110,19 @@ Nothing the user sees changes, in the desktop app or in the dashboard.
 
 ### Order and tickets
 
-- **Ticket 1, shared tooling, blocks both tracks:** the root ESLint config, the base TypeScript config, Vitest at the root with one project per package, and CI. Each package's own files join lint and type-check in its own track.
-- **Then two tracks in parallel.** 4a-1 touches `src/`, `tests/`, the build and the packaging config. 4b-1 touches `whisper_web/`, except `whisper_web/backend_node/`. Shared files (root `package.json`, `pnpm-lock.yaml`, the ESLint config) can conflict: a branch rebases on `dev` and re-runs `pnpm install` before its PR.
-- **4a-1 is one big-bang conversion** ([TypeScript migration approach](../whisper-cleanup/issues/04-typescript-approach.md)): the move to TypeScript lands on one branch, because main does not run half CommonJS and half bundled ESM. `/to-tickets` may still cut it where each cut builds and passes on its own (for example: electron-vite with today's JS first, then TypeScript, then IPC typing, then pino, then the Vitest move).
+- **Ticket 1, shared tooling, blocks both tracks:** the base TypeScript config, Vitest at the root with one project per package, and CI. Lint is not in it: oxlint is set up by its own agent outside this spec (owner, 2026-11-28). Each package's own files join type-check in its own track.
+- **Then two tracks in parallel.** 4a-1 touches `src/`, `tests/`, the build and the packaging config. 4b-1 touches `whisper_web/`, except `whisper_web/backend_node/`. Shared files (root `package.json`, `pnpm-lock.yaml`, the lint config) can conflict: a branch rebases on `dev` and re-runs `pnpm install` before its PR.
+- **4a-1 is cut so each ticket builds and passes on its own** ([TypeScript migration approach](../whisper-cleanup/issues/04-typescript-approach.md) chose one big bang because main cannot run half CommonJS and half bundled ESM). The first 4a-1 ticket moves to electron-vite and rewrites every `require` as ESM `import` in plain JavaScript. From then on everything is bundled ESM, so JavaScript and TypeScript files can live side by side (`allowJs`) and the TypeScript conversion runs in batches of folders (`/to-tickets`, 2026-11-28): `common` with the config module and the logger first, then `listen`, and `ask`, `settings`, `shortcuts` and `window` in parallel, and last the IPC list with `index`, the bridges and preload, which also turns `allowJs` off. Each batch replaces the `console.*` calls in its own files with the logger.
 - **4b-1 order:** the MSW page tests on Vitest first; then lint and strict-type fixes, folders, component splits and deletions, each checked against the page tests and the dashboard screenshots.
 - Branches follow the map: one per ticket, PR into `dev`, merged by the agent. Nothing goes to `main`.
 
 ### Shared tooling
 
-- **ESLint 10 flat config** at the `WhisperV2` root, with `typescript-eslint` strict type-checked. Rules that carry `CODING_STANDARDS.md`: `no-explicit-any`, `consistent-type-assertions` with assertions forbidden (`as const` allowed), `no-non-null-assertion`, `no-console`, `switch-exhaustiveness-check`, and a rule that named functions take at most one parameter, with inline callbacks exempt. The exact rule that does this last part is chosen in the ticket. The judgment rules (discriminated unions, branded IDs, parse at the boundary) are followed in code, not linted. `whisper_web` adds only `eslint-config-next`.
-- **Not linted in this spec:** the Lit renderer under `src/renderer/` (rewritten in step 6, including the vendored `aec.js`, which gets a `.d.ts` then), `whisper_web/backend_node/` (rewritten on Hono in 4a-2), and build and release scripts outside `src/` (`scripts/`, `notarize.js`, configs). Each is listed in the config's `ignores` with the step that removes it.
-- **No naming rule.** File and folder names keep today's style. Which style to enforce is not decided (owner, 2026-11-28).
+- **Lint is oxlint, set up outside this spec** by its own agent (owner, 2026-11-28). This spec does not choose rules or ignores. A ticket passes `pnpm lint` as it stands when the ticket runs, and follows `CODING_STANDARDS.md` in its code whether or not a rule checks it yet. The Lit renderer, `whisper_web/backend_node/` and the build scripts are not cleaned in this spec, whatever the linter covers.
+- **No naming rule in this spec.** File and folder names keep today's style. A separate effort later renames them to kebab-case (owner, 2026-11-28); it should start after this spec, so that it does not collide with the folder moves here.
 - **TypeScript:** a strict base config in the root (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`), extended by main, preload, shared, the e2e tests and `whisper_web`. TypeScript 6 everywhere, as in `whisper_web` today. One `pnpm type-check` runs them all.
 - **Vitest** at the root with projects: main (Node environment), `whisper_web` (jsdom). `pnpm test` runs both. Jest, `jest-environment-*`, `@jest/globals`, `@types/jest`, `ts-node`, the Jest configs and setup files are deleted when their last test has moved.
-- **CI** (`ci.yml`): install, lint, type-check, Vitest. The Electron suite still runs only on the owner's Mac (see Out of Scope).
+- **CI** (`ci.yml`): install, type-check, Vitest, and the lint step the oxlint setup adds. The Electron suite still runs only on the owner's Mac (see Out of Scope).
 
 ### 4a-1: build with electron-vite
 
@@ -174,7 +173,7 @@ Nothing the user sees changes, in the desktop app or in the dashboard.
 - **Vitest** with jsdom, React Testing Library and `@testing-library/jest-dom`'s Vitest entry. `next/jest`, `jest.config.ts`, `jest.setup.ts` go.
 - **MSW** (`msw/node`) stubs the dashboard's network in tests: the `/runtime-config.json` fetch, every `/api/...` route the pages call, and the WhisperAPP links. Handlers return fixed data shaped like `backend_node`'s real responses. Unknown requests fail the test (`onUnhandledRequest: 'error'`).
 - **Page tests** for login, activity and settings are rewritten to MSW against today's code, then stay green through every 4b-1 change. Pages with no test today get one only where a 4b-1 change touches their logic (for example the split activity details page). `__tests__/utils/api.test.ts` and `__tests__/utils/auth.test.ts` are judged with the `tdd` skill: a check that a page test now covers through the network is deleted, the rest are rewritten to MSW.
-- **Lint and types:** `whisper_web` extends the shared config and the base TypeScript config. The 15 Next 16 rules that are switched off today are turned on, and the code is fixed for them with no visible change.
+- **Lint and types:** `whisper_web` extends the base TypeScript config. The code is fixed for the 15 Next 16 rules switched off today (the `react-hooks` and `@next/next` checks in `eslint.config.mjs`), with no visible change, so that whichever linter runs them finds them clean. Turning the rules on is the oxlint setup's job.
 - **Folders:** `app/` unchanged; `components/ui/` holds the shadcn components; feature components go to `components/<feature>/` (`activity`, `settings`, `layout` for the sidebar and shell); `utils/` merges into `lib/`. Imports keep the `@/` alias. File names keep their current style.
 - **Splits:** `Sidebar.tsx`, `app/activity/page.tsx`, `app/activity/details/page.tsx` and `SearchPopup.tsx` are split into smaller components in their feature folder, with no change in output.
 - **Deleted:** `requirements.txt`, `test-types.d.ts`, and in `backend_node` the three endpoints nothing calls. Nothing else in `backend_node` changes, since 4a-2 rewrites it.
@@ -198,7 +197,7 @@ The seams below match [Which tests to delete](../whisper-cleanup/issues/09-which
 - **4a-2, the new main structure:** factories with dependencies passed in, only `windowManager` touching windows, repositories without the `index` layer, the small `auth` module, IPC registration per feature with the two bridge files deleted, `internalBridge` deleted, `index` split, the dashboard backend on Hono in `src/main/webStack/`, and the Vitest service tests at seam 2.
 - **The two `Object has been destroyed` bugs in `windowManager`** (Spec: Steps 2 and 3): they are fixed in 4a-2, where `windowManager` is rewritten. 4a-1 keeps today's behavior.
 - **4b-2:** the dashboard on the Hono client, `api.ts` split per feature, `runtime-config.json`, CORS and the port/URL variables deleted, and whether `devMock.ts` goes.
-- **A rule for file and folder names.** Not decided; names keep today's style (owner, 2026-11-28).
+- **Lint setup (oxlint) and the kebab-case renames:** each is its own effort (owner, 2026-11-28).
 - **Error reporting** and where logs go: [Error reporting from the desktop app](../whisper-cleanup/issues/20-error-reporting.md), after 4a-1.
 - **The renderer in TypeScript or React,** the UI's direct `fetch` calls to WhisperAPP, and Kosmos components: step 6.
 - **Build and release scripts in TypeScript** (`scripts/`, `notarize.js`).
@@ -212,4 +211,4 @@ The seams below match [Which tests to delete](../whisper-cleanup/issues/09-which
 - **Risk: bundling changes import order.** Today each `require` runs where it is written; a bundle hoists static imports. The import cycles stay working only while the cyclic imports run inside functions. The 4 smoke tests catch a broken startup.
 - **Risk: vendored renderer scripts under Vite.** The fallback (keep `build.js` for the renderer until step 6) is written above so that the ticket does not stall.
 - **The parallel tracks share files.** A branch rebases on `dev` and re-runs `pnpm install` before its PR, so `pnpm-lock.yaml` conflicts are resolved by the tool, not by hand.
-- This spec holds roughly 8-10 tickets for `/to-tickets`. The shared tooling, the electron-vite move, the TypeScript conversion, the IPC list and the MSW page tests need judgment (Opus). The Jest-to-Vitest moves, the deletions and the folder moves are mechanical (Sonnet).
+- `/to-tickets` cut this spec into 12 tickets in `issues/`, each with its model.

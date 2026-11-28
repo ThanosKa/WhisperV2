@@ -8,6 +8,45 @@ const APP_ROOT = path.resolve(__dirname, '../..');
 const MAIN_PRELOAD = path.join(__dirname, 'support', 'main-preload.js');
 export const FAKE_SCREEN_JPEG = path.join(__dirname, 'support', 'fake-screen.jpg');
 
+// Scale 1 on any display, so screenshots have the same pixels on every Mac. Chromium reads this
+// switch at start, so it goes on the command line, not in the preload.
+const SCALE_SWITCH = '--force-device-scale-factor=1';
+
+// The app the suite launches. `WHISPER_E2E_APP=packaged` runs the packaged app that
+// `pnpm run package:e2e` builds into dist-e2e/ for this Mac's architecture; unset (or
+// `development`), the suite runs the development app from the repo.
+type AppUnderTest = { kind: 'development' } | { kind: 'packaged'; executablePath: string };
+
+const PACKAGED_APP_DIR = path.join(APP_ROOT, 'dist-e2e', process.arch === 'arm64' ? 'mac-arm64' : 'mac');
+
+const readAppUnderTest = (): AppUnderTest => {
+    const value = process.env.WHISPER_E2E_APP ?? 'development';
+    if (value === 'development') {
+        return { kind: 'development' };
+    }
+    if (value === 'packaged') {
+        return { kind: 'packaged', executablePath: path.join(PACKAGED_APP_DIR, 'Whisper.app', 'Contents', 'MacOS', 'Whisper') };
+    }
+    throw new Error(`WHISPER_E2E_APP must be "development" or "packaged", not "${value}"`);
+};
+
+const APP_UNDER_TEST = readAppUnderTest();
+
+// The development app runs through Electron's default app, which loads the preload with `-r`. The
+// packaged app has no default app; its test build loads the preload from its own entry point
+// (tests/e2e/electron-builder.e2e.yml).
+async function launchOptions({ app }: { app: AppUnderTest }): Promise<{ executablePath?: string; args: string[] }> {
+    switch (app.kind) {
+        case 'development':
+            return { args: [SCALE_SWITCH, '-r', MAIN_PRELOAD, APP_ROOT] };
+        case 'packaged':
+            await fs.access(app.executablePath).catch(() => {
+                throw new Error(`No packaged app at ${app.executablePath}; build it with \`pnpm run package:e2e\``);
+            });
+            return { executablePath: app.executablePath, args: [SCALE_SWITCH] };
+    }
+}
+
 // The feature windows load `content.html?view=<name>`; the header loads `header.html`.
 export type AppView = 'header' | 'ask' | 'listen' | 'settings' | 'plan' | 'screenshot';
 
@@ -77,9 +116,7 @@ export const test = base.extend<Fixtures>({
         const launched: ElectronApplication[] = [];
         await use(async () => {
             const electronApp = await electron.launch({
-                // Scale 1 on any display, so screenshots have the same pixels on every Mac. Chromium
-                // reads this switch at start, so it goes on the command line, not in the preload.
-                args: ['--force-device-scale-factor=1', '-r', MAIN_PRELOAD, APP_ROOT],
+                ...(await launchOptions({ app: APP_UNDER_TEST })),
                 env: {
                     ...process.env,
                     WHISPER_E2E_USER_DATA: userDataDir,

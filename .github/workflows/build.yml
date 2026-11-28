@@ -32,7 +32,8 @@ jobs:
 
     - name: Build and Publish Electron App (macOS)
       if: matrix.os == 'macos-latest'
-      run: pnpm run build:all && pnpm exec electron-builder --mac --publish always
+      # release:mac adds the macOS floor to latest-mac.yml before it uploads the release.
+      run: pnpm run release:mac
       env:
         GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         CSC_LINK: ${{ secrets.CSC_LINK }}

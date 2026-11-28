@@ -1,6 +1,8 @@
-// Loaded into Electron's main process with `electron -r <this file> .`, before the app's own code.
+// Loaded into Electron's main process before the app's own code: with `electron -r <this file> .`
+// for the development app, and by tests/e2e/support/packaged-main.js for the packaged app.
 // It stands in for the OS boundaries a test cannot rely on: where the profile lives, what macOS
-// has allowed, the screen, the microphone and system audio. The app's code is not changed.
+// has allowed, the screen, the microphone, system audio and the update server. The app's code is
+// not changed.
 const childProcess = require('child_process');
 const { app, systemPreferences } = require('electron');
 
@@ -61,6 +63,15 @@ childProcess.spawn = function spawn(command, args, ...rest) {
     }
     return realSpawn.call(this, command, args, ...rest);
 };
+
+// Updates: a packaged app asks GitHub for a newer release at start, and would download it. A test
+// must not reach GitHub, so the check finds nothing. The development app never checks:
+// electron-updater skips an app that is not packaged.
+if (app.isPackaged) {
+    const { autoUpdater } = require('electron-updater');
+    autoUpdater.checkForUpdates = async () => null;
+    autoUpdater.checkForUpdatesAndNotify = async () => null;
+}
 
 // Displays: show the app one display, so the Settings window does not list the monitors that
 // happen to be plugged in, and its screenshot is the same on any Mac.

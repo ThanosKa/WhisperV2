@@ -238,7 +238,7 @@ export default function ActivityPage() {
                             <button
                                 onClick={() => setActiveTab('meetings')}
                                 className={`px-6 py-2 rounded-md font-medium transition-colors ${
-                                    activeTab === 'meetings' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                                    activeTab === 'meetings' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-600 hover:text-gray-900'
                                 }`}
                             >
                                 Meetings
@@ -246,7 +246,7 @@ export default function ActivityPage() {
                             <button
                                 onClick={() => setActiveTab('questions')}
                                 className={`px-6 py-2 rounded-md font-medium transition-colors ${
-                                    activeTab === 'questions' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                                    activeTab === 'questions' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-600 hover:text-gray-900'
                                 }`}
                             >
                                 Questions
@@ -413,7 +413,7 @@ function SessionCard({
     return (
         <Link
             href={`/activity/details?sessionId=${session.id}`}
-            className="relative block bg-white p-6 shadow-sm border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer group"
+            className="relative block bg-white p-6 shadow-xs border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer group"
         >
             <div className="flex justify-between items-start mb-3">
                 <div className="min-w-0 flex-1">
@@ -422,7 +422,7 @@ function SessionCard({
                             {isEditing ? (
                                 <Input
                                     ref={inputRef}
-                                    className="w-full bg-transparent border border-transparent p-0 h-auto text-lg font-medium text-gray-900 hover:underline truncate block focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none md:text-lg"
+                                    className="w-full bg-transparent border border-transparent p-0 h-auto text-lg font-medium text-gray-900 hover:underline truncate block focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-hidden md:text-lg"
                                     value={title}
                                     onChange={e => setTitle(e.target.value)}
                                     placeholder="Enter title..."
@@ -544,7 +544,7 @@ function SkeletonStatsCard() {
 
 function SkeletonSessionCard() {
     return (
-        <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm animate-pulse">
+        <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-xs animate-pulse">
             <div className="flex justify-between items-start mb-3">
                 <div className="min-w-0 flex-1">
                     <div className="h-5 bg-gray-200 rounded w-2/3 mb-2" />

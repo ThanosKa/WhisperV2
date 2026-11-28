@@ -209,7 +209,7 @@ function SessionDetailsContent() {
 
     return (
         <>
-            <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-100 text-slate-900">
+            <div className="min-h-screen bg-linear-to-br from-slate-50 via-blue-50/30 to-slate-100 text-slate-900">
                 <div className="mx-auto flex max-w-4xl flex-col gap-10 px-6 pb-16 pt-8">
                     <section className="rounded-lg border border-slate-200 bg-white px-6 py-6">
                         <div className="space-y-8">
@@ -220,7 +220,7 @@ function SessionDetailsContent() {
                                         {editingTitle ? (
                                             <Input
                                                 ref={titleInputRef}
-                                                className="w-full border border-transparent bg-transparent p-0 !text-3xl font-semibold text-slate-900 focus-visible:outline-none focus-visible:ring-0"
+                                                className="w-full border border-transparent bg-transparent p-0 text-3xl! font-semibold text-slate-900 focus-visible:outline-hidden focus-visible:ring-0"
                                                 value={newTitle}
                                                 onChange={event => setNewTitle(event.target.value)}
                                                 placeholder="Untitled session"
@@ -390,7 +390,7 @@ function SessionDetailsContent() {
                                             if (!isQuestion) return null;
 
                                             return (
-                                                <div key={item.id} className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
+                                                <div key={item.id} className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-xs">
                                                     {/* Question */}
                                                     <div className="p-4 bg-slate-50 border-b border-slate-200">
                                                         <div className="flex items-start justify-between mb-2">

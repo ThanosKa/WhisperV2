@@ -109,7 +109,7 @@ export default function SyncPage() {
                             <button
                                 onClick={handleSyncWithDesktop}
                                 disabled={isSyncing}
-                                className={`w-full flex items-center justify-center gap-3 py-3 px-4 border rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                                className={`w-full flex items-center justify-center gap-3 py-3 px-4 border rounded-md shadow-xs text-sm font-medium focus:outline-hidden focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
                                     syncStatus === 'success'
                                         ? 'border-green-300 text-green-700 bg-green-50'
                                         : syncStatus === 'error'
@@ -148,7 +148,7 @@ export default function SyncPage() {
                                 window.location.href = `${process.env.API_BASE_URL || 'http://localhost:3000'}/auth/sign-in?mode=electron`;
                             }}
                             disabled={isLoading}
-                            className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-gray-300 rounded-md shadow-xs text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <User className="h-5 w-5" />
                             <span>{isLoading ? 'Redirecting...' : 'Sign in with Account'}</span>

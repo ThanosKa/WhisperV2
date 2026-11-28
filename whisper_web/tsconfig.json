@@ -32,7 +32,6 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    "tailwind.config.ts",
     ".next/types/**/*.ts",
     "out/types/**/*.ts",
     "out/dev/types/**/*.ts"

@@ -63,7 +63,7 @@ export default function Markdown({ content, className }: MarkdownProps) {
                                         style={oneDark}
                                         language={match[1]}
                                         PreTag="div"
-                                        className="rounded-md !bg-gray-900 !text-gray-100"
+                                        className="rounded-md bg-gray-900! text-gray-100!"
                                         showLineNumbers={String(children).split('\n').length > 5}
                                     >
                                         {String(children).replace(/\n$/, '')}

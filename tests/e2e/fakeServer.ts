@@ -15,22 +15,25 @@ export const FAKE_USER = {
     apiQuota: { limit: 10, used: 0, remaining: 10 },
 } as const;
 
-// The answer the fake LLM streams to Ask, sent in several chunks.
 export const FAKE_ANSWER_CHUNKS = ['The fake server', ' answers', ' this question.'] as const;
 export const FAKE_ANSWER = FAKE_ANSWER_CHUNKS.join('');
 
-// The transcript the fake STT relay sends for the microphone ("me") stream.
 export const FAKE_TRANSCRIPT = 'This is the fake transcript from the relay.';
 
 export type LlmRequest = { route: 'chat' | 'stream'; body: unknown };
 
-// What the fake relay received, per stream, so a test can tell the fake microphone reached it.
 export type RelayAudio = { me: number; them: number };
+
+export type UnknownRequest =
+    | { kind: 'http'; method: string; url: string }
+    | { kind: 'websocket'; url: string }
+    | { kind: 'relay'; message: string }
+    | { kind: 'failed'; method: string; url: string; error: string };
 
 export type FakeServer = {
     url: string;
     wsUrl: string;
-    unknownRequests: string[];
+    unknownRequests: UnknownRequest[];
     llmRequests: LlmRequest[];
     relayAudio: RelayAudio;
     close: () => Promise<void>;
@@ -43,17 +46,20 @@ type RouteRequest = { match: RegExpMatchArray; headers: http.IncomingHttpHeaders
 type Route = {
     method: 'GET' | 'POST';
     pattern: RegExp;
-    // LLM routes log their request body, so a test can check what the app asked for.
     llm?: LlmRequest['route'];
     reply: (request: RouteRequest) => Reply;
 };
 
-const json = (status: number, body: unknown): Reply => ({ kind: 'json', status, body });
+const json = ({ status, body }: { status: number; body: unknown }): Reply => ({ kind: 'json', status, body });
 
-const sessionReply = (sessionUuid: string | undefined, data: unknown): Reply =>
-    sessionUuid === FAKE_SESSION_UUID ? json(200, { success: true, data }) : json(404, { success: false, error: 'Session not found' });
+const sessionReply = ({ sessionUuid, data }: { sessionUuid: string | undefined; data: unknown }): Reply =>
+    sessionUuid === FAKE_SESSION_UUID
+        ? json({ status: 200, body: { success: true, data } })
+        : json({ status: 404, body: { success: false, error: 'Session not found' } });
 
-const isFakeSession = (headers: http.IncomingHttpHeaders) => headers['x-session-uuid'] === FAKE_SESSION_UUID;
+const isFakeSession = ({ headers }: { headers: http.IncomingHttpHeaders }) => headers['x-session-uuid'] === FAKE_SESSION_UUID;
+
+const unauthorized = json({ status: 401, body: { success: false } });
 
 // What WhisperAPP's /api/llm/chat returns: the model's text in `content`. Listen's Done asks for a
 // `comprehensive_summary`, whose text the app parses as this JSON.
@@ -66,25 +72,25 @@ const ROUTES: Route[] = [
     {
         method: 'GET',
         pattern: /^\/api\/auth\/session\/([^/]+)$/,
-        reply: ({ match: [, sessionUuid] }) => sessionReply(sessionUuid, { status: 'authenticated' }),
+        reply: ({ match: [, sessionUuid] }) => sessionReply({ sessionUuid, data: { status: 'authenticated' } }),
     },
     {
         method: 'GET',
         pattern: /^\/api\/auth\/user-by-session\/([^/]+)$/,
-        reply: ({ match: [, sessionUuid] }) => sessionReply(sessionUuid, FAKE_USER),
+        reply: ({ match: [, sessionUuid] }) => sessionReply({ sessionUuid, data: FAKE_USER }),
     },
     {
         method: 'POST',
         pattern: /^\/api\/llm\/stream$/,
         llm: 'stream',
-        reply: ({ headers }) => (isFakeSession(headers) ? { kind: 'sse', events: answerEvents } : json(401, { success: false })),
+        reply: ({ headers }) => (isFakeSession({ headers }) ? { kind: 'sse', events: answerEvents } : unauthorized),
     },
     {
         method: 'POST',
         pattern: /^\/api\/llm\/chat$/,
         llm: 'chat',
         reply: ({ headers }) =>
-            isFakeSession(headers) ? json(200, { success: true, content: JSON.stringify(FAKE_SUMMARY) }) : json(401, { success: false }),
+            isFakeSession({ headers }) ? json({ status: 200, body: { success: true, content: JSON.stringify(FAKE_SUMMARY) } }) : unauthorized,
     },
 ];
 
@@ -97,7 +103,7 @@ const findRoute = ({ method, pathname }: { method: string; pathname: string }) =
     return undefined;
 };
 
-const readJsonBody = async (req: http.IncomingMessage): Promise<unknown> => {
+const readJsonBody = async ({ req }: { req: http.IncomingMessage }): Promise<unknown> => {
     const chunks: Buffer[] = [];
     for await (const chunk of req) {
         chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
@@ -130,43 +136,57 @@ const sendReply = async ({ res, reply }: { res: http.ServerResponse; reply: Repl
     }
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const parseRelayMessage = (raw: RawData): Record<string, unknown> | undefined => {
+type RelayStream = keyof RelayAudio;
+
+// The messages the app sends the relay (src/features/listen/stt/sttService.js), with the fields the fake reads.
+type RelayMessage = { type: 'OPEN'; sessionId: string } | { type: 'AUDIO'; stream: RelayStream } | { type: 'CLOSE' };
+
+const isRelayStream = (value: unknown): value is RelayStream => value === 'me' || value === 'them';
+
+const parseRelayMessage = ({ text }: { text: string }): RelayMessage | undefined => {
+    let parsed: unknown;
     try {
-        const parsed: unknown = JSON.parse(raw.toString());
-        return isRecord(parsed) ? parsed : undefined;
+        parsed = JSON.parse(text);
     } catch {
         return undefined;
+    }
+    if (!isRecord(parsed)) return undefined;
+    switch (parsed.type) {
+        case 'OPEN':
+            return typeof parsed.sessionId === 'string' ? { type: 'OPEN', sessionId: parsed.sessionId } : undefined;
+        case 'AUDIO':
+            return isRelayStream(parsed.stream) ? { type: 'AUDIO', stream: parsed.stream } : undefined;
+        case 'CLOSE':
+            return { type: 'CLOSE' };
+        default:
+            return undefined;
     }
 };
 
 // Speaks the STT relay's protocol (the `websocket` repo, src/index.ts): OPEN is answered with
 // CONNECTED; the first AUDIO chunk on the "me" stream gets the fixed transcript as a PARTIAL and a
-// TURN_COMPLETE; CLOSE gets CLOSED. Any other message type is recorded as unknown.
-const serveRelay = ({
-    socket,
-    relayAudio,
-    unknownRequests,
-}: {
-    socket: WebSocket;
-    relayAudio: RelayAudio;
-    unknownRequests: string[];
-}) => {
-    let sessionId: unknown = null;
+// TURN_COMPLETE; CLOSE gets CLOSED. Any other message is recorded as unknown.
+const serveRelay = ({ socket, relayAudio, unknownRequests }: { socket: WebSocket; relayAudio: RelayAudio; unknownRequests: UnknownRequest[] }) => {
+    let sessionId: string | null = null;
     let transcriptSent = false;
     const send = (message: Record<string, unknown>) => socket.send(JSON.stringify({ sessionId, ...message }));
 
-    socket.on('message', raw => {
-        const message = parseRelayMessage(raw);
-        switch (message?.type) {
+    socket.on('message', (raw: RawData) => {
+        const text = raw.toString();
+        const message = parseRelayMessage({ text });
+        if (message === undefined) {
+            unknownRequests.push({ kind: 'relay', message: text.slice(0, 80) });
+            return;
+        }
+        switch (message.type) {
             case 'OPEN':
                 sessionId = message.sessionId;
                 send({ type: 'CONNECTED', provider: 'soniox', sessionUuid: FAKE_SESSION_UUID });
                 return;
             case 'AUDIO': {
-                const stream = message.stream === 'them' ? 'them' : 'me';
+                const { stream } = message;
                 relayAudio[stream] += 1;
                 if (stream === 'me' && !transcriptSent) {
                     transcriptSent = true;
@@ -178,14 +198,12 @@ const serveRelay = ({
             case 'CLOSE':
                 send({ type: 'CLOSED' });
                 return;
-            default:
-                unknownRequests.push(`RELAY ${String(message?.type ?? raw.toString().slice(0, 80))}`);
         }
     });
 };
 
 export async function startFakeServer(): Promise<FakeServer> {
-    const unknownRequests: string[] = [];
+    const unknownRequests: UnknownRequest[] = [];
     const llmRequests: LlmRequest[] = [];
     const relayAudio: RelayAudio = { me: 0, them: 0 };
 
@@ -194,12 +212,12 @@ export async function startFakeServer(): Promise<FakeServer> {
         const pathname = new URL(req.url ?? '/', 'http://fake.local').pathname;
         const found = findRoute({ method, pathname });
         if (!found) {
-            unknownRequests.push(`${method} ${req.url ?? ''}`);
+            unknownRequests.push({ kind: 'http', method, url: req.url ?? '' });
             res.writeHead(404, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ success: false, error: 'Unknown request in the e2e fake server' }));
             return;
         }
-        const body = await readJsonBody(req);
+        const body = await readJsonBody({ req });
         if (found.route.llm) llmRequests.push({ route: found.route.llm, body });
         const reply = found.route.reply({ match: found.match, headers: req.headers, body });
         await sendReply({ res, reply });
@@ -207,7 +225,7 @@ export async function startFakeServer(): Promise<FakeServer> {
 
     const server = http.createServer((req, res) => {
         handle(req, res).catch(error => {
-            unknownRequests.push(`FAILED ${req.method ?? ''} ${req.url ?? ''}: ${String(error)}`);
+            unknownRequests.push({ kind: 'failed', method: req.method ?? '', url: req.url ?? '', error: String(error) });
             res.destroy();
         });
     });
@@ -215,12 +233,12 @@ export async function startFakeServer(): Promise<FakeServer> {
     // The app connects to STT_RELAY_URL itself, with the session in a header, as the real relay expects.
     const relay = new WebSocketServer({ noServer: true });
     server.on('upgrade', (req, socket, head) => {
-        if (req.url !== '/' || !isFakeSession(req.headers)) {
-            unknownRequests.push(`WEBSOCKET ${req.url ?? ''}`);
+        if (req.url !== '/' || !isFakeSession({ headers: req.headers })) {
+            unknownRequests.push({ kind: 'websocket', url: req.url ?? '' });
             socket.destroy();
             return;
         }
-        relay.handleUpgrade(req, socket, head, ws => serveRelay({ socket: ws, relayAudio, unknownRequests }));
+        relay.handleUpgrade(req, socket, head, (ws: WebSocket) => serveRelay({ socket: ws, relayAudio, unknownRequests }));
     });
 
     await new Promise<void>((resolve, reject) => {

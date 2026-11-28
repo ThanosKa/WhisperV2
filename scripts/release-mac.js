@@ -46,7 +46,7 @@ if (require.main === module) {
             undefined,
             undefined,
             undefined,
-            { publish: 'always' },
+            { publish: 'always' }
         );
     releaseMac({ distDir, publish }).catch(error => {
         console.error(`[release-mac] ${error.message}`);

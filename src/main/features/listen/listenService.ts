@@ -1,54 +1,81 @@
-import { BrowserWindow } from 'electron';
-import SttService from './stt/sttService';
+import { z } from 'zod';
+import SttService, { type AudioContent, type Speaker } from './stt/sttService';
 import summaryService from './summary/summaryService';
 import authService from '../common/services/authService';
 import sessionRepository from '../common/repositories/session';
+import type { SessionRow } from '../common/repositories/session';
 import sttRepository from './stt/repositories';
+import type { TranscriptRow } from './stt/repositories';
 import internalBridge from '../../bridge/internalBridge';
 import summaryRepository from './summary/repositories';
+import type { Insight } from './summary/repositories';
 import * as llmClient from '../common/ai/llmClient';
 import * as settingsService from '../settings/settingsService';
 import { windowPool } from '../../window/windowManager';
+import { logger } from '../common/utils/logger';
+import { errorMessage } from '../common/utils/errors';
+
+const log = logger.child({ module: 'ListenService' });
+
+const STT_MAX_RETRY = 10;
+const STT_RETRY_DELAY_MS = 300; // 0.3 seconds
+
+// The meeting summary WhisperAPP's `comprehensive_summary` profile answers with, as JSON.
+const ComprehensiveSummarySchema = z.object({
+    title: z.string().nullish(),
+    summary: z.string().nullish(),
+    key_topics: z.unknown().optional(),
+    action_items: z.unknown().optional(),
+});
+
+type ComprehensiveSummary = z.infer<typeof ComprehensiveSummarySchema>;
+
+// A listen session left open by a crash, found at startup.
+export type StrandedSession = { session: SessionRow; transcripts: TranscriptRow[]; insights: Insight[] };
+
+export type StrandedSessionInfo = { id: string; title: string; started_at: number | null };
+
+export type HandlerResult = { success: boolean; error?: string | null };
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 class ListenService {
-    constructor() {
-        this.sttService = new SttService();
-        this.summaryService = summaryService;
-        this.currentSessionId = null;
-        this.isInitializingSession = false;
-        this.strandedSession = null; // { session, transcripts, insights }
-        this.isRecoveryDismissed = false;
+    sttService = new SttService();
+    summaryService = summaryService;
+    currentSessionId: string | null = null;
+    isInitializingSession = false;
+    strandedSession: StrandedSession | null = null;
+    isRecoveryDismissed = false;
 
+    constructor() {
         this.setupServiceCallbacks();
-        console.log('[ListenService] Service instance created.');
+        log.info('Service instance created');
     }
 
-    setupServiceCallbacks() {
+    setupServiceCallbacks(): void {
         // STT service callbacks
         this.sttService.setCallbacks({
-            onTranscriptionComplete: (speaker, text) => {
-                this.handleTranscriptionComplete(speaker, text);
+            onTranscriptionComplete: ({ speaker, text }) => {
+                void this.handleTranscriptionComplete({ speaker, text });
             },
             onStatusUpdate: status => {
-                this.sendToRenderer('update-status', status);
+                this.sendToRenderer({ channel: 'update-status', data: status });
             },
             onQuotaExceeded: resetAt => {
-                this.handleSttQuotaExceeded(resetAt);
+                void this.handleSttQuotaExceeded(resetAt);
             },
         });
 
         // Summary service callbacks
         this.summaryService.setCallbacks({
-            onAnalysisComplete: data => {
-                // console.log('📊 Analysis completed:', data);
-            },
+            onAnalysisComplete: () => {},
             onStatusUpdate: status => {
-                this.sendToRenderer('update-status', status);
+                this.sendToRenderer({ channel: 'update-status', data: status });
             },
         });
     }
 
-    sendToRenderer(channel, data) {
+    sendToRenderer({ channel, data }: { channel: string; data?: unknown }): void {
         const listenWindow = windowPool?.get('listen');
 
         if (listenWindow && !listenWindow.isDestroyed()) {
@@ -56,46 +83,49 @@ class ListenService {
         }
     }
 
-    async findStrandedSession() {
+    async findStrandedSession(): Promise<StrandedSession | null> {
         try {
             const uid = authService.getCurrentUserId();
             if (!uid) {
-                console.log('[Recovery] No user - skipping check');
+                log.info('Recovery: no user, skipping check');
                 return null;
             }
 
             const session = sessionRepository.findLatestUnfinishedListen();
             if (!session) {
-                console.log('[Recovery] No unfinished sessions');
+                log.info({ uid }, 'Recovery: no unfinished sessions');
                 return null;
             }
 
             const transcripts = await sttRepository.getAllTranscriptsBySessionId(session.id);
             if (!transcripts || transcripts.length === 0) {
-                console.log('[Recovery] Session found but no transcripts');
+                log.info({ uid, sessionId: session.id }, 'Recovery: session found but no transcripts');
                 return null;
             }
 
             const allInsights = summaryRepository.getAllInsightsBySessionId(session.id);
 
-            console.log(`[Recovery] Found: ${transcripts.length} transcripts, ${allInsights?.length || 0} insight rounds`);
+            log.info(
+                { uid, sessionId: session.id, transcripts: transcripts.length, insightRounds: allInsights?.length || 0 },
+                'Recovery: found stranded session'
+            );
             return { session, transcripts, insights: allInsights };
         } catch (err) {
-            console.error('[Recovery] Error:', err);
+            log.error({ err }, 'Recovery: failed to look for a stranded session');
             return null;
         }
     }
 
-    async bootstrapRecovery() {
-        console.log('[Recovery] Bootstrap starting...');
+    async bootstrapRecovery(): Promise<void> {
+        log.info('Recovery: bootstrap starting');
         this.strandedSession = await this.findStrandedSession();
         if (this.strandedSession && !this.isRecoveryDismissed) {
-            console.log('[Recovery] Notifying header...');
+            log.info({ sessionId: this.strandedSession.session.id }, 'Recovery: notifying header');
             this.notifyHeaderOfStrandedSession(this.strandedSession.session);
         }
     }
 
-    notifyHeaderOfStrandedSession(session) {
+    notifyHeaderOfStrandedSession(session: SessionRow): void {
         const header = windowPool?.get('header');
         if (header && !header.isDestroyed()) {
             header.webContents.send('listen:stranded-session-detected', {
@@ -106,7 +136,7 @@ class ListenService {
         }
     }
 
-    getStrandedSessionInfo() {
+    getStrandedSessionInfo(): StrandedSessionInfo | null {
         if (!this.strandedSession?.session) {
             return null;
         }
@@ -118,27 +148,33 @@ class ListenService {
         };
     }
 
-    initialize() {
+    initialize(): void {
         // IPC handlers are set up in featureBridge.js
-        console.log('[ListenService] Initialized and ready.');
+        log.info('Initialized and ready');
     }
 
-    async handleListenRequest(listenButtonText) {
+    async handleListenRequest(listenButtonText: string): Promise<void> {
         const listenWindow = windowPool.get('listen');
         const header = windowPool.get('header');
+        // The untyped code called `header.webContents` without a check, so a missing header threw;
+        // this keeps that.
+        const sendResultToHeader = (result: { success: boolean; nextStatus?: string }) => {
+            if (!header) throw new Error('Header window is not open');
+            header.webContents.send('listen:changeSessionResult', result);
+        };
 
         try {
             let nextStatus = null;
             switch (listenButtonText) {
                 case 'Listen':
-                    console.log('[ListenService] changeSession to "Listen"');
+                    log.info({ sessionId: this.currentSessionId }, 'changeSession to "Listen"');
 
                     // Guard: Block if stranded session exists and not dismissed
                     if (this.strandedSession && !this.isRecoveryDismissed) {
-                        console.log('[ListenService] Blocking Listen - stranded session must be resolved');
+                        log.info({ strandedSessionId: this.strandedSession.session.id }, 'Blocking Listen: stranded session must be resolved');
                         this.notifyHeaderOfStrandedSession(this.strandedSession.session);
                         nextStatus = 'beforeSession';
-                        header.webContents.send('listen:changeSessionResult', { success: false, nextStatus });
+                        sendResultToHeader({ success: false, nextStatus });
                         return;
                     }
 
@@ -147,9 +183,9 @@ class ListenService {
                         setTimeout(() => {
                             try {
                                 const history = this.getConversationHistory();
-                                this.sendToRenderer('listen:sync-conversation-history', history);
+                                this.sendToRenderer({ channel: 'listen:sync-conversation-history', data: history });
                             } catch (e) {
-                                console.warn('[ListenService] failed to sync conversation history:', e.message);
+                                log.warn({ err: e, sessionId: this.currentSessionId }, 'Failed to sync conversation history');
                             }
                         }, 100);
                         if (listenWindow && !listenWindow.isDestroyed()) {
@@ -168,14 +204,14 @@ class ListenService {
                             // Initialization failed: do not flip UI to inSession, keep as beforeSession
                             nextStatus = 'beforeSession';
                             // Notify header about failure immediately and exit success path
-                            header.webContents.send('listen:changeSessionResult', { success: false, nextStatus });
+                            sendResultToHeader({ success: false, nextStatus });
                             return;
                         }
                     }
                     break;
 
                 case 'Stop':
-                    console.log('[ListenService] changeSession to "Stop"');
+                    log.info({ sessionId: this.currentSessionId }, 'changeSession to "Stop"');
                     await this.pauseSession();
                     if (listenWindow && !listenWindow.isDestroyed()) {
                         listenWindow.webContents.send('session-state-changed', { isActive: false, mode: 'pause' });
@@ -184,7 +220,7 @@ class ListenService {
                     break;
 
                 case 'Resume':
-                    console.log('[ListenService] changeSession to "Resume"');
+                    log.info({ sessionId: this.currentSessionId }, 'changeSession to "Resume"');
                     await this.resumeSession();
                     if (listenWindow && !listenWindow.isDestroyed()) {
                         listenWindow.webContents.send('session-state-changed', { isActive: true, mode: 'resume' });
@@ -193,9 +229,10 @@ class ListenService {
                     break;
 
                 case 'Done':
-                    console.log('[ListenService] changeSession to "Done"');
+                    log.info({ sessionId: this.currentSessionId }, 'changeSession to "Done"');
                     await this.closeSession();
                     internalBridge.emit('window:requestVisibility', { name: 'listen', visible: false });
+                    if (!listenWindow) throw new Error('Listen window is not open');
                     listenWindow.webContents.send('session-state-changed', { isActive: false, mode: 'end' });
                     this.summaryService.resetConversationHistory();
                     nextStatus = 'beforeSession';
@@ -205,44 +242,43 @@ class ListenService {
                     throw new Error(`[ListenService] unknown listenButtonText: ${listenButtonText}`);
             }
 
-            header.webContents.send('listen:changeSessionResult', { success: true, nextStatus });
+            sendResultToHeader({ success: true, nextStatus });
         } catch (error) {
-            console.error('[ListenService] error in handleListenRequest:', error);
-            header.webContents.send('listen:changeSessionResult', { success: false });
+            log.error({ err: error, sessionId: this.currentSessionId, listenButtonText }, 'Listen request failed');
+            sendResultToHeader({ success: false });
             throw error;
         }
     }
 
-    async handleTranscriptionComplete(speaker, text) {
+    async handleTranscriptionComplete({ speaker, text }: { speaker: Speaker; text: string }): Promise<void> {
         const trimmedText = text.trim();
+        const sessionId = this.currentSessionId;
         if (trimmedText.length < 3) {
-            console.log(`[ListenService] Skipping very short transcription (${trimmedText.length} chars): "${trimmedText}"`);
+            log.info({ sessionId, speaker, chars: trimmedText.length }, 'Skipping very short transcription');
             return; // Pre-filter short noise before DB or analysis
         }
 
-        console.log(`[ListenService] Forwarding meaningful utterance (${trimmedText.length} chars): ${speaker}: "${trimmedText}"`);
-
-        // console.log(`[ListenService] Transcription complete: ${speaker} - ${text}`);
+        log.info({ sessionId, speaker, chars: trimmedText.length }, 'Forwarding meaningful utterance');
 
         // Save to database
-        await this.saveConversationTurn(speaker, trimmedText);
+        await this.saveConversationTurn({ speaker, transcription: trimmedText });
 
         // Add to summary service for analysis
-        this.summaryService.addConversationTurn(speaker, trimmedText);
+        this.summaryService.addConversationTurn({ speaker, text: trimmedText });
     }
 
-    async handleSttQuotaExceeded(resetAt) {
-        console.log('[ListenService] STT quota exceeded, resetAt:', resetAt);
+    async handleSttQuotaExceeded(resetAt: string): Promise<void> {
+        log.info({ sessionId: this.currentSessionId, resetAt }, 'STT quota exceeded');
 
         // Stop audio capture
-        this.sendToRenderer('change-listen-capture-state', { status: 'stop' });
+        this.sendToRenderer({ channel: 'change-listen-capture-state', data: { status: 'stop' } });
 
         // Close STT sessions (but don't call closeSessions which would end the DB session)
         try {
             await this.sttService.closeSessions();
             await this.stopMacOSAudioCapture();
         } catch (err) {
-            console.error('[ListenService] Error stopping audio on quota exceeded:', err);
+            log.error({ err, sessionId: this.currentSessionId }, 'Failed to stop audio on quota exceeded');
         }
 
         // Notify header window
@@ -266,12 +302,12 @@ class ListenService {
             });
         }
 
-        this.sendToRenderer('update-status', 'Daily audio limit reached');
+        this.sendToRenderer({ channel: 'update-status', data: 'Daily audio limit reached' });
     }
 
-    async saveConversationTurn(speaker, transcription) {
+    async saveConversationTurn({ speaker, transcription }: { speaker: Speaker; transcription: string }): Promise<void> {
         if (!this.currentSessionId) {
-            console.error('[DB] Cannot save turn, no active session ID.');
+            log.error({ speaker }, 'Cannot save turn: no active session id');
             return;
         }
         if (transcription.trim() === '') return;
@@ -283,13 +319,13 @@ class ListenService {
                 speaker: speaker,
                 text: transcription.trim(),
             });
-            console.log(`[DB] Saved transcript for session ${this.currentSessionId}: (${speaker})`);
+            log.info({ sessionId: this.currentSessionId, speaker }, 'Saved transcript');
         } catch (error) {
-            console.error('Failed to save transcript to DB:', error);
+            log.error({ err: error, sessionId: this.currentSessionId }, 'Failed to save transcript');
         }
     }
 
-    async initializeNewSession() {
+    async initializeNewSession(): Promise<boolean> {
         try {
             // The UID is no longer passed to the repository method directly.
             // The adapter layer handles UID injection. We just ensure a user is available.
@@ -300,7 +336,7 @@ class ListenService {
             }
 
             this.currentSessionId = await sessionRepository.getOrCreateActive('listen');
-            console.log(`[DB] New listen session ensured: ${this.currentSessionId}`);
+            log.info({ sessionId: this.currentSessionId }, 'Listen session ensured');
 
             // Set session ID for summary service
             this.summaryService.setSessionId(this.currentSessionId);
@@ -313,27 +349,43 @@ class ListenService {
                 const currentSettings = await settingsService.getSettings();
                 await this.summaryService.setAnalysisPreset(currentSettings?.analysisPresetId || 'meetings');
             } catch (e) {
-                console.warn('[ListenService] Failed to apply saved analysis preset:', e.message);
+                log.warn({ err: e, sessionId: this.currentSessionId }, 'Failed to apply saved analysis preset');
             }
 
-            console.log('New conversation session started:', this.currentSessionId);
+            log.info({ sessionId: this.currentSessionId }, 'New conversation session started');
             return true;
         } catch (error) {
-            console.error('Failed to initialize new session in DB:', error);
+            log.error({ err: error }, 'Failed to initialize new session in DB');
             this.currentSessionId = null;
             return false;
         }
     }
 
-    async initializeSession(language = 'en') {
+    // Connects the relay, trying again a few times; throws when every attempt failed.
+    async connectSttWithRetry({ language, failure }: { language: string; failure: string }): Promise<void> {
+        for (let attempt = 1; attempt <= STT_MAX_RETRY; attempt++) {
+            try {
+                await this.sttService.initializeSttSessions(language);
+                return;
+            } catch (err) {
+                log.warn({ err, attempt, sessionId: this.currentSessionId }, 'STT connection attempt failed');
+                if (attempt < STT_MAX_RETRY) {
+                    await sleep(STT_RETRY_DELAY_MS);
+                }
+            }
+        }
+        throw new Error(failure);
+    }
+
+    async initializeSession(language = 'en'): Promise<boolean> {
         if (this.isInitializingSession) {
-            console.log('Session initialization already in progress.');
+            log.info('Session initialization already in progress');
             return false;
         }
 
         this.isInitializingSession = true;
-        this.sendToRenderer('session-initializing', true);
-        this.sendToRenderer('update-status', 'Initializing sessions...');
+        this.sendToRenderer({ channel: 'session-initializing', data: true });
+        this.sendToRenderer({ channel: 'update-status', data: 'Initializing sessions...' });
 
         try {
             // Initialize database session
@@ -342,75 +394,57 @@ class ListenService {
                 throw new Error('Failed to initialize database session');
             }
 
-            /* ---------- STT Initialization Retry Logic ---------- */
-            const MAX_RETRY = 10;
-            const RETRY_DELAY_MS = 300; // 0.3 seconds
+            await this.connectSttWithRetry({ language, failure: 'STT init failed after retries' });
 
-            let sttReady = false;
-            for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
-                try {
-                    await this.sttService.initializeSttSessions(language);
-                    sttReady = true;
-                    break; // Exit on success
-                } catch (err) {
-                    console.warn(`[ListenService] STT init attempt ${attempt} failed: ${err.message}`);
-                    if (attempt < MAX_RETRY) {
-                        await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
-                    }
-                }
-            }
-            if (!sttReady) throw new Error('STT init failed after retries');
-            /* ------------------------------------------- */
+            log.info({ sessionId: this.currentSessionId }, 'Listen service initialized');
 
-            console.log('✅ Listen service initialized successfully.');
-
-            this.sendToRenderer('update-status', 'Connected. Ready to listen.');
-            this.sendToRenderer('change-listen-capture-state', { status: 'start' });
+            this.sendToRenderer({ channel: 'update-status', data: 'Connected. Ready to listen.' });
+            this.sendToRenderer({ channel: 'change-listen-capture-state', data: { status: 'start' } });
 
             return true;
         } catch (error) {
-            console.error('❌ Failed to initialize listen service:', error);
-            this.sendToRenderer('update-status', 'Initialization failed.');
+            log.error({ err: error, sessionId: this.currentSessionId }, 'Failed to initialize listen service');
+            this.sendToRenderer({ channel: 'update-status', data: 'Initialization failed.' });
             return false;
         } finally {
             this.isInitializingSession = false;
-            this.sendToRenderer('session-initializing', false);
+            this.sendToRenderer({ channel: 'session-initializing', data: false });
         }
     }
 
-    async sendMicAudioContent(data, mimeType) {
-        return await this.sttService.sendMicAudioContent(data, mimeType);
+    async sendMicAudioContent({ data, mimeType }: AudioContent): Promise<void> {
+        return await this.sttService.sendMicAudioContent({ data, mimeType });
     }
 
-    async startMacOSAudioCapture() {
+    async startMacOSAudioCapture(): Promise<boolean> {
         if (process.platform !== 'darwin') {
             throw new Error('macOS audio capture only available on macOS');
         }
         return await this.sttService.startMacOSAudioCapture();
     }
 
-    async stopMacOSAudioCapture() {
+    async stopMacOSAudioCapture(): Promise<void> {
         this.sttService.stopMacOSAudioCapture();
     }
 
-    isSessionActive() {
+    isSessionActive(): boolean {
         return this.sttService.isSessionActive();
     }
 
-    async stopAudioCapture() {
+    async stopAudioCapture(): Promise<void> {
         // Stop audio without ending session (for app shutdown/crash recovery)
         try {
-            this.sendToRenderer('change-listen-capture-state', { status: 'stop' });
+            this.sendToRenderer({ channel: 'change-listen-capture-state', data: { status: 'stop' } });
             await this.sttService.closeSessions();
             await this.stopMacOSAudioCapture();
         } catch (err) {
-            console.error('[ListenService] Error stopping audio capture:', err);
+            log.error({ err, sessionId: this.currentSessionId }, 'Failed to stop audio capture');
         }
     }
 
-    async closeSession() {
+    async closeSession(): Promise<{ success: true } | { success: false; error: string }> {
         try {
-            this.sendToRenderer('change-listen-capture-state', { status: 'stop' });
+            this.sendToRenderer({ channel: 'change-listen-capture-state', data: { status: 'stop' } });
             // Close STT sessions
             await this.sttService.closeSessions();
 
@@ -420,15 +454,15 @@ class ListenService {
             if (this.currentSessionId) {
                 const endedSessionId = this.currentSessionId;
                 await sessionRepository.end(endedSessionId);
-                console.log(`[DB] Session ${endedSessionId} ended.`);
+                log.info({ sessionId: endedSessionId }, 'Session ended');
 
                 // Fire-and-forget: generate comprehensive summary with full transcript
                 // This provides: title, summary, key_topics, action_items - everything we need
-                (async () => {
+                void (async () => {
                     try {
                         await this._generateAndSaveComprehensiveSummary(endedSessionId);
                     } catch (e) {
-                        console.warn('[ListenService] Failed to generate comprehensive summary:', e.message);
+                        log.warn({ err: e, sessionId: endedSessionId }, 'Failed to generate comprehensive summary');
                     }
                 })();
             }
@@ -436,38 +470,38 @@ class ListenService {
             // Reset state
             this.currentSessionId = null;
 
-            console.log('Listen service session closed.');
+            log.info('Listen service session closed');
             return { success: true };
         } catch (error) {
-            console.error('Error closing listen service session:', error);
-            return { success: false, error: error.message };
+            log.error({ err: error, sessionId: this.currentSessionId }, 'Failed to close listen session');
+            return { success: false, error: errorMessage(error) };
         }
     }
 
-    async pauseSession() {
+    async pauseSession(): Promise<{ success: true } | { success: false; error: string }> {
         try {
-            this.sendToRenderer('change-listen-capture-state', { status: 'stop' });
+            this.sendToRenderer({ channel: 'change-listen-capture-state', data: { status: 'stop' } });
             // Do not close STT sessions on pause; keep websockets alive for fast resume
             await this.stopMacOSAudioCapture();
 
             // Do NOT end database session; keep currentSessionId so Ask can attach.
-            console.log(`[DB] Session ${this.currentSessionId} paused (not ended).`);
+            log.info({ sessionId: this.currentSessionId }, 'Session paused (not ended)');
             return { success: true };
         } catch (error) {
-            console.error('Error pausing listen service session:', error);
-            return { success: false, error: error.message };
+            log.error({ err: error, sessionId: this.currentSessionId }, 'Failed to pause listen session');
+            return { success: false, error: errorMessage(error) };
         }
     }
 
-    async resumeSession() {
+    async resumeSession(): Promise<{ success: true } | { success: false; error: string }> {
         try {
             // Resume local capture; STT sockets remain active from pause
-            this.sendToRenderer('change-listen-capture-state', { status: 'start' });
-            this.sendToRenderer('update-status', 'Resumed listening.');
+            this.sendToRenderer({ channel: 'change-listen-capture-state', data: { status: 'start' } });
+            this.sendToRenderer({ channel: 'update-status', data: 'Resumed listening.' });
             return { success: true };
         } catch (error) {
-            console.error('Error resuming listen service session:', error);
-            return { success: false, error: error.message };
+            log.error({ err: error, sessionId: this.currentSessionId }, 'Failed to resume listen session');
+            return { success: false, error: errorMessage(error) };
         }
     }
 
@@ -480,76 +514,19 @@ class ListenService {
         };
     }
 
-    getConversationHistory() {
+    getConversationHistory(): string[] {
         return this.summaryService.getConversationHistory();
     }
 
-    async _generateAndSaveMeetingTitle(sessionId) {
-        // Prefer summary TL;DR, then fall back to transcript snippet;
-        // if LLM available, ask for a short title in the transcript language.
+    async _generateAndSaveComprehensiveSummary(sessionId: string): Promise<void> {
         try {
-
-            // 1) Gather context
-            let tldr = null;
-            try {
-                const s = await summaryRepository.getSummaryBySessionId(sessionId);
-                tldr = s?.tldr || null;
-            } catch (_) {}
-
-            let transcriptSample = '';
-            try {
-                const all = await sttRepository.getAllTranscriptsBySessionId(sessionId);
-                const lastFew = (all || []).slice(-8).map(t => `${t.speaker || ''}: ${t.text || ''}`.trim());
-                transcriptSample = lastFew.join('\n');
-            } catch (_) {}
-
-            const baseCandidate = (tldr || '').trim() || (transcriptSample || '').trim();
-            if (!baseCandidate) return; // nothing to title
-
-            // 2) Try LLM for best-quality title (server-backed)
-            let title = '';
-            try {
-                const payload = {
-                    profile: 'whisper',
-                    userContent: `Create a short (max 8 words) meeting title in the same language as this content.\n\nContent:\n${baseCandidate}`,
-                    context: null,
-                };
-                const completion = await llmClient.chat(payload);
-                title = (completion?.content || '').split('\n')[0].replace(/^"|"$/g, '').trim();
-            } catch (e) {
-                console.warn('[ListenService] LLM title generation failed, using heuristic:', e.message);
-            }
-
-            // 3) Heuristic fallback if needed
-            if (!title) {
-                const from = baseCandidate.split(/\n+/)[0];
-                title = (from || '')
-                    .replace(/[\p{Emoji}\p{Extended_Pictographic}]/gu, '')
-                    .split(/\s+/)
-                    .slice(0, 10)
-                    .join(' ')
-                    .trim();
-                if (title) title = title.charAt(0).toUpperCase() + title.slice(1);
-            }
-
-            if (title) {
-                await sessionRepository.updateTitle({ id: sessionId, title });
-            }
-        } catch (err) {
-            console.warn('[ListenService] Error in _generateAndSaveMeetingTitle:', err.message);
-        }
-    }
-
-    async _generateAndSaveComprehensiveSummary(sessionId) {
-        try {
-
             // Get the full transcript
-            console.log(`[ListenService] Looking for transcripts for session: ${sessionId}`);
+            log.info({ sessionId }, 'Looking for transcripts for comprehensive summary');
             const allTranscripts = await sttRepository.getAllTranscriptsBySessionId(sessionId);
-            console.log(`[ListenService] Found ${allTranscripts ? allTranscripts.length : 0} transcripts for session ${sessionId}`);
+            log.info({ sessionId, transcripts: allTranscripts ? allTranscripts.length : 0 }, 'Found transcripts for comprehensive summary');
 
             if (!allTranscripts || allTranscripts.length === 0) {
-                console.log('[ListenService] No transcripts found for comprehensive summary');
+                log.info({ sessionId }, 'No transcripts found for comprehensive summary');
                 return;
             }
 
@@ -557,13 +534,9 @@ class ListenService {
             const fullTranscript = allTranscripts.map(t => `${t.speaker || 'Unknown'}: ${t.text || ''}`.trim()).join('\n');
 
             if (!fullTranscript.trim()) {
-                console.log('[ListenService] Empty transcript for comprehensive summary');
+                log.info({ sessionId }, 'Empty transcript for comprehensive summary');
                 return;
             }
-
-            // Get current settings for analysis profile
-            const currentSettings = await settingsService.getSettings();
-            const analysisPresetId = currentSettings?.analysisPresetId || 'meetings';
 
             // Build new payload format for comprehensive summary
             const payload = {
@@ -572,20 +545,19 @@ class ListenService {
                 context: { transcript: fullTranscript },
             };
 
-            console.log(`[ListenService] Generating comprehensive summary for session ${sessionId}...`);
+            log.info({ sessionId }, 'Generating comprehensive summary');
 
             const completion = await llmClient.chat(payload);
             const responseText = completion.content.trim();
 
             // Parse the JSON response
-            let summaryData;
+            let summaryData: ComprehensiveSummary;
             try {
                 // Extract JSON from markdown code blocks if present
-                const jsonMatch = responseText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i);
-                const jsonString = jsonMatch ? jsonMatch[1] : responseText;
-                summaryData = JSON.parse(jsonString);
+                const jsonString = responseText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i)?.[1] ?? responseText;
+                summaryData = ComprehensiveSummarySchema.parse(JSON.parse(jsonString));
             } catch (parseError) {
-                console.warn('[ListenService] Failed to parse comprehensive summary JSON:', parseError.message);
+                log.warn({ err: parseError, sessionId }, 'Failed to parse comprehensive summary JSON');
                 // Fallback: create basic summary
                 summaryData = {
                     title: `Meeting Summary - ${new Date().toLocaleDateString()}`,
@@ -604,27 +576,25 @@ class ListenService {
                 action_json: JSON.stringify(summaryData.action_items || []),
                 model: 'comprehensive_summary',
             });
-            console.log(`[DB] 💾 Session ${sessionId} comprehensive summary saved (profile: comprehensive_summary)`);
+            log.info({ sessionId, profile: 'comprehensive_summary' }, 'Comprehensive summary saved');
 
             // Update the session title if a better one was generated
             if (summaryData.title && summaryData.title !== 'Meeting Summary') {
                 try {
                     await sessionRepository.updateTitle({ id: sessionId, title: summaryData.title });
-                    console.log(`[DB] 📝 Session ${sessionId} title updated: "${summaryData.title}" (profile: comprehensive_summary)`);
+                    log.info({ sessionId, title: summaryData.title, profile: 'comprehensive_summary' }, 'Session title updated');
                 } catch (titleError) {
-                    console.warn('[ListenService] Could not update title:', titleError.message);
+                    log.warn({ err: titleError, sessionId }, 'Could not update session title');
                 }
             }
-
-            console.log(`[ListenService] ✅ Comprehensive summary saved for session ${sessionId}`);
         } catch (err) {
-            console.warn('[ListenService] Error in _generateAndSaveComprehensiveSummary:', err.message);
+            log.warn({ err, sessionId }, 'Failed to generate and save comprehensive summary');
         }
     }
 
-    async handleRecoveryAction(action, sessionId) {
+    async handleRecoveryAction({ action, sessionId }: { action: string; sessionId: string }): Promise<HandlerResult> {
         if (!this.strandedSession || this.strandedSession.session.id !== sessionId) {
-            console.warn(`[ListenService] Recovery action mismatch: expected ${this.strandedSession?.session.id}, got ${sessionId}`);
+            log.warn({ expectedSessionId: this.strandedSession?.session.id, sessionId, action }, 'Recovery action session mismatch');
             return { success: false, error: 'Session mismatch' };
         }
 
@@ -640,12 +610,15 @@ class ListenService {
             }
             return { success: false, error: 'Unknown action' };
         } catch (err) {
-            console.error(`[ListenService] Recovery action '${action}' failed:`, err);
-            return { success: false, error: err.message };
+            log.error({ err, sessionId, action }, 'Recovery action failed');
+            return { success: false, error: errorMessage(err) };
         }
     }
 
-    async resumeStrandedSession() {
+    async resumeStrandedSession(): Promise<{ success: true }> {
+        if (!this.strandedSession) {
+            throw new Error('No stranded session to resume');
+        }
         const { session, transcripts, insights } = this.strandedSession;
 
         // Set as current session (DON'T create new one)
@@ -656,21 +629,22 @@ class ListenService {
         this.summaryService.hydrateConversation(transcripts);
 
         // Hydrate insights if they exist
-        if (Array.isArray(insights) && insights.length > 0) {
-            const latestInsight = insights[insights.length - 1];
-            console.log(
-                `[Recovery] Hydrating insights: ${latestInsight.payload?.summary?.length || 0} summary, ${latestInsight.payload?.actions?.length || 0} actions`
+        const latestInsight = insights.at(-1);
+        if (Array.isArray(insights) && latestInsight) {
+            log.info(
+                { sessionId: session.id, summaryPoints: latestInsight.payload?.summary?.length || 0, actions: latestInsight.payload?.actions?.length || 0 },
+                'Recovery: hydrating insights'
             );
             this.summaryService.hydrateInsights(latestInsight.payload);
         } else {
-            console.log('[Recovery] No insights to hydrate');
+            log.info({ sessionId: session.id }, 'Recovery: no insights to hydrate');
         }
 
         // Send recovered transcripts to UI
         if (transcripts && transcripts.length > 0) {
             const listenWindow = windowPool?.get('listen');
             if (listenWindow && !listenWindow.isDestroyed()) {
-                console.log(`[Recovery] Sending ${transcripts.length} transcripts to UI`);
+                log.info({ sessionId: session.id, transcripts: transcripts.length }, 'Recovery: sending transcripts to UI');
                 transcripts.forEach(t => {
                     listenWindow.webContents.send('stt-update', {
                         speaker: t.speaker,
@@ -692,40 +666,25 @@ class ListenService {
         // Notify SummaryView about existing transcripts (fixes "Insights will appear here" placeholder)
         if (transcripts && transcripts.length > 0) {
             const history = transcripts.map(t => ({ speaker: t.speaker, text: t.text }));
-            this.sendToRenderer('listen:sync-conversation-history', history);
+            this.sendToRenderer({ channel: 'listen:sync-conversation-history', data: history });
         }
 
-        console.log(`[ListenService] Resumed session ${session.id}: ${transcripts.length} transcripts, insights: ${!!insights}`);
+        log.info({ sessionId: session.id, transcripts: transcripts.length, hasInsights: !!insights }, 'Resumed stranded session');
 
         // Clear stranded state
         this.strandedSession = null;
         this.isRecoveryDismissed = false;
 
         // Re-initialize STT
-        this.sendToRenderer('session-initializing', true);
-        this.sendToRenderer('update-status', 'Resuming session...');
+        this.sendToRenderer({ channel: 'session-initializing', data: true });
+        this.sendToRenderer({ channel: 'update-status', data: 'Resuming session...' });
 
-        const MAX_RETRY = 10;
-        const RETRY_DELAY_MS = 300;
-        let sttReady = false;
-        for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
-            try {
-                await this.sttService.initializeSttSessions('en');
-                sttReady = true;
-                break;
-            } catch (err) {
-                console.warn(`[ListenService] STT resume attempt ${attempt} failed: ${err.message}`);
-                if (attempt < MAX_RETRY) {
-                    await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
-                }
-            }
-        }
-        if (!sttReady) throw new Error('STT resume failed after retries');
+        await this.connectSttWithRetry({ language: 'en', failure: 'STT resume failed after retries' });
 
         // Send restored insights to renderer
         const listenWindow = windowPool?.get('listen');
         if (Array.isArray(insights) && insights.length > 0 && listenWindow && !listenWindow.isDestroyed()) {
-            console.log(`[Recovery] Sending ${insights.length} insight rounds to UI`);
+            log.info({ sessionId: session.id, insightRounds: insights.length }, 'Recovery: sending insight rounds to UI');
             // Reverse so newest arrives first (matches normal operation)
             [...insights].reverse().forEach(insight => {
                 listenWindow.webContents.send('summary-update', {
@@ -734,12 +693,15 @@ class ListenService {
                 });
             });
         } else {
-            console.log(`[Recovery] NOT sending insights - count: ${Array.isArray(insights) ? insights.length : 0}, window: ${!!listenWindow}`);
+            log.info(
+                { sessionId: session.id, insightRounds: Array.isArray(insights) ? insights.length : 0, hasWindow: !!listenWindow },
+                'Recovery: not sending insights'
+            );
         }
 
-        this.sendToRenderer('update-status', 'Session resumed. Ready to listen.');
-        this.sendToRenderer('session-initializing', false);
-        this.sendToRenderer('change-listen-capture-state', { status: 'start' });
+        this.sendToRenderer({ channel: 'update-status', data: 'Session resumed. Ready to listen.' });
+        this.sendToRenderer({ channel: 'session-initializing', data: false });
+        this.sendToRenderer({ channel: 'change-listen-capture-state', data: { status: 'start' } });
 
         // Notify Listen window that session is active (enables transcription)
         if (listenWindow && !listenWindow.isDestroyed()) {
@@ -758,16 +720,16 @@ class ListenService {
         return { success: true };
     }
 
-    async finalizeStrandedSession() {
+    async finalizeStrandedSession(): Promise<HandlerResult> {
         if (!this.strandedSession?.session) {
-            console.warn('[ListenService] finalizeStrandedSession called without stranded session');
+            log.warn('finalizeStrandedSession called without stranded session');
             return { success: false, error: 'No stranded session' };
         }
 
         const { session } = this.strandedSession;
         const sessionId = session.id;
 
-        console.log(`[ListenService] Finalizing stranded session ${sessionId} (background)...`);
+        log.info({ sessionId }, 'Finalizing stranded session in the background');
 
         // Clear stranded state immediately so the UI can continue
         this.strandedSession = null;
@@ -775,62 +737,74 @@ class ListenService {
 
         // Run finalize workflow in the background
         this._finalizeSessionInBackground(sessionId).catch(err => {
-            console.error(`[ListenService] Background finalize failed for session ${sessionId}:`, err);
+            log.error({ err, sessionId }, 'Background finalize failed');
         });
 
         return { success: true };
     }
 
-    async _finalizeSessionInBackground(sessionId) {
+    async _finalizeSessionInBackground(sessionId: string): Promise<void> {
         try {
             await this._generateAndSaveComprehensiveSummary(sessionId);
         } catch (err) {
-            console.warn(`[ListenService] Error generating comprehensive summary for ${sessionId}:`, err.message || err);
+            log.warn({ err, sessionId }, 'Failed to generate comprehensive summary for stranded session');
         }
 
         try {
             await sessionRepository.end(sessionId);
-            console.log(`[ListenService] Finalized stranded session ${sessionId}`);
+            log.info({ sessionId }, 'Finalized stranded session');
         } catch (err) {
-            console.error(`[ListenService] Failed to mark session ${sessionId} as ended:`, err.message || err);
+            log.error({ err, sessionId }, 'Failed to mark stranded session as ended');
         }
     }
 
-    _createHandler(asyncFn, successMessage, errorMessage) {
-        return async (...args) => {
+    // Wraps a handler so the IPC caller always gets `{ success, error }`.
+    _createHandler<Args extends unknown[]>({
+        run,
+        successMessage,
+        failureMessage,
+    }: {
+        run: (...args: Args) => Promise<HandlerResult | void>;
+        successMessage: string | null;
+        failureMessage: string;
+    }): (...args: Args) => Promise<HandlerResult> {
+        return async (...args: Args) => {
             try {
-                const result = await asyncFn.apply(this, args);
-                if (successMessage) console.log(successMessage);
-                // `startMacOSAudioCapture` does not return { success, error } object on success,
-                // Return success object here so handler sends consistent response.
-                // Other functions already return success objects.
-                return result && typeof result.success !== 'undefined' ? result : { success: true };
+                const result = await run(...args);
+                if (successMessage) log.info({ sessionId: this.currentSessionId }, successMessage);
+                // `sendMicAudioContent` and `stopMacOSAudioCapture` return nothing on success;
+                // answer `{ success: true }` for them so every handler sends the same shape.
+                return result ? result : { success: true };
             } catch (e) {
-                console.error(errorMessage, e);
-                return { success: false, error: e.message };
+                log.error({ err: e, sessionId: this.currentSessionId }, failureMessage);
+                return { success: false, error: errorMessage(e) };
             }
         };
     }
 
-    // Use `_createHandler` to dynamically generate handlers.
-    handleSendMicAudioContent = this._createHandler(this.sendMicAudioContent, null, 'Error sending user audio:');
+    handleSendMicAudioContent = this._createHandler({
+        run: (content: AudioContent) => this.sendMicAudioContent(content),
+        successMessage: null,
+        failureMessage: 'Error sending user audio',
+    });
 
-    handleStartMacosAudio = this._createHandler(
-        async () => {
+    handleStartMacosAudio = this._createHandler({
+        run: async () => {
             if (process.platform !== 'darwin') {
                 return { success: false, error: 'macOS audio capture only available on macOS' };
-            }
-            if (this.sttService.isMacOSAudioRunning?.()) {
-                return { success: false, error: 'already_running' };
             }
             await this.startMacOSAudioCapture();
             return { success: true, error: null };
         },
-        'macOS audio capture started.',
-        'Error starting macOS audio capture:'
-    );
+        successMessage: 'macOS audio capture started',
+        failureMessage: 'Error starting macOS audio capture',
+    });
 
-    handleStopMacosAudio = this._createHandler(this.stopMacOSAudioCapture, 'macOS audio capture stopped.', 'Error stopping macOS audio capture:');
+    handleStopMacosAudio = this._createHandler({
+        run: () => this.stopMacOSAudioCapture(),
+        successMessage: 'macOS audio capture stopped',
+        failureMessage: 'Error stopping macOS audio capture',
+    });
 }
 
 const listenService = new ListenService();

@@ -1,11 +1,13 @@
-import { ipcMain, BrowserWindow } from 'electron';
+import { BrowserWindow } from 'electron';
 import Store from 'electron-store';
+import { z } from 'zod';
 import authService from '../common/services/authService';
 import settingsRepository from './repositories';
 import { windowPool } from '../../window/windowManager';
+import { errorMessage } from '../common/utils/errors';
+import { logger } from '../common/utils/logger';
 
-// New imports for common services
-// Model provider management removed (server-only)
+const log = logger.child({ module: 'SettingsService' });
 
 const store = new Store({
     name: 'whisper-settings',
@@ -14,53 +16,48 @@ const store = new Store({
     },
 });
 
+// What the store holds under `users.<uid>`: the user's own settings. Any key is allowed, and
+// `getSettings` fills in the defaults below.
+const StoredSettingsSchema = z.record(z.string(), z.unknown());
+
 // Configuration constants
 const NOTIFICATION_CONFIG = {
     RELEVANT_WINDOW_TYPES: ['settings', 'main', 'listen'],
     DEBOUNCE_DELAY: 300, // prevent spam during bulk operations (ms)
-    MAX_RETRY_ATTEMPTS: 3,
-    RETRY_BASE_DELAY: 1000, // exponential backoff base (ms)
 };
 
-// Removed provider-model facade functions
+type NotificationOptions = { windowTypes?: string[]; debounce?: number };
 
 // window targeting system
 class WindowNotificationManager {
-    constructor() {
-        this.pendingNotifications = new Map();
-    }
+    private readonly pendingNotifications = new Map<string, ReturnType<typeof setTimeout>>();
 
-    /**
-     * Send notifications only to relevant windows
-     * @param {string} event - Event name
-     * @param {*} data - Event data
-     * @param {object} options - Notification options
-     */
-    notifyRelevantWindows(event, data = null, options = {}) {
+    /** Send notifications only to relevant windows. */
+    notifyRelevantWindows({ event, data = null, options = {} }: { event: string; data?: unknown; options?: NotificationOptions }) {
         const { windowTypes = NOTIFICATION_CONFIG.RELEVANT_WINDOW_TYPES, debounce = NOTIFICATION_CONFIG.DEBOUNCE_DELAY } = options;
 
         if (debounce > 0) {
-            this.debounceNotification(
-                event,
-                () => {
-                    this.sendToTargetWindows(event, data, windowTypes);
+            this.debounceNotification({
+                key: event,
+                fn: () => {
+                    this.sendToTargetWindows({ event, data, windowTypes });
                 },
-                debounce
-            );
+                delay: debounce,
+            });
         } else {
-            this.sendToTargetWindows(event, data, windowTypes);
+            this.sendToTargetWindows({ event, data, windowTypes });
         }
     }
 
-    sendToTargetWindows(event, data, windowTypes) {
+    private sendToTargetWindows({ event, data, windowTypes }: { event: string; data: unknown; windowTypes: string[] }) {
         const relevantWindows = this.getRelevantWindows(windowTypes);
 
         if (relevantWindows.length === 0) {
-            console.log(`[WindowNotificationManager] No relevant windows found for event: ${event}`);
+            log.info({ event }, 'No relevant windows found for event');
             return;
         }
 
-        console.log(`[WindowNotificationManager] Sending ${event} to ${relevantWindows.length} relevant windows`);
+        log.info({ event, windows: relevantWindows.length }, 'Sending event to relevant windows');
 
         relevantWindows.forEach(win => {
             try {
@@ -70,19 +67,19 @@ class WindowNotificationManager {
                     win.webContents.send(event);
                 }
             } catch (error) {
-                console.warn(`[WindowNotificationManager] Failed to send ${event} to window:`, error.message);
+                log.warn({ err: error, event }, 'Failed to send event to window');
             }
         });
     }
 
-    getRelevantWindows(windowTypes) {
+    private getRelevantWindows(windowTypes: string[]): BrowserWindow[] {
         const allWindows = BrowserWindow.getAllWindows();
-        const relevantWindows = [];
+        const relevantWindows: BrowserWindow[] = [];
 
         allWindows.forEach(win => {
             if (win.isDestroyed()) return;
 
-            for (const [windowName, poolWindow] of windowPool || []) {
+            for (const [windowName, poolWindow] of windowPool) {
                 if (poolWindow === win && windowTypes.includes(windowName)) {
                     if (windowName === 'settings' || win.isVisible()) {
                         relevantWindows.push(win);
@@ -95,10 +92,11 @@ class WindowNotificationManager {
         return relevantWindows;
     }
 
-    debounceNotification(key, fn, delay) {
+    private debounceNotification({ key, fn, delay }: { key: string; fn: () => void; delay: number }) {
         // Clear existing timeout
-        if (this.pendingNotifications.has(key)) {
-            clearTimeout(this.pendingNotifications.get(key));
+        const pending = this.pendingNotifications.get(key);
+        if (pending !== undefined) {
+            clearTimeout(pending);
         }
 
         // Set new timeout
@@ -108,12 +106,6 @@ class WindowNotificationManager {
         }, delay);
 
         this.pendingNotifications.set(key, timeoutId);
-    }
-
-    cleanup() {
-        // Clear all pending notifications
-        this.pendingNotifications.forEach(timeoutId => clearTimeout(timeoutId));
-        this.pendingNotifications.clear();
     }
 }
 
@@ -134,9 +126,6 @@ const DEFAULT_KEYBINDS = {
     nextResponse: 'Cmd+]',
 };
 
-// Service state
-let currentSettings = null;
-
 function getDefaultSettings() {
     return {
         profile: 'school',
@@ -155,40 +144,41 @@ function getDefaultSettings() {
     };
 }
 
-async function getSettings() {
+export type Settings = ReturnType<typeof getDefaultSettings> & Record<string, unknown>;
+
+const userSettingsKey = (uid: string | null) => (uid ? `users.${uid}` : 'users.default');
+
+async function getSettings(): Promise<Settings> {
     try {
         const uid = authService.getCurrentUserId();
-        const userSettingsKey = uid ? `users.${uid}` : 'users.default';
 
         const defaultSettings = getDefaultSettings();
-        const savedSettings = store.get(userSettingsKey, {});
+        const savedSettings = StoredSettingsSchema.parse(store.get(userSettingsKey(uid), {}));
 
-        currentSettings = { ...defaultSettings, ...savedSettings };
-        return currentSettings;
+        return { ...defaultSettings, ...savedSettings };
     } catch (error) {
-        console.error('[SettingsService] Error getting settings from store:', error);
+        log.error({ err: error }, 'Error getting settings from store');
         return getDefaultSettings();
     }
 }
 
-async function saveSettings(settings) {
+async function saveSettings(settings: Record<string, unknown>): Promise<{ success: true } | { success: false; error: string }> {
     try {
         const uid = authService.getCurrentUserId();
-        const userSettingsKey = uid ? `users.${uid}` : 'users.default';
+        const key = userSettingsKey(uid);
 
-        const currentSaved = store.get(userSettingsKey, {});
+        const currentSaved = StoredSettingsSchema.parse(store.get(key, {}));
         const newSettings = { ...currentSaved, ...settings };
 
-        store.set(userSettingsKey, newSettings);
-        currentSettings = newSettings;
+        store.set(key, newSettings);
 
         // Use smart notification system
-        windowNotificationManager.notifyRelevantWindows('settings-updated', currentSettings);
+        windowNotificationManager.notifyRelevantWindows({ event: 'settings-updated', data: newSettings });
 
         return { success: true };
     } catch (error) {
-        console.error('[SettingsService] Error saving settings to store:', error);
-        return { success: false, error: error.message };
+        log.error({ err: error }, 'Error saving settings to store');
+        return { success: false, error: errorMessage(error) };
     }
 }
 
@@ -198,55 +188,8 @@ async function getPresets() {
         const presets = await settingsRepository.getPresets();
         return presets;
     } catch (error) {
-        console.error('[SettingsService] Error getting presets:', error);
+        log.error({ err: error }, 'Error getting presets');
         return [];
-    }
-}
-
-async function getPresetTemplates() {
-    try {
-        const templates = await settingsRepository.getPresetTemplates();
-        return templates;
-    } catch (error) {
-        console.error('[SettingsService] Error getting preset templates:', error);
-        return [];
-    }
-}
-
-async function updatePreset(id, updates) {
-    // updates: {title?, prompt?, append_text?}
-    try {
-        // The adapter injects the UID.
-        await settingsRepository.updatePreset(id, updates);
-        windowNotificationManager.notifyRelevantWindows('presets-updated', {
-            action: 'updated',
-            presetId: id,
-            title: updates.title || undefined, // Only if changed
-        });
-        return { success: true };
-    } catch (error) {
-        console.error('[SettingsService] Error updating preset:', error);
-        return { success: false, error: error.message };
-    }
-}
-
-// Removed API key save/remove (server-only)
-
-async function updateContentProtection(enabled) {
-    try {
-        const settings = await getSettings();
-        settings.contentProtection = enabled;
-
-        // Update content protection in main window
-        const mainWindow = windowPool.get('main');
-        if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.setContentProtection(enabled);
-        }
-
-        return await saveSettings(settings);
-    } catch (error) {
-        console.error('[SettingsService] Error updating content protection:', error);
-        return { success: false, error: error.message };
     }
 }
 
@@ -254,51 +197,26 @@ async function getAutoUpdateSetting() {
     try {
         return settingsRepository.getAutoUpdate();
     } catch (error) {
-        console.error('[SettingsService] Error getting auto update setting:', error);
+        log.error({ err: error }, 'Error getting auto update setting');
         return true; // Fallback to enabled
     }
 }
 
-async function setAutoUpdateSetting(isEnabled) {
+async function setAutoUpdateSetting(isEnabled: boolean): Promise<{ success: true } | { success: false; error: string }> {
     try {
         await settingsRepository.setAutoUpdate(isEnabled);
         return { success: true };
     } catch (error) {
-        console.error('[SettingsService] Error setting auto update setting:', error);
-        return { success: false, error: error.message };
+        log.error({ err: error }, 'Error setting auto update setting');
+        return { success: false, error: errorMessage(error) };
     }
 }
 
-function initialize() {
-    // cleanup
-    windowNotificationManager.cleanup();
-
-    console.log('[SettingsService] Initialized and ready.');
-}
-
-// Cleanup function
-function cleanup() {
-    windowNotificationManager.cleanup();
-    console.log('[SettingsService] Cleaned up resources.');
-}
-
-function notifyPresetUpdate(action, presetId, title = null) {
-    const data = { action, presetId };
+function notifyPresetUpdate({ action, presetId, title = null }: { action: string; presetId: string; title?: string | null }) {
+    const data: { action: string; presetId: string; title?: string } = { action, presetId };
     if (title) data.title = title;
 
-    windowNotificationManager.notifyRelevantWindows('presets-updated', data);
+    windowNotificationManager.notifyRelevantWindows({ event: 'presets-updated', data });
 }
 
-export {
-    initialize,
-    cleanup,
-    notifyPresetUpdate,
-    getSettings,
-    saveSettings,
-    getPresets,
-    getPresetTemplates,
-    updatePreset,
-    updateContentProtection,
-    getAutoUpdateSetting,
-    setAutoUpdateSetting,
-};
+export { notifyPresetUpdate, getSettings, saveSettings, getPresets, getAutoUpdateSetting, setAutoUpdateSetting };

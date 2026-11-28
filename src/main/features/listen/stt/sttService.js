@@ -5,6 +5,7 @@ import authService from '../../common/services/authService';
 import { app } from 'electron';
 import path from 'path';
 import config from '../../common/config/config';
+import { env } from '../../common/config/env';
 import { windowPool } from '../../../window/windowManager';
 
 const COMPLETION_DEBOUNCE_MS = config.get('utteranceSilenceMs') ?? 800;
@@ -13,7 +14,7 @@ const MAX_UTTERANCE_CHARS = (() => {
     return Number.isFinite(value) && value > 0 ? value : 0;
 })();
 const DB_FALLBACK_MS = 3000;
-const DEFAULT_RELAY_URL = process.env.STT_RELAY_URL || config.get('sttRelayUrl') || 'wss://websocket-production-395f.up.railway.app';
+const DEFAULT_RELAY_URL = env.STT_RELAY_URL ?? config.get('sttRelayUrl');
 
 class SttService {
     constructor() {
@@ -193,7 +194,7 @@ class SttService {
     }
 
     async initializeSttSessions(language = 'en') {
-        const effectiveLanguage = process.env.OPENAI_TRANSCRIBE_LANG || language || 'en';
+        const effectiveLanguage = env.OPENAI_TRANSCRIBE_LANG || language || 'en';
 
         console.log('[SttService] Initializing STT relay');
 

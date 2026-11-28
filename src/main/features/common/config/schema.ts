@@ -1,3 +1,12 @@
+// The source of the database tables: `sqliteClient` creates each table and adds missing columns.
+// The repositories parse the rows they read with zod schemas that follow these columns.
+
+export type TableSchema = {
+    columns: readonly { name: string; type: string }[];
+    constraints?: readonly string[];
+    indexes?: readonly { name: string; columns: readonly string[] }[];
+};
+
 const LATEST_SCHEMA = {
     users: {
         columns: [
@@ -111,10 +120,8 @@ const LATEST_SCHEMA = {
             { name: 'payload_json', type: 'TEXT NOT NULL' },
             { name: 'created_at', type: 'INTEGER NOT NULL' },
         ],
-        indexes: [
-            { name: 'idx_session_insights_session', columns: ['session_id', 'analysis_round'] }
-        ]
+        indexes: [{ name: 'idx_session_insights_session', columns: ['session_id', 'analysis_round'] }],
     },
-};
+} satisfies Record<string, TableSchema>;
 
 export default LATEST_SCHEMA;

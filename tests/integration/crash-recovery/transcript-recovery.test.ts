@@ -107,8 +107,8 @@ describe('Crash Recovery - Transcript Recovery', () => {
 
         expect(result).not.toBeNull();
         expect(result?.transcripts).toHaveLength(3);
-        expect(result?.transcripts[0].text).toBe('First message');
-        expect(result?.transcripts[2].text).toBe('Third message');
+        expect(result?.transcripts[0]).toHaveProperty('text', 'First message');
+        expect(result?.transcripts[2]).toHaveProperty('text', 'Third message');
     });
 
     test('should recover transcripts in correct order', async () => {
@@ -131,9 +131,9 @@ describe('Crash Recovery - Transcript Recovery', () => {
 
         const result = await listenService.findStrandedSession();
 
-        expect(result?.transcripts[0].text).toBe('A');
-        expect(result?.transcripts[1].text).toBe('B');
-        expect(result?.transcripts[2].text).toBe('C');
+        expect(result?.transcripts[0]).toHaveProperty('text', 'A');
+        expect(result?.transcripts[1]).toHaveProperty('text', 'B');
+        expect(result?.transcripts[2]).toHaveProperty('text', 'C');
     });
 
     test('should send transcripts to UI via stt-update events', async () => {
@@ -241,9 +241,9 @@ describe('Crash Recovery - Transcript Recovery', () => {
         const result = await listenService.findStrandedSession();
 
         expect(result?.transcripts).toHaveLength(4);
-        expect(result?.transcripts[0].speaker).toBe('User');
-        expect(result?.transcripts[1].speaker).toBe('Assistant');
-        expect(result?.transcripts[3].speaker).toBe('System');
+        expect(result?.transcripts[0]).toHaveProperty('speaker', 'User');
+        expect(result?.transcripts[1]).toHaveProperty('speaker', 'Assistant');
+        expect(result?.transcripts[3]).toHaveProperty('speaker', 'System');
     });
 
     test('should send sync-conversation-history event to SummaryView', async () => {

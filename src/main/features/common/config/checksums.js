@@ -1,4 +1,0 @@
-const DOWNLOAD_CHECKSUMS = {
-};
-
-export { DOWNLOAD_CHECKSUMS };

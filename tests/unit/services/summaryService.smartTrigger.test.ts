@@ -15,7 +15,7 @@ vi.mock('../../../src/main/features/common/config/config', () => {
     return {
         default: {
             get: vi.fn((key: string) => values[key]),
-            set: vi.fn((key: string, value: unknown) => {
+            set: vi.fn(({ key, value }: { key: string; value: unknown }) => {
                 values[key] = value;
             }),
         },
@@ -45,14 +45,17 @@ describe('SummaryService smart trigger batching', () => {
         vi.resetModules();
         vi.clearAllMocks();
         config = (await import('../../../src/main/features/common/config/config')).default;
-        config.set('smartTrigger', {
-            enabled: true,
-            minTokenCount: 12,
-            minCharCount: 80,
-            maxWaitUtterances: 6,
+        config.set({
+            key: 'smartTrigger',
+            value: {
+                enabled: true,
+                minTokenCount: 12,
+                minCharCount: 80,
+                maxWaitUtterances: 6,
+            },
         });
-        config.set('analysisStep', 5);
-        config.set('recapStep', 15);
+        config.set({ key: 'analysisStep', value: 5 });
+        config.set({ key: 'recapStep', value: 15 });
         summaryService = (await import('../../../src/main/features/listen/summary/summaryService')).default;
         summaryService.resetConversationHistory();
         summaryService.sendToRenderer = vi.fn();
@@ -115,8 +118,8 @@ describe('SummaryService smart trigger batching', () => {
     });
 
     test('falls back to analysisStep logic when smart trigger disabled', async () => {
-        config.set('smartTrigger', { enabled: false });
-        config.set('analysisStep', 2);
+        config.set({ key: 'smartTrigger', value: { enabled: false } });
+        config.set({ key: 'analysisStep', value: 2 });
 
         seedHistory([mediumUtterance('me'), mediumUtterance('them')]);
 

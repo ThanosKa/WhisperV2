@@ -1,31 +1,28 @@
 import * as sqliteRepository from './sqlite.repository';
+import type { NewUser } from './sqlite.repository';
 import authService from '../../services/authService';
+import { logger } from '../../utils/logger';
 
-function getAuthService() {
-    return authService;
-}
+export type { NewUser, UserRow } from './sqlite.repository';
+
+const log = logger.child({ module: 'UserRepository' });
 
 function getBaseRepository() {
-    const service = getAuthService();
-    if (!service) {
-        throw new Error('AuthService could not be loaded for the user repository.');
-    }
-    const user = service.getCurrentUser();
     // Always use SQLite for local-first data strategy
     // Firebase repository disabled in favor of webapp authentication with local storage
     return sqliteRepository;
 }
 
 const userRepositoryAdapter = {
-    findOrCreate: user => {
+    findOrCreate: (user: NewUser | null | undefined) => {
         // This function receives the full user object, which includes the uid. No need to inject.
         return getBaseRepository().findOrCreate(user);
     },
 
     getById: () => {
-        const uid = getAuthService().getCurrentUserId();
+        const uid = authService.getCurrentUserId();
         if (!uid) {
-            console.warn('[UserRepository] Cannot get user: not authenticated');
+            log.warn('Cannot get user: not authenticated');
             return null;
         }
 
@@ -33,9 +30,7 @@ const userRepositoryAdapter = {
         const sqliteData = getBaseRepository().getById(uid);
 
         // Get cloud data from AuthService (plan, apiQuota)
-        const authService = getAuthService();
-        const userState = authService.getCurrentUser();
-        const currentUser = userState?.currentUser;
+        const currentUser = authService.getCurrentUser().currentUser;
 
         if (currentUser && currentUser.plan) {
             // Merge cloud data into SQLite data
@@ -62,17 +57,17 @@ const userRepositoryAdapter = {
         return sqliteData;
     },
 
-    update: updateData => {
-        const uid = getAuthService().getCurrentUserId();
+    update: (updateData: { displayName: string }) => {
+        const uid = authService.getCurrentUserId();
         if (!uid) {
-            console.warn('[UserRepository] Cannot update user: not authenticated');
+            log.warn('Cannot update user: not authenticated');
             return null;
         }
         return getBaseRepository().update({ uid, ...updateData });
     },
 
     deleteById: () => {
-        const uid = getAuthService().getCurrentUserId();
+        const uid = authService.getCurrentUserId();
         return getBaseRepository().deleteById(uid);
     },
 };

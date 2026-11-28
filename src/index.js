@@ -825,7 +825,7 @@ async function startWebStack() {
     frontSrv.use(express.static(staticDir));
 
     const frontendServer = await new Promise((resolve, reject) => {
-        const server = frontSrv.listen(frontendPort, '127.0.0.1', () => resolve(server));
+        const server = frontSrv.listen(frontendPort, '127.0.0.1', err => (err ? reject(err) : resolve(server)));
         server.on('error', reject);
         app.once('before-quit', () => server.close());
     });
@@ -836,7 +836,7 @@ async function startWebStack() {
     apiSrv.use(nodeApi);
 
     const apiServer = await new Promise((resolve, reject) => {
-        const server = apiSrv.listen(apiPort, '127.0.0.1', () => resolve(server));
+        const server = apiSrv.listen(apiPort, '127.0.0.1', err => (err ? reject(err) : resolve(server)));
         server.on('error', reject);
         app.once('before-quit', () => server.close());
     });

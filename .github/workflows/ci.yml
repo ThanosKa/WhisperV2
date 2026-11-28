@@ -4,7 +4,7 @@ on:
     push:
         branches: ['main']
     pull_request:
-        branches: ['main']
+        branches: ['dev', 'main']
 
 jobs:
     test:
@@ -13,27 +13,28 @@ jobs:
 
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v6
 
             - name: Setup Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v7
               with:
-                  node-version: '20.x'
-                  cache: 'npm'
-                  cache-dependency-path: |
-                      package-lock.json
-                      whisper_web/package-lock.json
+                  node-version-file: .nvmrc
+                  cache: pnpm
 
-            - name: Install root dependencies
-              run: npm ci
-
-            - name: Install web dependencies
-              working-directory: whisper_web
-              run: npm ci
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
 
             - name: Test desktop app
-              run: npm test
+              run: pnpm test
 
             - name: Test web app
-              working-directory: whisper_web
-              run: npm test
+              run: pnpm --filter whisper-frontend test
+
+            - name: Lint web app
+              run: pnpm run web:lint
+
+            - name: Type-check web app
+              run: pnpm run web:type-check

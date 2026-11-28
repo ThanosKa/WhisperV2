@@ -15,28 +15,24 @@ jobs:
         os: [macos-latest, windows-latest, ubuntu-latest]
 
     steps:
-    - name: Check out Git repository
-      uses: actions/checkout@v4
+    - name: Check out repository
+      uses: actions/checkout@v7
+
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v6
 
     - name: Install Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v7
       with:
-        node-version: 20
-        cache: 'npm'
+        node-version-file: .nvmrc
+        cache: pnpm
 
-    - name: Install Root Dependencies
-      run: npm install
-
-    - name: Install Web Dependencies
-      run: |
-        cd whisper_web
-        npm install
-
-
+    - name: Install Dependencies
+      run: pnpm install --frozen-lockfile
 
     - name: Build and Publish Electron App (macOS)
       if: matrix.os == 'macos-latest'
-      run: npm run build:all && npx electron-builder --mac --publish always
+      run: pnpm run build:all && pnpm exec electron-builder --mac --publish always
       env:
         GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         CSC_LINK: ${{ secrets.CSC_LINK }}
@@ -47,12 +43,12 @@ jobs:
 
     - name: Build and Publish Electron App (Windows)
       if: matrix.os == 'windows-latest'
-      run: npm run build:all && npx electron-builder --win --publish always
+      run: pnpm run build:all && pnpm exec electron-builder --win --publish always
       env:
         GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
     - name: Build and Publish Electron App (Linux)
       if: matrix.os == 'ubuntu-latest'
-      run: npm run build:all && npx electron-builder --linux --publish always
+      run: pnpm run build:all && pnpm exec electron-builder --linux --publish always
       env:
         GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}

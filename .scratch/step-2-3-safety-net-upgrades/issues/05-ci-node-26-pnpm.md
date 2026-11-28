@@ -10,9 +10,16 @@
 
 **Model:** Sonnet (run `/model sonnet` before `/implement`). Mechanical YAML changes with an exact list.
 
-- [ ] `ci.yml` uses Node 26 and `pnpm/action-setup`, runs one `pnpm install --frozen-lockfile`, both Jest suites, `whisper_web` lint and type-check
-- [ ] `ci.yml` is triggered on pull requests to `dev` and `main`
+- [x] `ci.yml` uses Node 26 and `pnpm/action-setup`, runs one `pnpm install --frozen-lockfile`, both Jest suites, `whisper_web` lint and type-check
+- [x] `ci.yml` is triggered on pull requests to `dev` and `main`
 - [ ] CI passes on this ticket's own pull request into `dev`
-- [ ] `build.yml` uses Node 26 and pnpm, same commands otherwise. It is not run, because it publishes a release
-- [ ] Root lint is not added to CI (it stays broken until step 4b-1)
+- [x] `build.yml` uses Node 26 and pnpm, same commands otherwise. It is not run, because it publishes a release
+- [x] Root lint is not added to CI (it stays broken until step 4b-1)
 - [ ] Work on its own branch, merged into `dev` through a pull request
+
+## Comments
+
+- Both workflows use `actions/checkout@v7`, `pnpm/action-setup@v6` (reads `packageManager`, pnpm 12.23.0), `actions/setup-node@v7` with `node-version-file: .nvmrc` (26) and `cache: pnpm`, then one `pnpm install --frozen-lockfile`. Majors are the latest releases on 2026-11-28.
+- `ci.yml` runs `pnpm test`, `pnpm --filter whisper-frontend test`, `pnpm run web:lint`, `pnpm run web:type-check`. It still also runs on push to `main`; pull requests trigger on `dev` and `main`. No Electron suite, no root lint.
+- `build.yml` keeps its triggers and publish commands, now with `pnpm run build:all` and `pnpm exec electron-builder`. Not run.
+- The same commands pass locally on Node 26 / pnpm 12: install, 49 web tests, web lint, web type-check.

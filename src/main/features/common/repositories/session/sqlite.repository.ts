@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
+import { SessionIdSchema, type SessionId } from '../../../../../shared/sessionId';
 import sqliteClient from '../../services/sqliteClient';
 import { logger } from '../../utils/logger';
 
@@ -7,7 +8,7 @@ const log = logger.child({ module: 'SessionRepository' });
 
 // A row of `sessions` (config/schema.ts). Only `id` and `uid` are NOT NULL.
 export const SessionRowSchema = z.object({
-    id: z.string(),
+    id: SessionIdSchema,
     uid: z.string(),
     title: z.string().nullable(),
     session_type: z.string().nullable(),
@@ -31,9 +32,9 @@ function getById(id: string): SessionRow | undefined {
     return parseOptionalRow(db.prepare('SELECT * FROM sessions WHERE id = ?').get(id));
 }
 
-function create({ uid, type = 'ask' }: { uid: string; type?: SessionType }): string {
+function create({ uid, type = 'ask' }: { uid: string; type?: SessionType }): SessionId {
     const db = sqliteClient.getDb();
-    const sessionId = randomUUID();
+    const sessionId = SessionIdSchema.parse(randomUUID());
     const now = Math.floor(Date.now() / 1000);
     const query = `INSERT INTO sessions (id, uid, title, session_type, started_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`;
 
@@ -54,13 +55,13 @@ function getAllByUserId(uid: string): SessionRow[] {
     return z.array(SessionRowSchema).parse(db.prepare(query).all(uid));
 }
 
-function updateTitle({ id, title }: { id: string; title: string }): { changes: number } {
+function updateTitle({ id, title }: { id: SessionId; title: string }): { changes: number } {
     const db = sqliteClient.getDb();
     const result = db.prepare('UPDATE sessions SET title = ? WHERE id = ?').run(title, id);
     return { changes: result.changes };
 }
 
-function deleteWithRelatedData(id: string): { success: true } {
+function deleteWithRelatedData(id: SessionId): { success: true } {
     const db = sqliteClient.getDb();
     const transaction = db.transaction(() => {
         db.prepare('DELETE FROM transcripts WHERE session_id = ?').run(id);
@@ -73,7 +74,7 @@ function deleteWithRelatedData(id: string): { success: true } {
     return { success: true };
 }
 
-function end(id: string): { changes: number } {
+function end(id: SessionId): { changes: number } {
     const db = sqliteClient.getDb();
     const now = Math.floor(Date.now() / 1000);
     const query = `UPDATE sessions SET ended_at = ?, updated_at = ? WHERE id = ?`;
@@ -81,7 +82,7 @@ function end(id: string): { changes: number } {
     return { changes: result.changes };
 }
 
-function updateType({ id, type }: { id: string; type: SessionType }): { changes: number } {
+function updateType({ id, type }: { id: SessionId; type: SessionType }): { changes: number } {
     const db = sqliteClient.getDb();
     const now = Math.floor(Date.now() / 1000);
     const query = 'UPDATE sessions SET session_type = ?, updated_at = ? WHERE id = ?';
@@ -89,7 +90,7 @@ function updateType({ id, type }: { id: string; type: SessionType }): { changes:
     return { changes: result.changes };
 }
 
-function touch(id: string): { changes: number } {
+function touch(id: SessionId): { changes: number } {
     const db = sqliteClient.getDb();
     const now = Math.floor(Date.now() / 1000);
     const query = 'UPDATE sessions SET updated_at = ? WHERE id = ?';
@@ -97,7 +98,7 @@ function touch(id: string): { changes: number } {
     return { changes: result.changes };
 }
 
-function getOrCreateActive({ uid, requestedType = 'ask' }: { uid: string; requestedType?: SessionType }): string {
+function getOrCreateActive({ uid, requestedType = 'ask' }: { uid: string; requestedType?: SessionType }): SessionId {
     const db = sqliteClient.getDb();
 
     // 1. Look for ANY active session for the user (ended_at IS NULL).

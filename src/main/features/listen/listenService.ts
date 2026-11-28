@@ -14,6 +14,7 @@ import * as settingsService from '../settings/settingsService';
 import { windowPool } from '../../window/windowManager';
 import { logger } from '../common/utils/logger';
 import { sendEvent } from '../../ipc/sendEvent';
+import type { SessionId } from '../../../shared/sessionId';
 import { ListenButtonTextSchema, type EventArgs, type EventChannel, type Outcome, type RecoveryAction } from '../../../shared/ipc';
 import { errorMessage } from '../common/utils/errors';
 
@@ -35,7 +36,7 @@ type ComprehensiveSummary = z.infer<typeof ComprehensiveSummarySchema>;
 // A listen session left open by a crash, found at startup.
 export type StrandedSession = { session: SessionRow; transcripts: TranscriptRow[]; insights: Insight[] };
 
-export type StrandedSessionInfo = { id: string; title: string; started_at: number | null };
+export type StrandedSessionInfo = { id: SessionId; title: string; started_at: number | null };
 
 // Some handlers answer success with `error: null`, which the wire keeps.
 export type HandlerResult = Outcome<{ error?: null }>;
@@ -45,7 +46,7 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 class ListenService {
     sttService = new SttService();
     summaryService = summaryService;
-    currentSessionId: string | null = null;
+    currentSessionId: SessionId | null = null;
     isInitializingSession = false;
     strandedSession: StrandedSession | null = null;
     isRecoveryDismissed = false;
@@ -542,7 +543,7 @@ class ListenService {
         return this.summaryService.getConversationHistory();
     }
 
-    async _generateAndSaveComprehensiveSummary(sessionId: string): Promise<void> {
+    async _generateAndSaveComprehensiveSummary(sessionId: SessionId): Promise<void> {
         try {
             // Get the full transcript
             log.info({ sessionId }, 'Looking for transcripts for comprehensive summary');
@@ -779,7 +780,7 @@ class ListenService {
         return { success: true };
     }
 
-    async _finalizeSessionInBackground(sessionId: string): Promise<void> {
+    async _finalizeSessionInBackground(sessionId: SessionId): Promise<void> {
         try {
             await this._generateAndSaveComprehensiveSummary(sessionId);
         } catch (err) {

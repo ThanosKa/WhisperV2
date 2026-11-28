@@ -11,6 +11,7 @@ import askRepository from './repositories';
 import { errorMessage } from '../common/utils/errors';
 import { logger } from '../common/utils/logger';
 import { sendEvent } from '../../ipc/sendEvent';
+import type { SessionId } from '../../../shared/sessionId';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'os';
@@ -649,7 +650,7 @@ class AskService {
         this.abortController = abortController;
         const { signal } = abortController;
 
-        let sessionId: string | null = null;
+        let sessionId: SessionId | null = null;
 
         try {
             log.info({ promptPreview: actualPrompt.substring(0, 50), historyItems: conversationHistoryRaw?.length || 0 }, 'Processing message');
@@ -913,7 +914,7 @@ class AskService {
     }: {
         reader: ReadableStreamDefaultReader<Uint8Array>;
         askWin: BrowserWindow;
-        sessionId: string | null;
+        sessionId: SessionId | null;
         signal: AbortSignal;
     }): Promise<void> {
         const decoder = new TextDecoder();

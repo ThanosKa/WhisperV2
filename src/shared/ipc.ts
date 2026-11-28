@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SessionIdSchema } from './sessionId';
 import type askService from '../main/features/ask/askService';
 import type { AskState } from '../main/features/ask/askService';
 import type authService from '../main/features/common/services/authService';
@@ -34,7 +35,7 @@ export const RecoveryActionSchema = z.enum(['resume', 'finalize']);
 export type RecoveryAction = z.infer<typeof RecoveryActionSchema>;
 const audioContent = z.object({ data: z.string(), mimeType: z.string() });
 const rectangle = z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() });
-const strandedSessionInfo = z.looseObject({ id: z.string(), title: z.string(), started_at: z.number().nullable() });
+const strandedSessionInfo = z.looseObject({ id: SessionIdSchema, title: z.string(), started_at: z.number().nullable() });
 
 const invoke = {
     // Settings and app
@@ -86,7 +87,7 @@ const invoke = {
     'listen:setAnalysisPreset': { args: z.tuple([z.object({ presetId: z.string().nullable() })]), result: result<Outcome>() },
     // The action, then the session id
     'listen:handleRecoveryAction': {
-        args: z.tuple([RecoveryActionSchema, z.string()]),
+        args: z.tuple([RecoveryActionSchema, SessionIdSchema]),
         result: result<Returns<typeof listenService.handleRecoveryAction>>(),
     },
     'listen:getStrandedSession': { args: none, result: result<StrandedSessionInfo | null>() },

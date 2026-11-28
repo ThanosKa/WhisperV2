@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SessionIdSchema, type SessionId } from '../../../../../shared/sessionId';
 import sqliteClient from '../../../common/services/sqliteClient';
 import { logger } from '../../../common/utils/logger';
 
@@ -6,7 +7,7 @@ const log = logger.child({ module: 'SummaryRepository' });
 
 // A row of `summaries` (config/schema.ts). Only `session_id` is NOT NULL.
 export const SummaryRowSchema = z.object({
-    session_id: z.string(),
+    session_id: SessionIdSchema,
     generated_at: z.number().nullable(),
     model: z.string().nullable(),
     text: z.string().nullable(),
@@ -22,7 +23,7 @@ export type SummaryRow = z.infer<typeof SummaryRowSchema>;
 
 export type NewSummary = {
     uid: string | null;
-    sessionId: string;
+    sessionId: SessionId;
     tldr: string | null | undefined;
     text: string;
     bullet_json: string;

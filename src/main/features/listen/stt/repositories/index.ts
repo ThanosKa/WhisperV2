@@ -1,5 +1,6 @@
 import * as sqliteRepository from './sqlite.repository';
 import authService from '../../../common/services/authService';
+import type { SessionId } from '../../../../../shared/sessionId';
 
 export type { TranscriptRow } from './sqlite.repository';
 
@@ -10,7 +11,7 @@ function getBaseRepository() {
 }
 
 const sttRepositoryAdapter = {
-    addTranscript: ({ sessionId, speaker, text }: { sessionId: string; speaker: string; text: string }) => {
+    addTranscript: ({ sessionId, speaker, text }: { sessionId: SessionId; speaker: string; text: string }) => {
         const uid = authService.getCurrentUserId();
         return getBaseRepository().addTranscript({ uid, sessionId, speaker, text });
     },

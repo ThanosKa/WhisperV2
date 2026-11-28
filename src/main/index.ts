@@ -30,6 +30,7 @@ import featureBridge from './bridge/featureBridge';
 import windowBridge from './bridge/windowBridge';
 import { sendEvent } from './ipc/sendEvent';
 import type { EventArgs } from '../shared/ipc';
+import { SessionIdSchema } from '../shared/sessionId';
 import createBackendApp from '../../whisper_web/backend_node/dist';
 
 const log = logger.child({ module: 'Main' });
@@ -420,9 +421,8 @@ app.on('activate', () => {
 
 // The dashboard's API (whisper_web/backend_node) asks main for data over `eventBridge`. Its payloads
 // come from HTTP requests, so each is parsed here before use.
-const SessionIdSchema = z.string();
 const CreateSessionSchema = z.looseObject({ title: z.string().optional() }).nullish();
-const UpdateSessionTitleSchema = z.object({ id: z.string(), title: z.string() });
+const UpdateSessionTitleSchema = z.object({ id: SessionIdSchema, title: z.string() });
 const UpdateUserProfileSchema = z.object({ displayName: z.string() });
 const FindOrCreateUserSchema = z.object({ uid: z.string(), displayName: z.string().nullish(), email: z.string().nullish() }).nullish();
 const UpdatePresetSchema = z.object({

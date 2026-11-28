@@ -9,6 +9,7 @@ import * as settingsService from '../../settings/settingsService';
 import { windowPool } from '../../../window/windowManager';
 import { logger } from '../../common/utils/logger';
 import { sendEvent } from '../../../ipc/sendEvent';
+import type { SessionId } from '../../../../shared/sessionId';
 import type { EventArgs, EventChannel } from '../../../../shared/ipc';
 import { errorMessage } from '../../common/utils/errors';
 import fs from 'fs';
@@ -91,7 +92,7 @@ class SummaryService {
     previousAnalysisResult: AnalysisResult | null = null;
     analysisHistory: AnalysisHistoryEntry[] = [];
     conversationHistory: string[] = [];
-    currentSessionId: string | null = null;
+    currentSessionId: SessionId | null = null;
     definedTerms = new Set<string>(); // Track previously defined terms
     lastAnalyzedIndex = 0; // Track how many utterances we've already analyzed
     detectedQuestions = new Set<string>(); // Track previously detected questions
@@ -144,7 +145,7 @@ class SummaryService {
         this.onAnalysisComplete = onAnalysisComplete;
     }
 
-    setSessionId(sessionId: string | null): void {
+    setSessionId(sessionId: SessionId | null): void {
         this.currentSessionId = sessionId;
     }
 

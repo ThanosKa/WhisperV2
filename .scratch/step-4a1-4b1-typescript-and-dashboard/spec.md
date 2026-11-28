@@ -1,6 +1,6 @@
 # Spec: Steps 4a-1 and 4b-1, main and preload to TypeScript, dashboard cleanup
 
-Status: open
+Status: resolved
 Label: ready-for-agent
 
 Steps 4a-1 and 4b-1 of [Order of the work](../whisper-cleanup/issues/07-work-order.md), from the [Whisper cleanup map](../whisper-cleanup/map.md), run as one spec at the owner's request (2026-11-28). The two run in parallel after a shared tooling ticket. Decisions come from [TypeScript migration approach](../whisper-cleanup/issues/04-typescript-approach.md), [Which tests to delete](../whisper-cleanup/issues/09-which-tests-to-delete.md), [Code structure for main and preload](../whisper-cleanup/issues/15-main-code-structure.md), [whisper_web cleanup scope](../whisper-cleanup/issues/18-whisper-web-cleanup.md) and `CODING_STANDARDS.md` at the workspace root. It starts from the state recorded in [Spec: Steps 2 and 3](../step-2-3-safety-net-upgrades/spec.md).
@@ -215,4 +215,4 @@ The seams below match [Which tests to delete](../whisper-cleanup/issues/09-which
 
 ## End-of-spec run (ticket 12, 2026-11-28)
 
-type-check 0, `pnpm test` 0 (331 tests: main 269, dashboard 62), `pnpm web:lint` 0, `pnpm lint` fails as expected (no root lint config; oxlint effort). Electron suite 14/14 in dev and 14/14 packaged. Dashboard screenshots: 8 identical, `download` re-baselined (anti-aliasing), `activity` differs only in a total built from `Math.random()` fake data. Status stays open until the owner decides on that one (see ticket 12).
+type-check 0, `pnpm test` 0 (331 tests: main 269, dashboard 62), `pnpm web:lint` 0, `pnpm lint` fails as expected (no root lint config; oxlint effort). Electron suite 14/14 in dev and 14/14 packaged. Dashboard screenshots: 8 identical, `download` re-baselined (anti-aliasing), `activity` differs only in a total built from `Math.random()` fake data, which `devMock.ts` already had on `dev`: not a regression, and left to 4b-2, which decides whether `devMock.ts` goes. Resolved 2026-11-28.

@@ -21,6 +21,7 @@ The map ends when nothing is left to decide before someone starts doing the work
 - **Checking the work.** The owner checks nothing by hand and deploys nothing until the whole cleanup is done; every step is verified by the automated suite, and the manual checklist runs once at the end.
 - **Working with the owner.** Solo developer. Reply in Greek, plain words, explain jargon, one question at a time. Commit after every change to this map or a ticket. Research runs on local branches; nothing is pushed without asking.
 - **Implementation tickets name their model.** Each ticket made by `/to-tickets` carries a `Model:` line (Opus or Sonnet) that the run follows; the rule is in `docs/agents/issue-tracker.md`.
+- **When the Electron suite runs.** While a ticket is in progress, only the Jest suites run (no windows open). The full Electron suite runs once at the end of every ticket that touches the app, before its PR; a ticket that does not touch the app (CI, docs) skips it. A ticket may add checkpoints only where its risk calls for them (step 3 used three). The suite opens windows on the owner's screen, so it runs no more often than this.
 - **Branches (WhisperV2).** `dev` on GitHub is the integration branch for the whole cleanup. Each step runs on its own branch, goes to `dev` as a PR, and the agent merges it; that standing yes covers pushing step branches and merging into `dev`. Nothing goes to `main` until step 9, and only after asking: a push to `main` runs `build.yml`, which publishes a release (`electron-builder --publish always`). `main` on GitHub stays at the last release until then.
 
 ## Decisions so far
@@ -49,7 +50,7 @@ The map ends when nothing is left to decide before someone starts doing the work
 
 ## Not yet specified
 
-<!-- empty: the way to the destination is clear -->
+- [Error reporting from the desktop app](issues/20-error-reporting.md): which service, what leaves the Mac, opt-out, and when (after step 4a-1); opened 2026-11-28.
 
 ## Out of scope
 

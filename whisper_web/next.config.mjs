@@ -1,23 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
-    swcMinify: true,
     output: 'export',
     distDir: 'out',
     trailingSlash: true,
 
     images: { unoptimized: true },
 
-    webpack: config => {
-        if (process.platform === 'win32') {
-            config.watchOptions = {
-                ...config.watchOptions,
-                poll: 1000,
-                aggregateTimeout: 300,
-            };
-        }
-        return config;
-    },
+    // Next 16's `next dev` writes an AGENTS.md when an AI agent runs it. The repo's agent docs are planned
+    // separately (step 8 of the cleanup map), so it stays off.
+    agentRules: false,
 };
 
 export default nextConfig;

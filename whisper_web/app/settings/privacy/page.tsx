@@ -32,7 +32,7 @@ export default function PrivacySettingsPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <Card className="flex flex-col">
-                        <CardHeader className="flex-grow">
+                        <CardHeader className="grow">
                             <CardTitle className="text-lg">Privacy Policy</CardTitle>
                             <CardDescription>Understand how we collect, use, and protect your personal information.</CardDescription>
                         </CardHeader>
@@ -50,7 +50,7 @@ export default function PrivacySettingsPage() {
                     </Card>
 
                     <Card className="flex flex-col">
-                        <CardHeader className="flex-grow">
+                        <CardHeader className="grow">
                             <CardTitle className="text-lg">Terms of Service</CardTitle>
                             <CardDescription>Understand your rights and responsibilities when using our platform.</CardDescription>
                         </CardHeader>

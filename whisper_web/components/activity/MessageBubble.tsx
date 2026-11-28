@@ -64,7 +64,7 @@ export function MessageBubble({ content, role = 'assistant', speaker, timestamp,
                         {role === 'assistant' && !isTranscript ? (
                             <Markdown content={content} className="prose-sm prose-gray max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0" />
                         ) : (
-                            <p className="whitespace-pre-wrap break-words">{filteredContent}</p>
+                            <p className="whitespace-pre-wrap wrap-break-word">{filteredContent}</p>
                         )}
                     </div>
                     {timestamp && (

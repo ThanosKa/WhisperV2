@@ -9,6 +9,7 @@
 // and stops only the dev server it started. It needs the Chromium that `npx playwright install chromium` fetches (it runs as the new headless mode, channel chromium).
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +37,10 @@ const PAGES = [
 const NO_ANIMATION_CSS = `*, *::before, *::after {
     animation: none !important; transition: none !important; caret-color: transparent !important; scroll-behavior: auto !important;
 }`;
+
+// Next 15+ draws a dev-tools badge (bottom left) inside <nextjs-portal>; it is not part of the dashboard.
+// Hiding it also hides Next's error overlay, so page errors are printed instead (see pageerror below).
+const HIDE_NEXT_DEV_TOOLS_CSS = 'nextjs-portal { display: none !important; }';
 
 function freePort() {
     return new Promise((resolve, reject) => {
@@ -65,8 +70,9 @@ async function waitForServer({ url, timeoutMs }) {
 async function main() {
     const port = await freePort();
     const base = `http://127.0.0.1:${port}`;
-    const nextBin = path.join(webDir, 'node_modules', '.bin', 'next');
-    const server = spawn(nextBin, ['dev', '-p', String(port), '-H', '127.0.0.1'], {
+    // Resolved the way Node resolves it from whisper_web, so it works with pnpm's hoisted layout too.
+    const nextBin = createRequire(path.join(webDir, 'package.json')).resolve('next/dist/bin/next');
+    const server = spawn(process.execPath, [nextBin, 'dev', '-p', String(port), '-H', '127.0.0.1'], {
         cwd: webDir,
         env: { ...process.env, NEXT_PUBLIC_DEV_MOCK: '1', NEXT_TELEMETRY_DISABLED: '1' },
         detached: true,
@@ -105,11 +111,16 @@ async function main() {
             }
         });
         const page = await context.newPage();
+        page.on('pageerror', error => console.error(`page error on ${page.url()}: ${error.message}`));
+        page.on('console', message => {
+            if (message.type() === 'error') console.error(`console error on ${page.url()}: ${message.text()}`);
+        });
         mkdirSync(assetsDir, { recursive: true });
 
         for (const [index, { name, route }] of PAGES.entries()) {
             await page.goto(`${base}${route}`, { waitUntil: 'load', timeout: 120_000 });
             await page.addStyleTag({ content: NO_ANIMATION_CSS });
+            await page.addStyleTag({ content: HIDE_NEXT_DEV_TOOLS_CSS });
             await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => undefined);
             await page.evaluate(() => document.fonts.ready);
             await page.waitForTimeout(1500);

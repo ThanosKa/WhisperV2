@@ -195,7 +195,7 @@ export default function PersonalizePage() {
                                         onClick={() => selectPreset(preset)}
                                         className={`
                                             p-4 rounded-lg cursor-pointer transition-all duration-200 bg-white
-                                            h-48 flex flex-col shadow-sm hover:shadow-md relative
+                                            h-48 flex flex-col shadow-xs hover:shadow-md relative
                                             ${
                                                 selectedPreset?.id === preset.id
                                                     ? 'border-2 border-blue-500 shadow-md'
@@ -226,7 +226,7 @@ export default function PersonalizePage() {
                     <div className="mb-2 text-sm text-gray-600">Role</div>
                 </div>
                 <div className="flex-1 px-8 pb-6 overflow-hidden">
-                    <div className="h-full rounded-lg border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+                    <div className="h-full rounded-lg border border-gray-200 shadow-xs overflow-hidden flex flex-col">
                         {/* Saved Content - Gray Area */}
                         <div className="bg-gray-50 p-6 border-b border-gray-200 min-h-[40%] max-h-[60%] overflow-y-auto">
                             <div className="text-gray-700 leading-relaxed whitespace-pre-wrap font-mono text-sm">
@@ -239,7 +239,7 @@ export default function PersonalizePage() {
                             <textarea
                                 value={newContent}
                                 onChange={e => setNewContent(e.target.value)}
-                                className={`w-full h-full p-6 text-sm text-gray-900 border-0 resize-none focus:outline-none focus:ring-1 focus:ring-gray-300 focus:border-transparent bg-white font-mono leading-relaxed ${
+                                className={`w-full h-full p-6 text-sm text-gray-900 border-0 resize-none focus:outline-hidden focus:ring-1 focus:ring-gray-300 focus:border-transparent bg-white font-mono leading-relaxed ${
                                     isOverLimit ? 'text-red-900' : ''
                                 }`}
                                 placeholder="Add your custom instructions here..."

@@ -36,4 +36,5 @@ export function ipcRequest<T = unknown>(req: Request, channel: string, payload?:
     });
 }
 
-export default { ipcRequest };
+const ipcBridge = { ipcRequest };
+export default ipcBridge;

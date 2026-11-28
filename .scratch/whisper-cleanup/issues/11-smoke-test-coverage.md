@@ -26,3 +26,5 @@ Resolved 2026-11-23 with the owner. Kept deliberately small. The owner checks no
 From [DESIGN.md scope](17-design-md-scope.md): the Electron UI's 114 colors are merged into a small palette in step 5, so the step-6 screenshot comparison uses a small pixel tolerance, not an exact match.
 
 **Added by [whisper_web cleanup scope](18-whisper-web-cleanup.md):** the 10 dashboard pages are not in the Playwright suite; Claude in Chrome takes "before" screenshots before step 3 and compares by eye after steps 3 and 6.
+
+**Corrected by [Spec: Steps 2 and 3](../../step-2-3-safety-net-upgrades/spec.md):** auth and LLM read `API_BASE_URL`, not `whisper_API_URL`; the fake server is wired through `API_BASE_URL` and `STT_RELAY_URL`, and the test sets the other URL variables too.

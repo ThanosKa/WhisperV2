@@ -26,6 +26,12 @@ type Returns<F extends (...args: never[]) => unknown> = Awaited<ReturnType<F>>;
 export type Outcome<Success extends object = Record<never, never>> = ({ success: true } & Success) | { success: false; error: string };
 
 const none = z.tuple([]);
+// The header's Listen button texts (MainHeader._getListenButtonText), sent on `listen:changeSession`
+export const ListenButtonTextSchema = z.enum(['Listen', 'Stop', 'Resume', 'Done']);
+export type ListenButtonText = z.infer<typeof ListenButtonTextSchema>;
+// What the recovery toast asks main to do with a stranded session
+export const RecoveryActionSchema = z.enum(['resume', 'finalize']);
+export type RecoveryAction = z.infer<typeof RecoveryActionSchema>;
 const audioContent = z.object({ data: z.string(), mimeType: z.string() });
 const rectangle = z.object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() });
 const strandedSessionInfo = z.looseObject({ id: z.string(), title: z.string(), started_at: z.number().nullable() });
@@ -74,14 +80,13 @@ const invoke = {
     'listen:startMacosSystemAudio': { args: none, result: result<Returns<typeof listenService.handleStartMacosAudio>>() },
     'listen:stopMacosSystemAudio': { args: none, result: result<Returns<typeof listenService.handleStopMacosAudio>>() },
     'listen:isSessionActive': { args: none, result: result<boolean>() },
-    // The header's button text; listenService answers an unknown one with `success: false`
-    'listen:changeSession': { args: z.tuple([z.string()]), result: result<Outcome>() },
+    'listen:changeSession': { args: z.tuple([ListenButtonTextSchema]), result: result<Outcome>() },
     'listen:listAnalysisPresets': { args: none, result: result<Returns<typeof settingsService.getPresets>>() },
     'listen:getAnalysisPreset': { args: none, result: result<{ presetId: string | null }>() },
     'listen:setAnalysisPreset': { args: z.tuple([z.object({ presetId: z.string().nullable() })]), result: result<Outcome>() },
-    // The action (`resume` or `finalize`; listenService answers another with `success: false`), then the session id
+    // The action, then the session id
     'listen:handleRecoveryAction': {
-        args: z.tuple([z.string(), z.string()]),
+        args: z.tuple([RecoveryActionSchema, z.string()]),
         result: result<Returns<typeof listenService.handleRecoveryAction>>(),
     },
     'listen:getStrandedSession': { args: none, result: result<StrandedSessionInfo | null>() },

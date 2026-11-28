@@ -14,7 +14,7 @@ import * as settingsService from '../settings/settingsService';
 import { windowPool } from '../../window/windowManager';
 import { logger } from '../common/utils/logger';
 import { sendEvent } from '../../ipc/sendEvent';
-import type { EventArgs, EventChannel, Outcome } from '../../../shared/ipc';
+import { ListenButtonTextSchema, type EventArgs, type EventChannel, type Outcome, type RecoveryAction } from '../../../shared/ipc';
 import { errorMessage } from '../common/utils/errors';
 
 const log = logger.child({ module: 'ListenService' });
@@ -156,6 +156,8 @@ class ListenService {
         log.info('Initialized and ready');
     }
 
+    // The IPC schema already limits the text to the header's buttons; this parses it again so main's
+    // own callers get the same check.
     async handleListenRequest(listenButtonText: string): Promise<void> {
         const listenWindow = windowPool.get('listen');
         const header = windowPool.get('header');
@@ -168,7 +170,9 @@ class ListenService {
 
         try {
             let nextStatus = null;
-            switch (listenButtonText) {
+            const button = ListenButtonTextSchema.safeParse(listenButtonText);
+            if (!button.success) throw new Error(`[ListenService] unknown listenButtonText: ${listenButtonText}`);
+            switch (button.data) {
                 case 'Listen':
                     log.info({ sessionId: this.currentSessionId }, 'changeSession to "Listen"');
 
@@ -256,9 +260,6 @@ class ListenService {
                     this.summaryService.resetConversationHistory();
                     nextStatus = 'beforeSession';
                     break;
-
-                default:
-                    throw new Error(`[ListenService] unknown listenButtonText: ${listenButtonText}`);
             }
 
             sendResultToHeader({ success: true, nextStatus });
@@ -615,23 +616,24 @@ class ListenService {
         }
     }
 
-    async handleRecoveryAction({ action, sessionId }: { action: string; sessionId: string }): Promise<HandlerResult> {
+    // `dismiss` is main's own: the toast sends only `resume` and `finalize`.
+    async handleRecoveryAction({ action, sessionId }: { action: RecoveryAction | 'dismiss'; sessionId: string }): Promise<HandlerResult> {
         if (!this.strandedSession || this.strandedSession.session.id !== sessionId) {
             log.warn({ expectedSessionId: this.strandedSession?.session.id, sessionId, action }, 'Recovery action session mismatch');
             return { success: false, error: 'Session mismatch' };
         }
 
         try {
-            if (action === 'resume') {
-                return await this.resumeStrandedSession();
-            } else if (action === 'finalize') {
-                return await this.finalizeStrandedSession();
-            } else if (action === 'dismiss') {
-                this.isRecoveryDismissed = true;
-                this.strandedSession = null;
-                return { success: true };
+            switch (action) {
+                case 'resume':
+                    return await this.resumeStrandedSession();
+                case 'finalize':
+                    return await this.finalizeStrandedSession();
+                case 'dismiss':
+                    this.isRecoveryDismissed = true;
+                    this.strandedSession = null;
+                    return { success: true };
             }
-            return { success: false, error: 'Unknown action' };
         } catch (err) {
             log.error({ err, sessionId, action }, 'Recovery action failed');
             return { success: false, error: errorMessage(err) };

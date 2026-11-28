@@ -32,6 +32,8 @@ const invokeCallsFromTheUi: [string, unknown[]][] = [
     ['listen:stopMacosSystemAudio', []],
     ['listen:isSessionActive', []],
     ['listen:changeSession', ['Listen']],
+    ['listen:changeSession', ['Stop']],
+    ['listen:changeSession', ['Resume']],
     ['listen:changeSession', ['Done']],
     ['listen:listAnalysisPresets', []],
     ['listen:getAnalysisPreset', []],
@@ -114,6 +116,8 @@ describe('the IPC list', () => {
         ['listen:sendMicAudio', [{ data: new Uint8Array(4), mimeType: 'audio/pcm;rate=16000' }]],
         ['open-external', [undefined]],
         ['get-current-user', ['extra']],
+        ['listen:changeSession', ['Pause']],
+        ['listen:handleRecoveryAction', ['restart', 'session-1']],
     ])('rejects a malformed payload on %s', (channel, args) => {
         expect(parsesInvoke([channel, args])).toBe(false);
     });

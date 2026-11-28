@@ -1,7 +1,17 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import { readApiBaseUrlArgument } from '../shared/preloadArguments';
 // Types only: the sandboxed preload cannot load zod, and main parses every payload anyway.
-import type { EventArgs, EventChannel, InvokeArgs, InvokeChannel, InvokeResult, SendArgs, SendChannel } from '../shared/ipc';
+import type {
+    EventArgs,
+    EventChannel,
+    InvokeArgs,
+    InvokeChannel,
+    InvokeResult,
+    ListenButtonText,
+    RecoveryAction,
+    SendArgs,
+    SendChannel,
+} from '../shared/ipc';
 
 // Each wrapper takes its channel's arguments and result from the IPC list, so a renamed or
 // reshaped channel fails type-check here.
@@ -109,7 +119,7 @@ const api = {
         showSettingsWindow: () => send({ channel: 'show-settings-window', args: [] }),
         hideSettingsWindow: () => send({ channel: 'hide-settings-window', args: [] }),
 
-        sendListenButtonClick: (listenButtonText: string) => invoke({ channel: 'listen:changeSession', args: [listenButtonText] }),
+        sendListenButtonClick: (listenButtonText: ListenButtonText) => invoke({ channel: 'listen:changeSession', args: [listenButtonText] }),
         sendAskButtonClick: () => invoke({ channel: 'ask:toggleAskButton', args: [] }),
         sendToggleAllWindowsVisibility: () => invoke({ channel: 'shortcut:toggleAllWindowsVisibility', args: [] }),
         getCurrentShortcuts: () => invoke({ channel: 'settings:getCurrentShortcuts', args: [] }),
@@ -132,7 +142,8 @@ const api = {
             unlisten({ channel: 'listen-window-visibility', listener: callback }),
 
         // Recovery actions
-        handleRecoveryAction: (action: string, sessionId: string) => invoke({ channel: 'listen:handleRecoveryAction', args: [action, sessionId] }),
+        handleRecoveryAction: (action: RecoveryAction, sessionId: string) =>
+            invoke({ channel: 'listen:handleRecoveryAction', args: [action, sessionId] }),
         onStrandedSessionDetected: (callback: Listener<'listen:stranded-session-detected'>) =>
             listen({ channel: 'listen:stranded-session-detected', listener: callback }),
         removeOnStrandedSessionDetected: (callback: Listener<'listen:stranded-session-detected'>) =>
@@ -151,7 +162,8 @@ const api = {
         removeOnShow: () => unlistenAll('recovery-toast:show'),
         onHide: (callback: Listener<'recovery-toast:hide'>) => listen({ channel: 'recovery-toast:hide', listener: callback }),
         removeOnHide: () => unlistenAll('recovery-toast:hide'),
-        handleRecoveryAction: (action: string, sessionId: string) => invoke({ channel: 'listen:handleRecoveryAction', args: [action, sessionId] }),
+        handleRecoveryAction: (action: RecoveryAction, sessionId: string) =>
+            invoke({ channel: 'listen:handleRecoveryAction', args: [action, sessionId] }),
     },
 
     // Quota/usage updates broadcast from main process

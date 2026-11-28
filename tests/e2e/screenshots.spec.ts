@@ -3,13 +3,19 @@ import { FAKE_USER } from './fakeServer';
 import { expect, findWindow, test, type RunningApp } from './fixtures';
 import { askAQuestion, listenUntilTranscript } from './flows';
 
-// One screenshot per window in its normal state, compared with an exact match: `threshold: 0`
-// (Playwright's default lets each pixel's colour differ by 0.2). Playwright's default
-// `animations: 'disabled'` stops CSS animations, and the launch fixes the scale at 1.
+// One screenshot per window in its normal state. Playwright's default `animations: 'disabled'`
+// stops CSS animations, and the launch fixes the scale at 1.
+
+// Not an exact match: exact failed on rendering noise in both runs tried (scaled image edges, text
+// anti-aliasing, two pixels of Listen's select arrow). The tolerance is the smallest that passed
+// the measured noise with a margin; Playwright's default threshold is 0.2. See ticket 02's comments.
+const SCREENSHOT_TOLERANCE = { threshold: 0.1, maxDiffPixels: 5 };
 
 // The look that does not depend on the moment or the Mac:
 // - no hover: the windows are on the real screen, so the Mac's own mouse pointer may rest on one
-//   and show its hover-only buttons. With pointer events off, nothing can be hovered.
+//   and show its hover-only buttons. With pointer events off, nothing can be hovered. Chromium
+//   drops a hover only on the next mouse event, so the test's own mouse moves once more: it was
+//   left on Listen's toggle button by the click on "Show Transcript".
 // - text that changes by itself is hidden: the date and time on Ask's screenshot label, Listen's
 //   timer, and the app version. Hidden rather than masked, because their width changes too.
 const STABLE_LOOK = `
@@ -55,8 +61,9 @@ async function waitForStillWindow({ page }: { page: Page }) {
 
 async function expectWindowScreenshot({ page, name }: { page: Page; name: string }) {
     await applyStableLook({ page });
+    await page.mouse.move(0, 0);
     await waitForStillWindow({ page });
-    await expect(page).toHaveScreenshot(name, { threshold: 0 });
+    await expect(page).toHaveScreenshot(name, SCREENSHOT_TOLERANCE);
 }
 
 async function askWithScreenshot(app: RunningApp) {

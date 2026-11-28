@@ -17,7 +17,7 @@ export const useAuth = () => {
             try {
                 ensureMockData();
                 const profile = getMockUser();
-                setUserInfo(profile, true);
+                setUserInfo({ userInfo: profile, skipEvents: true });
                 // State is set in a microtask, not synchronously in the effect body
                 void Promise.resolve().then(() => {
                     setMode('webapp');
@@ -34,7 +34,7 @@ export const useAuth = () => {
         // Prevent infinite loops
         if (retryCount > 3) {
             console.log('🛑 Too many retries, staying unauthenticated');
-            setUserInfo(null);
+            setUserInfo({ userInfo: null });
             void Promise.resolve().then(() => {
                 setMode(null);
                 setUser(null);
@@ -71,7 +71,7 @@ export const useAuth = () => {
                                 plan: apiUser.plan,
                             };
                             // Overwrite localStorage to ensure headers match server user
-                            setUserInfo(profile, true);
+                            setUserInfo({ userInfo: profile, skipEvents: true });
                             setMode('webapp');
                             setUser(profile);
                             setRetryCount(0);
@@ -83,7 +83,7 @@ export const useAuth = () => {
                         // Treat as logged out in Electron mode
                         setMode(null);
                         setUser(null);
-                        setUserInfo(null);
+                        setUserInfo({ userInfo: null });
                         setRetryCount(0);
                         setIsLoading(false);
                         return;
@@ -108,13 +108,13 @@ export const useAuth = () => {
                 console.log('🚫 No authenticated user detected');
                 setMode(null);
                 setUser(null);
-                setUserInfo(null);
+                setUserInfo({ userInfo: null });
                 setRetryCount(0);
             } catch (error) {
                 console.error('Error checking stored auth:', error);
                 setMode(null);
                 setUser(null);
-                setUserInfo(null);
+                setUserInfo({ userInfo: null });
                 setRetryCount(0);
             }
             setIsLoading(false);

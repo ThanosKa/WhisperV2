@@ -31,7 +31,10 @@ export function useActivitySessions() {
 
     const fetchSessions = useCallback(async () => {
         try {
-            const [meetingsPage, questionsPage] = await Promise.all([getMeetingsPage(0, PAGE_SIZE), getQuestionsPage(0, PAGE_SIZE)]);
+            const [meetingsPage, questionsPage] = await Promise.all([
+                getMeetingsPage({ offset: 0, limit: PAGE_SIZE }),
+                getQuestionsPage({ offset: 0, limit: PAGE_SIZE }),
+            ]);
             setMeetings(meetingsPage.items);
             setQuestions(questionsPage.items);
             setMeetingsOffset(meetingsPage.nextOffset ?? meetingsPage.items.length);
@@ -81,7 +84,7 @@ export function useActivitySessions() {
         if (isLoadingMoreMeetings || !hasMoreMeetings) return;
         setIsLoadingMoreMeetings(true);
         try {
-            const page = await getMeetingsPage(meetingsOffset, PAGE_SIZE);
+            const page = await getMeetingsPage({ offset: meetingsOffset, limit: PAGE_SIZE });
             setMeetings(prev => [...prev, ...page.items]);
             setMeetingsOffset(page.nextOffset ?? meetingsOffset + page.items.length);
             setHasMoreMeetings(page.nextOffset !== null);
@@ -96,7 +99,7 @@ export function useActivitySessions() {
         if (isLoadingMoreQuestions || !hasMoreQuestions) return;
         setIsLoadingMoreQuestions(true);
         try {
-            const page = await getQuestionsPage(questionsOffset, PAGE_SIZE);
+            const page = await getQuestionsPage({ offset: questionsOffset, limit: PAGE_SIZE });
             setQuestions(prev => [...prev, ...page.items]);
             setQuestionsOffset(page.nextOffset ?? questionsOffset + page.items.length);
             setHasMoreQuestions(page.nextOffset !== null);

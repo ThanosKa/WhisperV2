@@ -104,7 +104,7 @@ function SessionDetailsContent() {
 
         setSavingTitle(true);
         try {
-            await updateSessionTitle(sessionId, t);
+            await updateSessionTitle({ sessionId, title: t });
             setSessionDetails(prev => (prev ? { ...prev, session: { ...prev.session, title: t } } : prev));
             setEditingTitle(false);
             window.dispatchEvent(new CustomEvent('sessionUpdated', { detail: { sessionId, title: t } }));

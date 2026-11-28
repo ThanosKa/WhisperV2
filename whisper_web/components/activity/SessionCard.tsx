@@ -45,7 +45,7 @@ export function SessionCard({ session, onDelete, deletingId, onTitleUpdate }: Se
         setSaving(true);
 
         try {
-            await updateSessionTitle(session.id, t);
+            await updateSessionTitle({ sessionId: session.id, title: t });
             setIsEditing(false);
             // Trigger parent refresh
             if (onTitleUpdate) onTitleUpdate();

@@ -73,11 +73,12 @@ const showScreenshotWindow = (base64Data, position) => {
     if (!screenshotWin || screenshotWin.isDestroyed()) {
         // Create window if it doesn't exist
         const header = windowPool.get('header');
-        if (header) {
+        if (header && !header.isDestroyed()) {
             createFeatureWindows(header, ['screenshot']);
-            // The page can take longer than 100 ms to load (Electron 45), and data sent before it
-            // listens is lost: send the data again once the page has loaded.
             const createdWin = windowPool.get('screenshot');
+            if (!createdWin || createdWin.isDestroyed()) return;
+            // The page can take longer than 100 ms to load (Electron 45), and data sent before it
+            // listens is lost: send the data once the page has loaded.
             createdWin.webContents.once('did-finish-load', () => {
                 if (!createdWin.isDestroyed()) createdWin.webContents.send('screenshot:data', base64Data);
             });
@@ -85,7 +86,6 @@ const showScreenshotWindow = (base64Data, position) => {
             setTimeout(() => {
                 const newWin = windowPool.get('screenshot');
                 if (newWin && !newWin.isDestroyed()) {
-                    newWin.webContents.send('screenshot:data', base64Data);
                     if (position) {
                         console.log('[WindowManager] Showing screenshot window at position:', position);
                         const currentBounds = newWin.getBounds();

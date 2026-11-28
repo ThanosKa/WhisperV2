@@ -6,6 +6,8 @@ import os from 'os';
 import shortcutsService from '../features/shortcuts/shortcutsService';
 import internalBridge from '../bridge/internalBridge';
 import askService from '../features/ask/askService';
+import { env } from '../features/common/config/env';
+import { apiBaseUrlArgument } from '../../shared/preloadArguments';
 
 // Main is bundled into out/main/: the preload is built into out/preload/, and the Lit renderer is
 // served from src/renderer/ with its esbuild bundles in public/build/ (build.js).
@@ -730,6 +732,7 @@ function createFeatureWindows(header, namesToCreate) {
             nodeIntegration: false,
             contextIsolation: true,
             preload: PRELOAD_PATH,
+            additionalArguments: [apiBaseUrlArgument(env.API_BASE_URL)],
         },
     };
 
@@ -983,6 +986,7 @@ function createWindows() {
             nodeIntegration: false,
             contextIsolation: true,
             preload: PRELOAD_PATH,
+            additionalArguments: [apiBaseUrlArgument(env.API_BASE_URL)],
             backgroundThrottling: false,
             webSecurity: false,
             enableRemoteModule: false,

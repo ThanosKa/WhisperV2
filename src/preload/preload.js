@@ -1,5 +1,6 @@
 // src/preload.js
 import { contextBridge, ipcRenderer } from 'electron';
+import { readApiBaseUrlArgument } from '../shared/preloadArguments';
 
 contextBridge.exposeInMainWorld('api', {
     // Platform information for renderer processes
@@ -10,9 +11,9 @@ contextBridge.exposeInMainWorld('api', {
         platform: process.platform,
     },
 
-    // Environment variables exposed to renderer
+    // Main's parsed API_BASE_URL, passed in the window arguments (src/shared/preloadArguments.ts)
     env: {
-        API_BASE_URL: process.env.API_BASE_URL || 'https://www.app-whisper.com',
+        API_BASE_URL: readApiBaseUrlArgument(process.argv) ?? '',
     },
 
     // Common utilities used across multiple components

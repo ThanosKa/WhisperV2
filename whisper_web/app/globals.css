@@ -64,6 +64,22 @@
   }
 }
 
+/*
+  Two more Tailwind 3 defaults that Tailwind 4 changed, kept as its upgrade guide suggests:
+  placeholders were gray-400 (now the text color at 50%), and buttons showed a pointer cursor (now the default arrow).
+*/
+@layer base {
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-gray-400);
+  }
+
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
 @utility text-balance {
   text-wrap: balance;
 }

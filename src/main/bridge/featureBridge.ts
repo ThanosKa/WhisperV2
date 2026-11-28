@@ -1,225 +1,235 @@
-// src/bridge/featureBridge.js
-import { ipcMain, app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, shell } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import * as settingsService from '../features/settings/settingsService';
 import authService from '../features/common/services/authService';
-// Model provider management removed (server-only)
 import shortcutsService from '../features/shortcuts/shortcutsService';
-import presetRepository from '../features/common/repositories/preset';
 import askService from '../features/ask/askService';
 import listenService from '../features/listen/listenService';
 import permissionService from '../features/common/services/permissionService';
 import { env } from '../features/common/config/env';
+import { errorMessage } from '../features/common/utils/errors';
+import { logger } from '../features/common/utils/logger';
+import { handle } from '../ipc/typedIpc';
+
+const log = logger.child({ module: 'FeatureBridge' });
+
+const updatesDisabledInDevelopment: { success: false; error: string } = { success: false, error: 'Development mode - updates disabled' };
 
 export default {
     // Receive requests from renderer and forward to services
     initialize() {
-        // Settings Service
-        ipcMain.handle('settings:getPresets', async () => await settingsService.getPresets());
-        ipcMain.handle('settings:getSettings', async () => await settingsService.getSettings());
-        ipcMain.handle('settings:saveSettings', async (event, settings) => await settingsService.saveSettings(settings));
-        ipcMain.handle('settings:get-auto-update', async () => await settingsService.getAutoUpdateSetting());
-        ipcMain.handle('settings:set-auto-update', async (event, isEnabled) => await settingsService.setAutoUpdateSetting(isEnabled));
-        ipcMain.handle('settings:get-app-version', async () => {
-            return app.getVersion();
-        });
-        // Removed legacy provider-model settings IPC
-
-        // Add new handler for opening DB path
-        ipcMain.handle('settings:open-db-path', async () => {
-            try {
-                const userDataPath = app.getPath('userData');
-                await shell.openPath(userDataPath);
-                console.log('[FeatureBridge] Opened DB folder:', userDataPath);
-                return { success: true };
-            } catch (error) {
-                console.error('[FeatureBridge] Failed to open DB folder:', error);
-                return { success: false, error: error.message };
-            }
+        // Settings
+        handle({ channel: 'settings:get-auto-update', handler: async () => await settingsService.getAutoUpdateSetting() });
+        handle({ channel: 'settings:set-auto-update', handler: async isEnabled => await settingsService.setAutoUpdateSetting(isEnabled) });
+        handle({ channel: 'settings:get-app-version', handler: async () => app.getVersion() });
+        handle({
+            channel: 'settings:open-db-path',
+            handler: async () => {
+                try {
+                    const userDataPath = app.getPath('userData');
+                    await shell.openPath(userDataPath);
+                    log.info({ userDataPath }, 'Opened DB folder');
+                    return { success: true };
+                } catch (error) {
+                    log.error({ err: error }, 'Failed to open DB folder');
+                    return { success: false, error: errorMessage(error) };
+                }
+            },
         });
 
         // Shortcuts
-        ipcMain.handle('settings:getCurrentShortcuts', async () => await shortcutsService.loadKeybinds());
-        ipcMain.handle('shortcut:toggleAllWindowsVisibility', async () => await shortcutsService.toggleAllWindowsVisibility());
+        handle({ channel: 'settings:getCurrentShortcuts', handler: async () => await shortcutsService.loadKeybinds() });
+        handle({ channel: 'shortcut:toggleAllWindowsVisibility', handler: async () => await shortcutsService.toggleAllWindowsVisibility() });
 
         // Permissions
-        ipcMain.handle('check-system-permissions', async () => await permissionService.checkSystemPermissions());
-        ipcMain.handle('request-microphone-permission', async () => await permissionService.requestMicrophonePermission());
-        ipcMain.handle('open-system-preferences', async (event, section) => await permissionService.openSystemPreferences(section));
+        handle({ channel: 'check-system-permissions', handler: async () => await permissionService.checkSystemPermissions() });
+        handle({ channel: 'request-microphone-permission', handler: async () => await permissionService.requestMicrophonePermission() });
+        handle({ channel: 'open-system-preferences', handler: async section => await permissionService.openSystemPreferences(section) });
 
         // User/Auth
-        ipcMain.handle('get-current-user', () => authService.getCurrentUser());
-        ipcMain.handle('start-webapp-auth', async () => await authService.startWebappAuthFlow());
-        ipcMain.handle('reset-auth-state', async () => {
-            // Reset auth state - this is a no-op on the backend
-            // The actual state reset happens in the renderer
-            return { success: true };
-        });
-
-        // New logout handler
-        ipcMain.handle('sign-out', async () => {
-            await authService.signOut();
-            return { success: true };
+        handle({ channel: 'get-current-user', handler: () => authService.getCurrentUser() });
+        handle({ channel: 'start-webapp-auth', handler: async () => await authService.startWebappAuthFlow() });
+        // A no-op in main: the renderer resets its own auth state
+        handle({ channel: 'reset-auth-state', handler: async () => ({ success: true }) });
+        handle({
+            channel: 'sign-out',
+            handler: async () => {
+                await authService.signOut();
+                return { success: true };
+            },
         });
 
         // App
-        ipcMain.handle('quit-application', () => app.quit());
+        handle({ channel: 'quit-application', handler: () => app.quit() });
 
-        // Auto-update handlers
-        ipcMain.handle('app:check-for-updates', async () => {
-            try {
-                if (env.NODE_ENV === 'development') {
-                    return { success: false, error: 'Development mode - updates disabled' };
+        // Auto-update
+        handle({
+            channel: 'app:check-for-updates',
+            handler: async () => {
+                try {
+                    if (env.NODE_ENV === 'development') return updatesDisabledInDevelopment;
+                    await autoUpdater.checkForUpdatesAndNotify();
+                    return { success: true };
+                } catch (error) {
+                    log.error({ err: error }, 'Error checking for updates');
+                    return { success: false, error: errorMessage(error) };
                 }
-                await autoUpdater.checkForUpdatesAndNotify();
-                return { success: true };
-            } catch (error) {
-                console.error('[FeatureBridge] Error checking for updates:', error);
-                return { success: false, error: error.message };
-            }
+            },
         });
 
-        ipcMain.handle('app:install-update', async () => {
-            try {
-                if (env.NODE_ENV === 'development') {
-                    return { success: false, error: 'Development mode - updates disabled' };
+        handle({
+            channel: 'app:install-update',
+            handler: async () => {
+                try {
+                    if (env.NODE_ENV === 'development') return updatesDisabledInDevelopment;
+
+                    // Force close all windows to prevent "zombie" processes from blocking quit
+                    // Using destroy() bypasses close event listeners that might prevent quit
+                    log.info('Force closing all windows before update install');
+                    BrowserWindow.getAllWindows().forEach(win => {
+                        if (win && !win.isDestroyed()) {
+                            log.info({ windowId: win.id }, 'Destroying window');
+                            win.destroy();
+                        }
+                    });
+
+                    // Small delay to ensure windows are fully destroyed
+                    await new Promise(resolve => setTimeout(resolve, 100));
+
+                    // isSilent=false: show normal quit behavior; isForceRunAfter=true: launch the updated app immediately
+                    log.info('Calling quitAndInstall');
+                    autoUpdater.quitAndInstall(false, true);
+                    return { success: true };
+                } catch (error) {
+                    log.error({ err: error }, 'Error installing update');
+                    return { success: false, error: errorMessage(error) };
                 }
-
-                // Force close all windows to prevent "zombie" processes from blocking quit
-                // Using destroy() bypasses close event listeners that might prevent quit
-                console.log('[FeatureBridge] Force closing all windows before update install...');
-                const allWindows = BrowserWindow.getAllWindows();
-                allWindows.forEach(win => {
-                    if (win && !win.isDestroyed()) {
-                        console.log('[FeatureBridge] Destroying window:', win.id);
-                        win.destroy();
-                    }
-                });
-
-                // Small delay to ensure windows are fully destroyed
-                await new Promise(resolve => setTimeout(resolve, 100));
-
-                // quitAndInstall(isSilent=false, isForceRunAfter=true)
-                // isSilent=false: Show normal quit behavior
-                // isForceRunAfter=true: Force launch the updated app immediately
-                console.log('[FeatureBridge] Calling quitAndInstall...');
-                autoUpdater.quitAndInstall(false, true);
-                return { success: true };
-            } catch (error) {
-                console.error('[FeatureBridge] Error installing update:', error);
-                return { success: false, error: error.message };
-            }
+            },
         });
-
-        // General
-        ipcMain.handle('get-preset-templates', () => presetRepository.getPresetTemplates());
-        ipcMain.handle('get-web-url', () => process.env.whisper_WEB_URL || 'http://localhost:3000');
 
         // Ask
-        ipcMain.handle('ask:sendQuestionFromAsk', async (event, userPrompt, useScreenCapture = true, webSearchEnabled = false) => {
-            // Get conversation history from listenService and pass it to askService
-            const conversationHistory = listenService.getConversationHistory();
-            console.log(
-                `[FeatureBridge] ask:sendQuestionFromAsk: clickLen=${userPrompt?.length || 0}, historyItems=${conversationHistory.length}, useScreenCapture=${useScreenCapture}, webSearchEnabled=${webSearchEnabled}`
-            );
-            if (Array.isArray(conversationHistory)) {
-                const preview = conversationHistory.slice(-2);
-                console.log('[FeatureBridge] history preview:', JSON.stringify(preview));
-            }
-            return await askService.sendMessageManual({ userPrompt, conversationHistory, useScreenCapture, webSearchEnabled });
+        handle({
+            channel: 'ask:sendQuestionFromAsk',
+            handler: async (userPrompt, useScreenCapture = true, webSearchEnabled = false) => {
+                // Get conversation history from listenService and pass it to askService
+                const conversationHistory = listenService.getConversationHistory();
+                log.info(
+                    { channel: 'ask:sendQuestionFromAsk', clickLen: userPrompt.length, historyItems: conversationHistory.length, useScreenCapture, webSearchEnabled },
+                    'Question from Ask'
+                );
+                log.info({ preview: JSON.stringify(conversationHistory.slice(-2)) }, 'History preview');
+                return await askService.sendMessageManual({ userPrompt, conversationHistory, useScreenCapture, webSearchEnabled });
+            },
         });
-        ipcMain.handle('ask:sendQuestionFromSummary', async (event, userPrompt) => {
-            // Get conversation history from listenService and pass it to askService
-            const conversationHistory = listenService.getConversationHistory();
-            console.log(
-                `[FeatureBridge] ask:sendQuestionFromSummary: clickLen=${userPrompt?.length || 0}, historyItems=${conversationHistory.length}`
-            );
-            if (Array.isArray(conversationHistory)) {
-                const preview = conversationHistory.slice(-2);
-                console.log('[FeatureBridge] history preview:', JSON.stringify(preview));
-            }
-            const presetId = listenService.summaryService.selectedPresetId;
-            return await askService.sendMessage({ userPrompt, conversationHistory, presetId });
+        handle({
+            channel: 'ask:sendQuestionFromSummary',
+            handler: async userPrompt => {
+                // Get conversation history from listenService and pass it to askService
+                const conversationHistory = listenService.getConversationHistory();
+                log.info(
+                    { channel: 'ask:sendQuestionFromSummary', clickLen: userPrompt.length, historyItems: conversationHistory.length },
+                    'Question from Summary'
+                );
+                log.info({ preview: JSON.stringify(conversationHistory.slice(-2)) }, 'History preview');
+                const presetId = listenService.summaryService.selectedPresetId;
+                return await askService.sendMessage({ userPrompt, conversationHistory, presetId });
+            },
         });
-        ipcMain.handle('ask:toggleAskButton', async () => await askService.toggleAskButton());
-        ipcMain.handle('ask:setUseScreenCapture', async (event, value) => {
-            askService.state.useScreenCapture = value;
+        handle({ channel: 'ask:toggleAskButton', handler: async () => await askService.toggleAskButton() });
+        handle({
+            channel: 'ask:setUseScreenCapture',
+            handler: async value => {
+                askService.state.useScreenCapture = value;
+            },
         });
-        ipcMain.handle('ask:closeAskWindow', async () => await askService.closeAskWindow());
-        ipcMain.handle('ask:interruptStream', () => {
-            askService.interruptStream();
+        handle({ channel: 'ask:closeAskWindow', handler: async () => await askService.closeAskWindow() });
+        handle({
+            channel: 'ask:interruptStream',
+            handler: () => {
+                askService.interruptStream();
+            },
         });
 
         // Listen
-        ipcMain.handle('listen:sendMicAudio', async (event, { data, mimeType }) => await listenService.handleSendMicAudioContent({ data, mimeType }));
-        ipcMain.handle('listen:sendSystemAudio', async (event, { data, mimeType }) => {
-            const result = await listenService.sttService.sendSystemAudioContent({ data, mimeType });
-            if (result.success) {
-                listenService.sendToRenderer({ channel: 'system-audio-data', data: { data } });
-            }
-            return result;
+        handle({ channel: 'listen:sendMicAudio', handler: async ({ data, mimeType }) => await listenService.handleSendMicAudioContent({ data, mimeType }) });
+        handle({
+            channel: 'listen:sendSystemAudio',
+            handler: async ({ data, mimeType }) => {
+                const result = await listenService.sttService.sendSystemAudioContent({ data, mimeType });
+                if (result.success) {
+                    listenService.sendToRenderer({ channel: 'system-audio-data', data: { data } });
+                }
+                return result;
+            },
         });
-        ipcMain.handle('listen:startMacosSystemAudio', async () => await listenService.handleStartMacosAudio());
-        ipcMain.handle('listen:stopMacosSystemAudio', async () => await listenService.handleStopMacosAudio());
-        ipcMain.handle('listen:isSessionActive', async () => await listenService.isSessionActive());
-        ipcMain.handle('listen:changeSession', async (event, listenButtonText) => {
-            console.log('[FeatureBridge] listen:changeSession from mainheader', listenButtonText);
-            try {
-                await listenService.handleListenRequest(listenButtonText);
-                return { success: true };
-            } catch (error) {
-                console.error('[FeatureBridge] listen:changeSession failed', error.message);
-                return { success: false, error: error.message };
-            }
+        handle({ channel: 'listen:startMacosSystemAudio', handler: async () => await listenService.handleStartMacosAudio() });
+        handle({ channel: 'listen:stopMacosSystemAudio', handler: async () => await listenService.handleStopMacosAudio() });
+        handle({ channel: 'listen:isSessionActive', handler: async () => listenService.isSessionActive() });
+        handle({
+            channel: 'listen:changeSession',
+            handler: async listenButtonText => {
+                log.info({ listenButtonText }, 'listen:changeSession from main header');
+                try {
+                    await listenService.handleListenRequest(listenButtonText);
+                    return { success: true };
+                } catch (error) {
+                    log.error({ err: error, listenButtonText }, 'listen:changeSession failed');
+                    return { success: false, error: errorMessage(error) };
+                }
+            },
         });
-        // Analysis presets for Listen (Phase 1)
-        ipcMain.handle('listen:listAnalysisPresets', async () => {
-            return await settingsService.getPresets();
+        // Analysis presets for Listen
+        handle({ channel: 'listen:listAnalysisPresets', handler: async () => await settingsService.getPresets() });
+        handle({
+            channel: 'listen:getAnalysisPreset',
+            handler: async () => {
+                const current = await settingsService.getSettings();
+                return { presetId: current.analysisPresetId || null };
+            },
         });
-        ipcMain.handle('listen:getAnalysisPreset', async () => {
-            const current = await settingsService.getSettings();
-            return { presetId: current?.analysisPresetId || null };
-        });
-        ipcMain.handle('listen:setAnalysisPreset', async (event, { presetId }) => {
-            try {
-                // Persist selection
-                await settingsService.saveSettings({ analysisPresetId: presetId || null });
-                // Apply to summary service via listenService
-                await listenService.summaryService.setAnalysisPreset(presetId || null);
-                return { success: true };
-            } catch (err) {
-                console.error('[FeatureBridge] listen:setAnalysisPreset failed:', err.message);
-                return { success: false, error: err.message };
-            }
+        handle({
+            channel: 'listen:setAnalysisPreset',
+            handler: async ({ presetId }) => {
+                try {
+                    // Persist selection
+                    await settingsService.saveSettings({ analysisPresetId: presetId || null });
+                    // Apply to summary service via listenService
+                    await listenService.summaryService.setAnalysisPreset(presetId || null);
+                    return { success: true };
+                } catch (error) {
+                    log.error({ err: error, presetId }, 'listen:setAnalysisPreset failed');
+                    return { success: false, error: errorMessage(error) };
+                }
+            },
         });
 
         // Recovery actions
-        ipcMain.handle('listen:handleRecoveryAction', async (event, action, sessionId) => {
-            try {
-                return await listenService.handleRecoveryAction({ action, sessionId });
-            } catch (error) {
-                console.error('[FeatureBridge] Recovery action failed:', error);
-                return { success: false, error: error.message };
-            }
+        handle({
+            channel: 'listen:handleRecoveryAction',
+            handler: async (action, sessionId) => {
+                try {
+                    return await listenService.handleRecoveryAction({ action, sessionId });
+                } catch (error) {
+                    log.error({ err: error, action, sessionId }, 'Recovery action failed');
+                    return { success: false, error: errorMessage(error) };
+                }
+            },
         });
-        ipcMain.handle('listen:getStrandedSession', async () => {
-            try {
-                return listenService.getStrandedSessionInfo();
-            } catch (error) {
-                console.error('[FeatureBridge] listen:getStrandedSession failed:', error);
-                return null;
-            }
+        handle({
+            channel: 'listen:getStrandedSession',
+            handler: async () => {
+                try {
+                    return listenService.getStrandedSessionInfo();
+                } catch (error) {
+                    log.error({ err: error }, 'listen:getStrandedSession failed');
+                    return null;
+                }
+            },
         });
 
-        // Model provider IPC removed; keep a no-op re-initialize for header compat
-        ipcMain.handle('model:re-initialize-state', async () => ({ success: true }));
-        // Removed broadcasting model-state/settings-updated from modelStateService
+        // Model providers are server-only; the header still calls this, so it stays a no-op
+        handle({ channel: 'model:re-initialize-state', handler: async () => ({ success: true }) });
 
-        console.log('[FeatureBridge] Initialized with core feature handlers.');
-    },
-
-    // Send status to renderer
-    sendAskProgress(win, progress) {
-        win.webContents.send('feature:ask:progress', progress);
+        log.info('Initialized with core feature handlers');
     },
 };

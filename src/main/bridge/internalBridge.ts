@@ -1,11 +1,5 @@
-// src/bridge/internalBridge.js
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 
-// Internal event bus connecting FeatureCore and WindowCore
+// Internal event bus connecting the features and the window manager
 const internalBridge = new EventEmitter();
 export default internalBridge;
-
-// Example event
-// internalBridge.on('content-protection-changed', (enabled) => {
-//   // Handle in windowManager
-// });

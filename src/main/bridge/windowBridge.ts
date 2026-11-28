@@ -1,70 +1,65 @@
-// src/bridge/windowBridge.js
-import { ipcMain, shell, BrowserWindow } from 'electron';
+import { shell, BrowserWindow } from 'electron';
 import * as windowManager from '../window/windowManager';
+import { handle, on, sendEvent } from '../ipc/typedIpc';
 
 // Bridge only registers IPC handlers (no business logic)
 export default {
     initialize() {
-        // Existing IPC handlers
-        ipcMain.handle('toggle-content-protection', () => windowManager.toggleContentProtection());
-        ipcMain.handle('resize-header-window', (event, args) => windowManager.resizeHeaderWindow(args));
-        ipcMain.handle('get-content-protection-status', () => windowManager.getContentProtectionStatus());
-        ipcMain.on('show-settings-window', () => windowManager.showSettingsWindow());
-        ipcMain.on('hide-settings-window', () => windowManager.hideSettingsWindow());
-        ipcMain.on('cancel-hide-settings-window', () => windowManager.cancelHideSettingsWindow());
+        handle({ channel: 'toggle-content-protection', handler: () => windowManager.toggleContentProtection() });
+        handle({ channel: 'resize-header-window', handler: args => windowManager.resizeHeaderWindow(args) });
+        handle({ channel: 'get-content-protection-status', handler: () => windowManager.getContentProtectionStatus() });
+        on({ channel: 'show-settings-window', listener: () => windowManager.showSettingsWindow() });
+        on({ channel: 'hide-settings-window', listener: () => windowManager.hideSettingsWindow() });
+        on({ channel: 'cancel-hide-settings-window', listener: () => windowManager.cancelHideSettingsWindow() });
         // Screenshot window show/hide
-        ipcMain.on('show-screenshot-window', (event, { base64Data, position }) => windowManager.showScreenshotWindow({ base64Data, position }));
-        ipcMain.on('hide-screenshot-window', () => windowManager.hideScreenshotWindow());
-        ipcMain.on('cancel-hide-screenshot-window', () => windowManager.cancelHideScreenshotWindow());
+        on({ channel: 'show-screenshot-window', listener: ({ base64Data, position }) => windowManager.showScreenshotWindow({ base64Data, position }) });
+        on({ channel: 'hide-screenshot-window', listener: () => windowManager.hideScreenshotWindow() });
+        on({ channel: 'cancel-hide-screenshot-window', listener: () => windowManager.cancelHideScreenshotWindow() });
         // Plan tooltip show/hide
-        ipcMain.on('window:showPlanWindow', (event, { visible }) => windowManager.showPlanWindow(visible));
-        ipcMain.on('hide-plan-window', () => windowManager.hidePlanWindow());
-        ipcMain.on('cancel-hide-plan-window', () => windowManager.cancelHidePlanWindow());
+        on({ channel: 'window:showPlanWindow', listener: ({ visible }) => windowManager.showPlanWindow(visible) });
+        on({ channel: 'hide-plan-window', listener: () => windowManager.hidePlanWindow() });
+        on({ channel: 'cancel-hide-plan-window', listener: () => windowManager.cancelHidePlanWindow() });
 
-        // Recovery toast show/hide
-        ipcMain.handle('recovery-toast:show', (event, sessionInfo, headerBounds) => {
-            windowManager.showRecoveryToast({ sessionInfo, headerBounds });
-            return { success: true };
+        // Recovery toast
+        handle({
+            channel: 'recovery-toast:show',
+            handler: (sessionInfo, headerBounds) => {
+                windowManager.showRecoveryToast({ sessionInfo, headerBounds });
+                return { success: true };
+            },
         });
-        ipcMain.handle('recovery-toast:hide', () => {
-            windowManager.hideRecoveryToast();
-            return { success: true };
-        });
 
-        ipcMain.handle('open-login-page', () => windowManager.openLoginPage());
-        ipcMain.handle('open-personalize-page', () => windowManager.openLoginPage());
-        ipcMain.handle('move-window-step', (event, direction) => windowManager.moveWindowStep(direction));
-        ipcMain.handle('open-external', (event, url) => shell.openExternal(url));
+        handle({ channel: 'open-personalize-page', handler: () => windowManager.openLoginPage() });
+        handle({ channel: 'move-window-step', handler: direction => windowManager.moveWindowStep(direction) });
+        handle({ channel: 'open-external', handler: url => shell.openExternal(url) });
 
-        // Newly moved handlers from windowManager
-        ipcMain.on('header-state-changed', (event, state) => windowManager.handleHeaderStateChanged(state));
-        ipcMain.on('header-animation-finished', (event, state) => windowManager.handleHeaderAnimationFinished(state));
-        ipcMain.handle('get-header-position', () => windowManager.getHeaderPosition());
-        ipcMain.handle('move-header-to', (event, newX, newY) => windowManager.moveHeaderTo({ newX, newY }));
-        ipcMain.handle('adjust-window-height', (event, { winName, height }) => windowManager.adjustWindowHeight({ winName, targetHeight: height }));
+        on({ channel: 'header-state-changed', listener: state => windowManager.handleHeaderStateChanged(state) });
+        on({ channel: 'header-animation-finished', listener: state => windowManager.handleHeaderAnimationFinished(state) });
+        handle({ channel: 'get-header-position', handler: () => windowManager.getHeaderPosition() });
+        handle({ channel: 'move-header-to', handler: (newX, newY) => windowManager.moveHeaderTo({ newX, newY }) });
+        handle({ channel: 'adjust-window-height', handler: ({ winName, height }) => windowManager.adjustWindowHeight({ winName, targetHeight: height }) });
 
         // Window visibility controls
-        ipcMain.handle('window:set-visibility', (event, { name, visible }) => windowManager.setWindowVisibility({ name, visible }));
-        ipcMain.handle('window:is-visible', (event, name) => windowManager.isWindowVisible(name));
+        handle({ channel: 'window:set-visibility', handler: ({ name, visible }) => windowManager.setWindowVisibility({ name, visible }) });
+        handle({ channel: 'window:is-visible', handler: name => windowManager.isWindowVisible(name) });
 
         // Display management
-        ipcMain.handle('get-displays', () => windowManager.listDisplays());
-        ipcMain.handle('move-to-display', (event, displayId) => windowManager.moveToDisplay(displayId));
+        handle({ channel: 'get-displays', handler: () => windowManager.listDisplays() });
+        handle({ channel: 'move-to-display', handler: displayId => windowManager.moveToDisplay(displayId) });
 
         // Force show permission onboarding
-        ipcMain.handle('header:force-show-permission', () => windowManager.forceShowPermissionOnboarding());
+        handle({ channel: 'header:force-show-permission', handler: () => windowManager.forceShowPermissionOnboarding() });
 
-        // Auth events
-        ipcMain.on('auth-started', event => {
-            BrowserWindow.getAllWindows().forEach(win => {
-                if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
-                    win.webContents.send('auth-started');
-                }
-            });
+        // Auth events: one window starting sign-in tells every window
+        on({
+            channel: 'auth-started',
+            listener: () => {
+                BrowserWindow.getAllWindows().forEach(win => {
+                    if (win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed()) {
+                        sendEvent({ webContents: win.webContents, channel: 'auth-started', args: [] });
+                    }
+                });
+            },
         });
-    },
-
-    notifyFocusChange(win, isFocused) {
-        win.webContents.send('window:focus-change', isFocused);
     },
 };

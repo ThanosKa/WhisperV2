@@ -20,11 +20,14 @@ protocols:
 
 # List of files to be included in the app package
 files:
-    - src/**/*
-    - package.json
-    - whisper_web/backend_node/dist/**/*
-    - '!**/node_modules/electron/**'
+    # electron-vite output: main (out/main/, with the dashboard backend_node bundled in) and preload
+    # (out/preload/).
+    - out/**/*
+    # The Lit renderer: its HTML entries, assets and SystemAudioDump, and its esbuild bundles.
+    - src/renderer/**/*
     - public/build/**/*
+    - package.json
+    - '!**/node_modules/electron/**'
 
 # Additional resources to be copied into the app's resources directory
 extraResources:
@@ -36,7 +39,7 @@ extraResources:
 npmRebuild: false
 
 asarUnpack:
-    - 'src/ui/assets/SystemAudioDump'
+    - 'src/renderer/assets/SystemAudioDump'
     - '**/node_modules/sharp/**/*'
     - '**/node_modules/@img/**/*'
 
@@ -46,7 +49,7 @@ afterSign: notarize.js
 # Windows configuration
 win:
     executableName: whisper # Creates whisper.exe to fix "Open Electron?" issue
-    icon: src/ui/assets/wlogo.ico
+    icon: src/renderer/assets/wlogo.ico
     target:
         - target: nsis
           arch: x64
@@ -73,7 +76,7 @@ mac:
     # The application category type
     category: public.app-category.utilities
     # Path to the .icns icon file
-    icon: src/ui/assets/wlogo.icns
+    icon: src/renderer/assets/wlogo.icns
     # Minimum macOS version, written to Info.plist as LSMinimumSystemVersion. Electron 44 and
     # later need macOS 13. The update feed carries the same floor as a Darwin version (see
     # scripts/add-mac-feed-minimum-system-version.js).
@@ -99,7 +102,7 @@ linux:
     # The application category
     category: AudioVideo
     # Path to the icon file
-    icon: src/ui/assets/wlogo.png
+    icon: src/renderer/assets/wlogo.png
     # Desktop entry configuration (updated for electron-builder v26)
     desktop:
         entry:

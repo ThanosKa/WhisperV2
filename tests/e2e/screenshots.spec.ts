@@ -1,9 +1,11 @@
-import type { ElectronApplication, Page } from '@playwright/test';
-import { FAKE_ANSWER, FAKE_TRANSCRIPT, FAKE_USER } from './fakeServer';
-import { expect, findWindow, test } from './fixtures';
+import type { Page } from '@playwright/test';
+import { FAKE_USER } from './fakeServer';
+import { expect, findWindow, test, type RunningApp } from './fixtures';
+import { askAQuestion, listenUntilTranscript } from './flows';
 
-// One screenshot per window in its normal state, compared with an exact match. Playwright's
-// default `animations: 'disabled'` stops CSS animations, and the launch fixes the scale at 1.
+// One screenshot per window in its normal state, compared with an exact match: `threshold: 0`
+// (Playwright's default lets each pixel's colour differ by 0.2). Playwright's default
+// `animations: 'disabled'` stops CSS animations, and the launch fixes the scale at 1.
 
 // The look that does not depend on the moment or the Mac:
 // - no hover: the windows are on the real screen, so the Mac's own mouse pointer may rest on one
@@ -54,16 +56,11 @@ async function waitForStillWindow({ page }: { page: Page }) {
 async function expectWindowScreenshot({ page, name }: { page: Page; name: string }) {
     await applyStableLook({ page });
     await waitForStillWindow({ page });
-    await expect(page).toHaveScreenshot(name);
+    await expect(page).toHaveScreenshot(name, { threshold: 0 });
 }
 
-async function askAQuestion({ electronApp, headerWindow }: { electronApp: ElectronApplication; headerWindow: Page }) {
-    await headerWindow.locator('main-header .ask-action').click();
-    const askWindow = await findWindow({ electronApp, view: 'ask' });
-    const input = askWindow.locator('#textInput');
-    await input.fill('What does the fake server say?');
-    await input.press('Enter');
-    await expect(askWindow.locator('.msg-assistant .msg-content')).toHaveText(FAKE_ANSWER);
+async function askWithScreenshot(app: RunningApp) {
+    const askWindow = await askAQuestion(app);
     await expect(askWindow.locator('.screenshot-indicator')).toHaveCount(1);
     return askWindow;
 }
@@ -74,12 +71,12 @@ test('header window', async ({ headerWindow }) => {
 });
 
 test('Ask window', async ({ electronApp, headerWindow }) => {
-    const askWindow = await askAQuestion({ electronApp, headerWindow });
+    const askWindow = await askWithScreenshot({ electronApp, headerWindow });
     await expectWindowScreenshot({ page: askWindow, name: 'ask.png' });
 });
 
 test('Screenshot window', async ({ electronApp, headerWindow }) => {
-    const askWindow = await askAQuestion({ electronApp, headerWindow });
+    const askWindow = await askWithScreenshot({ electronApp, headerWindow });
     await askWindow.locator('.screenshot-indicator').hover();
     const screenshotWindow = await findWindow({ electronApp, view: 'screenshot' });
     await expect(screenshotWindow.locator('.screenshot-image')).toBeVisible();
@@ -87,10 +84,7 @@ test('Screenshot window', async ({ electronApp, headerWindow }) => {
 });
 
 test('Listen window', async ({ electronApp, headerWindow }) => {
-    await headerWindow.locator('main-header .listen-button').first().click();
-    const listenWindow = await findWindow({ electronApp, view: 'listen' });
-    await listenWindow.getByRole('button', { name: 'Show Transcript' }).click();
-    await expect(listenWindow.locator('.stt-message')).toHaveText([FAKE_TRANSCRIPT]);
+    const listenWindow = await listenUntilTranscript({ electronApp, headerWindow });
     await expectWindowScreenshot({ page: listenWindow, name: 'listen.png' });
 });
 

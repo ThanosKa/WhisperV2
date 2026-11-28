@@ -38,7 +38,6 @@ function readYaml({ file }) {
     return parsed;
 }
 
-// The macOS floor of the build, as written to Info.plist: `mac.minimumSystemVersion`.
 function readMacosFloor({ buildConfig }) {
     const mac = buildConfig.mac;
     const floor = isRecord(mac) ? mac.minimumSystemVersion : undefined;

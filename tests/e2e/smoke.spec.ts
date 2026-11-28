@@ -1,20 +1,8 @@
-import type { ElectronApplication, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { queryDatabase } from './database';
-import { FAKE_ANSWER, FAKE_TRANSCRIPT, type FakeServer } from './fakeServer';
-import { expect, findWindow, test } from './fixtures';
-
-const listenButton = (headerWindow: Page) => headerWindow.locator('main-header .listen-button').first();
-
-// Starts Listen and waits for the fake transcript in the Listen window. The fake relay sends it
-// once microphone audio arrives, so this also shows that the fake microphone reached the relay.
-async function listenUntilTranscript({ electronApp, headerWindow }: { electronApp: ElectronApplication; headerWindow: Page }) {
-    await listenButton(headerWindow).click();
-    await expect(listenButton(headerWindow)).toHaveClass(/active/);
-    const listenWindow = await findWindow({ electronApp, view: 'listen' });
-    await listenWindow.getByRole('button', { name: 'Show Transcript' }).click();
-    await expect(listenWindow.locator('.stt-message')).toHaveText([FAKE_TRANSCRIPT]);
-    return listenWindow;
-}
+import { FAKE_TRANSCRIPT, type FakeServer } from './fakeServer';
+import { expect, findWindow, test, type RunningApp } from './fixtures';
+import { askAQuestion, listenButton, listenUntilTranscript, QUESTION } from './flows';
 
 // Stop, then Done, then wait until the Listen window has finished hiding and the summary request
 // that Done sends in the background has arrived. Closing the app during the 250 ms fade-out makes
@@ -24,16 +12,14 @@ async function finishListening({
     headerWindow,
     listenWindow,
     fakeServer,
-}: {
-    electronApp: ElectronApplication;
-    headerWindow: Page;
+}: RunningApp & {
     listenWindow: Page;
     fakeServer: FakeServer;
 }) {
-    await listenButton(headerWindow).click();
-    await expect(listenButton(headerWindow)).toHaveClass(/paused/);
+    await listenButton({ headerWindow }).click();
+    await expect(listenButton({ headerWindow })).toHaveClass(/paused/);
     await headerWindow.locator('main-header .listen-button.done').click();
-    await expect(listenButton(headerWindow)).not.toHaveClass(/paused|active/);
+    await expect(listenButton({ headerWindow })).not.toHaveClass(/paused|active/);
     const listenBrowserWindow = await electronApp.browserWindow(listenWindow);
     await expect.poll(() => listenBrowserWindow.evaluate(win => win.isVisible())).toBe(false);
     await expect.poll(() => fakeServer.llmRequests.some(({ route }) => route === 'chat')).toBe(true);
@@ -46,17 +32,10 @@ test('the app opens on the main header', async ({ headerWindow }) => {
 });
 
 test('Ask streams the answer to a typed question', async ({ electronApp, headerWindow, fakeServer }) => {
-    await headerWindow.locator('main-header .ask-action').click();
-    const askWindow = await findWindow({ electronApp, view: 'ask' });
+    await askAQuestion({ electronApp, headerWindow });
 
-    const question = 'What does the fake server say?';
-    const input = askWindow.locator('#textInput');
-    await input.fill(question);
-    await input.press('Enter');
-
-    await expect(askWindow.locator('.msg-assistant .msg-content')).toHaveText(FAKE_ANSWER);
     expect(fakeServer.llmRequests.map(({ route }) => route)).toEqual(['stream']);
-    expect(JSON.stringify(fakeServer.llmRequests[0]?.body)).toContain(question);
+    expect(JSON.stringify(fakeServer.llmRequests[0]?.body)).toContain(QUESTION);
 });
 
 test('Listen shows the transcript and saves the session', async ({ electronApp, headerWindow, fakeServer, userDataDir }) => {

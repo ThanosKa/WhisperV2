@@ -1,83 +1,131 @@
+import { z } from 'zod';
 import * as llmClient from '../../common/ai/llmClient';
 import sessionRepository from '../../common/repositories/session';
+import type { ResolvedPreset } from '../../common/repositories/preset';
 import summaryRepository from './repositories';
+import type { InsightPayload } from './repositories';
 import config from '../../common/config/config';
-import * as mockAnalysisData from '../../common/mocks/mockAnalysisData';
 import * as settingsService from '../../settings/settingsService';
-import sttRepository from '../stt/repositories';
 import { windowPool } from '../../../window/windowManager';
+import { logger } from '../../common/utils/logger';
+import { errorMessage } from '../../common/utils/errors';
 import fs from 'fs';
 import path from 'path';
 
+const log = logger.child({ module: 'SummaryService' });
+
+// Recent turns sent with each analysis request.
+const MAX_TURNS = 30;
+
+// The result of one analysis round, as the Listen window shows it. A round restored from the
+// database (`hydrateInsights`) also carries `sections`; a parsed LLM answer carries `rawLLMOutput`.
+export type AnalysisResult = {
+    summary: string[];
+    actions: string[];
+    followUps: string[];
+    rawLLMOutput?: unknown;
+    sections?: unknown[];
+};
+
+type AnalysisRound = { timestamp: number; data: AnalysisResult; conversationLength: number };
+
+// `analysisHistory` holds the rounds of this run and the round restored after a crash.
+type AnalysisHistoryEntry = AnalysisRound | InsightPayload;
+
+export type AnalysisContext = {
+    definedTerms: string[];
+    detectedQuestions: string[];
+    analysisProfile: string | null;
+    selectedPresetId: string | null;
+};
+
+export type SummaryCallbacks = {
+    onAnalysisComplete: (data: AnalysisResult) => void;
+    onStatusUpdate: (status: string) => void;
+};
+
+// A default preset's prompt may be JSON naming the analysis role.
+const RolePromptSchema = z.object({ kind: z.literal('analysis_role'), role: z.string() });
+
+// The analysis answer from WhisperAPP's LLM route: JSON with a list of sections.
+const AnalysisEnvelopeSchema = z.object({ sections: z.array(z.unknown()) });
+const AnalysisSectionSchema = z.object({ type: z.string(), items: z.array(z.unknown()) });
+const SectionItemsSchema = z.array(z.string());
+
+const KNOWN_SECTION_TYPES = new Set([
+    'insights',
+    'opportunities',
+    'questions',
+    'follow_ups',
+    'buyer_questions',
+    'defines',
+    'objections',
+    'strengths',
+    'gaps',
+    'suggested_questions',
+    'issue_summary',
+    'root_causes',
+    'troubleshooting',
+    'key_concepts',
+    'unclear_points',
+    'study_questions',
+    'searches',
+]);
+
+type SectionRead = { kind: 'section'; type: string; items: string[] } | { kind: 'skip' } | { kind: 'invalid'; reason: string };
+
+// Reads one entry of `sections` the way the untyped code did: an entry of no known type, or whose
+// `items` is not a list, is skipped; a null entry, or a known one holding a non-text item, made
+// the old code throw, which fell back as if the answer were not JSON.
+function readSection(raw: unknown): SectionRead {
+    if (raw === null || raw === undefined) return { kind: 'invalid', reason: 'Section is null' };
+    const shape = AnalysisSectionSchema.safeParse(raw);
+    if (!shape.success || !KNOWN_SECTION_TYPES.has(shape.data.type)) return { kind: 'skip' };
+    const items = SectionItemsSchema.safeParse(shape.data.items);
+    if (!items.success) return { kind: 'invalid', reason: 'Section item is not text' };
+    return { kind: 'section', type: shape.data.type, items: items.data };
+}
+
 class SummaryService {
-    constructor() {
-        this.previousAnalysisResult = null;
-        this.analysisHistory = [];
-        this.conversationHistory = [];
-        this.currentSessionId = null;
-        this.definedTerms = new Set(); // Track previously defined terms
-        this.lastAnalyzedIndex = 0; // Track how many utterances we've already analyzed
-        this.detectedQuestions = new Set(); // Track previously detected questions
-        this.analysisProfile = 'meeting_analysis'; // base template id
-        this.mockMode = false; // New: Mock STT mode flag (enabled for testing)
-        console.log('[SummaryService] Mock STT mode enabled by default for testing');
-        this.mockDataMap = null; // Will load mock convo data
-        this.analysisRound = 0; // Track analysis rounds for debugging
+    previousAnalysisResult: AnalysisResult | null = null;
+    analysisHistory: AnalysisHistoryEntry[] = [];
+    conversationHistory: string[] = [];
+    currentSessionId: string | null = null;
+    definedTerms = new Set<string>(); // Track previously defined terms
+    lastAnalyzedIndex = 0; // Track how many utterances we've already analyzed
+    detectedQuestions = new Set<string>(); // Track previously detected questions
+    analysisProfile: string | null = 'meeting_analysis'; // base template id
+    analysisRound = 0; // Track analysis rounds for debugging
 
-        // Phase 1: Analysis preset selection state
-        this.selectedPresetId = null;
-        this.selectedRoleText = '';
-        this.customSystemPrompt = null; // New: For full custom system prompts
+    // Phase 1: Analysis preset selection state
+    selectedPresetId: string | null = null;
+    selectedRoleText = '';
+    customSystemPrompt: string | null = null; // New: For full custom system prompts
 
-        // Callbacks
-        this.onAnalysisComplete = null;
-        this.onStatusUpdate = null;
-        this.batchTimer = null; // For time fallback
+    // Callbacks
+    onAnalysisComplete: SummaryCallbacks['onAnalysisComplete'] | null = null;
+    onStatusUpdate: SummaryCallbacks['onStatusUpdate'] | null = null;
+    batchTimer: NodeJS.Timeout | null = null; // For time fallback
 
-        // Insights repository for crash recovery
-        this.insightsRepo = summaryRepository;
-
-        // Load mock convo data if needed (for mock STT)
-        this.loadMockData();
-    }
-
-    loadMockData() {
-        try {
-            // Import mock convo data - assume new file exists
-            this.mockDataMap = mockAnalysisData.presetsToMock;
-            console.log('[SummaryService] Mock STT convo data loaded:', Object.keys(this.mockDataMap));
-        } catch (err) {
-            console.warn('[SummaryService] Failed to load mock STT data:', err.message);
-            this.mockDataMap = {};
-        }
-    }
+    // Insights repository for crash recovery
+    insightsRepo = summaryRepository;
 
     /**
      * Write debug log to response.txt file
-     * @param {string} message - Log message to append
      */
-    writeDebugLog(message) {
+    writeDebugLog(message: string): void {
         try {
             const logPath = path.join(process.cwd(), 'response.txt');
             const timestamp = new Date().toISOString();
             const logEntry = `[${timestamp}] ${message}\n`;
             fs.appendFileSync(logPath, logEntry);
         } catch (err) {
-            console.warn('[SummaryService] Failed to write debug log:', err.message);
-        }
-    }
-
-    setMockMode(enabled) {
-        this.mockMode = !!enabled;
-        console.log(`[SummaryService] Mock STT mode ${enabled ? 'enabled' : 'disabled'}`);
-        if (enabled && this.selectedPresetId) {
-            // If preset already set, simulate now
-            this.simulateMockAnalysis();
+            log.warn({ err }, 'Failed to write debug log');
         }
     }
 
     // Update _mapPresetToProfile to ensure customer-support maps to customer_support_analysis
-    _mapPresetToProfile(presetId) {
+    _mapPresetToProfile(presetId: string): string {
         switch (presetId) {
             case 'sales':
                 return 'sales_analysis';
@@ -92,134 +140,20 @@ class SummaryService {
         }
     }
 
-    /**
-     * Generate context string for previous terms and questions based on analysis type
-     * @param {string} profile - The analysis profile (e.g., 'sales_analysis', 'meeting_analysis')
-     * @returns {string} - Context string with appropriate labels for the analysis type
-     */
-    _getPreviousContext(profile) {
-        const prevDefines = Array.from(this.definedTerms).join(', ') || '(none)';
-        const prevQuestions = Array.from(this.detectedQuestions).join(' | ') || '(none)';
-
-        // Generic mapping for different analysis types
-        const contextMapping = {
-            // Sales context - objections are "questions", opportunities are "terms"
-            sales_analysis: {
-                termsLabel: 'Previous Opportunities',
-                questionsLabel: 'Previous Objections',
-            },
-            // Recruiting context - gaps are "terms", strengths are "questions"
-            recruiting_analysis: {
-                termsLabel: 'Previous Gaps',
-                questionsLabel: 'Previous Strengths',
-            },
-            // Customer support context - root causes are "terms", troubleshooting steps are "questions"
-            customer_support_analysis: {
-                termsLabel: 'Previous Root Causes',
-                questionsLabel: 'Previous Steps',
-            },
-            // School context - unclear points are "terms", concepts are "questions"
-            school_analysis: {
-                termsLabel: 'Previous Unclear Points',
-                questionsLabel: 'Previous Concepts',
-            },
-            // Meeting context - standard terms and questions
-            meeting_analysis: {
-                termsLabel: 'Previously Defined Terms',
-                questionsLabel: 'Previously Detected Questions',
-            },
-        };
-
-        const contextConfig = contextMapping[profile];
-        if (contextConfig) {
-            return `${contextConfig.termsLabel}: ${prevDefines}\n${contextConfig.questionsLabel}: ${prevQuestions}`;
-        }
-
-        // Fallback for unknown analysis types
-        return `Previous Terms: ${prevDefines}\nPrevious Questions: ${prevQuestions}`;
-    }
-
-    /**
-     * Extract up to maxTerms Define candidates from the last few conversation lines.
-     * Looks for proper-noun sequences, acronyms, and technical terms.
-     */
-    _extractDefineCandidates(conversationTexts, maxTerms = 3) {
-        if (!Array.isArray(conversationTexts) || conversationTexts.length === 0) return [];
-
-        // Look at the last 3-5 lines for terms
-        const recentLines = conversationTexts.slice(-5);
-        const candidates = new Set();
-
-        recentLines.forEach(line => {
-            // Strip speaker prefix like "me:"/"them:"
-            const cleaned = line.replace(/^\s*(me|them)\s*:\s*/i, '').trim();
-            if (!cleaned) return;
-
-            const words = cleaned.split(/\s+/);
-            let buffer = [];
-
-            for (const w of words) {
-                const token = w.replace(/[\.,!?;:"'\)\(\[\]]+$/g, '');
-
-                // Multi-word proper nouns (e.g., "Machine Learning", "Azure DevOps")
-                if (/^[A-Z][a-zA-Z]+$/.test(token)) {
-                    buffer.push(token);
-                }
-                // ALLCAPS acronyms (e.g., "AI", "API", "GenAI")
-                else if (/^[A-Z]{2,}$/.test(token)) {
-                    if (buffer.length > 0) {
-                        candidates.add(buffer.join(' '));
-                        buffer = [];
-                    }
-                    candidates.add(token);
-                }
-                // Technical terms with mixed case (e.g., "JavaScript", "DevOps")
-                else if (/^[A-Z][a-z]*[A-Z]/.test(token)) {
-                    if (buffer.length > 0) {
-                        candidates.add(buffer.join(' '));
-                        buffer = [];
-                    }
-                    candidates.add(token);
-                } else {
-                    if (buffer.length > 0) {
-                        candidates.add(buffer.join(' '));
-                        buffer = [];
-                    }
-                }
-            }
-            if (buffer.length > 0) {
-                candidates.add(buffer.join(' '));
-            }
-        });
-
-        // Filter out common words and very short terms
-        const filtered = Array.from(candidates).filter(term => term.length > 1 && !['The', 'And', 'But', 'For', 'Or', 'So', 'Yet'].includes(term));
-
-        // Return the most recent terms first, up to maxTerms
-        return filtered.slice(-maxTerms).reverse();
-    }
-
-    setCallbacks({ onAnalysisComplete, onStatusUpdate }) {
+    setCallbacks({ onAnalysisComplete, onStatusUpdate }: SummaryCallbacks): void {
         this.onAnalysisComplete = onAnalysisComplete;
         this.onStatusUpdate = onStatusUpdate;
     }
 
-    setSessionId(sessionId) {
+    setSessionId(sessionId: string | null): void {
         this.currentSessionId = sessionId;
-    }
-
-    setAnalysisProfile(profileId) {
-        // Minimal guard; future: validate against known profiles
-        if (typeof profileId === 'string' && profileId.trim()) {
-            this.analysisProfile = profileId.trim();
-        }
     }
 
     /**
      * Set the active analysis preset and cache its role text (trimmed to ~100 words).
      * Accepts null/empty to clear and fall back to base template without role.
      */
-    async setAnalysisPreset(presetId) {
+    async setAnalysisPreset(presetId: string | null): Promise<{ success: true } | { success: false; error: string }> {
         try {
             this.selectedPresetId = presetId || null;
 
@@ -230,11 +164,11 @@ class SummaryService {
                 return { success: false, error: 'preset_not_found' };
             }
 
-            const presets = await settingsService.getPresets();
+            const presets: ResolvedPreset[] = await settingsService.getPresets();
             const preset = Array.isArray(presets) ? presets.find(p => p && p.id === presetId) : null;
 
             if (!preset) {
-                console.warn('[SummaryService] setAnalysisPreset: preset not found, clearing role');
+                log.warn({ presetId, sessionId: this.currentSessionId }, 'Analysis preset not found, clearing role');
                 this.selectedRoleText = '';
                 this.customSystemPrompt = null;
                 return { success: false, error: 'preset_not_found' };
@@ -244,36 +178,34 @@ class SummaryService {
                 // Default: Extract role and set profile
                 const fullPrompt = preset.prompt + (preset.append_text || '');
                 const roleText = this._extractRoleFromPrompt(fullPrompt);
-                this.selectedRoleText = this._trimToWordLimit(roleText, 100);
+                this.selectedRoleText = this._trimToWordLimit({ text: roleText, maxWords: 100 });
                 this.customSystemPrompt = null;
                 this.analysisProfile = this._mapPresetToProfile(presetId);
-                console.log(`[SummaryService] Set default preset: ${presetId} -> profile: ${this.analysisProfile}`);
+                log.info({ presetId, profile: this.analysisProfile, sessionId: this.currentSessionId }, 'Set default analysis preset');
             } else {
                 // Custom: Use full concatenated prompt as system
                 this.customSystemPrompt = preset.prompt + (preset.append_text || '');
                 this.selectedRoleText = '';
                 this.analysisProfile = null;
-                console.log(`[SummaryService] Set custom preset: ${presetId}, full prompt length: ${this.customSystemPrompt.length}`);
-            }
-
-            if (this.mockMode) {
-                console.log('[SummaryService] Mock STT mode active - simulating convo for preset:', presetId);
-                this.simulateMockAnalysis();
+                log.info(
+                    { presetId, promptLength: this.customSystemPrompt.length, sessionId: this.currentSessionId },
+                    'Set custom analysis preset'
+                );
             }
 
             return { success: true };
         } catch (err) {
-            console.warn('[SummaryService] setAnalysisPreset error:', err.message);
+            log.warn({ err, presetId, sessionId: this.currentSessionId }, 'Failed to set analysis preset');
             this.selectedRoleText = '';
             this.customSystemPrompt = null;
-            return { success: false, error: err.message };
+            return { success: false, error: errorMessage(err) };
         }
     }
 
-    hydrateConversation(transcripts) {
+    hydrateConversation(transcripts: ReadonlyArray<{ speaker: string | null; text: string | null }>): void {
         if (!Array.isArray(transcripts)) return;
 
-        console.log(`[SummaryService] Hydrating ${transcripts.length} transcripts WITHOUT triggering analysis`);
+        log.info({ sessionId: this.currentSessionId, transcripts: transcripts.length }, 'Hydrating transcripts without triggering analysis');
 
         // Reset state
         this.conversationHistory = [];
@@ -281,20 +213,20 @@ class SummaryService {
 
         // Populate history without calling addConversationTurn (which triggers analysis)
         transcripts.forEach(t => {
-            const conversationText = `${t.speaker.toLowerCase()}: ${t.text.trim()}`;
+            const conversationText = `${(t.speaker ?? '').toLowerCase()}: ${(t.text ?? '').trim()}`;
             this.conversationHistory.push(conversationText);
         });
 
         // Update lastAnalyzedIndex to prevent immediate re-analysis
         this.lastAnalyzedIndex = this.conversationHistory.length;
 
-        console.log(`[SummaryService] Hydrated ${this.conversationHistory.length} turns, lastAnalyzedIndex=${this.lastAnalyzedIndex}`);
+        log.info({ sessionId: this.currentSessionId, turns: this.conversationHistory.length, lastAnalyzedIndex: this.lastAnalyzedIndex }, 'Hydrated conversation');
     }
 
-    hydrateInsights(insightPayload) {
+    hydrateInsights(insightPayload: InsightPayload | null | undefined): void {
         if (!insightPayload) return;
 
-        console.log('[SummaryService] Hydrating insights from persisted data');
+        log.info({ sessionId: this.currentSessionId }, 'Hydrating insights from persisted data');
 
         // Restore previousAnalysisResult so context continuity works
         this.previousAnalysisResult = insightPayload;
@@ -302,93 +234,33 @@ class SummaryService {
         // Add to history for audit trail
         this.analysisHistory.push(insightPayload);
 
-        console.log(
-            `[SummaryService] Restored ${insightPayload.summary?.length || 0} summary points, ${insightPayload.actions?.length || 0} actions`
+        log.info(
+            { sessionId: this.currentSessionId, summaryPoints: insightPayload.summary?.length || 0, actions: insightPayload.actions?.length || 0 },
+            'Restored insights'
         );
     }
 
-    simulateMockAnalysis() {
-        if (!this.selectedPresetId || !this.mockDataMap) {
-            console.warn('[SummaryService] Cannot simulate Mock STT: no preset or mock data');
-            return;
-        }
-
-        let mockKey = this.selectedPresetId === 'meetings' ? 'meeting' : this.selectedPresetId;
-        if (mockKey === 'customer-support') {
-            mockKey = 'customer_support'; // Map to match mock data key
-        }
-        const mockData = this.mockDataMap[mockKey];
-        if (!mockData || !mockData.conversation) {
-            console.warn(`[SummaryService] No mock convo data for preset: ${mockKey}`);
-            return;
-        }
-
-        console.log(`[SummaryService] Mock STT: Simulating conversation for ${mockKey} with batch processing`);
-
-        // Clear previous history for clean simulation
-        this.conversationHistory = [];
-
-        // Inject turns gradually with realistic delays to simulate batching
-        const numTurns = mockData.conversation.length;
-        let turnIndex = 0;
-
-        const injectNextTurn = () => {
-            if (turnIndex >= numTurns) {
-                console.log(`[SummaryService] Mock STT: All ${numTurns} turns injected - simulation complete`);
-                return;
-            }
-
-            const speaker = turnIndex % 2 === 0 ? 'me' : 'them';
-            const text = mockData.conversation[turnIndex];
-            turnIndex++;
-
-            console.log(`[SummaryService] Mock STT: Injecting turn ${turnIndex}/${numTurns}`);
-            this.addConversationTurn(speaker, text); // Now allows batching triggers in mock mode
-
-            // Also save mock transcripts to database like real STT
-            if (this.currentSessionId) {
-                try {
-                    sttRepository.addTranscript({
-                        sessionId: this.currentSessionId,
-                        speaker: speaker,
-                        text: text.trim(),
-                    });
-                    console.log(`[SummaryService] Mock STT: Saved transcript to DB for session ${this.currentSessionId}`);
-                } catch (err) {
-                    console.warn('[SummaryService] Mock STT: Failed to save transcript to DB:', err.message);
-                }
-            }
-
-            // Schedule next turn with realistic delay (1-3 seconds between turns)
-            const delay = Math.random() * 2000 + 1000; // 1-3 seconds
-            setTimeout(injectNextTurn, delay);
-        };
-
-        // Start the simulation
-        injectNextTurn();
-    }
-
-    _extractRoleFromPrompt(prompt) {
+    _extractRoleFromPrompt(prompt: string): string {
         if (!prompt || typeof prompt !== 'string') return '';
         try {
-            const parsed = JSON.parse(prompt);
-            if (parsed && parsed.kind === 'analysis_role' && typeof parsed.role === 'string') {
-                return parsed.role || '';
+            const parsed = RolePromptSchema.safeParse(JSON.parse(prompt));
+            if (parsed.success) {
+                return parsed.data.role || '';
             }
-        } catch (_) {
+        } catch {
             // not JSON, treat as raw text
         }
         return prompt;
     }
 
-    _trimToWordLimit(text, maxWords) {
+    _trimToWordLimit({ text, maxWords }: { text: string; maxWords: number }): string {
         if (!text || typeof text !== 'string') return '';
         const words = text.trim().split(/\s+/);
         if (words.length <= maxWords) return text.trim();
         return words.slice(0, maxWords).join(' ');
     }
 
-    sendToRenderer(channel, data) {
+    sendToRenderer({ channel, data }: { channel: string; data: unknown }): void {
         const listenWindow = windowPool?.get('listen');
 
         if (listenWindow && !listenWindow.isDestroyed()) {
@@ -396,24 +268,22 @@ class SummaryService {
         }
     }
 
-    addConversationTurn(speaker, text) {
+    addConversationTurn({ speaker, text }: { speaker: string; text: string }): void {
         const trimmedText = text.trim();
         if (trimmedText.length < 5) {
-            console.log(`[SummaryTrigger] Skipping short utterance for batching (${trimmedText.length} chars): ${speaker}: "${trimmedText}"`);
+            log.info({ sessionId: this.currentSessionId, speaker, chars: trimmedText.length }, 'Skipping short utterance for batching');
             return; // Skip very short utterances to reduce spam
         }
 
         const conversationText = `${speaker.toLowerCase()}: ${trimmedText}`;
         this.conversationHistory.push(conversationText);
-        console.log(
-            `[SummaryTrigger] ${this.mockMode ? 'Mock STT:' : ''} Added to batch (${this.conversationHistory.length} total${this.mockMode ? ' (mock)' : ' in history'}): ${speaker}: "${trimmedText}"`
-        );
+        log.info({ sessionId: this.currentSessionId, speaker, total: this.conversationHistory.length }, 'Added utterance to batch');
 
         // Start time fallback timer if first utterance
         if (this.conversationHistory.length === 1 && !this.batchTimer) {
             this.batchTimer = setTimeout(() => {
-                console.log('[SummaryTrigger] Time fallback: Forcing analysis after 120s quiet');
-                this.triggerAnalysisIfNeeded(true); // Force flag
+                log.info({ sessionId: this.currentSessionId }, 'Time fallback: forcing analysis after 120s quiet');
+                void this.triggerAnalysisIfNeeded(true); // Force flag
             }, 120000); // 2 min
         }
 
@@ -422,15 +292,15 @@ class SummaryService {
             this.triggerInitialUIState();
         }
 
-        // Trigger analysis if needed (skipped in mock)
-        this.triggerAnalysisIfNeeded();
+        // Trigger analysis if needed
+        void this.triggerAnalysisIfNeeded();
     }
 
     /**
      * Trigger initial UI state after first utterance - shows default actions WITHOUT LLM call
      */
-    triggerInitialUIState() {
-        console.log('[SummaryTrigger] FIRST UTTERANCE: Showing initial UI actions (no LLM call)');
+    triggerInitialUIState(): void {
+        log.info({ sessionId: this.currentSessionId }, 'First utterance: showing initial UI actions (no LLM call)');
 
         // Create initial state with default actions only
         const initialData = {
@@ -441,15 +311,15 @@ class SummaryService {
         };
 
         // Send to UI to trigger display of default actions
-        this.sendToRenderer('summary-update', initialData);
+        this.sendToRenderer({ channel: 'summary-update', data: initialData });
     }
 
-    getConversationHistory() {
-        console.log('[SummaryService] history length:', this.conversationHistory.length);
+    getConversationHistory(): string[] {
+        log.info({ sessionId: this.currentSessionId, length: this.conversationHistory.length }, 'Conversation history read');
         return this.conversationHistory;
     }
 
-    resetConversationHistory() {
+    resetConversationHistory(): void {
         this.conversationHistory = [];
         this.previousAnalysisResult = null;
         this.analysisHistory = [];
@@ -460,48 +330,29 @@ class SummaryService {
             clearTimeout(this.batchTimer);
             this.batchTimer = null;
         }
-        console.log('🔄 Conversation history and analysis state reset');
+        log.info({ sessionId: this.currentSessionId }, 'Conversation history and analysis state reset');
     }
 
     /**
      * Converts conversation history into text to include in the prompt.
-     * @param {Array<string>} conversationTexts - Array of conversation texts ["me: ~~~", "them: ~~~", ...]
-     * @param {number} maxTurns - Maximum number of recent turns to include
-     * @returns {string} - Formatted conversation string for the prompt
+     * @param conversationTexts - Array of conversation texts ["me: ~~~", "them: ~~~", ...]
+     * @returns Formatted conversation string of the last MAX_TURNS turns
      */
-    formatConversationForPrompt(conversationTexts, maxTurns = 30) {
+    formatConversationForPrompt(conversationTexts: string[]): string {
         if (conversationTexts.length === 0) return '';
-        return conversationTexts.slice(-maxTurns).join('\n');
+        return conversationTexts.slice(-MAX_TURNS).join('\n');
     }
 
-    async makeOutlineAndRequests(conversationTexts, maxTurns = 30) {
-        console.log(`🔍 makeOutlineAndRequests called - conversationTexts: ${conversationTexts.length}`);
+    async makeOutlineAndRequests(conversationTexts: string[]): Promise<AnalysisResult | null> {
+        const sessionId = this.currentSessionId;
+        log.info({ sessionId, texts: conversationTexts.length }, 'Analysis requested');
 
         if (conversationTexts.length === 0) {
-            console.log('⚠️ No conversation texts available for analysis');
+            log.info({ sessionId }, 'No conversation texts available for analysis');
             return null;
         }
 
-        if (this.mockMode) {
-            console.log('[SummaryService] Mock STT mode: Full fake convo injected - running single real LLM analysis');
-            // Proceed to real flow
-        }
-
-        // Original real logic (always used now, even in mock STT)
-        const recentConversation = this.formatConversationForPrompt(conversationTexts, maxTurns);
-
-        // Build previous items for de-duplication guidance
-        const prevDefines = Array.from(this.definedTerms);
-        const prevQuestions = Array.from(this.detectedQuestions);
-
-        let contextualPrompt = '';
-        if (this.previousAnalysisResult && this.previousAnalysisResult.summary.length > 0) {
-            const meaningfulSummary = this.previousAnalysisResult.summary.filter(s => s && !s.includes('No progress') && !s.includes('No specific'));
-            if (meaningfulSummary.length > 0) {
-                contextualPrompt = `
-Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
-            }
-        }
+        const recentConversation = this.formatConversationForPrompt(conversationTexts);
 
         // SIMPLE DEBUG: Log round start
         this.analysisRound++;
@@ -512,20 +363,20 @@ Previous Context: ${meaningfulSummary.slice(0, 2).join('; ')}`;
         const roundLog = `=== ROUND ${this.analysisRound} ===
 PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (actions:${prevActions} + terms:${prevTerms} + questions:${prevQuestionsCount})`;
 
-        console.log(`[SummaryService] ${roundLog.replace(/\n/g, ' | ')}`);
+        log.info({ sessionId, round: this.analysisRound, prevActions, prevTerms, prevQuestions: prevQuestionsCount, totalSending }, 'Analysis round started');
         this.writeDebugLog(roundLog);
 
         // Accumulate ALL actions from analysis history (all previous rounds combined)
-        const allPreviousItems = [];
+        const allPreviousItems: string[] = [];
         this.analysisHistory.forEach(historyEntry => {
-            if (historyEntry.data && historyEntry.data.actions) {
+            if ('data' in historyEntry && historyEntry.data.actions) {
                 allPreviousItems.push(...historyEntry.data.actions);
             }
         });
 
         // SIMPLE DEBUG: Log what we're actually sending to LLM
         const sendLog = `SENDING TO LLM (${allPreviousItems.length} items):\n${allPreviousItems.map((item, i) => `  ${i + 1}. ${item}`).join('\n')}`;
-        console.log(`[SummaryService] ${sendLog.replace(/\n/g, ' | ')}`);
+        log.info({ sessionId, round: this.analysisRound, previousItems: allPreviousItems }, 'Sending previous items to LLM');
         this.writeDebugLog(sendLog);
 
         const contextData = {
@@ -549,21 +400,18 @@ PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (acti
                 context: contextData, // Contains transcript and previousItems
             };
 
-            console.log(`[SummaryService] 📋 Sending payload with profile '${profileToUse}' and role length: ${payload.role.length}`);
-
-            console.log('🤖 Sending analysis request to AI...');
+            log.info({ sessionId, profile: profileToUse, roleLength: payload.role.length }, 'Sending analysis request to AI');
 
             const completion = await llmClient.chat(payload);
 
             const responseText = completion.content.trim();
-            // console.log('[SummaryService] Response starts with JSON?:', responseText.startsWith('{') ? 'Yes' : 'No (likely markdown)');
 
-            const structuredData = this.parseResponseText(responseText, this.previousAnalysisResult);
+            const structuredData = this.parseResponseText({ responseText, previousResult: this.previousAnalysisResult });
 
             // SIMPLE DEBUG: Log what LLM created this round
             const newActions = structuredData.actions?.length || 0;
             const responseLog = `LLM CREATED: ${newActions} actions`;
-            console.log(`[SummaryService] ${responseLog}`);
+            log.info({ sessionId, round: this.analysisRound, actions: newActions }, 'LLM analysis received');
             this.writeDebugLog(responseLog);
 
             if (this.currentSessionId) {
@@ -577,7 +425,7 @@ PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (acti
                         model: 'server',
                     });
                 } catch (err) {
-                    console.error('[DB] Failed to save summary:', err);
+                    log.error({ err, sessionId: this.currentSessionId }, 'Failed to save summary');
                 }
             }
 
@@ -586,7 +434,7 @@ PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (acti
 
             // SIMPLE DEBUG: Log round end
             const saveLog = `=== END ROUND ${this.analysisRound} ===`;
-            console.log(`[SummaryService] ${saveLog}`);
+            log.info({ sessionId, round: this.analysisRound }, 'Analysis round ended');
             this.writeDebugLog(saveLog);
             this.analysisHistory.push({
                 timestamp: Date.now(),
@@ -600,275 +448,29 @@ PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (acti
 
             return structuredData;
         } catch (error) {
-            console.error('❌ Error during analysis generation:', error.message);
+            log.error({ err: error, sessionId }, 'Error during analysis generation');
             return this.previousAnalysisResult; // Return previous result on error
         }
     }
 
-    parseResponseText(responseText, previousResult) {
+    parseResponseText({ responseText, previousResult }: { responseText: string; previousResult: AnalysisResult | null }): AnalysisResult {
         const defaultFollowUps = ['✉️ Draft a follow-up email', '✅ Generate action items', '📝 Show summary'];
-        const structuredData = {
+        const structuredData: AnalysisResult = {
             summary: [],
             actions: [],
             followUps: [],
             rawLLMOutput: null,
         };
-        const addFollowUp = value => {
+        const addFollowUp = (value: string) => {
             if (!value) return;
             const cleaned = value.trim();
             if (!cleaned) return;
             structuredData.followUps.push(cleaned);
         };
-
-        // If there are previous results, use them as default values (however, new analysis takes priority)
-        if (previousResult && structuredData.summary.length === 0) {
-            structuredData.summary = [...previousResult.summary];
-        }
-
-        if (!responseText || typeof responseText !== 'string') {
-            console.log('[SummaryService] No response text to parse');
-            return structuredData;
-        }
-
-        const trimmedResponse = responseText.trim();
-
-        // First, try JSON parsing (handle code block wrappers)
-        let jsonData = null;
-        let jsonString = trimmedResponse;
-
-        // Extract JSON from common markdown code block wrappers
-        const jsonMatch = trimmedResponse.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i);
-        if (jsonMatch) {
-            jsonString = jsonMatch[1].trim();
-            console.log('[SummaryService] Extracted JSON from code block');
-        } else if (trimmedResponse.startsWith('```') && trimmedResponse.endsWith('```')) {
-            // Fallback: strip outer ```
-            jsonString = trimmedResponse.slice(3, -3).trim();
-            console.log('[SummaryService] Stripped ``` wrappers for JSON');
-        }
-
-        try {
-            jsonData = JSON.parse(jsonString);
-            if (jsonData && jsonData.sections && Array.isArray(jsonData.sections)) {
-                console.log('[SummaryService] JSON parsed successfully, sections:', jsonData.sections.length);
-
-                // Map JSON sections to structuredData (rest unchanged)
-                jsonData.sections.forEach(section => {
-                    if ((section.type === 'insights' || section.type === 'opportunities') && Array.isArray(section.items)) {
-                        section.items.forEach(item => {
-                            const summaryPoint = item
-                                .trim()
-                                .replace(/^-?\s*/, '')
-                                .replace(/^"|"$/g, '')
-                                .replace(/"([^"]+)"/g, '$1'); // Strip quotes
-                            if (summaryPoint) {
-                                structuredData.summary.unshift(summaryPoint);
-                                if (structuredData.summary.length > 5) {
-                                    structuredData.summary.pop();
-                                }
-                            }
-                        });
-                    } else if (section.type === 'questions' && Array.isArray(section.items)) {
-                        section.items.forEach(item => {
-                            const question = item
-                                .trim()
-                                .replace(/^-?\s*/, '')
-                                .replace(/^"|"$/g, '')
-                                .replace(/"([^"]+)"/g, '$1'); // Strip quotes
-                            const prefixed = `❓ ${question}`;
-                            structuredData.actions.push(prefixed);
-                        });
-                    } else if (section.type === 'follow_ups' && Array.isArray(section.items)) {
-                        section.items.forEach(item => {
-                            const followup = item
-                                .trim()
-                                .replace(/^-?\s*/, '')
-                                .replace(/^"|"$/g, '')
-                                .replace(/"([^"]+)"/g, '$1');
-                            if (followup) {
-                                const prefixed = `📈 Sales Follow-Up: ${followup}`;
-                                structuredData.actions.push(prefixed);
-                            }
-                        });
-                    } else if (section.type === 'buyer_questions' && Array.isArray(section.items)) {
-                        section.items.forEach(item => {
-                            const buyerQ = item
-                                .trim()
-                                .replace(/^-?\s*/, '')
-                                .replace(/^"|"$/g, '')
-                                .replace(/"([^"]+)"/g, '$1');
-                            if (buyerQ) {
-                                const prefixed = `❓ ${buyerQ}`;
-                                structuredData.actions.push(prefixed);
-                            }
-                        });
-                    } else if (section.type === 'defines' && Array.isArray(section.items)) {
-                        section.items.forEach(item => {
-                            const term = item
-                                .trim()
-                                .replace(/^-?\s*/, '')
-                                .replace(/^"|"$/g, '')
-                                .replace(/"([^"]+)"/g, '$1');
-                            let coreTerm = term.split('(')[0].split(':')[0].trim();
-                            coreTerm = coreTerm.replace(/[.,;:!?]+$/, '');
-                            if (!coreTerm || coreTerm.length < 2) coreTerm = term;
-                            const prefixed = `📘 Define ${coreTerm}`;
-                            structuredData.actions.push(prefixed);
-                        });
-                    } else if (section.type === 'objections' && Array.isArray(section.items)) {
-                        section.items.forEach(item => {
-                            const objection = item
-                                .trim()
-                                .replace(/^-?\s*/, '')
-                                .replace(/^"|"$/g, '')
-                                .replace(/"([^"]+)"/g, '$1');
-                            if (objection) {
-                                const prefixed = `❗❗ Objection: ${objection}`;
-                                structuredData.actions.push(prefixed);
-                            }
-                        });
-                    } else if (section.type === 'strengths' && Array.isArray(section.items)) {
-                        section.items.forEach(item => {
-                            const strength = item
-                                .trim()
-                                .replace(/^-?\s*/, '')
-                                .replace(/^"|"$/g, '')
-                                .replace(/"([^"]+)"/g, '$1');
-                            if (strength) {
-                                structuredData.summary.unshift(strength);
-                                if (structuredData.summary.length > 5) structuredData.summary.pop();
-                            }
-                        });
-                    } else if (section.type === 'gaps' && Array.isArray(section.items)) {
-                        section.items.forEach(item => {
-                            const gap = item
-                                .trim()
-                                .replace(/^-?\s*/, '')
-                                .replace(/^"|"$/g, '')
-                                .replace(/"([^"]+)"/g, '$1');
-                            if (gap) {
-                                const prefixed = `❗❗Gap: ${gap}`;
-                                structuredData.actions.push(prefixed);
-                            }
-                        });
-                    } else if (section.type === 'suggested_questions' && Array.isArray(section.items)) {
-                        section.items.forEach(item => {
-                            const question = item
-                                .trim()
-                                .replace(/^-?\s*/, '')
-                                .replace(/^"|"$/g, '')
-                                .replace(/"([^"]+)"/g, '$1');
-                            if (question) {
-                                const prefixed = `👆 Suggested Question: ${question}`;
-                                structuredData.actions.push(prefixed);
-                            }
-                        });
-                    } else if (section.type === 'issue_summary' && Array.isArray(section.items)) {
-                        section.items.forEach(item => {
-                            const summaryPoint = item
-                                .trim()
-                                .replace(/^-?\s*/, '')
-                                .replace(/^"|"$/g, '')
-                                .replace(/"([^"]+)"/g, '$1');
-                            if (summaryPoint) {
-                                structuredData.summary.unshift(summaryPoint);
-                                if (structuredData.summary.length > 5) structuredData.summary.pop();
-                            }
-                        });
-                    } else if (section.type === 'root_causes' && Array.isArray(section.items)) {
-                        section.items.forEach(item => {
-                            const cause = item
-                                .trim()
-                                .replace(/^-?\s*/, '')
-                                .replace(/^"|"$/g, '')
-                                .replace(/"([^"]+)"/g, '$1');
-                            if (cause) {
-                                const prefixed = `🔎 Root Cause: ${cause}`;
-                                structuredData.actions.push(prefixed);
-                            }
-                        });
-                    } else if (section.type === 'troubleshooting' && Array.isArray(section.items)) {
-                        section.items.forEach(item => {
-                            const step = item
-                                .trim()
-                                .replace(/^-?\s*/, '')
-                                .replace(/^"|"$/g, '')
-                                .replace(/"([^"]+)"/g, '$1');
-                            if (step) {
-                                const prefixed = `🔍 Troubleshooting Step: ${step}`;
-                                structuredData.actions.push(prefixed);
-                            }
-                        });
-                    } else if (section.type === 'key_concepts' && Array.isArray(section.items)) {
-                        section.items.forEach(item => {
-                            const concept = item
-                                .trim()
-                                .replace(/^-?\s*/, '')
-                                .replace(/^"|"$/g, '')
-                                .replace(/"([^"]+)"/g, '$1');
-                            if (concept) {
-                                structuredData.summary.unshift(concept);
-                                if (structuredData.summary.length > 5) structuredData.summary.pop();
-                            }
-                        });
-                    } else if (section.type === 'unclear_points' && Array.isArray(section.items)) {
-                        section.items.forEach(item => {
-                            const unclear = item
-                                .trim()
-                                .replace(/^-?\s*/, '')
-                                .replace(/^"|"$/g, '')
-                                .replace(/"([^"]+)"/g, '$1');
-                            if (unclear) {
-                                const prefixed = `❓ Clarify: ${unclear}`;
-                                structuredData.actions.push(prefixed);
-                            }
-                        });
-                    } else if (section.type === 'study_questions' && Array.isArray(section.items)) {
-                        section.items.forEach(item => {
-                            const question = item
-                                .trim()
-                                .replace(/^-?\s*/, '')
-                                .replace(/^"|"$/g, '')
-                                .replace(/"([^"]+)"/g, '$1');
-                            if (question) {
-                                const prefixed = `📚 Study Question: ${question}`;
-                                structuredData.actions.push(prefixed);
-                            }
-                        });
-                    } else if (section.type === 'searches' && Array.isArray(section.items)) {
-                        section.items.forEach(item => {
-                            const searchItem = item
-                                .trim()
-                                .replace(/^-?\s*/, '')
-                                .replace(/^Search:\s*/i, '')
-                                .replace(/^"|"$/g, '')
-                                .replace(/"([^"]+)"/g, '$1');
-                            if (searchItem) {
-                                // Exactly like Define: Emoji + Label | Query
-                                const prefixed = `🌐 Search: ${searchItem}`;
-                                structuredData.actions.push(prefixed);
-                            }
-                        });
-                    }
-                });
-
-                // Removed uniqueActions deduplication - keep all
-                // structuredData.actions = uniqueActions;
-
-                // Merge with previous if needed
-                if (structuredData.summary.length === 0 && previousResult) {
-                    structuredData.summary = previousResult.summary;
-                }
-
-                structuredData.rawLLMOutput = jsonData;
-                defaultFollowUps.forEach(addFollowUp);
-
-                return structuredData;
-            }
-        } catch (jsonError) {
-            console.error('[SummaryService] JSON parsing failed:', jsonError.message);
-            console.warn('[SummaryService] LLM did not return expected JSON. Check prompts/conversation input.');
-            // Safe fallback: Previous data + defaults
+        // Safe fallback when the answer is not the expected JSON: previous data + defaults
+        const fallback = (reason: string): AnalysisResult => {
+            log.error({ reason, sessionId: this.currentSessionId }, 'JSON parsing failed');
+            log.warn({ sessionId: this.currentSessionId }, 'LLM did not return expected JSON. Check prompts/conversation input.');
             if (previousResult) {
                 return {
                     ...previousResult,
@@ -880,6 +482,258 @@ PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (acti
                 actions: ['✨ What should I say next?', '💬 Suggest follow-up questions'],
                 followUps: defaultFollowUps,
             };
+        };
+
+        // If there are previous results, use them as default values (however, new analysis takes priority)
+        if (previousResult && structuredData.summary.length === 0) {
+            structuredData.summary = [...previousResult.summary];
+        }
+
+        if (!responseText || typeof responseText !== 'string') {
+            log.info({ sessionId: this.currentSessionId }, 'No response text to parse');
+            return structuredData;
+        }
+
+        const trimmedResponse = responseText.trim();
+
+        // First, try JSON parsing (handle code block wrappers)
+        let jsonString = trimmedResponse;
+
+        // Extract JSON from common markdown code block wrappers
+        const codeBlock = trimmedResponse.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i)?.[1];
+        if (codeBlock !== undefined) {
+            jsonString = codeBlock.trim();
+            log.info({ sessionId: this.currentSessionId }, 'Extracted JSON from code block');
+        } else if (trimmedResponse.startsWith('```') && trimmedResponse.endsWith('```')) {
+            // Fallback: strip outer ```
+            jsonString = trimmedResponse.slice(3, -3).trim();
+            log.info({ sessionId: this.currentSessionId }, 'Stripped ``` wrappers for JSON');
+        }
+
+        let jsonData: unknown;
+        try {
+            jsonData = JSON.parse(jsonString);
+        } catch (jsonError) {
+            return fallback(errorMessage(jsonError));
+        }
+
+        const envelope = AnalysisEnvelopeSchema.safeParse(jsonData);
+        if (envelope.success) {
+            log.info({ sessionId: this.currentSessionId, sections: envelope.data.sections.length }, 'JSON parsed successfully');
+
+            // Map JSON sections to structuredData
+            for (const rawSection of envelope.data.sections) {
+                const section = readSection(rawSection);
+                if (section.kind === 'skip') continue;
+                if (section.kind === 'invalid') return fallback(section.reason);
+
+                if (section.type === 'insights' || section.type === 'opportunities') {
+                    section.items.forEach(item => {
+                        const summaryPoint = item
+                            .trim()
+                            .replace(/^-?\s*/, '')
+                            .replace(/^"|"$/g, '')
+                            .replace(/"([^"]+)"/g, '$1'); // Strip quotes
+                        if (summaryPoint) {
+                            structuredData.summary.unshift(summaryPoint);
+                            if (structuredData.summary.length > 5) {
+                                structuredData.summary.pop();
+                            }
+                        }
+                    });
+                } else if (section.type === 'questions') {
+                    section.items.forEach(item => {
+                        const question = item
+                            .trim()
+                            .replace(/^-?\s*/, '')
+                            .replace(/^"|"$/g, '')
+                            .replace(/"([^"]+)"/g, '$1'); // Strip quotes
+                        const prefixed = `❓ ${question}`;
+                        structuredData.actions.push(prefixed);
+                    });
+                } else if (section.type === 'follow_ups') {
+                    section.items.forEach(item => {
+                        const followup = item
+                            .trim()
+                            .replace(/^-?\s*/, '')
+                            .replace(/^"|"$/g, '')
+                            .replace(/"([^"]+)"/g, '$1');
+                        if (followup) {
+                            const prefixed = `📈 Sales Follow-Up: ${followup}`;
+                            structuredData.actions.push(prefixed);
+                        }
+                    });
+                } else if (section.type === 'buyer_questions') {
+                    section.items.forEach(item => {
+                        const buyerQ = item
+                            .trim()
+                            .replace(/^-?\s*/, '')
+                            .replace(/^"|"$/g, '')
+                            .replace(/"([^"]+)"/g, '$1');
+                        if (buyerQ) {
+                            const prefixed = `❓ ${buyerQ}`;
+                            structuredData.actions.push(prefixed);
+                        }
+                    });
+                } else if (section.type === 'defines') {
+                    section.items.forEach(item => {
+                        const term = item
+                            .trim()
+                            .replace(/^-?\s*/, '')
+                            .replace(/^"|"$/g, '')
+                            .replace(/"([^"]+)"/g, '$1');
+                        let coreTerm = (term.split('(')[0] ?? '').split(':')[0]?.trim() ?? '';
+                        coreTerm = coreTerm.replace(/[.,;:!?]+$/, '');
+                        if (!coreTerm || coreTerm.length < 2) coreTerm = term;
+                        const prefixed = `📘 Define ${coreTerm}`;
+                        structuredData.actions.push(prefixed);
+                    });
+                } else if (section.type === 'objections') {
+                    section.items.forEach(item => {
+                        const objection = item
+                            .trim()
+                            .replace(/^-?\s*/, '')
+                            .replace(/^"|"$/g, '')
+                            .replace(/"([^"]+)"/g, '$1');
+                        if (objection) {
+                            const prefixed = `❗❗ Objection: ${objection}`;
+                            structuredData.actions.push(prefixed);
+                        }
+                    });
+                } else if (section.type === 'strengths') {
+                    section.items.forEach(item => {
+                        const strength = item
+                            .trim()
+                            .replace(/^-?\s*/, '')
+                            .replace(/^"|"$/g, '')
+                            .replace(/"([^"]+)"/g, '$1');
+                        if (strength) {
+                            structuredData.summary.unshift(strength);
+                            if (structuredData.summary.length > 5) structuredData.summary.pop();
+                        }
+                    });
+                } else if (section.type === 'gaps') {
+                    section.items.forEach(item => {
+                        const gap = item
+                            .trim()
+                            .replace(/^-?\s*/, '')
+                            .replace(/^"|"$/g, '')
+                            .replace(/"([^"]+)"/g, '$1');
+                        if (gap) {
+                            const prefixed = `❗❗Gap: ${gap}`;
+                            structuredData.actions.push(prefixed);
+                        }
+                    });
+                } else if (section.type === 'suggested_questions') {
+                    section.items.forEach(item => {
+                        const question = item
+                            .trim()
+                            .replace(/^-?\s*/, '')
+                            .replace(/^"|"$/g, '')
+                            .replace(/"([^"]+)"/g, '$1');
+                        if (question) {
+                            const prefixed = `👆 Suggested Question: ${question}`;
+                            structuredData.actions.push(prefixed);
+                        }
+                    });
+                } else if (section.type === 'issue_summary') {
+                    section.items.forEach(item => {
+                        const summaryPoint = item
+                            .trim()
+                            .replace(/^-?\s*/, '')
+                            .replace(/^"|"$/g, '')
+                            .replace(/"([^"]+)"/g, '$1');
+                        if (summaryPoint) {
+                            structuredData.summary.unshift(summaryPoint);
+                            if (structuredData.summary.length > 5) structuredData.summary.pop();
+                        }
+                    });
+                } else if (section.type === 'root_causes') {
+                    section.items.forEach(item => {
+                        const cause = item
+                            .trim()
+                            .replace(/^-?\s*/, '')
+                            .replace(/^"|"$/g, '')
+                            .replace(/"([^"]+)"/g, '$1');
+                        if (cause) {
+                            const prefixed = `🔎 Root Cause: ${cause}`;
+                            structuredData.actions.push(prefixed);
+                        }
+                    });
+                } else if (section.type === 'troubleshooting') {
+                    section.items.forEach(item => {
+                        const step = item
+                            .trim()
+                            .replace(/^-?\s*/, '')
+                            .replace(/^"|"$/g, '')
+                            .replace(/"([^"]+)"/g, '$1');
+                        if (step) {
+                            const prefixed = `🔍 Troubleshooting Step: ${step}`;
+                            structuredData.actions.push(prefixed);
+                        }
+                    });
+                } else if (section.type === 'key_concepts') {
+                    section.items.forEach(item => {
+                        const concept = item
+                            .trim()
+                            .replace(/^-?\s*/, '')
+                            .replace(/^"|"$/g, '')
+                            .replace(/"([^"]+)"/g, '$1');
+                        if (concept) {
+                            structuredData.summary.unshift(concept);
+                            if (structuredData.summary.length > 5) structuredData.summary.pop();
+                        }
+                    });
+                } else if (section.type === 'unclear_points') {
+                    section.items.forEach(item => {
+                        const unclear = item
+                            .trim()
+                            .replace(/^-?\s*/, '')
+                            .replace(/^"|"$/g, '')
+                            .replace(/"([^"]+)"/g, '$1');
+                        if (unclear) {
+                            const prefixed = `❓ Clarify: ${unclear}`;
+                            structuredData.actions.push(prefixed);
+                        }
+                    });
+                } else if (section.type === 'study_questions') {
+                    section.items.forEach(item => {
+                        const question = item
+                            .trim()
+                            .replace(/^-?\s*/, '')
+                            .replace(/^"|"$/g, '')
+                            .replace(/"([^"]+)"/g, '$1');
+                        if (question) {
+                            const prefixed = `📚 Study Question: ${question}`;
+                            structuredData.actions.push(prefixed);
+                        }
+                    });
+                } else if (section.type === 'searches') {
+                    section.items.forEach(item => {
+                        const searchItem = item
+                            .trim()
+                            .replace(/^-?\s*/, '')
+                            .replace(/^Search:\s*/i, '')
+                            .replace(/^"|"$/g, '')
+                            .replace(/"([^"]+)"/g, '$1');
+                        if (searchItem) {
+                            // Exactly like Define: Emoji + Label | Query
+                            const prefixed = `🌐 Search: ${searchItem}`;
+                            structuredData.actions.push(prefixed);
+                        }
+                    });
+                }
+            }
+
+            // Merge with previous if needed
+            if (structuredData.summary.length === 0 && previousResult) {
+                structuredData.summary = previousResult.summary;
+            }
+
+            structuredData.rawLLMOutput = jsonData;
+            defaultFollowUps.forEach(addFollowUp);
+
+            return structuredData;
         }
 
         defaultFollowUps.forEach(addFollowUp);
@@ -892,23 +746,20 @@ PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (acti
      * enough (by rough token/char thresholds) or a max wait count is reached.
      * Falls back to the original step-based rule when disabled.
      */
-    async triggerAnalysisIfNeeded(force = false) {
+    async triggerAnalysisIfNeeded(force = false): Promise<void> {
+        const sessionId = this.currentSessionId;
         // Clear timer on activity
         if (this.batchTimer) {
             clearTimeout(this.batchTimer);
             this.batchTimer = null;
-            if (this.mockMode) {
-                console.log('[SummaryTrigger] Mock STT: Cleared fallback timer');
-            } else {
-                console.log('[SummaryTrigger] Timer cleared - activity detected');
-            }
+            log.info({ sessionId }, 'Batch timer cleared: activity detected');
         }
 
         const recapStep = config.get('recapStep') || 15;
         const smartCfg = config.get('smartTrigger') || {};
 
         if (!this.conversationHistory.length) {
-            console.log(`[SummaryTrigger] No history yet - skipping trigger`);
+            log.info({ sessionId }, 'No history yet, skipping trigger');
             return;
         }
 
@@ -916,7 +767,7 @@ PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (acti
         let shouldAnalyze = false;
         if (force) {
             shouldAnalyze = true;
-            console.log(`[SummaryTrigger] Force trigger ${this.mockMode ? '(mock mode)' : ''}`);
+            log.info({ sessionId }, 'Force trigger');
         } else if (smartCfg.enabled) {
             const sinceLast = this.conversationHistory.slice(this.lastAnalyzedIndex);
             const textSince = sinceLast.join(' ');
@@ -925,21 +776,30 @@ PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (acti
             const charCount = textSince.length;
             const utteranceCount = sinceLast.length;
 
-            console.log(
-                `[SummaryTrigger] Batch check: ${utteranceCount} new utterances, ${charCount} chars, ~${tokenCount} tokens (last analyzed: ${this.lastAnalyzedIndex})`
-            );
+            log.info({ sessionId, utteranceCount, charCount, tokenCount, lastAnalyzedIndex: this.lastAnalyzedIndex }, 'Batch check');
 
             // Min batch size: Only consider if at least 3 utterances for meaningful batch
             if (utteranceCount < 3) {
-                console.log(`[SummaryTrigger] Batch too small (<3 utterances) - waiting`);
+                log.info({ sessionId, utteranceCount }, 'Batch too small (<3 utterances), waiting');
                 return; // Too small batch, wait for more
             }
 
             const enoughContent = tokenCount >= (smartCfg.minTokenCount ?? 12) || charCount >= (smartCfg.minCharCount ?? 50);
             const maxWaitHit = utteranceCount >= (smartCfg.maxWaitUtterances ?? 5);
 
-            console.log(
-                `[SummaryTrigger] Content check: enough=${enoughContent} (thresholds: ${charCount}>=${smartCfg.minCharCount}, ${tokenCount}>=${smartCfg.minTokenCount}), maxWait=${maxWaitHit} (${utteranceCount}>=${smartCfg.maxWaitUtterances})`
+            log.info(
+                {
+                    sessionId,
+                    enoughContent,
+                    charCount,
+                    minCharCount: smartCfg.minCharCount,
+                    tokenCount,
+                    minTokenCount: smartCfg.minTokenCount,
+                    maxWaitHit,
+                    utteranceCount,
+                    maxWaitUtterances: smartCfg.maxWaitUtterances,
+                },
+                'Content check'
             );
 
             shouldAnalyze = (enoughContent || maxWaitHit) && utteranceCount > 0;
@@ -947,32 +807,29 @@ PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (acti
             // Original behavior: analyze every N utterances
             const analysisStep = config.get('analysisStep') || 5;
             shouldAnalyze = this.conversationHistory.length >= analysisStep && this.conversationHistory.length % analysisStep === 0;
-            console.log(
-                `[SummaryTrigger] Fallback step: shouldAnalyze=${shouldAnalyze} (total: ${this.conversationHistory.length}, step: ${analysisStep})`
-            );
+            log.info({ sessionId, shouldAnalyze, total: this.conversationHistory.length, analysisStep }, 'Fallback step check');
         }
 
         if (!shouldAnalyze && !force) {
-            console.log(`[SummaryTrigger] Not triggering - batch not ready`);
+            log.info({ sessionId }, 'Not triggering: batch not ready');
             return;
         }
 
-        if (force && !this.mockMode) {
-            console.log('[SummaryTrigger] Force trigger from time fallback');
+        if (force) {
+            log.info({ sessionId }, 'Force trigger from time fallback');
         }
 
-        console.log(
-            `[SummaryTrigger] TRIGGERING ANALYSIS! Total history: ${this.conversationHistory.length}, new batch: ${this.conversationHistory.slice(this.lastAnalyzedIndex).length} utterances`
-        );
-
-        // Analyze only new utterances since last analysis (works for both real and mock STT)
+        // Analyze only new utterances since last analysis
         const textsToAnalyze = this.conversationHistory.slice(this.lastAnalyzedIndex);
-        console.log(`📝 Analyzing ${textsToAnalyze.length} new utterances (from index ${this.lastAnalyzedIndex})${this.mockMode ? ' [MOCK]' : ''}`);
+        log.info(
+            { sessionId, total: this.conversationHistory.length, newUtterances: textsToAnalyze.length, fromIndex: this.lastAnalyzedIndex },
+            'Triggering analysis'
+        );
 
         // FIX: Update lastAnalyzedIndex BEFORE async call so concurrent triggers see updated index
         // This prevents duplicate analysis and ensures previousAnalysisResult state is available
         this.lastAnalyzedIndex = this.conversationHistory.length;
-        console.log(`[SummaryTrigger] ✅ Updated lastAnalyzedIndex to ${this.lastAnalyzedIndex} to mark these utterances as analyzed`);
+        log.info({ sessionId, lastAnalyzedIndex: this.lastAnalyzedIndex }, 'Marked utterances as analyzed');
 
         const data = await this.makeOutlineAndRequests(textsToAnalyze);
         if (data) {
@@ -991,9 +848,9 @@ PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (acti
                             sections: data.sections || [],
                         },
                     });
-                    console.log(`[SummaryService] Persisted insights round ${this.analysisRound} for session ${this.currentSessionId}`);
+                    log.info({ sessionId: this.currentSessionId, round: this.analysisRound }, 'Persisted insights round');
                 } catch (err) {
-                    console.error('[SummaryService] Failed to persist insights:', err);
+                    log.error({ err, sessionId: this.currentSessionId }, 'Failed to persist insights');
                 }
             }
 
@@ -1005,84 +862,19 @@ PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (acti
                 }
             }
 
-            console.log('Sending structured data to renderer');
-            this.sendToRenderer('summary-update', { ...data, presetId: this.selectedPresetId });
+            log.info({ sessionId: this.currentSessionId }, 'Sending structured data to renderer');
+            this.sendToRenderer({ channel: 'summary-update', data: { ...data, presetId: this.selectedPresetId } });
 
             if (this.onAnalysisComplete) {
                 this.onAnalysisComplete(data);
             }
         } else {
-            console.log('No analysis data returned');
+            log.info({ sessionId: this.currentSessionId }, 'No analysis data returned');
         }
     }
 
     // Rough approximation: ~4 chars per token
-    /**
-     * Populate definedTerms and detectedQuestions Sets from LLM response actions
-     * Handles different action types based on analysis profile
-     * @param {Object} structuredData - The parsed LLM response data
-     */
-    _populateContextFromLLMResponse(structuredData) {
-        if (!structuredData || !Array.isArray(structuredData.actions)) {
-            return;
-        }
-
-        structuredData.actions.forEach(action => {
-            if (!action || typeof action !== 'string') return;
-
-            const actionStr = action.trim();
-
-            // Define term patterns (these go into definedTerms Set)
-            const termPatterns = [
-                { prefix: '📘 Define ', type: 'define' },
-                { prefix: '❗❗ Objection: ', type: 'objection' },
-                { prefix: '❗❗Gap: ', type: 'gap' },
-                { prefix: '🔎 Root Cause: ', type: 'root_cause' },
-                { prefix: '❓ Clarify: ', type: 'clarify' },
-            ];
-
-            // Question patterns (these go into detectedQuestions Set)
-            const questionPatterns = [
-                { prefix: '❓ ', type: 'question' },
-                { prefix: '👆 Suggested Question: ', type: 'suggested_question' },
-                { prefix: '📚 Study Question: ', type: 'study_question' },
-                { prefix: '🔍 Troubleshooting Step: ', type: 'troubleshooting' },
-                { prefix: '🌐 Search: ', type: 'search' },
-            ];
-
-            // Check for term patterns first
-            let termAdded = false;
-            for (const pattern of termPatterns) {
-                if (actionStr.startsWith(pattern.prefix)) {
-                    const content = actionStr.substring(pattern.prefix.length).trim();
-                    if (content && content.length > 1) {
-                        this.definedTerms.add(content);
-                        // console.log(`[SummaryService] Added ${pattern.type}: "${content}"`);
-                        termAdded = true;
-                        break;
-                    }
-                }
-            }
-
-            // Check for question patterns if not a term
-            if (!termAdded) {
-                for (const pattern of questionPatterns) {
-                    if (actionStr.startsWith(pattern.prefix)) {
-                        const content = actionStr.substring(pattern.prefix.length).trim();
-                        if (content && content.length > 3) {
-                            this.detectedQuestions.add(content);
-                            // console.log(`[SummaryService] Added ${pattern.type}: "${content}"`);
-                            break;
-                        }
-                    }
-                }
-            }
-        });
-
-        // console.log(`[SummaryService] Context updated - Terms: ${this.definedTerms.size}, Questions: ${this.detectedQuestions.size}`);
-    }
-
-    _roughTokenCount(str) {
+    _roughTokenCount(str: string): number {
         if (!str) return 0;
         return Math.ceil(str.length / 4);
     }
@@ -1099,42 +891,14 @@ PREV ROUND ACTIONS: ${prevActions} | TOTAL SENDING TO LLM: ${totalSending} (acti
 
     /**
      * Get current context for external services (like ask service)
-     * @returns {Object} - Context object with terms and questions
      */
-    getCurrentContext() {
+    getCurrentContext(): AnalysisContext {
         return {
             definedTerms: Array.from(this.definedTerms),
             detectedQuestions: Array.from(this.detectedQuestions),
             analysisProfile: this.analysisProfile,
             selectedPresetId: this.selectedPresetId,
         };
-    }
-
-    /**
-     * Get formatted previous context string for a specific analysis profile
-     * @param {string} profile - The analysis profile (optional, uses current if not provided)
-     * @returns {string} - Formatted context string (XML for analysis profiles, text for others)
-     */
-    getFormattedPreviousContext(profile = null) {
-        const targetProfile = profile || this.analysisProfile;
-
-        // For analysis profiles, return all actual LLM items in XML
-        if (targetProfile && targetProfile.endsWith('_analysis')) {
-            const allPreviousItems = [];
-            if (this.previousAnalysisResult && this.previousAnalysisResult.actions) {
-                allPreviousItems.push(...this.previousAnalysisResult.actions);
-            }
-            Array.from(this.definedTerms).forEach(term => allPreviousItems.push(`📘 Define ${term}`));
-            Array.from(this.detectedQuestions).forEach(question => allPreviousItems.push(`❓ ${question}`));
-
-            const previousXML =
-                allPreviousItems.length > 0 ? `<previous>\n${allPreviousItems.join('\n')}\n</previous>` : '<previous>\n(none)\n</previous>';
-
-            return previousXML;
-        }
-
-        // Fallback to old text format for non-analysis profiles
-        return this._getPreviousContext(targetProfile);
     }
 }
 

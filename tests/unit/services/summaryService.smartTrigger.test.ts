@@ -128,10 +128,10 @@ describe('SummaryService smart trigger batching', () => {
     });
 
     test('addConversationTurn ignores utterances shorter than five characters', () => {
-        summaryService.addConversationTurn('me', 'ok');
+        summaryService.addConversationTurn({ speaker: 'me', text: 'ok' });
         expect(summaryService.conversationHistory).toHaveLength(0);
 
-        summaryService.addConversationTurn('me', 'great idea');
+        summaryService.addConversationTurn({ speaker: 'me', text: 'great idea' });
         expect(summaryService.conversationHistory).toHaveLength(1);
         expect(summaryService.conversationHistory[0]).toMatch(/^me:/);
     });
